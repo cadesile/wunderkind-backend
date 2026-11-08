@@ -1,328 +1,345 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Config → Starter pack check, on bmc_page + bmc-pages.css/js.
+  Data: StarterPackCheckController::check() — countries, country, tier, defaultTier, result.
 
-{% block content %}
-<div class="row g-4 mt-1">
+  A DIAGNOSTIC, NOT A SETTINGS PAGE. No save bar and no data-bmc-form: nothing here is edited,
+  it is a question asked of the pool and the answer. The only control that writes is the warm
+  button, and that is its own POST.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Starter Pack Check</h5>
-        <p class="text-muted small mb-0">
-            Tests whether the pool can actually supply a starter squad for a country, without creating a club
-            or consuming anything. Safe to run against live data.
+  TWO FORMS AND THEY HAVE TO BE TWO. The check is a GET so its result is a linkable URL; the
+  warm creates data and must be a CSRF-guarded POST. One form cannot be both. The warm carries
+  the server's own last-checked country and tier rather than the selects' current values, so it
+  can never act on a dropdown that was changed but never submitted — and it is hidden entirely
+  until a check has been run, because there is nothing to warm before then.
+
+  #spc-funnel AND #spc-staff ARE LOAD-BEARING. StarterPackCheckControllerTest counts rows and
+  header cells through those ids to prove the funnel steps reached the template at all.
+#}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_starter_config'}) }}"><span>STARTER CONFIG</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_player_pool_config'}) }}"><span>PLAYER POOL</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+<section class="bmc-card" data-domain="people">
+    <div class="bmc-card__head">
+        <i data-lucide="flask-conical"></i>
+        <span class="bmc-card__title">RUN A CHECK</span>
+        <span class="bmc-card__meta">reads only — creates nothing, consumes nothing</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            Tests whether the pool can actually supply a starter squad for a country, without creating a
+            club or consuming anything. Safe to run against live data.
         </p>
-    </div>
 
-    {# ── Country picker ──────────────────────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body py-3">
-                <form method="get" action="{{ path('admin') }}" class="row g-2 align-items-end">
-                    <input type="hidden" name="routeName" value="admin_starter_pack_check">
+        <form method="get" action="{{ path('admin') }}"
+              style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:12px">
+            <input type="hidden" name="routeName" value="admin_starter_pack_check">
 
-                    <div class="col-md-5">
-                        <label class="small fw-bold d-block mb-1" for="spc-country">Country</label>
-                        <select name="country" id="spc-country" class="form-select form-select-sm" required>
-                            <option value="">— Select a country —</option>
-                            {% for code, label in countries %}
-                                <option value="{{ code }}" {{ code == country ? 'selected' : '' }}>{{ label }} ({{ code }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="small fw-bold d-block mb-1" for="spc-tier">League tier</label>
-                        <select name="tier" id="spc-tier" class="form-select form-select-sm">
-                            {% for t in 1..8 %}
-                                <option value="{{ t }}" {{ t == tier ? 'selected' : '' }}>
-                                    Tier {{ t }}{{ t == defaultTier ? ' — new clubs start here' : '' }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="fa fa-vial me-1"></i>Run check
-                        </button>
-                    </div>
-                </form>
-
-                {# Separate form, and deliberately so: the check above is GET (its result is a
-                   linkable URL), while warming creates data and must be a CSRF-guarded POST —
-                   one form cannot be both. Its country/tier are the server's own last-checked
-                   values rather than the select's, so it can never act on a dropdown that was
-                   changed but never submitted. Hidden entirely until a check has been run,
-                   since there is nothing to warm before then. #}
-                {% if result is not null %}
-                    <form method="post" action="{{ path('admin', {routeName: 'admin_starter_pack_warm'}) }}"
-                          class="mt-2"
-                          onsubmit="return confirm('Generate pool players, staff and scouts for {{ country }}? This creates data and can take up to a minute.')">
-                        <input type="hidden" name="_token" value="{{ csrf_token('starter_pack_warm') }}">
-                        <input type="hidden" name="country" value="{{ country }}">
-                        <input type="hidden" name="tier" value="{{ tier }}">
-                        <button type="submit" class="btn btn-warning btn-sm">
-                            <i class="fa fa-wand-magic-sparkles me-1"></i>Generate starter pack
-                        </button>
-                        <span class="text-muted ms-2" style="font-size:.75rem;">
-                            Tops up the {{ country }} pool (players, staff, scouts) to the minimums the starter
-                            draw needs, then re-runs this check.
-                        </span>
-                    </form>
-                {% endif %}
+            <div class="bmc-field-col">
+                <label class="bmc-lbl bmc-lbl--ink" for="spc-country">COUNTRY</label>
+                <span class="bmc-select">
+                    <select name="country" id="spc-country" required style="min-width:220px">
+                        <option value="">— Select a country —</option>
+                        {% for code, label in countries %}
+                            <option value="{{ code }}"{{ code == country ? ' selected' : '' }}>{{ label }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+                </span>
             </div>
-        </div>
-    </div>
 
-    {% if result is null %}
-        <div class="col-12">
-            <div class="alert alert-info small mb-0">
+            <div class="bmc-field-col">
+                <label class="bmc-lbl bmc-lbl--ink" for="spc-tier">LEAGUE TIER</label>
+                <span class="bmc-select">
+                    <select name="tier" id="spc-tier" style="min-width:220px">
+                        {% for t in 1..8 %}
+                            <option value="{{ t }}"{{ t == tier ? ' selected' : '' }}>Tier {{ t }}{{ t == defaultTier ? ' — new clubs start here' : '' }}</option>
+                        {% endfor %}
+                    </select>
+                </span>
+            </div>
+
+            <button type="submit" class="bmc-btn bmc-btn--blue"><span>RUN CHECK</span></button>
+        </form>
+
+        {% if result is not null %}
+            <form method="post" action="{{ path('admin', {routeName: 'admin_starter_pack_warm'}) }}"
+                  style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <input type="hidden" name="_token" value="{{ csrf_token('starter_pack_warm') }}">
+                <input type="hidden" name="country" value="{{ country }}">
+                <input type="hidden" name="tier" value="{{ tier }}">
+                <button type="submit" class="bmc-btn bmc-btn--orange"
+                        data-bmc-dialog-title="GENERATE STARTER PACK FOR {{ country }}?"
+                        data-bmc-dialog-message="Creates pool players, staff and scouts. This writes data and can take up to a minute."
+                        data-bmc-dialog-confirm="GENERATE" data-bmc-dialog-variant="yellow"><span>GENERATE STARTER PACK</span></button>
+                <span class="bmc-data">
+                    Tops the {{ country }} pool up to the minimums the starter draw needs, then re-runs this check.
+                </span>
+            </form>
+        {% endif %}
+    </div>
+</section>
+
+{% if result is null %}
+    <section class="bmc-card" data-domain="people">
+        <div class="bmc-card__body">
+            <span class="bmc-note">
+                <i data-lucide="info"></i>
                 Pick a country to test. A new club has no league when its starter pack is built, so
-                <strong>tier {{ defaultTier }}</strong> is what real club creation uses.
+                <strong>tier&nbsp;{{ defaultTier }}</strong> is what real club creation uses.
+            </span>
+        </div>
+    </section>
+{% else %}
+    {% set verdict = {
+        'ok':       {badge: 'positive', icon: 'circle-check',      text: 'A full starter pack can be built for ' ~ result.countryLabel ~ '.'},
+        'degraded': {badge: 'warning',  icon: 'triangle-alert',    text: 'A starter pack can be built, but it will be under-filled.'},
+        'blocked':  {badge: 'danger',   icon: 'circle-x',          text: 'A starter pack CANNOT be built — club initialisation will fail.'},
+    }[result.verdict] %}
+
+    {# ── the verdict ─────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="people" id="spc-verdict">
+        <div class="bmc-card__band" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <i data-lucide="{{ verdict.icon }}" class="ink-{{ result.verdict == 'ok' ? 'positive' : (result.verdict == 'degraded' ? 'dim' : 'danger') }}"></i>
+            <span class="bmc-badge bmc-badge--{{ verdict.badge }}">{{ result.verdict }}</span>
+            <div class="bmc-danger__text">
+                <span class="bmc-lbl bmc-lbl--ink">{{ verdict.text }}</span>
+                <span class="bmc-data">
+                    {{ result.playersAvailable|number_format }} of {{ result.playersRequested|number_format }} players available
+                    for {{ result.countryLabel }} ({{ result.country }}) at tier {{ result.tier }}.
+                </span>
             </div>
         </div>
-    {% else %}
-        {% set verdictClass = {'ok': 'success', 'degraded': 'warning', 'blocked': 'danger'}[result.verdict] %}
-        {% set verdictText  = {
-            'ok':       'A full starter pack can be built for ' ~ result.countryLabel ~ '.',
-            'degraded': 'A starter pack can be built, but it will be under-filled.',
-            'blocked':  'A starter pack CANNOT be built — club initialisation will fail.'
-        }[result.verdict] %}
+    </section>
 
-        {# ── Verdict ─────────────────────────────────────────────────── #}
-        <div class="col-12">
-            <div class="alert alert-{{ verdictClass }} d-flex align-items-center gap-2 mb-0">
-                <i class="fa fa-{{ result.verdict == 'ok' ? 'circle-check' : (result.verdict == 'degraded' ? 'triangle-exclamation' : 'circle-xmark') }}"></i>
-                <div>
-                    <div class="fw-semibold">{{ verdictText }}</div>
-                    <div class="small">
-                        {{ result.playersAvailable }} of {{ result.playersRequested }} players available
-                        for {{ result.countryLabel }} ({{ result.country }}) at tier {{ result.tier }}.
-                    </div>
+    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(400px,1fr))">
+
+        {# ── what the draw asks for ──────────────────────────────────── #}
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="sliders-horizontal"></i>
+                <span class="bmc-card__title">WHAT THE DRAW ASKS FOR</span>
+            </div>
+            <table class="bmc-minitable" style="min-width:0">
+                <tbody>
+                    <tr>
+                        <td><span class="bmc-data">Nationality</span></td>
+                        <td class="is-right">
+                            {% if result.nationality %}
+                                <span class="bmc-celltext">{{ result.nationality }}</span>
+                            {% else %}
+                                <span class="bmc-badge bmc-badge--danger">UNRESOLVED</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="bmc-data">Ability band</span></td>
+                        <td class="is-right bmc-cellnum">{{ result.ability.min }}–{{ result.ability.max }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="bmc-data">Band comes from</span></td>
+                        <td class="is-right"><code class="bmc-code">{{ result.ability.source }}</code></td>
+                    </tr>
+                    <tr>
+                        <td><span class="bmc-data">First-team age floor</span></td>
+                        <td class="is-right">
+                            <span class="bmc-cellnum">{{ result.firstTeamAgeMin }}+</span>
+                            <span class="bmc-data">born ≤ {{ result.bornOnOrBefore|date('Y-m-d') }}</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="bmc-data">Squad size</span></td>
+                        <td class="is-right bmc-cellnum">{{ result.playersRequested }} players</td>
+                    </tr>
+                    <tr>
+                        <td><span class="bmc-data">Client can pick this country</span></td>
+                        <td class="is-right">
+                            {% if result.countryEnabled %}
+                                <span class="bmc-badge bmc-badge--positive">YES</span>
+                            {% else %}
+                                <span class="bmc-badge bmc-badge--warning">NO</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        {# ── what the pool holds ─────────────────────────────────────── #}
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="database"></i>
+                <span class="bmc-card__title">WHAT THE POOL HOLDS</span>
+            </div>
+            <div class="bmc-stats">
+                <div class="bmc-stat">
+                    <span class="bmc-stat__label">IN POOL</span>
+                    <span class="bmc-stat__value">{{ result.poolTotal|number_format }}</span>
+                    <span class="bmc-stat__sub">players, any age</span>
+                </div>
+                <div class="bmc-stat">
+                    <span class="bmc-stat__label">AGED {{ result.firstTeamAgeMin }}+</span>
+                    <span class="bmc-stat__value {{ result.poolAgeEligible == 0 ? 'ink-danger' : '' }}">{{ result.poolAgeEligible|number_format }}</span>
+                    <span class="bmc-stat__sub">old enough for a first team</span>
+                </div>
+                <div class="bmc-stat">
+                    <span class="bmc-stat__label">IN BAND</span>
+                    <span class="bmc-stat__value">{{ result.poolInBand|number_format }}</span>
+                    <span class="bmc-stat__sub">any age</span>
                 </div>
             </div>
-        </div>
+            <div class="bmc-card__body">
+                <p class="bmc-bodytext">
+                    A big pool and a wide ability band can still produce an empty draw — the squad needs players
+                    that satisfy <em>both</em> at once. The funnel below shows which condition empties it.
+                </p>
+            </div>
+        </section>
+    </div>
 
-        {# ── What the draw asks for ──────────────────────────────────── #}
-        <div class="col-lg-5">
-            <div class="card h-100">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-sliders text-muted"></i>
-                    <span class="fw-semibold small">What the draw asks for</span>
-                </div>
-                <div class="card-body py-2">
-                    <table class="table table-sm mb-0 small">
-                        <tbody>
-                            <tr>
-                                <td class="text-muted">Nationality</td>
-                                <td class="text-end fw-semibold">
-                                    {% if result.nationality %}{{ result.nationality }}
-                                    {% else %}<span class="text-danger">unresolved</span>{% endif %}
+    {# ── the draw, step by step ──────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="people">
+        <div class="bmc-card__head">
+            <i data-lucide="filter"></i>
+            <span class="bmc-card__title">PLAYER DRAW, FILTER BY FILTER</span>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" id="spc-funnel" style="min-width:680px">
+                <thead><tr>
+                    <th>POSITION</th>
+                    <th class="is-right">NEEDS</th>
+                    {% for step in result.positions|first.funnel %}
+                        <th class="is-right">{{ step.label|upper }}</th>
+                    {% endfor %}
+                    <th class="is-right">CAN DRAW</th>
+                    <th></th>
+                </tr></thead>
+                <tbody>
+                    {% for row in result.positions %}
+                        <tr>
+                            <td><span class="bmc-celltext">{{ row.position }}</span></td>
+                            <td class="is-right bmc-cellnum">{{ row.requested }}</td>
+                            {% for step in row.funnel %}
+                                {% set previous = loop.first ? null : row.funnel[loop.index0 - 1].count %}
+                                {% set collapsed = step.count == 0 and previous is not null and previous > 0 %}
+                                <td class="is-right bmc-cellnum {{ collapsed ? 'ink-danger' : (step.count == 0 ? 'ink-dim' : '') }}"
+                                    {{ collapsed ? 'title="The draw empties at this filter"' : '' }}>
+                                    {{ step.count|number_format }}{{ collapsed ? ' ◀' : '' }}
                                 </td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">Ability band</td>
-                                <td class="text-end fw-semibold">{{ result.ability.min }}–{{ result.ability.max }}</td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">Band comes from</td>
-                                <td class="text-end"><code class="small">{{ result.ability.source }}</code></td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">First-team age floor</td>
-                                <td class="text-end fw-semibold">
-                                    {{ result.firstTeamAgeMin }}+
-                                    <span class="text-muted fw-normal">(born ≤ {{ result.bornOnOrBefore|date('Y-m-d') }})</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">Squad size</td>
-                                <td class="text-end fw-semibold">{{ result.playersRequested }} players</td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">Client can pick this country</td>
-                                <td class="text-end fw-semibold">
-                                    {% if result.countryEnabled %}yes{% else %}<span class="text-warning">no</span>{% endif %}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        {# ── What the pool holds ─────────────────────────────────────── #}
-        <div class="col-lg-7">
-            <div class="card h-100">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-database text-muted"></i>
-                    <span class="fw-semibold small">What the pool holds</span>
-                </div>
-                <div class="card-body py-3">
-                    <div class="row text-center g-2">
-                        <div class="col-4">
-                            <div class="fs-5 fw-bold">{{ result.poolTotal|number_format }}</div>
-                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">Players in pool</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="fs-5 fw-bold {{ result.poolAgeEligible == 0 ? 'text-danger' : '' }}">{{ result.poolAgeEligible|number_format }}</div>
-                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">Aged {{ result.firstTeamAgeMin }}+</div>
-                        </div>
-                        <div class="col-4">
-                            <div class="fs-5 fw-bold">{{ result.poolInBand|number_format }}</div>
-                            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;">In ability band (any age)</div>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-0 mt-3">
-                        A big pool and a big ability band can still produce an empty draw — the squad needs players
-                        that satisfy <em>both</em> at once. The funnel below shows which condition empties it.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        {# ── The draw, step by step ──────────────────────────────────── #}
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-filter text-muted"></i>
-                    <span class="fw-semibold small">Player draw, filter by filter</span>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 small align-middle" id="spc-funnel">
-                        <thead>
-                            <tr>
-                                <th>Position</th>
-                                <th class="text-end">Needs</th>
-                                {% for step in result.positions|first.funnel %}
-                                    <th class="text-end">{{ step.label }}</th>
-                                {% endfor %}
-                                <th class="text-end">Can draw</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in result.positions %}
-                                <tr>
-                                    <td class="fw-semibold">{{ row.position }}</td>
-                                    <td class="text-end">{{ row.requested }}</td>
-                                    {% for step in row.funnel %}
-                                        {% set previous = loop.first ? null : row.funnel[loop.index0 - 1].count %}
-                                        {% set collapsed = step.count == 0 and previous is not null and previous > 0 %}
-                                        <td class="text-end {{ collapsed ? 'text-danger fw-bold' : (step.count == 0 ? 'text-muted' : '') }}">
-                                            {{ step.count|number_format }}
-                                            {% if collapsed %}
-                                                <i class="fa fa-arrow-left ms-1" title="The draw empties at this filter"></i>
-                                            {% endif %}
-                                        </td>
-                                    {% endfor %}
-                                    <td class="text-end fw-semibold">{{ row.available|number_format }}</td>
-                                    <td class="text-end">
-                                        {% if row.ok %}
-                                            <span class="badge bg-success-subtle text-success-emphasis">ok</span>
-                                        {% else %}
-                                            <span class="badge bg-{{ row.available == 0 ? 'danger' : 'warning' }}-subtle text-{{ row.available == 0 ? 'danger' : 'warning' }}-emphasis">
-                                                short by {{ row.shortfall }}
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="card-footer py-2 small text-muted">
-                    The last column of the funnel is the <em>native</em> draw. Anything short of the need is topped up
-                    from the same ability band regardless of nationality, so “can draw” is the whole age-eligible band.
-                </div>
-            </div>
+                            <td class="is-right bmc-cellnum">{{ row.available|number_format }}</td>
+                            <td class="is-right">
+                                {% if row.ok %}
+                                    <span class="bmc-badge bmc-badge--positive">OK</span>
+                                {% else %}
+                                    <span class="bmc-badge bmc-badge--{{ row.available == 0 ? 'danger' : 'warning' }}">SHORT BY {{ row.shortfall }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        <div class="bmc-card__body">
+            <span class="bmc-note">
+                <i data-lucide="info"></i>
+                The last funnel column is the <em>native</em> draw. Anything short of the need is topped up from the
+                same ability band regardless of nationality, so “can draw” is the whole age-eligible band.
+            </span>
+        </div>
+    </section>
 
-        {# ── Staff & scouts ──────────────────────────────────────────── #}
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-users text-muted"></i>
-                    <span class="fw-semibold small">Staff &amp; scouts</span>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0 small align-middle" id="spc-staff">
-                        <thead>
+    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(400px,1fr))">
+
+        {# ── staff & scouts ──────────────────────────────────────────── #}
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="users"></i>
+                <span class="bmc-card__title">STAFF &amp; SCOUTS</span>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" id="spc-staff" style="min-width:420px">
+                    <thead><tr>
+                        <th>ROLE</th>
+                        <th class="is-right">NEEDS</th>
+                        <th class="is-right">{{ (result.nationality ?? 'Native')|upper }}</th>
+                        <th class="is-right">IN POOL</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                        {% for row in result.staff %}
                             <tr>
-                                <th>Role</th>
-                                <th class="text-end">Needs</th>
-                                <th class="text-end">{{ result.nationality ?? 'Native' }}</th>
-                                <th class="text-end">In pool</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in result.staff %}
-                                <tr>
-                                    <td>{{ row.role|replace({'_': ' '})|title }}</td>
-                                    <td class="text-end">{{ row.requested }}</td>
-                                    <td class="text-end {{ row.native == 0 ? 'text-muted' : '' }}">{{ row.native|number_format }}</td>
-                                    <td class="text-end fw-semibold">{{ row.available|number_format }}</td>
-                                    <td class="text-end">
-                                        {% if row.ok %}
-                                            <span class="badge bg-success-subtle text-success-emphasis">ok</span>
-                                        {% else %}
-                                            <span class="badge bg-warning-subtle text-warning-emphasis">short by {{ row.shortfall }}</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                            <tr>
-                                <td>Scout</td>
-                                <td class="text-end">{{ result.scouts.requested }}</td>
-                                <td class="text-end {{ result.scouts.native == 0 ? 'text-muted' : '' }}">{{ result.scouts.native|number_format }}</td>
-                                <td class="text-end fw-semibold">{{ result.scouts.available|number_format }}</td>
-                                <td class="text-end">
-                                    {% if result.scouts.ok %}
-                                        <span class="badge bg-success-subtle text-success-emphasis">ok</span>
+                                <td><span class="bmc-celltext">{{ row.role|replace({'_': ' '})|title }}</span></td>
+                                <td class="is-right bmc-cellnum">{{ row.requested }}</td>
+                                <td class="is-right bmc-cellnum {{ row.native == 0 ? 'ink-dim' : '' }}">{{ row.native|number_format }}</td>
+                                <td class="is-right bmc-cellnum">{{ row.available|number_format }}</td>
+                                <td class="is-right">
+                                    {% if row.ok %}
+                                        <span class="bmc-badge bmc-badge--positive">OK</span>
                                     {% else %}
-                                        <span class="badge bg-warning-subtle text-warning-emphasis">short by {{ result.scouts.shortfall }}</span>
+                                        <span class="bmc-badge bmc-badge--warning">SHORT BY {{ row.shortfall }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
-                        </tbody>
-                    </table>
-                </div>
+                        {% endfor %}
+                        <tr>
+                            <td><span class="bmc-celltext">Scout</span></td>
+                            <td class="is-right bmc-cellnum">{{ result.scouts.requested }}</td>
+                            <td class="is-right bmc-cellnum {{ result.scouts.native == 0 ? 'ink-dim' : '' }}">{{ result.scouts.native|number_format }}</td>
+                            <td class="is-right bmc-cellnum">{{ result.scouts.available|number_format }}</td>
+                            <td class="is-right">
+                                {% if result.scouts.ok %}
+                                    <span class="bmc-badge bmc-badge--positive">OK</span>
+                                {% else %}
+                                    <span class="bmc-badge bmc-badge--warning">SHORT BY {{ result.scouts.shortfall }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-        </div>
+        </section>
 
-        {# ── Findings ────────────────────────────────────────────────── #}
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <i class="fa fa-clipboard-list text-muted"></i>
-                    <span class="fw-semibold small">Findings</span>
-                </div>
-                <div class="card-body py-2">
-                    {% for finding in result.findings %}
-                        {% set icon = {
-                            'danger':  ['circle-xmark', 'text-danger'],
-                            'warning': ['triangle-exclamation', 'text-warning'],
-                            'success': ['circle-check', 'text-success'],
-                            'info':    ['circle-info', 'text-info']
-                        }[finding.level] %}
-                        <div class="d-flex gap-2 py-2 {{ not loop.last ? 'border-bottom' : '' }}">
-                            <i class="fa fa-{{ icon[0] }} {{ icon[1] }} mt-1"></i>
-                            <div class="small">{{ finding.message }}</div>
-                        </div>
-                    {% endfor %}
+        {# ── findings ────────────────────────────────────────────────── #}
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="clipboard-list"></i>
+                <span class="bmc-card__title">FINDINGS</span>
+                <span class="bmc-card__meta">{{ result.findings|length }}</span>
+            </div>
+            <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:10px">
+                {% set findingIcon = {
+                    'danger':  {icon: 'circle-x',       ink: 'danger'},
+                    'warning': {icon: 'triangle-alert', ink: 'dim'},
+                    'success': {icon: 'circle-check',   ink: 'positive'},
+                    'info':    {icon: 'info',           ink: 'dim'},
+                } %}
+                {% for finding in result.findings %}
+                    {% set f = findingIcon[finding.level] ?? findingIcon.info %}
+                    <span class="bmc-note">
+                        <i data-lucide="{{ f.icon }}" class="ink-{{ f.ink }}"></i>
+                        {{ finding.message }}
+                    </span>
+                {% else %}
+                    <span class="bmc-empty-note">NOTHING TO REPORT</span>
+                {% endfor %}
 
-                    {% if result.suggestedBand %}
-                        <div class="alert alert-secondary small mt-2 mb-0">
-                            Suggested tier {{ result.tier }} band:
-                            <strong>{{ result.suggestedBand.min }}–{{ result.suggestedBand.max }}</strong>
-                            — set it on
-                            <a href="{{ path('admin', {routeName: 'admin_starter_config'}) }}">Starter Config</a>
+                {% if result.suggestedBand %}
+                    <div class="bmc-inset">
+                        <span class="bmc-inset__title">SUGGESTED TIER {{ result.tier }} BAND</span>
+                        <span class="bmc-data">
+                            <strong>{{ result.suggestedBand.min }}–{{ result.suggestedBand.max }}</strong> — set it on
+                            <a class="bmc-card__link" href="{{ path('admin', {routeName: 'admin_starter_config'}) }}">Starter config</a>
                             under League Player Ability Ranges.
-                        </div>
-                    {% endif %}
-                </div>
+                        </span>
+                    </div>
+                {% endif %}
             </div>
-        </div>
-    {% endif %}
-
-</div>
+        </section>
+    </div>
+{% endif %}
 {% endblock %}
