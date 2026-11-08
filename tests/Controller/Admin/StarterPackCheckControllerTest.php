@@ -74,8 +74,11 @@ class StarterPackCheckControllerTest extends WebTestCase
         // built from the first row's own steps, so a miscounted header means the steps
         // never reached the template.
         self::assertCount(8, $crawler->filter('#spc-funnel thead th'));
-        self::assertCount(4, $crawler->filter('#spc-funnel tbody tr .badge'));
-        self::assertStringContainsString('starter pack', $crawler->filter('.alert')->first()->text());
+        // .bmc-badge and #spc-verdict, not Bootstrap's .badge and .alert — the rebuild moved
+        // both. The counts and the wording are what this test is about, not the class names,
+        // but a selector has to name something so these name the current ones.
+        self::assertCount(4, $crawler->filter('#spc-funnel tbody tr .bmc-badge'));
+        self::assertStringContainsString('starter pack', $crawler->filter('#spc-verdict')->text());
     }
 
     public function testTheScreenIsNotPubliclyReadable(): void
@@ -96,13 +99,19 @@ class StarterPackCheckControllerTest extends WebTestCase
         $client = static::createClient();
         $this->loginAsAdmin($client);
 
+        // Matched on the form it submits rather than on its label: the button's copy is
+        // upper-cased by the redesign and would be re-worded again by the next one, where what
+        // the test actually cares about — that the warm control is absent until a check has
+        // run — is a property of the route it posts to.
+        $warm = 'form[action*="admin_starter_pack_warm"] button[type="submit"]';
+
         $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check');
         self::assertResponseIsSuccessful();
-        $this->assertCount(0, $crawler->filter('button:contains("Generate starter pack")'));
+        $this->assertCount(0, $crawler->filter($warm));
 
         $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
         self::assertResponseIsSuccessful();
-        $this->assertCount(1, $crawler->filter('button:contains("Generate starter pack")'));
+        $this->assertCount(1, $crawler->filter($warm));
     }
 
     public function testWarmRejectsAPostWithoutAValidCsrfToken(): void
@@ -148,5 +157,53 @@ class StarterPackCheckControllerTest extends WebTestCase
         return (int) self::getContainer()->get(EntityManagerInterface::class)
             ->createQuery('SELECT COUNT(p.id) FROM App\\Entity\\Player p')
             ->getSingleScalarResult();
+    }
+
+    public function testThePageRendersInTheRedesignedShell(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_starter_pack_check', 'country' => 'US', 'tier' => 8]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.bmc-title', 'STARTER PACK CHECK');
+        self::assertSelectorTextContains('.bmc-crumb', 'CONFIG');
+        self::assertSelectorExists('.bmc-page');
+        self::assertSelectorNotExists('.card-body', 'no Bootstrap cards should survive the rebuild');
+        self::assertSelectorNotExists('.form-select', 'selects must use the .bmc-select component');
+        self::assertSelectorNotExists('.alert', 'the verdict is a card band now, not a Bootstrap alert');
+    }
+
+    /**
+     * THE CHECK IS GET AND THE WARM IS POST, and they must stay two forms.
+     *
+     * The check's result has to be a linkable URL; the warm creates data and must be CSRF
+     * guarded. One form cannot be both. The warm also posts the server's own last-checked
+     * country rather than the select's current value, so it cannot act on a dropdown that was
+     * changed but never submitted — asserted by reading its hidden input rather than the select.
+     */
+    public function testTheCheckAndTheWarmAreSeparateFormsWithTheRightMethods(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
+        self::assertResponseIsSuccessful();
+
+        $check = $crawler->filter('form[method="get"]')->first();
+        self::assertSame('admin_starter_pack_check', $check->filter('input[name="routeName"]')->attr('value'));
+
+        $warm = $crawler->filter('form[action*="admin_starter_pack_warm"]');
+        self::assertCount(1, $warm);
+        self::assertSame('post', strtolower((string) $warm->attr('method')));
+        self::assertCount(1, $warm->filter('input[name="_token"]'));
+        self::assertSame('EN', $warm->filter('input[name="country"]')->attr('value'));
+        self::assertSame('8', $warm->filter('input[name="tier"]')->attr('value'));
+        self::assertCount(
+            1,
+            $warm->filter('button[data-bmc-dialog-title]'),
+            'generating a starter pack writes data, so it must confirm first',
+        );
     }
 }

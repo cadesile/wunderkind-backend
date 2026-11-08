@@ -90,6 +90,32 @@
             (carry, item) => carry ~ item.subItems|reduce((c, sub) => c ~ (sub.selected ? sub.label|trans : ''), ''),
             ''
         ) %}
+
+        {#
+          FALLBACK, AND IT IS NOT AN EDGE CASE. EasyAdmin marks a menu item selected by
+          matching the whole query string, so the moment a custom page carries a parameter of
+          its own — ?country=US&tier=8 on the starter pack check, routeParams[country] on the
+          locations dashboard — NOTHING is selected, the label folds to '', and the page
+          renders with no data-bmc-page at all. The pin button then silently does nothing.
+
+          That had already shipped broken on the locations dashboard, which is reached with a
+          country every time an operator picks one, and on Enrichment.
+
+          So: fall back to the sub-item whose link carries the same routeName as this request.
+          It yields the SAME label, and therefore the same slug, as the selected path — a page
+          pinned bare and the same page pinned with parameters must not be two entries.
+        #}
+        {% if _selected_label is empty and app.request.query.get('routeName') %}
+            {% set _route = app.request.query.get('routeName') %}
+            {% set _selected_label = ea.mainMenu.items|reduce(
+                (carry, item) => carry ~ item.subItems|reduce(
+                    (c, sub) => (('routeName=' ~ _route) in sub.linkUrl|default('')) ? sub.label|trans : c,
+                    ''
+                ),
+                ''
+            ) %}
+        {% endif %}
+
         {% if _selected_label is not empty %}
             {% set _bmc_page = _selected_label|lower|replace({' & ': '-', ' / ': '-', ' ': '-'}) %}
         {% endif %}

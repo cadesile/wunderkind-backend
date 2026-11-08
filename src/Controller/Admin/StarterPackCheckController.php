@@ -45,6 +45,9 @@ class StarterPackCheckController extends AbstractController
         $tier    = max(1, min(8, $tier));
 
         return $this->render('admin/starter_pack_check.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup'    => 'Config',
+            'bmcTitle'    => 'Starter pack check',
             'countries'   => Country::generationCapableLabels(),
             'country'     => $country,
             'tier'        => $tier,
