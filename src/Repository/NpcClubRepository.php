@@ -158,27 +158,28 @@ class NpcClubRepository extends ServiceEntityRepository
      * @return array<string, NpcClub[]>
      */
     /**
-     * The tier that marks a town as "taken" for the purposes of selling land.
+     * Which of these towns already have a club in this tier, as a lookup set.
      *
-     * TOP FLIGHT ONLY, and the number matters. NPC generation puts ~144 clubs per country into a
-     * 40-town list, so almost every town has SOME club — blocking on any club at all would leave
-     * roughly one buyable town per country. Tier 1 is the proxy for "this is a major town", which
-     * is what the rule is actually for: the main cities are spoken for, and a player starts
-     * somewhere smaller and works up.
-     */
-    public const TOP_FLIGHT_TIER = 1;
-
-    /**
-     * Which of these towns have a top-flight club, as a lookup set.
+     * A GENERATION CONCERN, NOT A LAND RULE. Its only caller is
+     * NpcClubGenerationService::anchorPlaces(), which seeds a top division with the capital and
+     * the biggest towns and needs to know which of them are already spoken for — so a second
+     * run without --delete-existing moves on to the next towns down instead of stacking another
+     * club on the same five.
      *
-     * One query for a whole page: the list endpoint needs this per row, and asking per town
-     * would be fifty queries for a fifty-row page.
+     * IT REPLACES findLocationIdsWithTopFlightClub(), which asked the same question for a
+     * different reason: a town with a top-flight club could not be sold to a player, on the
+     * reasoning that "the main cities are spoken for". That rule never had a caller and the
+     * land model has moved past it — plots carry real-world prices now, so what a player can
+     * reach is decided by what they can afford, and a town is gated by the cost of its land
+     * rather than by who else plays there.
+     *
+     * One query for the whole set: anchoring asks about five or six towns at once.
      *
      * @param list<string> $locationIds
      *
-     * @return array<string, true> location id => true, absent when the town is free
+     * @return array<string, true> location id => true, absent when the town has no club in this tier
      */
-    public function findLocationIdsWithTopFlightClub(array $locationIds): array
+    public function findLocationIdsWithClubInTier(array $locationIds, int $tier): array
     {
         if ($locationIds === []) {
             return [];
@@ -188,37 +189,12 @@ class NpcClubRepository extends ServiceEntityRepository
             'SELECT DISTINCT location_id
                FROM npc_club
               WHERE location_id IN (:ids)
-                AND tier <= :tier',
-            ['ids' => $locationIds, 'tier' => self::TOP_FLIGHT_TIER],
+                AND tier = :tier',
+            ['ids' => $locationIds, 'tier' => $tier],
             ['ids' => ArrayParameterType::STRING],
         );
 
         return array_fill_keys(array_map(static fn ($id): string => (string) $id, $rows), true);
-    }
-
-    /** Whether one town has a top-flight club. The single-row form of the above. */
-    public function hasTopFlightClubAt(string $locationId): bool
-    {
-        return $this->findLocationIdsWithTopFlightClub([$locationId]) !== [];
-    }
-
-    /**
-     * The name of a top-flight club at this town, for the refusal message.
-     *
-     * Only called on the refusal path, so the extra query costs nothing in the common case —
-     * and "Bayern München already plays here" explains a 409 far better than "unavailable".
-     */
-    public function topFlightClubNameAt(string $locationId): ?string
-    {
-        $name = $this->getEntityManager()->getConnection()->fetchOne(
-            'SELECT name FROM npc_club
-              WHERE location_id = :id AND tier <= :tier
-              ORDER BY tier ASC, reputation DESC
-              LIMIT 1',
-            ['id' => $locationId, 'tier' => self::TOP_FLIGHT_TIER],
-        );
-
-        return $name === false || $name === null ? null : (string) $name;
     }
 
     /**
