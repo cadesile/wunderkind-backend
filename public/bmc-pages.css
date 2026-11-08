@@ -229,6 +229,18 @@
 .bmc-savebar[data-state="invalid"] .bmc-savebar__dot { background: var(--wk-danger); }
 .bmc-savebar__title { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); }
 .bmc-savebar__sub { flex: 1; min-width: 120px; font: var(--text-data); color: var(--wk-text-dim); }
+/* ── CodeMirror ───────────────────────────────────────────────
+   Starter config hand-edits two JSON blobs where a misplaced comma is silent in production,
+   so the editor and its lint markers earn their CDN load. These rules only make it sit in the
+   same box as every other field: the 2px stroke, no rounding, and the sizing the old page set
+   inline. The COLOURS come from CodeMirror's material-darker theme rather than from here —
+   re-skinning a syntax theme by hand is how you end up with unreadable comments. */
+.CodeMirror {
+    height: 200px; border: 2px solid var(--wk-stroke); border-radius: 0;
+    font: var(--text-data); font-family: var(--font-data), monospace;
+}
+.CodeMirror-focused { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
+
 /* ── select ───────────────────────────────────────────────────
    THE DESIGN SYSTEM HAD NO SELECT. Six redesigned pages went by without needing one — the
    nationality picker is a checkbox list, generation modes are tabs — so a native <select>
