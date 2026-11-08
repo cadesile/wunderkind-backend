@@ -106,6 +106,7 @@ class WorldPackSnapshotBuilder
             'citySize'       => $club->getCitySize()->value,
             'populationSize' => $club->getPopulationSize(),
             'isCapital'      => $club->isCapital(),
+            'land'           => $this->buildLandSnapshot($club),
             'personality'    => [
                 'playingStyle'       => $club->getPlayingStyle(),
                 'financialApproach'  => $club->getFinancialApproach(),
@@ -114,6 +115,55 @@ class WorldPackSnapshotBuilder
             'players' => array_map(fn(Player $p) => $this->buildPlayerSnapshot($p), $players),
             'staff'   => array_map(fn(Staff $s) => $this->buildStaffSnapshot($s), $staff),
             'scouts'  => array_map(fn(Scout $s) => $this->buildScoutSnapshot($s), $scouts),
+        ];
+    }
+
+    /**
+     * The ground this club stands on: the town, and the plot inside it.
+     *
+     * ADDITIVE AND NULLABLE. `region`, `citySize`, `populationSize` and `isCapital` stay
+     * exactly where they are on the club — nothing a client reads today moves — and this block
+     * is a second, fuller view of the same town plus the plot facts that had no home before.
+     * The duplication is deliberate: a client that wants the land can read one object, and one
+     * that does not keeps working untouched.
+     *
+     * NULL WHEN THERE IS NO TOWN, which is a real state and not an error. A country generated
+     * before its locations were seeded draws from LocationCatalogueService::PLACEHOLDER_PLACES,
+     * whose "towns" are "Capital" and "Northern" and will never be location rows — see
+     * NpcClub::$location.
+     *
+     * `plotNumber` IS NULL FOR MOST CLUBS, and that is the honest answer rather than a gap.
+     * Only the first LocationCapacityService::NPC_PLOT_CAP clubs in a town are seated on a
+     * plot; a town's third club occupies no ground, so there is no number to give. A club in a
+     * town that has never been priced has no plots to sit on either, and gets one when
+     * app:npc-clubs:seat-plots runs after enrichment.
+     *
+     * PENCE, LIKE EVERY OTHER MONEY FIELD HERE — startingBalance, landPence on
+     * GET /api/locations, landPencePaid on a claim. A pounds decimal would be a second money
+     * convention in one payload, and floats lose precision at £150m.
+     *
+     * THE PLOT'S OWN PRICE WHERE IT HAS ONE. LandPlot::getEffectiveLandPence() prefers the
+     * plot's override and falls back to the town's value, which is the same figure the
+     * catalogue quotes a player — so the pack and the shop agree on what this ground costs.
+     *
+     * @return array{name: string, region: string, plotNumber: ?int, capital: bool, valuePence: ?int}|null
+     */
+    public function buildLandSnapshot(NpcClub $club): ?array
+    {
+        $location = $club->getLocation();
+
+        if ($location === null) {
+            return null;
+        }
+
+        $plot = $club->getLandPlot();
+
+        return [
+            'name'       => $location->getTown(),
+            'region'     => $location->getRegion(),
+            'plotNumber' => $plot?->getPlotNumber(),
+            'capital'    => $location->isCapital(),
+            'valuePence' => $plot?->getEffectiveLandPence() ?? $location->getLandPence(),
         ];
     }
 

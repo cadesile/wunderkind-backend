@@ -721,4 +721,47 @@ class PlotHoldAndClaimTest extends KernelTestCase
 
         self::assertSame(['Bulk FC'], array_values($names));
     }
+
+    /**
+     * A plot an NPC club's ground stands on cannot be bought, and the refusal names the club.
+     *
+     * THE AGGREGATE CHECK WAS NOT ENOUGH. LocationCapacityService has always subtracted seated
+     * clubs from a town's AVAILABLE total, which stops the last plot being sold — but a town
+     * with spare plots is not sold out, so a request naming the club's specific plot sailed
+     * past the total and took ground that was already built on. That is the contradiction
+     * npc_club.land_plot_id exists to close.
+     */
+    public function testAPlotWithAnEstablishedClubOnItCannotBeHeld(): void
+    {
+        // Two plots, so the town is NOT sold out and the capacity check cannot be what refuses.
+        $plot     = $this->plot('Clubtown');
+        $location = $plot->getLocation();
+
+        $second = new \App\Entity\Location\LandPlot($location, 2);
+        $this->em->persist($second);
+
+        $club = new \App\Entity\NpcClub(
+            name: 'Clubtown Rovers', country: self::COUNTRY, tier: 1, reputation: 70,
+            primaryColor: '#111111', secondaryColor: '#eeeeee', balance: 1_000_000,
+            facilities: [], citySize: \App\Enum\CitySize::MEDIUM, location: $location,
+        );
+        $club->setLandPlot($plot);
+        $this->em->persist($club);
+        $this->em->flush();
+
+        $user = $this->user('seated', 10_000_000_00);
+
+        try {
+            $this->holds->acquire($user, $plot);
+            self::fail('a plot with a club on it must not be holdable');
+        } catch (PlotUnavailableException $e) {
+            self::assertSame(PlotUnavailableException::PLOT_HAS_CLUB, $e->reason);
+            self::assertStringContainsString('Clubtown Rovers', $e->getMessage());
+        }
+
+        // And the free plot next door is still buyable — the refusal is about the plot, not
+        // about the town being closed.
+        $hold = $this->holds->acquire($user, $second);
+        self::assertNotNull($hold);
+    }
 }

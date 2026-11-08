@@ -9,7 +9,9 @@ use App\Repository\Location\LocationRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\LeagueService;
 use App\Service\Location\LocationCatalogueService;
+use App\Service\Location\NpcClubPlotSeatingService;
 use App\Service\NpcClubGenerationService;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -42,6 +44,11 @@ class NpcClubGenerationServiceTest extends TestCase
             // No profile row: tierCountFor() falls back to 8, the depth this test's
             // expectations were written against.
             $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            // A REAL service over a stubbed Connection, because it is final and cannot be
+            // doubled — the same way LocationCatalogueService is built below. Seating is a
+            // post-flush SQL pass over rows that exist, so against a stub it does nothing,
+            // which is exactly right for a test with no database.
+            new NpcClubPlotSeatingService($this->createStub(Connection::class)),
         );
     }
 

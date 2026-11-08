@@ -62,6 +62,7 @@ class NpcClubGenerationService
         private readonly GameConfigRepository        $gameConfigRepository,
         private readonly LocationCatalogueService    $locationCatalogue,
         private readonly CountryProfileRepository     $countryProfileRepository,
+        private readonly \App\Service\Location\NpcClubPlotSeatingService $plotSeating,
     ) {}
 
     /**
@@ -234,6 +235,16 @@ class NpcClubGenerationService
         }
 
         $this->em->flush();
+
+        // SEATED AFTER THE FLUSH, because seatCountry() works in raw SQL over the rows that
+        // exist — clubs still in the unit of work are invisible to it. Idempotent, so running
+        // it on every generation costs one statement and re-seats nothing.
+        //
+        // A town with no plots yet seats nobody and that is correct: there is no ground to
+        // stand on until enrichment prices it. Those clubs are picked up by
+        // app:npc-clubs:seat-plots once there is.
+        $this->plotSeating->seatCountry($country);
+
         return $clubs;
     }
 

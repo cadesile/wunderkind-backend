@@ -110,7 +110,9 @@ class WorldInitializationService
         $tierConf     = $this->resolveTierConfig($tier);
         $abilityRange = $this->resolveAbilityRange($country, $tier);
 
-        $npcClubs = $this->npcClubRepository->findByLeague($league);
+        // WithLand: every club snapshot now carries a `land` block, and the plain finder would
+        // leave location and landPlot lazy — two queries per club, across eight tiers.
+        $npcClubs = $this->npcClubRepository->findByLeagueWithLand($league);
 
         // Bound the agent pool to ~worldPackPlayersPerAgent players per agent for this tier,
         // so distinct agents surfaced don't scale with the whole pool.

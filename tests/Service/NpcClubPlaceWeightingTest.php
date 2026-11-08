@@ -14,7 +14,9 @@ use App\Repository\Location\LocationRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\LeagueService;
 use App\Service\Location\LocationCatalogueService;
+use App\Service\Location\NpcClubPlotSeatingService;
 use App\Service\NpcClubGenerationService;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -77,6 +79,10 @@ class NpcClubPlaceWeightingTest extends TestCase
             $gameConfigRepo,
             $this->makeCatalogue($capitalIndex, $withIds, $priced),
             $this->createStub(CountryProfileRepository::class),
+            // A REAL service over a stubbed Connection, because it is final and cannot be
+            // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
+            // stub it does nothing — exactly right for a test with no database.
+            new NpcClubPlotSeatingService($this->createStub(Connection::class)),
         );
     }
 
@@ -114,6 +120,10 @@ class NpcClubPlaceWeightingTest extends TestCase
             $gameConfigRepo,
             $this->makeCatalogue(self::CAPITAL_IS_LARGEST, false, true, [$index => $pence]),
             $this->createStub(CountryProfileRepository::class),
+            // A REAL service over a stubbed Connection, because it is final and cannot be
+            // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
+            // stub it does nothing — exactly right for a test with no database.
+            new NpcClubPlotSeatingService($this->createStub(Connection::class)),
         );
     }
 

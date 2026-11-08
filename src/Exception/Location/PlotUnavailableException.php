@@ -17,6 +17,15 @@ class PlotUnavailableException extends \RuntimeException
     public const PLOT_HELD        = 'plot_held';
     public const HOLD_LIMIT       = 'hold_limit';
     public const PLOT_CLAIMED     = 'plot_claimed';
+
+    /**
+     * An established club already plays here.
+     *
+     * DISTINCT FROM plot_claimed, which names another PLAYER. This one names an NPC club, and
+     * the difference matters to whoever reads it: a claimed plot might come back on the market
+     * when its owner sells, where a club's ground does not.
+     */
+    public const PLOT_HAS_CLUB    = 'plot_has_club';
     public const NOT_SELLABLE     = 'plot_not_sellable';
     public const HOLD_EXPIRED     = 'hold_expired';
     public const HOLD_NOT_YOURS   = 'hold_not_yours';
@@ -110,6 +119,24 @@ class PlotUnavailableException extends \RuntimeException
                 ? 'This plot has already been claimed.'
                 : sprintf('This plot has already been claimed by %s.', $claimedBy),
             ['claimedBy' => $claimedBy],
+        );
+    }
+
+    /**
+     * The plot an NPC club's ground stands on.
+     *
+     * LocationCapacityService has always counted clubs against a town's available plots; since
+     * npc_club.land_plot_id exists, the count is backed by a row and the specific plot can be
+     * refused by name rather than only shrinking a total.
+     */
+    public static function plotHasClub(?string $clubName): self
+    {
+        return new self(
+            self::PLOT_HAS_CLUB,
+            $clubName === null
+                ? 'An established club already plays on this plot.'
+                : sprintf('%s already plays on this plot.', $clubName),
+            ['clubName' => $clubName],
         );
     }
 
