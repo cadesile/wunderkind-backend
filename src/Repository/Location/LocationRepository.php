@@ -246,7 +246,7 @@ class LocationRepository extends ServiceEntityRepository
      * Explicit columns via getArrayResult() — see the class docblock on ORM 3 hydration.
      * Only ACTIVE locations: a retired town must stop producing new NPC clubs.
      *
-     * @return list<array{name: string, population_size: int, region: string, is_capital: bool, city_size: string}>
+     * @return list<array{name: string, population_size: int, region: string, is_capital: bool, city_size: string, land_pence: ?int}>
      */
     public function findForGeneration(string $countryCode): array
     {
@@ -258,6 +258,11 @@ class LocationRepository extends ServiceEntityRepository
                 'l.region AS region',
                 'l.isCapital AS is_capital',
                 'l.citySize AS city_size',
+                // WHAT ONE PLOT HERE COSTS, and the reason a club generated in this town is as
+                // rich and as storied as it is. NULLABLE: a town is seeded long before it is
+                // priced, so the generator falls back to population — see
+                // NpcClubGenerationService::standingWithinBand().
+                'l.landPence AS land_pence',
             )
             ->where('l.country = :country')
             ->andWhere('l.status = :active')
@@ -289,6 +294,7 @@ class LocationRepository extends ServiceEntityRepository
                 'region'          => (string) $row['region'],
                 'is_capital'      => (bool) $row['is_capital'],
                 'city_size'       => is_object($citySize) ? $citySize->value : (string) $citySize,
+                'land_pence'      => $row['land_pence'] === null ? null : (int) $row['land_pence'],
             ];
         }, $rows);
     }

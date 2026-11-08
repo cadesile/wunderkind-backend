@@ -81,7 +81,7 @@ final class LocationCatalogueService
      * The one place that decides between real data and the fallback, so the two call sites that
      * used to inline that `?? [...]` cannot drift apart again.
      *
-     * @return list<array{name: string, population_size: int, region: string, is_capital?: bool, city_size?: string}>
+     * @return list<array{name: string, population_size: int, region: string, is_capital?: bool, city_size?: string, land_pence?: ?int}>
      */
     public function placesForGenerationOrPlaceholder(string $countryCode): array
     {

@@ -99,11 +99,17 @@ class LocationCatalogueServiceTest extends KernelTestCase
     }
 
     /**
-     * The generator's contract: the keys it has always consumed, plus city_size, plus the id.
+     * The generator's contract: the keys it has always consumed, plus city_size, the id, and
+     * land_pence.
      *
      * `id` was added so NpcClubGenerationService can link each generated club back to the town
-     * it was named after. The rest of the shape is unchanged and must stay that way — it is what
-     * makes the move off CountryContentRegistry provably behaviour-preserving.
+     * it was named after. `land_pence` was added so it can decide how strong that club is —
+     * what a plot costs here is what separates a London club from a Poole one, both of which
+     * band BIG; see NpcClubGenerationService::withBandStandings().
+     *
+     * NULLABLE, AND THE TEST SAYS SO RATHER THAN SKIPPING IT. A town is seeded long before it
+     * is priced, and the generator's fallback to population only matters because this key is
+     * genuinely absent that often.
      */
     public function testReturnsTheGeneratorsExpectedShape(): void
     {
@@ -113,7 +119,7 @@ class LocationCatalogueServiceTest extends KernelTestCase
 
         foreach (array_slice($places, 0, 5) as $place) {
             self::assertSame(
-                ['id', 'name', 'population_size', 'region', 'is_capital', 'city_size'],
+                ['id', 'name', 'population_size', 'region', 'is_capital', 'city_size', 'land_pence'],
                 array_keys($place),
             );
             self::assertIsString($place['name']);
@@ -121,6 +127,7 @@ class LocationCatalogueServiceTest extends KernelTestCase
             self::assertIsString($place['region']);
             self::assertIsBool($place['is_capital']);
             self::assertContains($place['city_size'], ['BIG', 'MEDIUM', 'SMALL']);
+            self::assertTrue($place['land_pence'] === null || is_int($place['land_pence']));
         }
     }
 

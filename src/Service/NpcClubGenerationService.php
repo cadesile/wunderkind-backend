@@ -40,6 +40,17 @@ class NpcClubGenerationService
     ];
 
     // Slugs classified by facility type for level band selection
+    /**
+     * How many of a country's biggest towns tier 1 is seeded with, before the capital is added
+     * and before the weighted draw fills whatever is left.
+     *
+     * FIVE BECAUSE THAT IS WHAT THE LOCATIONS DASHBOARD CALLS "BIGGEST TOWNS", and an operator
+     * comparing the two screens should see the same set. A const rather than configuration: it
+     * is a statement about what a top division is, not a dial, and a country generating fewer
+     * than five top-flight clubs simply takes the first `count` of them. See anchorPlaces().
+     */
+    private const ANCHOR_TOWNS = 5;
+
     private const TRAINING_SLUGS = ['training_pitch', 'strength_suite'];
     private const STANDS_SLUGS   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'];
 
@@ -156,7 +167,7 @@ class NpcClubGenerationService
         $levelBand  = self::FACILITY_LEVELS[$bandIndex];
         $countryEnum = Country::tryFrom($country);
         $placeData  = $this->locationCatalogue->placesForGenerationOrPlaceholder($country);
-        $classifiedPlaces = $this->classifyPlaces($placeData);
+        $classifiedPlaces = $this->withBandStandings($this->classifyPlaces($placeData));
         $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
         $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
         $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier, $tierCount);
@@ -168,12 +179,20 @@ class NpcClubGenerationService
             $this->npcClubRepo->deleteByCountryAndTier($country, $tier);
         }
 
+        // THE TOP DIVISION IS NOT A RANDOM DRAW. Every other tier is, but a country's biggest
+        // clubs belong in its biggest cities, and leaving that to the weighted pick produced
+        // England top flights with no London, Manchester or Birmingham in them far more often
+        // than not. AFTER the delete above, so a regeneration re-anchors the same towns rather
+        // than treating them as taken by the clubs it has just removed.
+        $anchors = $tier === 1 ? $this->anchorPlaces($classifiedPlaces, $count) : [];
+
         for ($i = 0; $i < $count; $i++) {
-            [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights, $suffixLeads);
+            [$name, $place] = $this->generateName($classifiedPlaces, $usedNames, $prestigeSuffixes, $genericSuffixes, $weights, $suffixLeads, $anchors[$i] ?? null);
             $usedNames[]    = $name;
             $citySize       = $place['city_size'];
-            $reputation     = $this->reputationForTier($tier, $citySize, $tierCount);
-            $balance        = $this->balanceForTier($tier, $citySize, $tierCount);
+            $standing       = (float) ($place['standing'] ?? 0.5);
+            $reputation     = $this->reputationForTier($tier, $citySize, $tierCount, $standing);
+            $balance        = $this->balanceForTier($tier, $citySize, $tierCount, $standing);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $identity       = $this->generateIdentity($name);
             $stadiumName    = $this->generateStadiumName($place['name'], $country);
@@ -219,9 +238,159 @@ class NpcClubGenerationService
     }
 
     /**
-     * Weighted random pick across classified places. Weight for a place =
-     * (tier's % for its city_size bucket) / (count of places in that bucket),
-     * so weight is spread evenly within a bucket.
+     * Annotate each place with where it stands among the towns sharing its band, 0.0 to 1.0.
+     *
+     * THE BAND ON ITS OWN IS TOO COARSE TO SET A CLUB'S STRENGTH. reputationForTier() and
+     * balanceForTier() narrow the tier's range by city size and then roll uniformly inside it,
+     * so every BIG town drew from one identical range. England bands its top 20% as BIG, which
+     * is 57 towns — London and Poole therefore produced top-flight clubs of indistinguishable
+     * reputation and budget, which is the same flattening that put Poole in the top division in
+     * the first place, showing up a second time in how strong the club turned out to be.
+     *
+     * LAND VALUE FIRST, POPULATION AS THE FALLBACK. What one plot costs here is the measure the
+     * game already uses for how desirable a town is, and it is the one a player feels: London is
+     * £150m a plot against Sheffield's £9m. A town is seeded long before it is priced, though,
+     * so an unpriced town is ranked on population instead.
+     *
+     * TWO SEPARATE RANKINGS, NOT ONE MIXED LIST. Pence and people are different units and
+     * ranking them together is meaningless. Priced towns are ranked against priced towns,
+     * unpriced against unpriced, and because both come out as a percentile WITHIN THE SAME
+     * BAND, the two results land on one comparable 0..1 scale.
+     *
+     * A BAND OF ONE GETS 0.5, not 1.0. Its single member is trivially both the strongest and
+     * the weakest, and handing it the top of the range would make a tiny country's every club
+     * maximal.
+     *
+     * @param list<array{population_size:int,land_pence?:?int,city_size:\App\Enum\CitySize,...}> $classifiedPlaces
+     *
+     * @return list<array{population_size:int,city_size:\App\Enum\CitySize,standing:float,...}>
+     */
+    private function withBandStandings(array $classifiedPlaces): array
+    {
+        /** @var array<string, array{priced: list<int>, unpriced: list<int>}> $members */
+        $members = [];
+
+        foreach ($classifiedPlaces as $i => $place) {
+            $band = $place['city_size']->value;
+            $members[$band] ??= ['priced' => [], 'unpriced' => []];
+            $members[$band][isset($place['land_pence']) ? 'priced' : 'unpriced'][] = $i;
+        }
+
+        foreach ($members as $groups) {
+            foreach ($groups as $group => $indexes) {
+                $value = $group === 'priced'
+                    ? static fn (array $p): int => (int) ($p['land_pence'] ?? 0)
+                    : static fn (array $p): int => (int) ($p['population_size'] ?? 0);
+
+                usort(
+                    $indexes,
+                    static fn (int $a, int $b): int => $value($classifiedPlaces[$a]) <=> $value($classifiedPlaces[$b]),
+                );
+
+                $last = count($indexes) - 1;
+
+                foreach ($indexes as $rank => $i) {
+                    $classifiedPlaces[$i]['standing'] = $last === 0 ? 0.5 : $rank / $last;
+                }
+            }
+        }
+
+        return $classifiedPlaces;
+    }
+
+    /**
+     * The towns a top division is guaranteed to contain, in the order they are handed out.
+     *
+     * THE CAPITAL FIRST, THEN THE BIGGEST. Those are two different towns in plenty of
+     * countries — Abuja is Nigeria's capital, Lagos is its largest — and both deserve a
+     * top-flight club, so the capital is prepended rather than relied on to appear by
+     * population. Where the capital is also the biggest, as in England, it appears once.
+     *
+     * `is_capital` HAS A JOB AGAIN. Until now the flag did exactly one thing: force a town BIG
+     * in LocationClassificationService::classify(), ahead of the rank bands. It was then
+     * recorded on the club and read by the export, the API and the CRUD screen, but nothing
+     * ever used it to decide that a club should EXIST there — and for a country whose capital
+     * is already its largest town, the forced-BIG override changed nothing at all.
+     *
+     * SKIPS TOWNS THAT ALREADY HAVE A TIER-1 CLUB. Generating a second batch without
+     * --delete-existing would otherwise stack a new club on the same five towns every run.
+     * Two clubs in one city is allowed — the name dedupe has always permitted it and big
+     * cities genuinely have several — but it should fall out of the draw, not be manufactured.
+     *
+     * NO ids ON THE PLACEHOLDER PATH. A country with no locations generates from
+     * LocationCatalogueService::PLACEHOLDER_PLACES, whose rows have no id and so can never be
+     * found "taken"; it anchors on "Capital" and returns, which is the right answer for a set
+     * that exists only to keep generation working before any town is seeded.
+     *
+     * @param array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}> $classifiedPlaces
+     *        In population order — classify() re-indexes by population descending, which is
+     *        what makes "the biggest" the front of the list rather than another sort here.
+     * @param int $count how many clubs this run creates; never return more anchors than that
+     *
+     * @return list<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}>
+     */
+    private function anchorPlaces(array $classifiedPlaces, int $count): array
+    {
+        if ($classifiedPlaces === [] || $count < 1) {
+            return [];
+        }
+
+        $candidates = array_slice($classifiedPlaces, 0, self::ANCHOR_TOWNS);
+
+        foreach ($classifiedPlaces as $i => $place) {
+            if (!empty($place['is_capital'])) {
+                if ($i >= self::ANCHOR_TOWNS) {
+                    array_unshift($candidates, $place);
+                }
+
+                break;
+            }
+        }
+
+        $ids = [];
+        foreach ($candidates as $place) {
+            if (isset($place['id'])) {
+                $ids[] = (string) $place['id'];
+            }
+        }
+
+        $taken = $ids === [] ? [] : $this->npcClubRepo->findLocationIdsWithClubInTier($ids, 1);
+
+        $anchors = [];
+        foreach ($candidates as $place) {
+            if (isset($place['id']) && isset($taken[(string) $place['id']])) {
+                continue;
+            }
+
+            $anchors[] = $place;
+        }
+
+        return array_slice($anchors, 0, $count);
+    }
+
+    /**
+     * Weighted random pick across classified places.
+     *
+     * TWO FACTORS, NOT ONE. The tier's weight for a band still decides how much of the draw
+     * that band gets. Within the band, a place's share is now proportional to the SQUARE ROOT
+     * of its population instead of being flat.
+     *
+     * FLAT WAS THE BUG. The weight used to be the band's percentage divided by the number of
+     * places in it, so every BIG town had identical odds. England bands its top 20% as BIG,
+     * which is 57 towns — so "big" carried no information about WHICH big, and a 5-club top
+     * division contained London about 6% of the time. Bolton, Oxford, Plymouth, Poole and
+     * Southampton as a country's entire top flight is that 94%, not a fluke.
+     *
+     * WHY THE ROOT RATHER THAN POPULATION ITSELF. London is 8.98m against Poole's 151k, 59:1.
+     * Raw proportionality hands London 27% of every tier-1 draw and still 16% of a mid-table
+     * one — a pyramid of London clubs all the way down. The root compresses that to roughly
+     * 6:1, which reads as "the big cities dominate" without erasing everywhere else. Measured
+     * against England's 284 towns: London 7.1% of a tier-1 draw, Birmingham 2.5%, Manchester
+     * 1.8%, Poole 0.2%. NpcClubPlaceWeightingTest pins the ordering rather than the figures.
+     *
+     * A place with no population cannot reach here on the real path — findForGeneration()
+     * excludes them — but max(1, …) keeps the placeholder set, and any future caller, from
+     * making a town unreachable or dividing by zero.
      *
      * @param array<array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}> $classifiedPlaces
      * @param array{big:float,medium:float,small:float} $weights
@@ -229,17 +398,24 @@ class NpcClubGenerationService
      */
     public function pickWeightedPlace(array $classifiedPlaces, array $weights): array
     {
-        $bucketCounts = ['big' => 0, 'medium' => 0, 'small' => 0];
-        foreach ($classifiedPlaces as $place) {
-            $bucketCounts[strtolower($place['city_size']->value)]++;
+        $pull       = [];
+        $bucketPull = ['big' => 0.0, 'medium' => 0.0, 'small' => 0.0];
+
+        foreach ($classifiedPlaces as $i => $place) {
+            $bucket               = strtolower($place['city_size']->value);
+            $pull[$i]             = sqrt((float) max(1, (int) ($place['population_size'] ?? 0)));
+            $bucketPull[$bucket]  = ($bucketPull[$bucket] ?? 0.0) + $pull[$i];
         }
 
         $cumulative = [];
         $total = 0.0;
         foreach ($classifiedPlaces as $i => $place) {
             $bucket = strtolower($place['city_size']->value);
-            $count  = max(1, $bucketCounts[$bucket]);
-            $weight = max(0.0001, (float) ($weights[$bucket] ?? 0)) / $count;
+            $share  = $pull[$i] / max(0.0001, $bucketPull[$bucket] ?? 0.0);
+            // Floored on the PRODUCT, not on the band weight. A band the tier gives 0% to still
+            // has to be reachable — pickWeightedPlace is the only source of places, and a
+            // country whose every town lands in one band would otherwise have a total of zero.
+            $weight = max(0.0001, (float) ($weights[$bucket] ?? 0) * $share);
             $total += $weight;
             $cumulative[$i] = $total;
         }
@@ -303,13 +479,17 @@ class NpcClubGenerationService
      * @param string[] $prestigeSuffixes
      * @param string[] $genericSuffixes
      * @param array{big:float,medium:float,small:float} $weights
+     * @param ?array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize} $forcedPlace
+     *        The town this club MUST play in, bypassing the weighted draw. Used by the tier-1
+     *        anchors; the retry loop then varies the suffix alone, which is the only part of
+     *        the name left to vary.
      * @return array{0:string,1:array{name:string,population_size:int,region:string,is_capital?:bool,city_size:\App\Enum\CitySize}}
      */
-    private function generateName(array $classifiedPlaces, array $usedNames, array $prestigeSuffixes, array $genericSuffixes, array $weights, bool $suffixLeads = false): array
+    private function generateName(array $classifiedPlaces, array $usedNames, array $prestigeSuffixes, array $genericSuffixes, array $weights, bool $suffixLeads = false, ?array $forcedPlace = null): array
     {
         $attempts = 0;
         do {
-            $place  = $this->pickWeightedPlace($classifiedPlaces, $weights);
+            $place  = $forcedPlace ?? $this->pickWeightedPlace($classifiedPlaces, $weights);
             $suffix = $this->pickSuffixForCitySize($place['city_size'], $prestigeSuffixes, $genericSuffixes);
             // Most countries read "{place} {suffix}" (Madrid CF, Lisboa SC). A few
             // put the club's own name first and the place second — Polish is
@@ -358,6 +538,38 @@ class NpcClubGenerationService
     }
 
     /** @return array{0:int,1:int} */
+    /**
+     * Roll inside a range, in the half of it this town's standing has earned.
+     *
+     * A SLIDING HALF-WIDTH WINDOW rather than a point. Reading the value straight off the
+     * standing would make every club deterministic — the same town would always produce the
+     * same reputation — and rolling uniformly across the whole range is what made London and
+     * Poole indistinguishable. A window of half the range, slid from the bottom at standing 0
+     * to the top at standing 1, keeps both: clubs still vary, and a club in a more valuable
+     * town is reliably the stronger of the two.
+     *
+     * The windows of the strongest and weakest town in a band therefore meet at a point and
+     * no more (one point of overlap when the span is odd), while every town between them
+     * overlaps its neighbours heavily. That is the intended shape: ordering holds firmly
+     * across the extremes and blurs between neighbours, where it should.
+     *
+     * SO A SINGLE PAIR OF CLUBS IS NOT ORDERED unless they sit at opposite ends of their band.
+     * Two towns a few ranks apart draw from windows that overlap most of the way, and which
+     * comes out higher on any one roll is chance. The guarantee is about the trend, which is
+     * what NpcClubPlaceWeightingTest measures over many runs rather than one.
+     *
+     * @param float $standing 0.0 (weakest in its band) to 1.0 (strongest)
+     */
+    private function rollAtStanding(int $min, int $max, float $standing): int
+    {
+        $standing = max(0.0, min(1.0, $standing));
+        $span     = max(0, $max - $min);
+        $window   = (int) round($span / 2);
+        $low      = $min + (int) round($standing * ($span - $window));
+
+        return random_int($low, min($max, $low + $window));
+    }
+
     public function skewRange(int $min, int $max, \App\Enum\CitySize $citySize): array
     {
         $span = $max - $min;
@@ -369,7 +581,7 @@ class NpcClubGenerationService
         };
     }
 
-    private function reputationForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8): int
+    private function reputationForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8, float $standing = 0.5): int
     {
         // Top tier → 70–90, bottom tier → 5–20, interpolated across the country's OWN
         // depth rather than a fixed eight. A 3-tier country's bottom division should be as
@@ -383,16 +595,18 @@ class NpcClubGenerationService
         $minRep = max(1, (int) round(70 - $progress * 65));
         $maxRep = max(1, (int) round(90 - $progress * 70));
         [$min, $max] = $this->skewRange($minRep, $maxRep, $citySize);
-        return random_int($min, $max);
+
+        return $this->rollAtStanding($min, $max, $standing);
     }
 
-    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8): int
+    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8, float $standing = 0.5): int
     {
         $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier, $tierCount);
         $min   = max(0, (int) $range['min']);
         $max   = max($min, (int) $range['max']);
         [$skewMin, $skewMax] = $this->skewRange($min, $max, $citySize);
-        return random_int($skewMin, $skewMax);
+
+        return $this->rollAtStanding($skewMin, $skewMax, $standing);
     }
 
     /**
