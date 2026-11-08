@@ -58,6 +58,11 @@ class LocationConfigController extends AbstractController
         $config = $this->configRepository->getConfig();
 
         return $this->render('admin/location_config.html.twig', [
+            // The page strip's crumb and title: "ADMIN › LOCATIONS & LAND". bmcGroup is the
+            // LIVE sidebar group label, not the design handoff's, so the crumb and the open
+            // submenu agree — see DashboardController::configureMenuItems().
+            'bmcGroup'      => 'Locations & land',
+            'bmcTitle'      => 'Configuration',
             'config'        => $config,
             'citySizes'     => CitySize::cases(),
             'plots'         => $config->getPlotsByCitySize(),

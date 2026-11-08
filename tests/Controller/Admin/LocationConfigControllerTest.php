@@ -441,4 +441,71 @@ class LocationConfigControllerTest extends WebTestCase
 
         return $value;
     }
+
+    /**
+     * The redesigned shell, held to the same checklist as the other six rebuilt pages.
+     *
+     * NOT DECORATION. Each of these has its own failure mode and each was hit at least once
+     * while the pages were being migrated: a controller that forgets bmcGroup/bmcTitle renders
+     * a strip with an empty crumb and no heading, and a page that leaves <main data-bmc-page>
+     * empty silently breaks the sidebar pin.
+     */
+    public function testThePageRendersInTheRedesignedShell(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $client->request('GET', '/admin', ['routeName' => 'admin_location_config']);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('.bmc-title', 'CONFIGURATION');
+        self::assertSelectorTextContains('.bmc-crumb', 'LOCATIONS & LAND');
+        self::assertSelectorExists('.bmc-page');
+        self::assertSelectorNotExists('.card-body', 'no Bootstrap cards should survive the rebuild');
+    }
+
+    /**
+     * BOTH forms keep their own save bar, and both are inline rather than sticky.
+     *
+     * The plot counts and the size bands post to different routes on purpose — saveBands()
+     * argues it, and they mean different things to the estate. Two position:sticky bars would
+     * pin to bottom:0 and overlap, so .bmc-savebar--inline is what keeps each one in its own
+     * card. If a later edit merges the forms or drops the modifier, this is where it shows.
+     */
+    public function testEachSettingsFormCarriesItsOwnInlineSaveBar(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_location_config']);
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            2,
+            $crawler->filter('form[data-bmc-form] .bmc-savebar--inline'),
+            'one inline save bar inside each of the two settings forms',
+        );
+        self::assertCount(
+            0,
+            $crawler->filter('.bmc-savebar:not(.bmc-savebar--inline)'),
+            'this page must not add a page-level sticky save bar',
+        );
+    }
+
+    /** The two actions are not settings, so they must stay outside the dirty-tracked forms. */
+    public function testTheTopUpAndRecalculateControlsAreNotInsideASettingsForm(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+
+        $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_location_config']);
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            0,
+            $crawler->filter('form[data-bmc-form] form[action*="admin_location_config_provision"]'),
+            'the top-up must not be nested in a settings form',
+        );
+        self::assertSelectorExists('form[action*="admin_location_config_provision"]');
+    }
 }
