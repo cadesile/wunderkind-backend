@@ -149,6 +149,17 @@ final class LocationCapacityService
      */
     private function shape(int $plots, int $npcClubs, int $claimed): array
     {
+        // STILL THE CLUB COUNT, deliberately, now that npc_club.land_plot_id exists.
+        //
+        // The obvious move once clubs sit on real plots is to count SEATED plots here instead.
+        // That is wrong, and measurably so: a club is seated by a backfill that runs after
+        // deploy, so between the two this town would report its reserved plots as available and
+        // sell ground an established club is standing on. An unpriced town — no plots to seat
+        // anyone on — would do it permanently.
+        //
+        // The seat's job is to name WHICH plot, so PlotHoldService can refuse that specific one
+        // by the club's name. How MUCH land a town offers is unchanged by it, and these figures
+        // mean exactly what they did before.
         $npcOccupied = min($npcClubs, self::NPC_PLOT_CAP);
 
         // Floored at zero: a town can legitimately be over-subscribed — three NPC clubs in a

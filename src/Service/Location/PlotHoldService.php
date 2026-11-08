@@ -8,6 +8,7 @@ use App\Entity\Location\LandPlot;
 use App\Entity\Location\PlotHold;
 use App\Entity\User;
 use App\Exception\Location\PlotUnavailableException;
+use App\Repository\NpcClubRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Repository\Location\PlotHoldRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -48,6 +49,7 @@ final class PlotHoldService
         private readonly EntityManagerInterface $em,
         private readonly LocationCapacityService $capacityService,
         private readonly LandPlotProvisioner    $plotProvisioner,
+        private readonly NpcClubRepository      $npcClubRepository,
     ) {}
 
     /**
@@ -85,6 +87,23 @@ final class PlotHoldService
 
         if ($existingClaim !== null) {
             throw PlotUnavailableException::plotClaimed($existingClaim->getClaimedByName());
+        }
+
+        // AN ESTABLISHED CLUB'S GROUND, refused by name rather than only shrinking a total.
+        //
+        // The capacity check below already made this town's seated plots unavailable in
+        // AGGREGATE — that is what npcOccupied has always done. What it could not do was stop a
+        // player buying the SPECIFIC plot a club sits on: a two-plot town with one NPC club and
+        // one free plot is not sold out, so a request naming the club's plot sailed past the
+        // total and took ground that was already built on.
+        //
+        // Checked here, between the claim and the capacity test, for the reason the comment
+        // below gives about ordering: a refusal that names what is in the way beats a vaguer
+        // one about the town.
+        $seatedClub = $this->npcClubRepository->findOneBy(['landPlot' => $plot]);
+
+        if ($seatedClub !== null) {
+            throw PlotUnavailableException::plotHasClub($seatedClub->getName());
         }
 
         // TOWN CAPACITY, CHECKED AFTER THE SPECIFIC PLOT AND NOT BEFORE. A town holds as many

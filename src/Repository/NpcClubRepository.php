@@ -60,6 +60,33 @@ class NpcClubRepository extends ServiceEntityRepository
         return $this->findBy(['league' => $league]);
     }
 
+    /**
+     * The league's clubs with their town and plot already loaded.
+     *
+     * FOR THE WORLD PACK, which puts a `land` block on every club snapshot. findByLeague()
+     * leaves `location` and `landPlot` as lazy proxies, so reading them per club costs two
+     * extra queries each — forty per tier on a twenty-club division, and a pack is eight tiers.
+     * Same reasoning as the note on WorldPackSnapshotBuilder::buildPlayerSnapshot() about
+     * guardians: a lazy relation read inside a per-row loop is a query multiplier.
+     *
+     * LEFT joins, because both are legitimately null — a club generated before its country's
+     * locations were seeded has no town, and only the first NPC_PLOT_CAP clubs in a town are
+     * seated on a plot.
+     *
+     * @return list<NpcClub>
+     */
+    public function findByLeagueWithLand(League $league): array
+    {
+        return $this->createQueryBuilder('c')
+            ->addSelect('loc', 'plot')
+            ->leftJoin('c.location', 'loc')
+            ->leftJoin('c.landPlot', 'plot')
+            ->where('c.league = :league')
+            ->setParameter('league', $league)
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return string[] every NPC club name in the given country, across all tiers */
     public function findNamesByCountry(string $country): array
     {
