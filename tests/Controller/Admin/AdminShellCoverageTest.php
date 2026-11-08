@@ -118,4 +118,57 @@ class AdminShellCoverageTest extends WebTestCase
             self::assertStringNotContainsString($needle, $page, "{$route} still carries '{$needle}'");
         }
     }
+
+    /**
+     * Every page's markup must actually nest.
+     *
+     * WHY A PARSER AND NOT A SELECTOR. Game config was rebuilt by transforming 2259 lines of
+     * Bootstrap in place, and the transform rewrote 30 `<div class="card cfg-section">` openers
+     * to `<section>` while leaving their `</div>` closers alone — plus two `<div
+     * class="form-check">` to `<label>`. The page still rendered, still returned 200, still
+     * passed every selector assertion in this file and every other, because a selector finds an
+     * element whether or not its ancestors closed in order. What it actually did was escape the
+     * shell: .bmc-main is 100vh with overflow hidden, so content that climbs out of it lands in
+     * the page's own scroll and leaves dead space under the sidebar.
+     *
+     * assertSelectorExists cannot see that. A real parse can, and the whole admin is cheap to
+     * parse, so all of it is checked rather than the one page that broke.
+     *
+     * SCRIPTS ARE STRIPPED FIRST, because a `'<div …>'` inside a JS string is not markup — the
+     * Generate page builds its pool table in JS and would otherwise read as unbalanced.
+     *
+     * @param array{0: string, 1: string} $page
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('pages')]
+    public function testThePageMarkupNestsCorrectly(string $route, string $title): void
+    {
+        $this->client->request('GET', '/admin', ['routeName' => $route]);
+        self::assertResponseIsSuccessful();
+
+        $html = (string) $this->client->getResponse()->getContent();
+        $html = preg_replace('#<script\b.*?</script>#is', '', $html) ?? $html;
+
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
+        $doc = new \DOMDocument();
+        $doc->loadHTML($html, \LIBXML_NOWARNING | \LIBXML_NOERROR);
+
+        // Only mis-nesting, not the long tail of things libxml dislikes about valid HTML5
+        // (unknown tags, bare ampersands, boolean attributes).
+        $mismatched = array_values(array_filter(
+            libxml_get_errors(),
+            static fn (\LibXMLError $e): bool => str_contains($e->message, 'Opening and ending tag mismatch')
+                || str_contains($e->message, 'Unexpected end tag'),
+        ));
+
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        self::assertSame(
+            [],
+            array_map(static fn (\LibXMLError $e): string => trim($e->message) . ' (line ' . $e->line . ')', $mismatched),
+            "{$route} has mis-nested markup",
+        );
+    }
 }
