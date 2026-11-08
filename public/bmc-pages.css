@@ -229,6 +229,40 @@
 .bmc-savebar[data-state="invalid"] .bmc-savebar__dot { background: var(--wk-danger); }
 .bmc-savebar__title { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); }
 .bmc-savebar__sub { flex: 1; min-width: 120px; font: var(--text-data); color: var(--wk-text-dim); }
+/* ── select ───────────────────────────────────────────────────
+   THE DESIGN SYSTEM HAD NO SELECT. Six redesigned pages went by without needing one — the
+   nationality picker is a checkbox list, generation modes are tabs — so a native <select>
+   dropped onto a dark pixel panel rendered as a light browser control with none of the
+   2px-stroke box every other field on the page has. Locations → Configuration needs one (71
+   seedable countries is far too many for a .bmc-segs group), so here it is, matching .bmc-num
+   box for box.
+
+   `appearance: none` plus a drawn caret, because the native arrow cannot be restyled and
+   reads as a different widget next to the hand-drawn borders. color-scheme is set so the
+   OPTION list the browser paints follows the panel rather than defaulting to light. */
+.bmc-select { position: relative; display: inline-flex; align-items: center; }
+.bmc-select select {
+    appearance: none; -webkit-appearance: none;
+    height: 36px; padding: 0 30px 0 8px; box-sizing: border-box;
+    background: var(--wk-panel); color: var(--wk-text);
+    border: 2px solid var(--wk-stroke); border-radius: 0;
+    font: var(--text-body-step); cursor: pointer;
+    color-scheme: dark;
+}
+.bmc-select::after {
+    content: "▾"; position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    font: var(--text-data); color: var(--wk-text-dim); pointer-events: none;
+}
+.bmc-select select:focus-visible { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
+.bmc-select select:disabled { opacity: .5; cursor: default; }
+
+/* A save bar that belongs to ONE card rather than to the page.
+   Locations → Configuration has two independent forms (plot counts, size bands) that must stay
+   apart — see the template's header note. Two position:sticky bars would both pin to bottom:0
+   and overlap, so each form's bar sits in its own card instead. Everything else about it, the
+   dot states included, is unchanged. */
+.bmc-savebar--inline { position: static; border-width: 3px 0 0; box-shadow: none; }
+
 /* Toasts must clear the sticky save bar. */
 body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 

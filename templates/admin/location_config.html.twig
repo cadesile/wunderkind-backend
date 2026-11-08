@@ -1,239 +1,278 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Locations & land → Configuration, on bmc_page + bmc-pages.css/js.
+  Data: LocationConfigController::overview().
 
-{% block content %}
-<div class="row g-4 mt-1">
+  TWO SAVE BARS, BOTH INLINE, AND NO STICKY ONE. Every other redesigned settings page has a
+  single sticky bar because it has a single form. This page has two, and keeping them apart is
+  a decision already argued on LocationConfigController::saveBands(): the plot counts change
+  how much land a town of a given size carries, while the bands change what every town IS and
+  need a recalculation run afterwards before they mean anything. One bar over two forms would
+  have to lie about which of those it had just done. Two STICKY bars is not an option either —
+  both would pin to bottom:0 and overlap — so each form carries its own .bmc-savebar--inline,
+  in the card whose fields it saves.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Locations &amp; Land — Configuration</h5>
-        <p class="text-muted small mb-0">
-            Settings for the land economy. These are balance dials, changeable without a deploy.
-        </p>
+  The top-up and the recalculation are ACTIONS, not settings: plain forms and a job queue, no
+  dirty tracking, each confirming for itself.
+#}
+
+{% set totals = {
+    towns:  estate|reduce((c, r) => c + r.towns,  0),
+    priced: estate|reduce((c, r) => c + r.priced, 0),
+    plots:  estate|reduce((c, r) => c + r.plots,  0),
+} %}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_locations_dashboard'}) }}"><span>DASHBOARD</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ ea_url().setController('App\\Controller\\Admin\\LocationCrudController').setAction('index').generateUrl() }}"><span>TOWNS</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+{# ── what the settings currently add up to ───────────────────────────── #}
+<div class="bmc-stats bmc-stats--card">
+    <div class="bmc-stat">
+        <span class="bmc-stat__label">TOWNS</span>
+        <span class="bmc-stat__value">{{ totals.towns|number_format }}</span>
+        <span class="bmc-stat__sub">active, all countries</span>
     </div>
+    <div class="bmc-stat">
+        <span class="bmc-stat__label">PRICED</span>
+        <span class="bmc-stat__value">{{ totals.priced|number_format }}</span>
+        <span class="bmc-stat__sub">{{ totals.towns > totals.priced ? (totals.towns - totals.priced)|number_format ~ ' awaiting enrichment' : 'every town valued' }}</span>
+    </div>
+    <div class="bmc-stat">
+        <span class="bmc-stat__label">PLOTS NOW</span>
+        <span class="bmc-stat__value">{{ totals.plots|number_format }}</span>
+        <span class="bmc-stat__sub">on the ground</span>
+    </div>
+    <div class="bmc-stat">
+        <span class="bmc-stat__label">TO ADD</span>
+        <span class="bmc-stat__value {{ shortfall > 0 ? 'ink-accent' : 'ink-dim' }}">{{ shortfall|number_format }}</span>
+        <span class="bmc-stat__sub">{{ shortfall > 0 ? 'priced towns below target' : 'every priced town at target' }}</span>
+    </div>
+</div>
 
-    {# ── Plots per city size ───────────────────────────────────────────────── #}
-    <div class="col-12 col-xl-7">
-        <div class="card h-100">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-map text-primary"></i>
-                <span class="fw-semibold small">Plots per city size</span>
-                <span class="ms-auto badge bg-secondary">{{ npcPlotCap }} max taken by NPC clubs</span>
+<div class="bmc-rule"><span class="bmc-rule__title">SETTINGS</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Balance dials · no deploy needed</span></div>
+
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+
+    {# ── plots per city size ─────────────────────────────────────────── #}
+    <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_plots'}) }}" data-bmc-form id="plots-form" style="display:contents">
+        <input type="hidden" name="_token" value="{{ csrf_token('location_config_plots') }}">
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="map"></i>
+                <span class="bmc-card__title">PLOTS PER CITY SIZE</span>
+                <span class="bmc-card__meta">{{ npcPlotCap }} max taken by NPC clubs</span>
             </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    How many clubs a town can hold. City size is a percentile split across each
-                    country&rsquo;s towns &mdash; top 20% by population <strong>big</strong>, bottom 50%
-                    <strong>small</strong>, the rest <strong>medium</strong>, with a capital always big.
-                    Generated clubs take at most {{ npcPlotCap }} plots in any one town, so a town with
-                    fewer than that is full the moment anything is generated there.
-                </p>
+            <div class="bmc-setting__help bmc-pretty" style="padding:10px 12px 4px">
+                How many clubs a town can hold. Generated clubs take at most {{ npcPlotCap }} plots in any
+                one town, so a town with fewer than that is full the moment anything is generated there.
+            </div>
 
-                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_plots'}) }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_plots') }}">
-
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm align-middle small mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Size</th>
-                                    <th style="width:7rem;">Plots</th>
-                                    <th class="text-end">Towns</th>
-                                    <th class="text-end" title="Towns with coordinates and a land value — the only ones that get plots">Priced</th>
-                                    <th class="text-end">Plots now</th>
-                                    <th class="text-end">Default</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            {% for size in citySizes %}
-                                {% set row = estate[size.value] ?? {'towns': 0, 'priced': 0, 'plots': 0} %}
-                                <tr>
-                                    <td class="fw-semibold text-capitalize">{{ size.value }}</td>
-                                    <td>
-                                        <label class="visually-hidden" for="plots_{{ size.value }}">Plots for {{ size.value }}</label>
-                                        <input type="number" class="form-control form-control-sm"
-                                               id="plots_{{ size.value }}" name="plots_{{ size.value }}"
-                                               value="{{ plots[size.value] }}"
-                                               min="{{ minPlots }}" max="{{ maxPlots }}" step="1" required>
-                                    </td>
-                                    <td class="text-end">{{ row.towns }}</td>
-                                    <td class="text-end">
-                                        {% if row.priced < row.towns %}
-                                            <span class="text-muted" title="{{ row.towns - row.priced }} still awaiting enrichment">{{ row.priced }}</span>
-                                        {% else %}{{ row.priced }}{% endif %}
-                                    </td>
-                                    <td class="text-end">{{ row.plots }}</td>
-                                    <td class="text-end text-muted">{{ defaults[size.value] ?? '—' }}</td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="d-flex gap-2 flex-wrap align-items-center">
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="fa fa-floppy-disk me-1"></i> Save
-                        </button>
-                        <span class="text-muted small">
-                            Saving changes the target only. Existing towns are untouched until you run the
-                            top-up, and lowering a figure never removes a plot.
+            {% for size in citySizes %}
+                {% set row = estate[size.value] ?? {'towns': 0, 'priced': 0, 'plots': 0} %}
+                {% set v   = plots[size.value] %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ size.value }}</span>
+                        <span class="bmc-setting__help">
+                            {{ row.towns|number_format }} town(s) ·
+                            {{ row.priced|number_format }} priced ·
+                            {{ row.plots|number_format }} plot(s) now
                         </span>
+                        <span class="bmc-setting__hint" data-bmc-hint
+                              data-default="Default {{ defaults[size.value] ?? '—' }}{% if row.priced < row.towns %} · {{ (row.towns - row.priced)|number_format }} still awaiting enrichment{% endif %}"></span>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# ── Apply to the existing estate ──────────────────────────────────────── #}
-    <div class="col-12 col-xl-5">
-        <div class="card h-100 {{ shortfall > 0 ? 'border-primary-subtle' : '' }}">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-arrow-up-right-dots text-muted"></i>
-                <span class="fw-semibold small">Top up existing towns</span>
-                <span class="ms-auto badge {{ shortfall > 0 ? 'bg-primary' : 'bg-secondary' }}">
-                    {{ shortfall }} to add
-                </span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Brings every <strong>priced</strong> town up to the plots its size calls for. An
-                    unpriced town stays at zero until enrichment values it &mdash; a plot with no land
-                    value cannot be bought, and creating one would only make the catalogue offer a
-                    purchase that fails. Free, no API calls, and safe to run repeatedly: it tops up and
-                    never removes.
-                </p>
-
-                {% if shortfall == 0 %}
-                    <div class="alert alert-secondary py-2 small mb-3 mb-0">
-                        Every priced town already matches its target. Nothing to do.
-                    </div>
-                {% endif %}
-
-                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_provision'}) }}">
-                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_provision') }}">
-
-                    <div class="mb-3">
-                        <label for="provisionCountry" class="form-label fw-semibold small mb-1">Country</label>
-                        <select name="country" id="provisionCountry" class="form-select form-select-sm">
-                            <option value="">All countries</option>
-                        {% for code in seedable %}
-                            <option value="{{ code }}">{{ code }}</option>
-                        {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="provisionDryRun" name="dry_run" value="1" checked>
-                        <label class="form-check-label small" for="provisionDryRun">
-                            Dry run &mdash; report what would change, write nothing
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num" style="width:88px">
+                            <input name="plots_{{ size.value }}" inputmode="numeric" value="{{ v }}"
+                                   data-saved="{{ v }}" data-min="{{ minPlots }}" data-max="{{ maxPlots }}"
+                                   aria-label="Plots for a {{ size.value|lower }} town">
                         </label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved">
+                            <i data-lucide="rotate-ccw" width="16" height="16"></i>
+                        </button>
                     </div>
-
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                        <i class="fa fa-arrow-up-right-dots me-1"></i> Run top-up
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# ── City size bands + recalculation ──────────────────────────────── #}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-chart-simple text-muted"></i>
-                <span class="fw-semibold small">City size bands</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small">
-                    A town's size is its <strong>rank within its own country</strong>, not an absolute
-                    population. Every priced town in a country is ordered by population; the top slice is
-                    BIG, the bottom slice is SMALL, and whatever is left in the middle is MEDIUM. So
-                    &ldquo;big&rdquo; means big compared with its neighbours, and a country's capital is
-                    forced BIG whatever its rank. Size decides how many land plots a town carries.
-                </p>
-
-                <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_bands'}) }}" class="mb-4">
-                    <input type="hidden" name="_token" value="{{ csrf_token('location_config_bands') }}">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-auto">
-                            <label for="bigSharePercent" class="form-label fw-semibold small mb-1">Big (top %)</label>
-                            <input type="number" class="form-control form-control-sm" style="width:110px"
-                                   id="bigSharePercent" name="bigSharePercent" value="{{ bigShare }}"
-                                   min="{{ minShare }}" max="{{ maxShare }}" step="1">
-                        </div>
-                        <div class="col-auto">
-                            <label for="smallSharePercent" class="form-label fw-semibold small mb-1">Small (bottom %)</label>
-                            <input type="number" class="form-control form-control-sm" style="width:110px"
-                                   id="smallSharePercent" name="smallSharePercent" value="{{ smallShare }}"
-                                   min="{{ minShare }}" max="{{ maxShare }}" step="1">
-                        </div>
-                        <div class="col-auto">
-                            <span class="form-label fw-semibold small mb-1 d-block">Medium</span>
-                            <span class="badge bg-secondary" id="mediumSharePreview">{{ mediumShare }}%</span>
-                            <span class="text-muted small ms-1">whatever is left</span>
-                        </div>
-                        <div class="col-auto">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
-                                <i class="fa fa-floppy-disk me-1"></i> Save bands
-                            </button>
-                        </div>
-                    </div>
-                    <div class="form-text">
-                        Saving stores the bands; it does not re-sort anything. Run the recalculation below
-                        to apply them. If the two add up to more than 100, big wins and small gives way —
-                        that is the order the ranking actually tests them in.
-                    </div>
-                </form>
-
-                <hr>
-
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="fw-semibold small">Recalculate every town's size</span>
-                    <span class="text-muted small">{{ reclassifyPlan|length }} country(s) with priced towns</span>
                 </div>
-                <p class="text-muted small">
-                    One step per country, run in sequence. Each step re-ranks that country's priced towns
-                    and writes their new size. Towns with no population sit out — they join the ranking
-                    when enrichment prices them. A town that moves <em>down</em> also gives up any land
-                    plot nobody holds; plots that are claimed or on hold are left alone.
-                </p>
+            {% endfor %}
 
-                {% if reclassifyPlan is empty %}
-                    <div class="alert alert-secondary py-2 small mb-0">
-                        No priced towns yet, so there is nothing to rank.
-                    </div>
-                {% else %}
-                    <button type="button" class="btn btn-sm btn-warning" id="reclassifyRun"
-                            data-url="{{ path('admin_location_config_reclassify_chunk') }}"
-                            data-token="{{ csrf_token('location_config_reclassify') }}">
-                        <i class="fa fa-rotate me-1"></i> Recalculate all sizes
-                    </button>
-
-                    <div id="reclassifyPanel" class="mt-3" hidden>
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <div class="progress flex-grow-1" style="height:8px">
-                                <div class="progress-bar" id="reclassifyBar" style="width:0%"></div>
-                            </div>
-                            <span class="text-muted small" id="reclassifySummary"></span>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
-                                <thead><tr>
-                                    <th style="width:110px">Step</th>
-                                    <th>Country</th>
-                                    <th class="text-end" style="width:90px">Towns</th>
-                                    <th>Result</th>
-                                </tr></thead>
-                                <tbody id="reclassifyRows"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <script type="application/json" id="reclassifyPlanData">{{ reclassifyPlan|json_encode|raw }}</script>
-                {% endif %}
+            <div class="bmc-savebar bmc-savebar--inline" data-bmc-savebar
+                 data-idle="Changes the target only — existing towns keep the plots they have.">
+                <span class="bmc-savebar__dot"></span>
+                <span class="bmc-savebar__title">ALL SAVED</span>
+                <span class="bmc-savebar__sub"></span>
+                <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+                <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE PLOTS</span></button>
             </div>
-        </div>
-    </div>
+        </section>
+    </form>
 
+    {# ── city size bands ─────────────────────────────────────────────── #}
+    <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_save_bands'}) }}" data-bmc-form id="bands-form" style="display:contents">
+        <input type="hidden" name="_token" value="{{ csrf_token('location_config_bands') }}">
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span class="bmc-card__title">CITY SIZE BANDS</span>
+                <span class="bmc-card__meta">rank within a country, not absolute population</span>
+            </div>
+            <div class="bmc-setting__help bmc-pretty" style="padding:10px 12px 4px">
+                Every priced town in a country is ordered by population; the top slice is BIG, the bottom
+                slice is SMALL, whatever is left is MEDIUM. So &ldquo;big&rdquo; means big compared with its
+                neighbours, and a capital is forced BIG whatever its rank.
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">BIG</span>
+                    <span class="bmc-setting__help">Top share by population</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Tested first, so it wins an overlap"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num" style="width:88px">
+                        <input name="bigSharePercent" id="bigSharePercent" inputmode="numeric" value="{{ bigShare }}"
+                               data-saved="{{ bigShare }}" data-min="{{ minShare }}" data-max="{{ maxShare }}"
+                               aria-label="Big share, percent">
+                    </label>
+                    <span class="bmc-unitword" style="width:14px">%</span>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved">
+                        <i data-lucide="rotate-ccw" width="16" height="16"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">SMALL</span>
+                    <span class="bmc-setting__help">Bottom share by population</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Gives way if the two overlap"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num" style="width:88px">
+                        <input name="smallSharePercent" id="smallSharePercent" inputmode="numeric" value="{{ smallShare }}"
+                               data-saved="{{ smallShare }}" data-min="{{ minShare }}" data-max="{{ maxShare }}"
+                               aria-label="Small share, percent">
+                    </label>
+                    <span class="bmc-unitword" style="width:14px">%</span>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved">
+                        <i data-lucide="rotate-ccw" width="16" height="16"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bmc-setting">
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">MEDIUM</span>
+                    <span class="bmc-setting__help">Whatever is left over</span>
+                    <span class="bmc-setting__hint" id="mediumShareNote"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <span class="bmc-badge bmc-badge--subtle" id="mediumSharePreview">{{ mediumShare }}%</span>
+                </div>
+            </div>
+
+            <div class="bmc-savebar bmc-savebar--inline" data-bmc-savebar
+                 data-idle="Stores the bands — nothing is re-sorted until you recalculate below.">
+                <span class="bmc-savebar__dot"></span>
+                <span class="bmc-savebar__title">ALL SAVED</span>
+                <span class="bmc-savebar__sub"></span>
+                <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+                <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE BANDS</span></button>
+            </div>
+        </section>
+    </form>
+</div>
+
+<div class="bmc-rule"><span class="bmc-rule__title">APPLY TO THE ESTATE</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Settings above do nothing on their own</span></div>
+
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+
+    {# ── top up ──────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="trending-up"></i>
+            <span class="bmc-card__title">TOP UP EXISTING TOWNS</span>
+            <span class="bmc-card__meta">{{ shortfall|number_format }} to add</span>
+        </div>
+        <div class="bmc-card__body">
+            <p class="bmc-bodytext">
+                Brings every <strong>priced</strong> town up to the plots its size calls for. An unpriced
+                town stays at zero until enrichment values it — a plot with no land value cannot be bought,
+                and creating one would only make the catalogue offer a purchase that fails. Free, no API
+                calls, and safe to run repeatedly: it tops up and never removes.
+            </p>
+
+            {% if shortfall == 0 %}
+                <span class="bmc-empty-note">EVERY PRICED TOWN ALREADY MATCHES ITS TARGET</span>
+            {% endif %}
+
+            <form method="post" action="{{ path('admin', {routeName: 'admin_location_config_provision'}) }}"
+                  style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+                <input type="hidden" name="_token" value="{{ csrf_token('location_config_provision') }}">
+
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <label class="bmc-lbl bmc-lbl--ink" for="provisionCountry">COUNTRY</label>
+                    <span class="bmc-select">
+                        <select name="country" id="provisionCountry" style="min-width:160px">
+                            <option value="">All countries</option>
+                            {% for code in seedable %}
+                                <option value="{{ code }}">{{ code }}</option>
+                            {% endfor %}
+                        </select>
+                    </span>
+                </div>
+
+                <label class="bmc-check" style="padding-left:0">
+                    <input type="checkbox" id="provisionDryRun" name="dry_run" value="1" checked>
+                    <span class="bmc-tile"></span>
+                    <span class="bmc-data">Dry run — report what would change, write nothing</span>
+                </label>
+
+                <button type="submit" class="bmc-btn bmc-btn--blue" style="align-self:flex-start"><span>RUN TOP-UP</span></button>
+            </form>
+        </div>
+    </section>
+
+    {# ── recalculate ─────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club" id="reclassify">
+        <div class="bmc-card__head">
+            <i data-lucide="rotate-cw"></i>
+            <span class="bmc-card__title">RECALCULATE EVERY TOWN'S SIZE</span>
+            <span class="bmc-card__meta">{{ reclassifyPlan|length }} country(s) with priced towns</span>
+        </div>
+        <div class="bmc-card__body">
+            <p class="bmc-bodytext">
+                One step per country, run in sequence. Each step re-ranks that country's priced towns and
+                writes their new size. Towns with no population sit out — they join the ranking when
+                enrichment prices them. A town that moves <em>down</em> also gives up any land plot nobody
+                holds; plots that are claimed or on hold are left alone.
+            </p>
+
+            {% if reclassifyPlan is empty %}
+                <span class="bmc-empty-note">NO PRICED TOWNS YET, SO NOTHING TO RANK</span>
+            {% else %}
+                <button type="button" class="bmc-btn bmc-btn--orange" id="reclassifyRun" style="margin-top:10px"
+                        data-url="{{ path('admin_location_config_reclassify_chunk') }}"
+                        data-token="{{ csrf_token('location_config_reclassify') }}"
+                        data-bmc-dialog-title="RECALCULATE {{ reclassifyPlan|length }} COUNTRY(S)?"
+                        data-bmc-dialog-message="Every priced town is re-ranked. Towns that move down give up any land plot nobody holds."
+                        data-bmc-dialog-confirm="RECALCULATE" data-bmc-dialog-variant="yellow"><span>RECALCULATE ALL SIZES</span></button>
+                <script type="application/json" id="reclassifyPlanData">{{ reclassifyPlan|json_encode|raw }}</script>
+            {% endif %}
+        </div>
+
+        {% if reclassifyPlan is not empty %}
+            <div id="reclassifyPanel" hidden>
+                <div class="bmc-card__band" style="display:flex;align-items:center;gap:10px">
+                    <span class="bmc-bar" style="flex:1"><span class="bmc-bar__fill" id="reclassifyBar" style="display:block;width:0%"></span></span>
+                    <span class="bmc-data" id="reclassifySummary"></span>
+                </div>
+                <div class="bmc-rows bmc-rows--flush bmc-rows--scroll-200" id="reclassifyRows"></div>
+            </div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}
 
@@ -241,43 +280,46 @@
 {{ parent() }}
 <script>
 (function () {
+    var $ = function (s) { return document.querySelector(s); };
+    var n = function (v) { return Number(v).toLocaleString('en-GB'); };
+
     // MEDIUM is derived, so show it moving as the other two are typed rather than making the
-    // operator work out what is left.
-    var big = document.getElementById('bigSharePercent'),
-        small = document.getElementById('smallSharePercent'),
-        preview = document.getElementById('mediumSharePreview');
+    // operator work out what is left — and say BEFORE the save that small will be trimmed.
+    var big = $('#bigSharePercent'), small = $('#smallSharePercent'),
+        preview = $('#mediumSharePreview'), note = $('#mediumShareNote');
 
     function drawMedium() {
         if (!big || !small || !preview) return;
         var b = Math.max(0, Math.min(100, parseInt(big.value, 10) || 0));
-        var s = Math.min(Math.max(0, Math.min(100, parseInt(small.value, 10) || 0)), 100 - b);
+        var raw = parseInt(small.value, 10) || 0;
+        var s = Math.min(Math.max(0, Math.min(100, raw)), 100 - b);
+        var trimmed = raw > 100 - b;
+
         preview.textContent = Math.max(0, 100 - b - s) + '%';
-        // Say so before the save does it silently.
-        preview.className = 'badge ' + ((parseInt(small.value, 10) || 0) > 100 - b ? 'bg-warning text-dark' : 'bg-secondary');
-        preview.title = (parseInt(small.value, 10) || 0) > 100 - b
-            ? 'Small will be reduced to ' + s + '% on save: big is tested first, so it wins.'
-            : '';
+        preview.className = 'bmc-badge ' + (trimmed ? 'bmc-badge--warning' : 'bmc-badge--subtle');
+        if (note) note.textContent = trimmed ? 'Small will be cut to ' + s + '% on save — big is tested first' : 'Whatever is left over';
     }
 
-    if (big && small) { big.addEventListener('input', drawMedium); small.addEventListener('input', drawMedium); drawMedium(); }
+    if (big && small) {
+        big.addEventListener('input', drawMedium);
+        small.addEventListener('input', drawMedium);
+        drawMedium();
+    }
 
     // ── the recalculation queue ─────────────────────────────────────
-    var runBtn = document.getElementById('reclassifyRun');
-    var planEl = document.getElementById('reclassifyPlanData');
+    var runBtn = $('#reclassifyRun'), planEl = $('#reclassifyPlanData');
     if (!runBtn || !planEl || !window.BMC) return;
 
     var plan = JSON.parse(planEl.textContent);
-    var panel = document.getElementById('reclassifyPanel'),
-        bar = document.getElementById('reclassifyBar'),
-        summary = document.getElementById('reclassifySummary'),
-        rows = document.getElementById('reclassifyRows');
+    var panel = $('#reclassifyPanel'), bar = $('#reclassifyBar'),
+        summary = $('#reclassifySummary'), rows = $('#reclassifyRows');
 
     var BADGE = {
-        queued:  ['Queued',  'bg-secondary'],
-        running: ['Running', 'bg-primary'],
-        done:    ['Done',    'bg-success'],
-        skipped: ['Skipped', 'bg-secondary'],
-        failed:  ['Failed',  'bg-danger']
+        queued:  ['QUEUED',  'subtle'],
+        running: ['RUNNING', 'accent'],
+        done:    ['DONE',    'positive'],
+        skipped: ['SKIPPED', 'subtle'],
+        failed:  ['FAILED',  'danger']
     };
 
     function draw(jobs) {
@@ -286,22 +328,22 @@
         var towns = jobs.reduce(function (a, j) { return a + (j.count || 0); }, 0);
 
         bar.style.width = Math.round(settled / jobs.length * 100) + '%';
-        summary.textContent = settled + ' of ' + jobs.length + ' countries · ' + towns.toLocaleString('en-GB') + ' town(s) ranked';
+        summary.textContent = settled + ' of ' + jobs.length + ' countries · ' + n(towns) + ' town(s) ranked';
 
         rows.innerHTML = jobs.map(function (j) {
             var b = BADGE[j.status];
-            return '<tr>' +
-                '<td><span class="badge ' + b[1] + '">' + b[0] + '</span></td>' +
-                '<td>' + j.label + ' <span class="text-muted small">' + j.code + '</span></td>' +
-                '<td class="text-end text-muted">' + j.towns.toLocaleString('en-GB') + '</td>' +
-                '<td class="small ' + (j.status === 'failed' ? 'text-danger' : 'text-muted') + '">' + (j.message || '') + '</td>' +
-                '</tr>';
+            return '<div class="bmc-jobrow">' +
+                '<div><span class="bmc-badge bmc-badge--' + b[1] + '">' + b[0] + '</span></div>' +
+                '<span class="bmc-celltext">' + j.label + ' <span class="bmc-data">' + j.code + '</span></span>' +
+                '<span class="bmc-cellnum ink-dim">' + n(j.towns) + '</span>' +
+                '<span class="bmc-data' + (j.status === 'failed' ? ' ink-danger' : '') + '">' + (j.message || '') + '</span>' +
+                '</div>';
         }).join('');
     }
 
+    // The PixelDialog handles the confirm through data-bmc-dialog-*, which re-dispatches the
+    // click once the operator says yes — so by the time this listener runs, it is confirmed.
     runBtn.addEventListener('click', function () {
-        if (!window.confirm('Re-rank every priced town in ' + plan.length + ' country(s)?\n\nTowns that move down give up any land plot nobody holds.')) return;
-
         runBtn.disabled = true;
         BMC.runJobs({
             url: runBtn.dataset.url,
