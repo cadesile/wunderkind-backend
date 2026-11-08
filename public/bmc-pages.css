@@ -229,6 +229,23 @@
 .bmc-savebar[data-state="invalid"] .bmc-savebar__dot { background: var(--wk-danger); }
 .bmc-savebar__title { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); }
 .bmc-savebar__sub { flex: 1; min-width: 120px; font: var(--text-data); color: var(--wk-text-dim); }
+/* ── fold ─────────────────────────────────────────────────────
+   A card whose body collapses. The old Worldpack cache page did this with Bootstrap's
+   data-bs-toggle="collapse", which is the one piece of Bootstrap JS the redesigned pages still
+   depended on — and it needs a matching #id on both halves, so two folds on a page is two
+   chances to typo one. Native <details> needs no script and no ids at all.
+
+   The default triangle is removed on both engines (list-style for Firefox, the webkit
+   pseudo-element for Safari and Chrome) and replaced with a chevron that rotates when open,
+   matching the sidebar's group heads. */
+.bmc-fold > summary { cursor: pointer; list-style: none; }
+.bmc-fold > summary::-webkit-details-marker { display: none; }
+.bmc-fold > summary::marker { content: ""; }
+.bmc-fold > summary:focus-visible { outline: 2px solid var(--wk-accent); outline-offset: -2px; }
+.bmc-fold > summary:active { background: var(--wk-pressed); }
+.bmc-fold__chev { margin-left: auto; flex-shrink: 0; color: var(--wk-text-dim); transition: transform .12s steps(3); }
+.bmc-fold[open] > summary .bmc-fold__chev { transform: rotate(90deg); }
+
 /* ── CodeMirror ───────────────────────────────────────────────
    Starter config hand-edits two JSON blobs where a misplaced comma is silent in production,
    so the editor and its lint markers earn their CDN load. These rules only make it sit in the
