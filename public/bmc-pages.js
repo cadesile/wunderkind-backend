@@ -134,14 +134,37 @@
     function fieldError(el) {
         var v = norm(el), kind = el.getAttribute('data-kind') || 'int';
         if (v === '') return el.getAttribute('data-blank') === 'ok' ? '' : 'Required';
+
+        // TWO KINDS BEYOND int/money, both added for Starter config. `text` is a value with no
+        // numeric meaning at all — a <select>'s option, a JSON blob — where the only rule worth
+        // enforcing is required-or-not; running the integer check over "MEDIUM" reported every
+        // dropdown on the page as broken. `decimal` is a real number: quizBonusMultiplier steps
+        // in 0.05 and the fan-base multipliers in 0.01, so "0.2" is correct input and the
+        // integer check rejected it.
+        if (kind === 'text') return '';
+
+        if (kind === 'decimal') {
+            if (!/^-?\d*\.?\d+$/.test(v)) return 'Number only';
+            var d = parseFloat(v), dlo = el.getAttribute('data-min'), dhi = el.getAttribute('data-max');
+            if ((dlo !== null && d < +dlo) || (dhi !== null && d > +dhi)) return dlo + '–' + dhi + ' only';
+            return '';
+        }
+
         if (!/^\d+$/.test(v)) return kind === 'money' ? 'Whole pounds only' : 'Whole number';
         var n = parseInt(v, 10), lo = el.getAttribute('data-min'), hi = el.getAttribute('data-max');
         if ((lo !== null && n < +lo) || (hi !== null && n > +hi)) return lo + '–' + hi + ' only';
         return '';
     }
 
+    // SELECTS AND TEXTAREAS COUNT TOO. This was input-only, which is fine while every tracked
+    // field is a number — and silently wrong the moment a page's only change is a dropdown or a
+    // JSON blob: check() saw nothing dirty, so the save bar read ALL SAVED and, worse,
+    // [data-bmc-save] stayed DISABLED and the operator could not save at all. Starter config is
+    // four selects and two JSON editors, so it would have been unusable.
+    var FIELD_SEL = 'input[data-saved], select[data-saved], textarea[data-saved]';
+
     function bindForm(form) {
-        var fields = $$('input[data-saved]', form);
+        var fields = $$(FIELD_SEL, form);
         var bar = $('[data-bmc-savebar]', form) || $('[data-bmc-savebar][data-form="' + form.id + '"]');
         var byName = {}; fields.forEach(function (f) { byName[f.name] = f; });
 
@@ -177,7 +200,7 @@
                 if (f._err) invalid++;
             });
             $$('[data-bmc-setting]', form).forEach(function (row) {
-                var fs = $$('input[data-saved]', row);
+                var fs = $$(FIELD_SEL, row);
                 var err = fs.map(function (f) { return f._err; }).filter(function (x) { return x && x.trim(); })[0];
                 var dirty = fs.some(function (f) { return f._dirty; });
                 var rv = $('.bmc-revert', row); if (rv) rv.hidden = !dirty;
@@ -206,11 +229,12 @@
         fields.forEach(function (f) {
             if (f.getAttribute('data-kind') === 'money') { BMC.money(f); f.addEventListener('input', function () { BMC.money(f); }); }
             f.addEventListener('input', check);
+            f.addEventListener('change', check);   // <select> is change-only
         });
         $$('[data-bmc-setting]', form).forEach(function (row) {
             var rv = $('.bmc-revert', row);
             if (rv) rv.addEventListener('click', function () {
-                $$('input[data-saved]', row).forEach(function (f) { f.value = f.getAttribute('data-saved'); if (f.getAttribute('data-kind') === 'money') BMC.money(f); });
+                $$(FIELD_SEL, row).forEach(function (f) { f.value = f.getAttribute('data-saved'); if (f.getAttribute('data-kind') === 'money') BMC.money(f); });
                 check();
             });
         });

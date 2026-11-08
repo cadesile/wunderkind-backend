@@ -1,558 +1,509 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Config → Starter config, on bmc_page + bmc-pages.css/js.
+  Data: DashboardController::starterConfig() — config, dynamicLeagueTiers.
+
+  ONE FORM, ONE STICKY SAVE BAR. Everything on this page posts to admin_starter_config_save in
+  a single submit, so unlike Locations → Configuration it takes the page-level bar.
+
+  THIS PAGE IS WHY bmc-pages.js NOW TRACKS SELECTS AND TEXTAREAS. bindForm() read
+  input[data-saved] only, and [data-bmc-save] is disabled while nothing is dirty — so a page
+  whose only change was a dropdown or a JSON edit could not be saved at all. Four selects and
+  two JSON editors live here. data-kind="text" skips the numeric check for them, and
+  data-kind="decimal" exists for the three multipliers that step in 0.01/0.05.
+
+  CODEMIRROR STAYS. The two JSON blocks are hand-edited structured data where a misplaced comma
+  is silent in production — the tutorial docs below say so — so lint markers and a submit guard
+  earn their CDN load. It syncs back to its textarea on every change so the save bar sees the
+  edit, which the old page had no need to do.
+#}
+
+{% set staffCounts = [
+    {field: 'starterPlayerCount',             label: 'PLAYERS',               d: 5, help: 'Assigned at club creation'},
+    {field: 'starterManagerCount',            label: 'MANAGERS',              d: 1, help: 'Assigned at club creation'},
+    {field: 'starterCoachCount',              label: 'COACHES',               d: 1, help: 'Assigned at club creation'},
+    {field: 'starterScoutCount',              label: 'SCOUTS',                d: 1, help: 'Assigned at club creation'},
+    {field: 'starterDirectorOfFootballCount', label: 'DIRECTORS OF FOOTBALL', d: 0, help: 'Assigned at club creation'},
+    {field: 'starterFacilityManagerCount',    label: 'FACILITY MANAGERS',     d: 0, help: 'Assigned at club creation'},
+    {field: 'starterChairmanCount',           label: 'CHAIRMEN',              d: 1, help: 'Assigned at club creation'},
+] %}
+
+{% set npcStaff = [
+    {key: 'managerCount',             label: 'MGR',     d: 1},
+    {key: 'coachCount',               label: 'COACH',   d: 1},
+    {key: 'chairmanCount',            label: 'CHAIR',   d: 1},
+    {key: 'directorOfFootballCount',  label: 'DOF',     d: 0},
+    {key: 'facilityManagerCount',     label: 'FAC MGR', d: 0},
+    {key: 'scoutCount',               label: 'SCOUT',   d: 0},
+] %}
 
 {% block head_stylesheets %}
     {{ parent() }}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.css">
-    <style>
-        .CodeMirror { height: 140px; font-size: 13px; border: 1px solid #ced4da; border-radius: 0.375rem; }
-        .CodeMirror-focused { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25); outline: 0; }
-        .cm-json-error .CodeMirror { border-color: #dc3545; }
-        #defaultFacilities-error, #setupTutorialConfig-error { display: none; }
-        .cm-json-error #defaultFacilities-error,
-        .cm-json-error #setupTutorialConfig-error { display: block; }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/theme/material-darker.min.css">
 {% endblock %}
 
-{% block content %}
-<div class="row g-4 mt-1">
+{% block bmc_page_class %} bmc-page--savebar{% endblock %}
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">Starter Config</h5>
-        <p class="text-muted small mb-0">These values define the starting conditions for every new club. Changes take effect on the next new registration.</p>
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_starter_pack_check'}) }}"><span>PACK CHECK</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_game_config'}) }}"><span>GAME CONFIG</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+<form method="post" action="{{ path('admin_starter_config_save') }}" data-bmc-form id="starter-form" style="display:contents">
+    <input type="hidden" name="_token" value="{{ csrf_token('save_starter_config') }}">
+
+    {# ── money a new account and a new club start with ─────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="banknote"></i>
+            <span class="bmc-card__title">OPENING MONEY</span>
+            <span class="bmc-card__meta">applies from the next registration</span>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">CLUB STARTING BALANCE</span>
+                <span class="bmc-setting__help">The new club's own transfer kitty. Device-owned — every sync reassigns it, so land is <strong>not</strong> charged against this.</span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="Default £50,000"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--fill" style="max-width:160px">
+                    <span class="bmc-num__unit">£</span>
+                    <input name="startingBalance" inputmode="numeric" data-kind="money"
+                           value="{{ config.startingBalancePounds }}" data-saved="{{ config.startingBalancePounds }}"
+                           data-min="0" data-max="100000000" aria-label="Club starting balance, pounds">
+                </label>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">ACCOUNT STARTING GRANT</span>
+                <span class="bmc-setting__help">
+                    The <strong>account's</strong> opening credit, granted once when the player creates their
+                    owner avatar. This is what land and stadiums are charged against (<code class="bmc-code">UserLedger</code>),
+                    and it is durable — unlike the club kitty, a sync cannot overwrite it. Each account draws a
+                    figure from this range deterministically from its own id, so the same account always resolves
+                    to the same amount. Set both ends equal for a fixed grant.
+                </span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="Default £5,000,000 – £6,000,000"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span>
+                    <input name="userStartingBalanceMinPounds" inputmode="numeric" data-kind="money"
+                           value="{{ config.userStartingBalanceMinPounds }}" data-saved="{{ config.userStartingBalanceMinPounds }}"
+                           data-min="0" data-max="1000000000" data-lte="userStartingBalanceMaxPounds" aria-label="Account grant minimum">
+                </label>
+                <span class="bmc-sep">–</span>
+                <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span>
+                    <input name="userStartingBalanceMaxPounds" inputmode="numeric" data-kind="money"
+                           value="{{ config.userStartingBalanceMaxPounds }}" data-saved="{{ config.userStartingBalanceMaxPounds }}"
+                           data-min="0" data-max="1000000000" aria-label="Account grant maximum">
+                </label>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">QUIZ BONUS MULTIPLIER</span>
+                <span class="bmc-setting__help">
+                    What finishing the onboarding quiz pays, as a multiple of <strong>that account's own</strong> grant,
+                    scaled by the share of questions answered correctly. At <code class="bmc-code">1.0</code> a perfect
+                    score doubles the grant and half marks add 50%. A multiple rather than a fixed amount because the
+                    grant is a range — a flat bonus would be a bigger proportion of an unlucky account's grant.
+                    <strong>0 switches the bonus off</strong>; the quiz still runs and still records answers.
+                </span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="{{ config.quizBonusMultiplier == 0 ? 'Bonus currently switched off' : 'Default 1.0' }}"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--76">
+                    <input name="quizBonusMultiplier" inputmode="decimal" data-kind="decimal"
+                           value="{{ config.quizBonusMultiplier }}" data-saved="{{ config.quizBonusMultiplier }}"
+                           data-min="0" data-max="10" aria-label="Quiz bonus multiplier">
+                </label>
+                <span class="bmc-unitword" style="width:14px">×</span>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">MINIMUM CLUB STAKE</span>
+                <span class="bmc-setting__help">
+                    The smallest opening capital a player may stake into a new club on
+                    <code class="bmc-code">POST /api/club/fund</code>. <strong>0 means no minimum</strong>, which is the
+                    default: the setup flow offers any part of the account balance, and refusing a stake the player was
+                    told they could make is a worse failure than letting them underfund a club they can top up later.
+                </span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="{{ config.clubFundingMinimumPence == 0 ? 'No minimum enforced' : 'Default £0' }}"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span>
+                    <input name="clubFundingMinimumPounds" inputmode="numeric" data-kind="money"
+                           value="{{ (config.clubFundingMinimumPence / 100)|round }}" data-saved="{{ (config.clubFundingMinimumPence / 100)|round }}"
+                           data-min="0" data-max="1000000000" aria-label="Minimum club stake, pounds">
+                </label>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">LAND VALUATIONS PER ACCOUNT</span>
+                <span class="bmc-setting__help">
+                    How many AI land valuations one account may ever request. Each is a <strong>billed external API
+                    call</strong>, so this is the ceiling on what a single player can spend — the catalogue is thousands
+                    of towns, and without a cap one account can walk it. <strong>0 is unlimited.</strong> Only requests
+                    that actually start a valuation count: a repeat tap, or a second player opening a town somebody else
+                    is already valuing, costs nothing. Lifetime total per account; it does not reset.
+                </span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="{{ config.maxEnrichmentRequestsPerUser == 0 ? 'Currently unlimited' : 'Lifetime cap per account' }}"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--76">
+                    <input name="maxEnrichmentRequestsPerUser" inputmode="numeric"
+                           value="{{ config.maxEnrichmentRequestsPerUser }}" data-saved="{{ config.maxEnrichmentRequestsPerUser }}"
+                           data-min="0" data-max="100000" aria-label="Land valuations per account">
+                </label>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">FUNDING PROJECTION WEEKS</span>
+                <span class="bmc-setting__help">
+                    How many weeks of running costs the funding screen projects, published on
+                    <code class="bmc-code">/api/starter-config</code>. Advisory — it warns, it does not refuse. The app
+                    does the wage half itself: hired staff and players leave the pool on assign, so the server holds no
+                    roster and can only report facility upkeep.
+                </span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="Published to the app"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--60">
+                    <input name="clubFundingProjectionWeeks" inputmode="numeric"
+                           value="{{ config.clubFundingProjectionWeeks }}" data-saved="{{ config.clubFundingProjectionWeeks }}"
+                           data-min="1" data-max="520" aria-label="Funding projection weeks">
+                </label>
+                <span class="bmc-unitword" style="width:34px">wks</span>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+
+        {# ── what the club is created with ──────────────────────────────── #}
+        <section class="bmc-card" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="users"></i>
+                <span class="bmc-card__title">STARTING SQUAD &amp; STAFF</span>
+            </div>
+            {% for s in staffCounts %}
+                {% set v = attribute(config, s.field) %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ s.label }}</span>
+                        <span class="bmc-setting__help">{{ s.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="Default {{ s.d }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--60">
+                            <input name="{{ s.field }}" inputmode="numeric" value="{{ v }}" data-saved="{{ v }}"
+                                   data-min="0" data-max="100" aria-label="{{ s.label|lower }} at club creation">
+                        </label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        {# ── the bands a new club is created into ───────────────────────── #}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="award"></i>
+                <span class="bmc-card__title">STARTING BANDS</span>
+            </div>
+
+            {% set bands = [
+                {field: 'starterSponsorTier',    label: 'SPONSOR TIER',    help: 'Sponsor company-size tier assigned at club creation', d: 'SMALL',
+                 value: config.starterSponsorTier, options: {'SMALL': 'SMALL', 'MEDIUM': 'MEDIUM', 'LARGE': 'LARGE'}},
+                {field: 'starterReputationTier', label: 'REPUTATION TIER', help: 'Club reputation band at creation', d: 'Local',
+                 value: config.starterReputationTier.value, options: {'local': 'Local', 'regional': 'Regional', 'national': 'National', 'elite': 'Elite'}},
+                {field: 'starterClubTier',       label: 'CLUB TIER',       help: 'Club tier assigned at creation', d: 'Local',
+                 value: config.starterClubTier, options: {'local': 'Local', 'regional': 'Regional', 'national': 'National', 'elite': 'Elite'}},
+            ] %}
+
+            {% for b in bands %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ b.label }}</span>
+                        <span class="bmc-setting__help">{{ b.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="Default {{ b.d }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <span class="bmc-select">
+                            {# data-kind="text": the numeric check would read "MEDIUM" as a broken field. #}
+                            <select name="{{ b.field }}" data-kind="text" data-saved="{{ b.value }}" aria-label="{{ b.label|lower }}">
+                                {% for val, label in b.options %}
+                                    <option value="{{ val }}"{{ b.value == val ? ' selected' : '' }}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </span>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
     </div>
 
-    <div class="col-12">
-    <form method="POST" action="{{ path('admin_starter_config_save') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('save_starter_config') }}">
+    {# ── the two JSON blocks ────────────────────────────────────────────── #}
+    <div class="bmc-rule"><span class="bmc-rule__title">STRUCTURED DATA</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Linted · the save is blocked on invalid JSON</span></div>
 
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-flag text-muted"></i>
-                <span class="fw-semibold small">New Club Defaults</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
+    <section class="bmc-card" data-domain="club" id="defaultFacilities-wrap">
+        <div class="bmc-card__head">
+            <i data-lucide="building"></i>
+            <span class="bmc-card__title">DEFAULT FACILITIES</span>
+            <span class="bmc-card__meta">JSON</span>
+        </div>
+        <div class="bmc-card__body">
+            <textarea id="defaultFacilities" name="defaultFacilities" rows="6"
+                      data-kind="text" data-blank="ok" data-saved="{{ config.defaultFacilitiesJson }}">{{ config.defaultFacilitiesJson }}</textarea>
+            <span class="bmc-setting__hint bmc-hint--invalid" id="defaultFacilities-error" hidden>Invalid JSON — fix it before saving.</span>
+            <p class="bmc-bodytext">
+                Flat slug → level map, e.g. <code class="bmc-code">{"training_pitch": 1, "north_stand": 0}</code>.
+                Leave as <code class="bmc-code">{}</code> for no default facilities.
+            </p>
+        </div>
+    </section>
 
-                    <div class="col-md-6">
-                        <label for="startingBalance" class="form-label fw-semibold small">Club Starting Balance</label>
-                        <div class="input-group">
-                            <span class="input-group-text">£</span>
-                            <input type="number" id="startingBalance" name="startingBalance"
-                                   value="{{ config.startingBalancePounds }}"
-                                   min="0" step="1" class="form-control">
-                        </div>
-                        <div class="form-text">
-                            The new club's own transfer kitty. Device-owned &mdash; every sync
-                            reassigns it, so land is <strong>not</strong> charged against this.
-                            Default: £50,000
-                        </div>
-                    </div>
+    <section class="bmc-card" data-domain="club" id="setupTutorialConfig-wrap">
+        <div class="bmc-card__head">
+            <i data-lucide="graduation-cap"></i>
+            <span class="bmc-card__title">SETUP TUTORIAL</span>
+            <span class="bmc-card__meta">JSON · served as `tutorial` on /api/starter-config</span>
+        </div>
+        <div class="bmc-card__body">
+            <textarea id="setupTutorialConfig" name="setupTutorialConfig" rows="14"
+                      data-kind="text" data-blank="ok" data-saved="{{ config.setupTutorialConfigJson }}">{{ config.setupTutorialConfigJson }}</textarea>
+            <span class="bmc-setting__hint bmc-hint--invalid" id="setupTutorialConfig-error" hidden>Invalid JSON — fix it before saving.</span>
 
-                    <div class="col-md-12">
-                        <label class="form-label fw-semibold small">Account Starting Balance Range</label>
-                        <div class="row g-2">
-                            <div class="col-sm-6">
-                                <div class="input-group">
-                                    <span class="input-group-text">Min £</span>
-                                    <input type="number" id="userStartingBalanceMinPounds"
-                                           name="userStartingBalanceMinPounds"
-                                           value="{{ config.userStartingBalanceMinPounds }}"
-                                           min="0" step="1" class="form-control">
-                                </div>
-                            </div>
-                            <div class="col-sm-6">
-                                <div class="input-group">
-                                    <span class="input-group-text">Max £</span>
-                                    <input type="number" id="userStartingBalanceMaxPounds"
-                                           name="userStartingBalanceMaxPounds"
-                                           value="{{ config.userStartingBalanceMaxPounds }}"
-                                           min="0" step="1" class="form-control">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-text">
-                            The <strong>account's</strong> opening credit, granted once when the
-                            player creates their owner avatar. This is the balance land and
-                            stadiums are charged against (<code>UserLedger</code>), and it is
-                            durable &mdash; unlike the club kitty above, a sync cannot overwrite
-                            it. Each account is given a figure drawn from this range,
-                            deterministically from its own id, so the same account always
-                            resolves to the same amount. Set both ends equal for a fixed grant.
-                            Default: £5,000,000 &ndash; £6,000,000.
-                        </div>
-                    </div>
+            <p class="bmc-bodytext">
+                First-run cards inside the app's <strong>new-game setup</strong> flow. Shape:
+                <code class="bmc-code">{"version": 1, "items": [...]}</code>.
+            </p>
+            <p class="bmc-bodytext">
+                A <code class="bmc-code">note</code> is a dismissible card at the top of a step
+                (<code class="bmc-code">anchor.on</code>); a <code class="bmc-code">briefing</code> replaces the step's
+                body until the player taps its CTA (<code class="bmc-code">anchor.before</code>). A briefing is not a
+                step — it does not affect the counter, BACK or FOUND CLUB.
+            </p>
+            <p class="bmc-bodytext">
+                Anchors are a step name, optionally <code class="bmc-code">kind:role</code> with at most one colon.
+                Steps: <code class="bmc-code">welcome avatar owner country club badge kits stadium hire role overview</code>;
+                a role suffix is legal only on <code class="bmc-code">hire</code> and <code class="bmc-code">role</code>,
+                from <code class="bmc-code">chairman dof manager facilities</code>. A bare
+                <code class="bmc-code">hire</code> matches all four hire steps.
+            </p>
+            <p class="bmc-bodytext">
+                Copy lives in the translation catalogue under <code class="bmc-code">ngs.tut.*</code> — the JSON carries
+                <em>keys</em>, never text. <strong>Raise <code class="bmc-code">version</code> to show everything again
+                to everyone</strong>; changing one item's <code class="bmc-code">id</code> replays just that item.
+            </p>
 
-                    <div class="col-md-12">
-                        <label for="maxEnrichmentRequestsPerUser" class="form-label fw-semibold small">
-                            Land Valuations Per Account
-                        </label>
-                        <input type="number" id="maxEnrichmentRequestsPerUser"
-                               name="maxEnrichmentRequestsPerUser"
-                               value="{{ config.maxEnrichmentRequestsPerUser }}"
-                               min="0" step="1" class="form-control">
-                        <div class="form-text">
-                            How many AI land valuations one account may ever request. Each one is
-                            a <strong>billed external API call</strong>, so this is the ceiling on
-                            what a single player can spend &mdash; the catalogue is thousands of
-                            towns, and without a cap one account can walk it.
-                            <br>
-                            <strong>Set to 0 for unlimited.</strong> Only requests that actually
-                            start a valuation are counted: a repeat tap, or a second player
-                            opening a town somebody else is already valuing, costs nothing and is
-                            not charged against the allowance. The count is a lifetime total per
-                            account and does not reset.
-                            {% if config.maxEnrichmentRequestsPerUser == 0 %}
-                                <br><span class="text-warning">Currently unlimited.</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="quizBonusMultiplier" class="form-label fw-semibold small">
-                            Quiz Bonus Multiplier
-                        </label>
-                        <input type="number" id="quizBonusMultiplier"
-                               name="quizBonusMultiplier"
-                               value="{{ config.quizBonusMultiplier }}"
-                               min="0" step="0.05" class="form-control">
-                        <div class="form-text">
-                            What finishing the onboarding quiz pays, as a multiple of
-                            <strong>that account's own</strong> starting grant above &mdash; scaled
-                            by the share of questions answered correctly. At the default
-                            <code>1.0</code>, a perfect score doubles the grant and half marks add
-                            50%.
-                            <br>
-                            A multiple rather than a fixed amount because the grant is a range: a
-                            flat bonus would be a bigger proportion of an unlucky account's grant
-                            than a lucky one's.
-                            <strong>Set to 0 to switch the bonus off</strong> &mdash; the quiz
-                            still runs and still records answers, it just pays nothing.
-                            {% if config.quizBonusMultiplier == 0 %}
-                                <br><span class="text-warning">Bonus currently switched off.</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="clubFundingMinimumPounds" class="form-label fw-semibold small">
-                            Minimum Club Stake (&pound;)
-                        </label>
-                        <input type="number" id="clubFundingMinimumPounds"
-                               name="clubFundingMinimumPounds"
-                               value="{{ (config.clubFundingMinimumPence / 100)|round }}"
-                               min="0" step="1000" class="form-control">
-                        <div class="form-text">
-                            The smallest opening capital a player may stake into a new club on
-                            <code>POST /api/club/fund</code>.
-                            <strong>0 means no minimum</strong>, which is the default: the setup
-                            flow offers any part of the account balance, up to all of it, and
-                            refusing a stake the player was told they could make is a worse
-                            failure than letting them underfund a club they can top up from a
-                            dividend later.
-                            {% if config.clubFundingMinimumPence == 0 %}
-                                <br><span class="text-warning">No minimum enforced.</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="clubFundingProjectionWeeks" class="form-label fw-semibold small">
-                            Funding Projection Weeks
-                        </label>
-                        <input type="number" id="clubFundingProjectionWeeks"
-                               name="clubFundingProjectionWeeks"
-                               value="{{ config.clubFundingProjectionWeeks }}"
-                               min="1" step="1" class="form-control">
-                        <div class="form-text">
-                            How many weeks of running costs the funding screen projects, published
-                            to the app on <code>/api/starter-config</code>. Advisory &mdash; it
-                            warns, it does not refuse.
-                            <br>
-                            The app does the wage half of that projection itself: hired staff and
-                            players are removed from the pool on assign, so the server holds no
-                            roster and can only report facility upkeep.
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="starterSponsorTier" class="form-label fw-semibold small">Starter Sponsor Tier</label>
-                        <select id="starterSponsorTier" name="starterSponsorTier" class="form-select">
-                            <option value="SMALL"  {% if config.starterSponsorTier == 'SMALL'  %}selected{% endif %}>SMALL</option>
-                            <option value="MEDIUM" {% if config.starterSponsorTier == 'MEDIUM' %}selected{% endif %}>MEDIUM</option>
-                            <option value="LARGE"  {% if config.starterSponsorTier == 'LARGE'  %}selected{% endif %}>LARGE</option>
-                        </select>
-                        <div class="form-text">Sponsor company-size tier assigned at club creation. Default: SMALL</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterPlayerCount" class="form-label fw-semibold small">Players</label>
-                        <input type="number" id="starterPlayerCount" name="starterPlayerCount"
-                               value="{{ config.starterPlayerCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Players assigned at club creation. Default: 5</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterManagerCount" class="form-label fw-semibold small">Managers</label>
-                        <input type="number" id="starterManagerCount" name="starterManagerCount"
-                               value="{{ config.starterManagerCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Managers assigned at club creation. Default: 1</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterCoachCount" class="form-label fw-semibold small">Coaches</label>
-                        <input type="number" id="starterCoachCount" name="starterCoachCount"
-                               value="{{ config.starterCoachCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Coaches assigned at club creation. Default: 1</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterScoutCount" class="form-label fw-semibold small">Scouts</label>
-                        <input type="number" id="starterScoutCount" name="starterScoutCount"
-                               value="{{ config.starterScoutCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Scouts assigned at club creation. Default: 1</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterDirectorOfFootballCount" class="form-label fw-semibold small">Directors of Football</label>
-                        <input type="number" id="starterDirectorOfFootballCount" name="starterDirectorOfFootballCount"
-                               value="{{ config.starterDirectorOfFootballCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Directors of Football assigned at club creation. Default: 0</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterFacilityManagerCount" class="form-label fw-semibold small">Facility Managers</label>
-                        <input type="number" id="starterFacilityManagerCount" name="starterFacilityManagerCount"
-                               value="{{ config.starterFacilityManagerCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Facility Managers assigned at club creation. Default: 0</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="starterChairmanCount" class="form-label fw-semibold small">Chairmen</label>
-                        <input type="number" id="starterChairmanCount" name="starterChairmanCount"
-                               value="{{ config.starterChairmanCount }}"
-                               min="0" class="form-control">
-                        <div class="form-text">Chairmen assigned at club creation. Default: 1</div>
-                    </div>
-
-
-                    <div class="col-md-6">
-                        <label for="starterReputationTier" class="form-label fw-semibold small">Starter Reputation Tier</label>
-                        <select id="starterReputationTier" name="starterReputationTier" class="form-select">
-                            <option value="local"    {% if config.starterReputationTier.value == 'local'    %}selected{% endif %}>Local</option>
-                            <option value="regional" {% if config.starterReputationTier.value == 'regional' %}selected{% endif %}>Regional</option>
-                            <option value="national" {% if config.starterReputationTier.value == 'national' %}selected{% endif %}>National</option>
-                            <option value="elite"    {% if config.starterReputationTier.value == 'elite'    %}selected{% endif %}>Elite</option>
-                        </select>
-                        <div class="form-text">Club reputation band at creation. Default: Local</div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="starterClubTier" class="form-label fw-semibold small">Starter Club Tier</label>
-                        <select id="starterClubTier" name="starterClubTier" class="form-select">
-                            <option value="local"      {% if config.starterClubTier == 'local'      %}selected{% endif %}>Local</option>
-                            <option value="regional"   {% if config.starterClubTier == 'regional'   %}selected{% endif %}>Regional</option>
-                            <option value="national"   {% if config.starterClubTier == 'national'   %}selected{% endif %}>National</option>
-                            <option value="elite"      {% if config.starterClubTier == 'elite'      %}selected{% endif %}>Elite</option>
-                        </select>
-                        <div class="form-text">Club tier assigned at creation. Default: Local</div>
-                    </div>
-
-                    <div class="col-12" id="defaultFacilities-wrap">
-                        <label for="defaultFacilities" class="form-label fw-semibold small">Default Facilities (JSON)</label>
-                        <textarea id="defaultFacilities" name="defaultFacilities"
-                                  class="font-monospace" rows="6">{{ config.defaultFacilitiesJson }}</textarea>
-                        <div id="defaultFacilities-error" class="text-danger small mt-1">Invalid JSON — please fix before saving.</div>
-                        <div class="form-text">
-                            Flat slug → level map, e.g. <code>{"training_pitch": 1, "north_stand": 0}</code>.
-                            Leave as <code>{}</code> for no default facilities.
-                        </div>
-                    </div>
-
+            <div class="bmc-danger" style="margin-top:10px">
+                <i data-lucide="triangle-alert"></i>
+                <div class="bmc-danger__text">
+                    <span class="bmc-lbl bmc-lbl--ink">MISTAKES HERE ARE SILENT</span>
+                    <span class="bmc-data">
+                        The app cannot fail on this data — setup is the one screen a new account cannot skip — so an item
+                        with an unknown anchor or an unresolvable copy key simply never appears, with no error anywhere.
+                        Saving runs a check and reports what it finds;
+                        <code class="bmc-code">php bin/console app:check-setup-tutorial</code> runs the same check plus
+                        translation-row coverage. An empty <code class="bmc-code">{}</code> is a valid "no tutorial" state.
+                    </span>
                 </div>
             </div>
         </div>
+    </section>
 
-        <div class="card mt-3">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-graduation-cap text-muted"></i>
-                <span class="fw-semibold small">Setup Tutorial</span>
-            </div>
-            <div class="card-body">
-                <div class="col-12" id="setupTutorialConfig-wrap">
-                    <label for="setupTutorialConfig" class="form-label fw-semibold small">Tutorial block (JSON)</label>
-                    <textarea id="setupTutorialConfig" name="setupTutorialConfig"
-                              class="font-monospace" rows="14">{{ config.setupTutorialConfigJson }}</textarea>
-                    <div id="setupTutorialConfig-error" class="text-danger small mt-1">Invalid JSON — please fix before saving.</div>
-                    <div class="form-text">
-                        First-run cards inside the app's <strong>new-game setup</strong> flow, served as
-                        <code>tutorial</code> on <code>GET /api/starter-config</code>. Shape:
-                        <code>{"version": 1, "items": [...]}</code>.
-                        <br><br>
-                        <strong>A <code>note</code></strong> is a dismissible card at the top of a step
-                        (<code>anchor.on</code>); <strong>a <code>briefing</code></strong> replaces the step's body
-                        until the player taps its CTA (<code>anchor.before</code>). A briefing is not a step — it
-                        does not affect the counter, BACK or FOUND CLUB.
-                        <br><br>
-                        Anchors are a step name, optionally <code>kind:role</code> with at most one colon. Steps:
-                        <code>welcome avatar owner country club badge kits stadium hire role overview</code>; a role
-                        suffix is legal only on <code>hire</code> and <code>role</code>, from
-                        <code>chairman dof manager facilities</code>. A bare <code>hire</code> matches all four hire
-                        steps.
-                        <br><br>
-                        Copy lives in the translation catalogue under <code>ngs.tut.*</code> — the JSON carries
-                        <em>keys</em>, never text.
-                        <br><br>
-                        <strong>Raise <code>version</code> to show everything again to everyone.</strong> Changing one
-                        item's <code>id</code> replays just that item.
-                        <br><br>
-                        ⚠️ <strong>Mistakes here are silent.</strong> The app cannot fail on this data — setup is the
-                        one screen a new account cannot skip — so an item with an unknown anchor or an unresolvable
-                        copy key simply never appears, with no error anywhere. Saving runs a check and reports what
-                        it finds; <code>php bin/console app:check-setup-tutorial</code> runs the same check plus
-                        translation-row coverage. An empty <code>{}</code> is a valid "no tutorial" state.
-                    </div>
-                </div>
-            </div>
+    {# ── NPC squads, per tier ───────────────────────────────────────────── #}
+    {% set allTiers = [] %}
+    {% for country, tiers in dynamicLeagueTiers %}
+        {% for tier in tiers %}{% if tier not in allTiers %}{% set allTiers = allTiers|merge([tier]) %}{% endif %}{% endfor %}
+    {% endfor %}
+    {% set allTiers = allTiers|sort %}
+
+    <div class="bmc-rule"><span class="bmc-rule__title">NPC CLUBS</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">Global per tier, across every country</span></div>
+
+    <section class="bmc-card" data-domain="people">
+        <div class="bmc-card__head">
+            <i data-lucide="users-round"></i>
+            <span class="bmc-card__title">NPC SQUAD CONFIG</span>
+            <span class="bmc-card__meta">{{ allTiers|length }} tier(s) in use</span>
         </div>
+        {% if allTiers is empty %}
+            <div class="bmc-card__body"><span class="bmc-empty-note">NO LEAGUES YET — GENERATE SOME FIRST</span></div>
+        {% else %}
+            <div class="bmc-card__body bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+                {% for tier in allTiers %}
+                    {% set tc = config.npcSquadConfig[tier] ?? {} %}
+                    <div class="bmc-inset">
+                        <span class="bmc-inset__title">TIER {{ tier }}</span>
 
-        <div class="card mt-3">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-users-cog text-muted"></i>
-                <span class="fw-semibold small">NPC Squad Config</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">Configure squad size, staff counts, and recruitment balance for each league tier. These settings apply globally across all countries for that tier.</p>
-                
-                {% set allTiers = [] %}
-                {% for country, tiers in dynamicLeagueTiers %}
-                    {% for tier in tiers %}
-                        {% if tier not in allTiers %}
-                            {% set allTiers = allTiers|merge([tier]) %}
-                        {% endif %}
-                    {% endfor %}
-                {% endfor %}
-                {% set allTiers = allTiers|sort %}
-
-                <div class="row g-3">
-                    {% for tier in allTiers %}
-                        {% set tc = config.npcSquadConfig[tier] ?? {} %}
-                        <div class="col-md-4">
-                            <div class="card shadow-sm h-100 border-light">
-                                <div class="card-header bg-light py-1 fw-bold small text-primary">Tier {{ tier }}</div>
-                                <div class="card-body p-2">
-                                    <div class="mb-2">
-                                        <label class="small fw-bold mb-1">Squad Size</label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text">Min</span>
-                                            <input type="number" name="npcConfig[{{ tier }}][playerMin]" 
-                                                   class="form-control" value="{{ tc.playerMin ?? 15 }}" min="1">
-                                            <span class="input-group-text">Max</span>
-                                            <input type="number" name="npcConfig[{{ tier }}][playerMax]" 
-                                                   class="form-control" value="{{ tc.playerMax ?? 25 }}" min="1">
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row g-1 mb-2">
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">Mgr</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][managerCount]" 
-                                                   class="form-control form-control-sm" value="{{ tc.managerCount ?? 1 }}" min="0">
-                                        </div>
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">Coach</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][coachCount]" 
-                                                   class="form-control form-control-sm" value="{{ tc.coachCount ?? 1 }}" min="0">
-                                        </div>
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">Chair</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][chairmanCount]"
-                                                   class="form-control form-control-sm" value="{{ tc.chairmanCount ?? 1 }}" min="0">
-                                        </div>
-                                    </div>
-
-                                    <div class="row g-1 mb-2">
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">DoF</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][directorOfFootballCount]"
-                                                   class="form-control form-control-sm" value="{{ tc.directorOfFootballCount ?? 0 }}" min="0">
-                                        </div>
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">Fac Mgr</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][facilityManagerCount]"
-                                                   class="form-control form-control-sm" value="{{ tc.facilityManagerCount ?? 0 }}" min="0">
-                                        </div>
-                                        <div class="col-4">
-                                            <label class="small fw-bold mb-0">Scout</label>
-                                            <input type="number" name="npcConfig[{{ tier }}][scoutCount]"
-                                                   class="form-control form-control-sm" value="{{ tc.scoutCount ?? 0 }}" min="0">
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label class="small fw-bold mb-0">Foreign %</label>
-                                            <span class="badge bg-secondary rounded-pill" id="fp-label-{{ tier }}">{{ tc.foreignPercent ?? 0 }}%</span>
-                                        </div>
-                                        <input type="range" name="npcConfig[{{ tier }}][foreignPercent]" 
-                                               class="form-range" min="0" max="100" 
-                                               value="{{ tc.foreignPercent ?? 0 }}"
-                                               oninput="document.getElementById('fp-label-{{ tier }}').innerText = this.value + '%'">
-                                    </div>
-                                </div>
-                            </div>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                            <span class="bmc-lbl">SQUAD</span>
+                            <label class="bmc-num bmc-num--60"><input name="npcConfig[{{ tier }}][playerMin]" inputmode="numeric"
+                                   value="{{ tc.playerMin ?? 15 }}" data-saved="{{ tc.playerMin ?? 15 }}" data-min="1" data-max="60"
+                                   data-lte="npcConfig[{{ tier }}][playerMax]" aria-label="Tier {{ tier }} squad minimum"></label>
+                            <span class="bmc-sep">–</span>
+                            <label class="bmc-num bmc-num--60"><input name="npcConfig[{{ tier }}][playerMax]" inputmode="numeric"
+                                   value="{{ tc.playerMax ?? 25 }}" data-saved="{{ tc.playerMax ?? 25 }}" data-min="1" data-max="60"
+                                   aria-label="Tier {{ tier }} squad maximum"></label>
                         </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
 
-        <div class="card mt-3">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-chart-line text-muted"></i>
-                <span class="fw-semibold small">League Player Ability Ranges</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">Define the min/max ability for players generated for NPC clubs in each league tier. If missing, sensible tier-based defaults are used (e.g. Tier 1: 75-95, Tier 8: 10-25).</p>
-                
-                {% for country, tiers in dynamicLeagueTiers %}
-                    <div class="d-flex align-items-center justify-content-between mt-3 mb-1">
-                        <h6 class="small fw-bold text-uppercase text-muted mb-0">{{ country }} Leagues</h6>
-                        <div class="d-flex gap-1">
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary copy-ranges-btn"
-                                    data-country="{{ country }}"
-                                    style="font-size:.72rem;padding:.2rem .55rem;">
-                                <i class="fa fa-copy me-1"></i>Copy
-                            </button>
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-primary paste-ranges-btn"
-                                    data-country="{{ country }}"
-                                    disabled
-                                    style="font-size:.72rem;padding:.2rem .55rem;">
-                                <i class="fa fa-paste me-1"></i>Paste
-                            </button>
-                        </div>
-                    </div>
-                    <div class="row g-2" data-ranges-country="{{ country }}">
-                        {% for tier in tiers %}
-                            <div class="col-md-3" data-tier="{{ tier }}">
-                                <label class="small fw-bold d-block mb-1">Tier {{ tier }}</label>
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text">Min</span>
-                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][min]"
-                                           class="form-control" placeholder="Min"
-                                           value="{{ config.leagueAbilityRanges[country][tier]['min'] ?? '' }}"
-                                           min="1" data-range="min">
-                                    <span class="input-group-text">Max</span>
-                                    <input type="number" name="leagueRanges[{{ country }}][{{ tier }}][max]"
-                                           class="form-control" placeholder="Max"
-                                           value="{{ config.leagueAbilityRanges[country][tier]['max'] ?? '' }}"
-                                           min="1" data-range="max">
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endfor %}
-                
-                {% if dynamicLeagueTiers is empty %}
-                    <div class="alert alert-info small mb-0">No leagues found in the database. Generate leagues first in NPC Clubs section.</div>
-                {% endif %}
-            </div>
-        </div>
-
-        {# ── Fan Base Initialisation ──────────────────────────────────────── #}
-        <div class="card mt-3">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-users text-muted"></i>
-                <span class="fw-semibold small">Fan Base Initialisation</span>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Starting fan base count range per league tier assigned during world initialisation.
-                    A random value in [min, max] is chosen for each NPC club at that tier.
-                </p>
-
-                {# Per-tier fan base ranges table #}
-                <div class="table-responsive mb-3">
-                    <table class="table table-sm align-middle mb-0" style="min-width:480px;">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="small text-muted fw-semibold" style="width:80px;">Tier</th>
-                                <th class="small text-muted fw-semibold" style="width:160px;">Min Fans</th>
-                                <th class="small text-muted fw-semibold" style="width:160px;">Max Fans</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for tier in 1..8 %}
-                            {% set tierKey = tier ~ '' %}
-                            {% set fb = config.fanBaseRanges[tierKey] ?? {min: 0, max: 0} %}
-                            <tr>
-                                <td class="small fw-semibold text-muted">Tier {{ tier }}</td>
-                                <td>
-                                    <input type="number" name="fanBaseRanges[{{ tier }}][min]"
-                                           value="{{ fb.min ?? 0 }}"
-                                           min="0" step="100" class="form-control form-control-sm">
-                                </td>
-                                <td>
-                                    <input type="number" name="fanBaseRanges[{{ tier }}][max]"
-                                           value="{{ fb.max ?? 0 }}"
-                                           min="0" step="100" class="form-control form-control-sm">
-                                </td>
-                            </tr>
+                        <div class="bmc-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">
+                            {% for st in npcStaff %}
+                                <label class="bmc-field-col" style="gap:4px">
+                                    <span class="bmc-lbl">{{ st.label }}</span>
+                                    <span class="bmc-num bmc-num--56"><input name="npcConfig[{{ tier }}][{{ st.key }}]" inputmode="numeric"
+                                          value="{{ attribute(tc, st.key) ?? st.d }}" data-saved="{{ attribute(tc, st.key) ?? st.d }}"
+                                          data-min="0" data-max="20" aria-label="Tier {{ tier }} {{ st.label|lower }}"></span>
+                                </label>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        </div>
 
-                {# Promotion / relegation changes #}
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label for="fanBasePromotionIncrease" class="form-label fw-semibold small">
-                            Promotion Fan Base Increase
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" id="fanBasePromotionIncrease" name="fanBasePromotionIncrease"
-                                   value="{{ config.fanBasePromotionIncrease }}"
-                                   min="0" max="2" step="0.01" class="form-control">
-                            <span class="input-group-text">× (e.g. 0.20 = +20%)</span>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span class="bmc-lbl">FOREIGN</span>
+                            <input type="range" name="npcConfig[{{ tier }}][foreignPercent]" min="0" max="100" style="flex:1"
+                                   value="{{ tc.foreignPercent ?? 0 }}" data-saved="{{ tc.foreignPercent ?? 0 }}"
+                                   data-min="0" data-max="100" aria-label="Tier {{ tier }} foreign percent"
+                                   oninput="this.nextElementSibling.textContent = this.value + '%'">
+                            <span class="bmc-badge bmc-badge--subtle" style="min-width:52px;justify-content:center">{{ tc.foreignPercent ?? 0 }}%</span>
                         </div>
-                        <div class="form-text">Percentage increase to fan base on promotion. Default: 0.20</div>
                     </div>
-                    <div class="col-md-6">
-                        <label for="fanBaseRelegationDecrease" class="form-label fw-semibold small">
-                            Relegation Fan Base Decrease
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" id="fanBaseRelegationDecrease" name="fanBaseRelegationDecrease"
-                                   value="{{ config.fanBaseRelegationDecrease }}"
-                                   min="0" max="1" step="0.01" class="form-control">
-                            <span class="input-group-text">× (e.g. 0.10 = −10%)</span>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </section>
+
+    {# ── ability ranges, per country ────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="people">
+        <div class="bmc-card__head">
+            <i data-lucide="trending-up"></i>
+            <span class="bmc-card__title">LEAGUE PLAYER ABILITY RANGES</span>
+            <span class="bmc-card__meta">blank falls back to tier defaults — tier 1: 75–95, tier 8: 10–25</span>
+        </div>
+
+        {% if dynamicLeagueTiers is empty %}
+            <div class="bmc-card__body"><span class="bmc-empty-note">NO LEAGUES IN THE DATABASE — GENERATE THEM FIRST</span></div>
+        {% else %}
+            {% for country, tiers in dynamicLeagueTiers %}
+                <div class="bmc-card__band" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span class="bmc-lbl bmc-lbl--ink">{{ country }} LEAGUES</span>
+                    <span style="flex:1"></span>
+                    <button type="button" class="bmc-quick-btn copy-ranges-btn" data-country="{{ country }}">COPY</button>
+                    <button type="button" class="bmc-quick-btn paste-ranges-btn" data-country="{{ country }}" disabled>PASTE</button>
+                </div>
+                <div class="bmc-card__body bmc-grid" data-ranges-country="{{ country }}"
+                     style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+                    {% for tier in tiers %}
+                        {% set lo = config.leagueAbilityRanges[country][tier]['min'] ?? '' %}
+                        {% set hi = config.leagueAbilityRanges[country][tier]['max'] ?? '' %}
+                        <div class="bmc-field-col" data-tier="{{ tier }}" style="gap:4px">
+                            <span class="bmc-lbl">TIER {{ tier }}</span>
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <label class="bmc-num bmc-num--60"><input name="leagueRanges[{{ country }}][{{ tier }}][min]" inputmode="numeric"
+                                       value="{{ lo }}" data-saved="{{ lo }}" data-blank="ok" data-min="1" data-max="100"
+                                       data-range="min" aria-label="{{ country }} tier {{ tier }} minimum"></label>
+                                <span class="bmc-sep">–</span>
+                                <label class="bmc-num bmc-num--60"><input name="leagueRanges[{{ country }}][{{ tier }}][max]" inputmode="numeric"
+                                       value="{{ hi }}" data-saved="{{ hi }}" data-blank="ok" data-min="1" data-max="100"
+                                       data-range="max" aria-label="{{ country }} tier {{ tier }} maximum"></label>
+                            </div>
                         </div>
-                        <div class="form-text">Percentage decrease to fan base on relegation. Default: 0.10</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </section>
+
+    {# ── fan base ───────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="megaphone"></i>
+            <span class="bmc-card__title">FAN BASE INITIALISATION</span>
+            <span class="bmc-card__meta">a random value in [min, max] per NPC club at that tier</span>
+        </div>
+
+        <div class="bmc-card__body bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+            {% for tier in 1..8 %}
+                {% set fb = config.fanBaseRanges[tier ~ ''] ?? {min: 0, max: 0} %}
+                <div class="bmc-field-col" style="gap:4px">
+                    <span class="bmc-lbl">TIER {{ tier }}</span>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <label class="bmc-num bmc-num--76"><input name="fanBaseRanges[{{ tier }}][min]" inputmode="numeric"
+                               value="{{ fb.min ?? 0 }}" data-saved="{{ fb.min ?? 0 }}" data-min="0" data-max="10000000"
+                               data-lte="fanBaseRanges[{{ tier }}][max]" aria-label="Tier {{ tier }} minimum fans"></label>
+                        <span class="bmc-sep">–</span>
+                        <label class="bmc-num bmc-num--76"><input name="fanBaseRanges[{{ tier }}][max]" inputmode="numeric"
+                               value="{{ fb.max ?? 0 }}" data-saved="{{ fb.max ?? 0 }}" data-min="0" data-max="10000000"
+                               aria-label="Tier {{ tier }} maximum fans"></label>
                     </div>
                 </div>
+            {% endfor %}
+        </div>
+
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">PROMOTION INCREASE</span>
+                <span class="bmc-setting__help">Fan base multiplier applied on promotion, e.g. 0.20 = +20%.</span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="Default 0.20"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--76"><input name="fanBasePromotionIncrease" inputmode="decimal" data-kind="decimal"
+                       value="{{ config.fanBasePromotionIncrease }}" data-saved="{{ config.fanBasePromotionIncrease }}"
+                       data-min="0" data-max="2" aria-label="Promotion fan base increase"></label>
+                <span class="bmc-unitword" style="width:14px">×</span>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
             </div>
         </div>
 
-        {# COUNTRY CONFIG LIVED HERE. A country is now offered to players when its profile is
-           LIVE — set on the country itself, where whether it is ready is actually known —
-           rather than ticked here in a list that could disagree with it. Change it at
-           /admin?routeName=admin_locations, on the country. #}
-
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary btn-sm">Save Starter Config</button>
+        <div class="bmc-setting" data-bmc-setting>
+            <div class="bmc-setting__text">
+                <span class="bmc-setting__label">RELEGATION DECREASE</span>
+                <span class="bmc-setting__help">Fan base multiplier applied on relegation, e.g. 0.10 = −10%.</span>
+                <span class="bmc-setting__hint" data-bmc-hint data-default="Default 0.10"></span>
+            </div>
+            <div class="bmc-setting__ctl">
+                <label class="bmc-num bmc-num--76"><input name="fanBaseRelegationDecrease" inputmode="decimal" data-kind="decimal"
+                       value="{{ config.fanBaseRelegationDecrease }}" data-saved="{{ config.fanBaseRelegationDecrease }}"
+                       data-min="0" data-max="1" aria-label="Relegation fan base decrease"></label>
+                <span class="bmc-unitword" style="width:14px">×</span>
+                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+            </div>
         </div>
-    </form>
-    </div>
+    </section>
 
-</div>
+    {# COUNTRY CONFIG LIVED HERE. A country is now offered to players when its profile is LIVE —
+       set on the country itself, where whether it is ready is actually known — rather than
+       ticked here in a list that could disagree with it. Change it on the country, at
+       /admin?routeName=admin_locations_dashboard. #}
+
+    <div class="bmc-savebar" data-bmc-savebar data-idle="Changes take effect on the next new registration.">
+        <span class="bmc-savebar__dot"></span>
+        <span class="bmc-savebar__title">ALL SAVED</span>
+        <span class="bmc-savebar__sub"></span>
+        <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+        <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE STARTER CONFIG</span></button>
+    </div>
+</form>
 {% endblock %}
 
 {% block body_javascript %}
@@ -563,113 +514,98 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/json-lint.min.js"></script>
     <script>
-    // Both JSON textareas on this screen get the same editor + lint + submit guard.
-    // Was hardcoded to `defaultFacilities`; generalised 2026-11-02 when Setup Tutorial
-    // added a second one, rather than copying 40 lines.
+    // Both JSON textareas get the same editor + lint + submit guard. Generalised over a list
+    // rather than copied, since Setup Tutorial added the second one.
     ['defaultFacilities', 'setupTutorialConfig'].forEach(function (id) {
-        const ta = document.getElementById(id);
-        const wrap = document.getElementById(id + '-wrap');
-        if (!ta || !wrap) return;
-        const form = ta.closest('form');
+        var ta = document.getElementById(id);
+        var err = document.getElementById(id + '-error');
+        if (!ta || !err) return;
+        var form = ta.closest('form');
 
-        const editor = CodeMirror.fromTextArea(ta, {
+        var editor = CodeMirror.fromTextArea(ta, {
             mode: { name: 'javascript', json: true },
             lineNumbers: true,
             lineWrapping: true,
             gutters: ['CodeMirror-lint-markers'],
             lint: true,
-            theme: 'default',
+            theme: 'material-darker',
         });
 
-        function isValidJson(str) {
-            try { JSON.parse(str); return true; } catch (e) { return false; }
+        function valid() {
+            try { JSON.parse(editor.getValue().trim()); return true; } catch (e) { return false; }
         }
 
         function validate() {
-            if (isValidJson(editor.getValue().trim())) {
-                wrap.classList.remove('cm-json-error');
-            } else {
-                wrap.classList.add('cm-json-error');
-            }
+            err.hidden = valid();
+            // SYNC BACK ON EVERY CHANGE, not only on submit. The save bar tracks the textarea,
+            // and CodeMirror detaches it — without this the operator edits JSON, the bar still
+            // reads ALL SAVED, and [data-bmc-save] stays disabled so the edit cannot be saved.
+            editor.save();
+            if (window.BMC) BMC.refreshForm(form);
         }
 
         editor.on('change', validate);
         validate();
 
         form.addEventListener('submit', function (e) {
-            editor.save(); // sync CodeMirror back to the hidden textarea
-            if (!isValidJson(editor.getValue().trim())) {
+            editor.save();
+            if (!valid()) {
                 e.preventDefault();
-                wrap.classList.add('cm-json-error');
-                wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                err.hidden = false;
+                err.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (window.BMC) BMC.toast('INVALID JSON — NOT SAVED');
             }
         });
     });
 
-    // ── League Ability Range copy / paste ────────────────────────────────────
+    // ── League ability range copy / paste ───────────────────────────────
     (function () {
         // clipboard: { fromCountry: string, tiers: { [tier]: { min: string, max: string } } } | null
-        let clipboard = null;
+        var clipboard = null;
 
         function readCountry(country) {
-            const container = document.querySelector(`[data-ranges-country="${country}"]`);
+            var container = document.querySelector('[data-ranges-country="' + country + '"]');
             if (!container) return {};
-            const data = {};
+            var data = {};
             container.querySelectorAll('[data-tier]').forEach(function (cell) {
-                const tier = cell.dataset.tier;
-                const min  = cell.querySelector('[data-range="min"]');
-                const max  = cell.querySelector('[data-range="max"]');
-                data[tier] = { min: min ? min.value : '', max: max ? max.value : '' };
+                var min = cell.querySelector('[data-range="min"]'), max = cell.querySelector('[data-range="max"]');
+                data[cell.dataset.tier] = { min: min ? min.value : '', max: max ? max.value : '' };
             });
             return data;
         }
 
         function writeCountry(country, data) {
-            const container = document.querySelector(`[data-ranges-country="${country}"]`);
+            var container = document.querySelector('[data-ranges-country="' + country + '"]');
             if (!container) return 0;
-            let applied = 0;
+            var applied = 0;
             container.querySelectorAll('[data-tier]').forEach(function (cell) {
-                const tier = cell.dataset.tier;
-                if (!data[tier]) return;
-                const min = cell.querySelector('[data-range="min"]');
-                const max = cell.querySelector('[data-range="max"]');
-                if (min) { min.value = data[tier].min; }
-                if (max) { max.value = data[tier].max; }
+                var d = data[cell.dataset.tier];
+                if (!d) return;
+                var min = cell.querySelector('[data-range="min"]'), max = cell.querySelector('[data-range="max"]');
+                if (min) min.value = d.min;
+                if (max) max.value = d.max;
                 applied++;
             });
+            // Pasting changes fields without an input event, so the save bar would not notice.
+            if (window.BMC) BMC.refreshForm(container.closest('form'));
             return applied;
         }
 
         function updatePasteButtons() {
             document.querySelectorAll('.paste-ranges-btn').forEach(function (btn) {
-                if (!clipboard) {
-                    btn.disabled = true;
-                    btn.title    = '';
-                } else {
-                    const isSelf = btn.dataset.country === clipboard.fromCountry;
-                    btn.disabled = false;
-                    btn.title    = isSelf
+                btn.disabled = !clipboard;
+                btn.title = clipboard
+                    ? (btn.dataset.country === clipboard.fromCountry
                         ? 'Re-paste copied values back into ' + clipboard.fromCountry
-                        : 'Paste values copied from ' + clipboard.fromCountry;
-                }
+                        : 'Paste values copied from ' + clipboard.fromCountry)
+                    : '';
             });
         }
 
         document.querySelectorAll('.copy-ranges-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                const country = btn.dataset.country;
-                clipboard = { fromCountry: country, tiers: readCountry(country) };
-
-                // Visual feedback — briefly flash the button
-                btn.classList.add('btn-secondary');
-                btn.classList.remove('btn-outline-secondary');
-                btn.innerHTML = '<i class="fa fa-check me-1"></i>Copied';
-                setTimeout(function () {
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-outline-secondary');
-                    btn.innerHTML = '<i class="fa fa-copy me-1"></i>Copy';
-                }, 1200);
-
+                clipboard = { fromCountry: btn.dataset.country, tiers: readCountry(btn.dataset.country) };
+                if (window.BMC) BMC.toast('COPIED ' + btn.dataset.country);
                 updatePasteButtons();
             });
         });
@@ -677,18 +613,8 @@
         document.querySelectorAll('.paste-ranges-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 if (!clipboard) return;
-                const country = btn.dataset.country;
-                const count   = writeCountry(country, clipboard.tiers);
-
-                // Visual feedback
-                btn.classList.add('btn-primary');
-                btn.classList.remove('btn-outline-primary');
-                btn.innerHTML = '<i class="fa fa-check me-1"></i>Pasted ' + count + ' tier' + (count !== 1 ? 's' : '');
-                setTimeout(function () {
-                    btn.classList.remove('btn-primary');
-                    btn.classList.add('btn-outline-primary');
-                    btn.innerHTML = '<i class="fa fa-paste me-1"></i>Paste';
-                }, 1500);
+                var n = writeCountry(btn.dataset.country, clipboard.tiers);
+                if (window.BMC) BMC.toast('PASTED ' + n + ' TIER' + (n !== 1 ? 'S' : ''));
             });
         });
 

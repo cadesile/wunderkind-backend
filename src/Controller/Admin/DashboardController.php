@@ -596,6 +596,10 @@ class DashboardController extends AbstractDashboardController
         }
 
         return $this->render('admin/starter_config.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label so the
+            // crumb and the open submenu agree — see configureMenuItems().
+            'bmcGroup' => 'Config',
+            'bmcTitle' => 'Starter config',
             'config' => $this->starterConfigRepository->getConfig(),
             'dynamicLeagueTiers' => $dynamicLeagueTiers,
         ]);
@@ -1586,7 +1590,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108b';
+    private const BMC_ASSET_VERSION = '20261108c';
 
     public function configureAssets(): Assets
     {
