@@ -11,9 +11,12 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\BrowserKit\Cookie;
+use App\Tests\Support\AssertsFlashTrait;
 
 class NpcClubSizeWeightsControllerTest extends WebTestCase
 {
+    use AssertsFlashTrait;
+
     private const TEST_ADMIN_EMAIL = 'npc-size-weights-test-admin@example.com';
 
     /**
@@ -97,7 +100,7 @@ class NpcClubSizeWeightsControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'City size weights saved.');
+        $this->assertFlash($client, 'City size weights saved.');
 
         // Fetch fresh from the container (not a stale copy) to confirm real persistence.
         self::getContainer()->get(EntityManagerInterface::class)->clear();
@@ -136,7 +139,7 @@ class NpcClubSizeWeightsControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token.');
+        $this->assertFlash($client, 'Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame($before, $this->getGameConfig()->getNpcClubSizeWeights());
