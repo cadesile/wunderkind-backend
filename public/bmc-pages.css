@@ -245,6 +245,19 @@
 .bmc-textbox:focus-within { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
 .bmc-breakall { word-break: break-all; }
 
+/* ── log view ─────────────────────────────────────────────────
+   Deliberately NOT on the design tokens. Log output is read as a terminal, and the level
+   colours the colouriser writes are the GitHub-dark set an eye already parses — mapping them
+   onto the palette would make WARNING and INFO harder to tell apart, which is the one thing
+   the page is for. The BOX is still bmc: 2px stroke, square corners. */
+.bmc-logview {
+    margin: 0; padding: 12px; max-height: 70vh; overflow-y: auto;
+    background: #0d1117; color: #e6edf3;
+    border-top: 3px solid var(--wk-stroke);
+    font: var(--text-data); font-family: var(--font-data), monospace; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-all;
+}
+
 /* ── fold ─────────────────────────────────────────────────────
    A card whose body collapses. The old Worldpack cache page did this with Bootstrap's
    data-bs-toggle="collapse", which is the one piece of Bootstrap JS the redesigned pages still

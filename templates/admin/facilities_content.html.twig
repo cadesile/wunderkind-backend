@@ -1,472 +1,125 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Templates → Facility templates, on bmc_page + bmc-pages.css/js.
+  Data: DashboardController::facilitiesOverview() — facilities, byCategory.
+
+  THE 320-LINE INLINE <style> IS GONE. It built a whole parallel design language — its own
+  cards, buttons, inputs, filter pills and modal — on top of Bootstrap variables. Everything it
+  drew now comes from bmc components, except the four CATEGORY ACCENT COLOURS, which stay as
+  data because they are information: they tell Training from Medical at a glance across the
+  grid and have no equivalent token.
+
+  THE QUICK-EDIT MODAL WAS BOOTSTRAP'S, listening on show.bs.modal. It is now a
+  .bmc-dialog-scrim driven by this page's own script — the same shape _league_dialogs.html.twig
+  established, because BMC.confirm() is for yes/no and this one collects. That removes the last
+  Bootstrap JS dependency outside the stock CRUD pages.
+
+  THE DATA- ATTRIBUTES ON EACH CARD ARE THE DIALOG'S ONLY SOURCE. Nothing is re-fetched when it
+  opens, so a field added here must be added to the dialog's populate step too.
+#}
 
 {% set FACILITY_CTRL = 'App\\Controller\\Admin\\FacilityTemplateCrudController' %}
 
+{# Accent per category — information, not decoration. See the note above. #}
 {% set CAT_META = {
-    'TRAINING': { label: 'Training',  color: '#3B82F6', bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.35)', icon: 'fa-dumbbell' },
-    'MEDICAL':  { label: 'Medical',   color: '#F43F5E', bg: 'rgba(244,63,94,.12)',  border: 'rgba(244,63,94,.35)',  icon: 'fa-kit-medical' },
-    'SCOUTING': { label: 'Scouting',  color: '#F59E0B', bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', icon: 'fa-binoculars' },
-    'STADIUM':  { label: 'Stadium',   color: '#8B5CF6', bg: 'rgba(139,92,246,.12)', border: 'rgba(139,92,246,.35)', icon: 'fa-stadium' },
+    'TRAINING': { label: 'Training', color: '#3B82F6' },
+    'MEDICAL':  { label: 'Medical',  color: '#F43F5E' },
+    'SCOUTING': { label: 'Scouting', color: '#F59E0B' },
+    'STADIUM':  { label: 'Stadium',  color: '#8B5CF6' },
 } %}
 
-{% block content %}
-<style>
-/* ── Reset & base ──────────────────────────────────────────────────────── */
-.fac-page { font-family: 'Inter', system-ui, sans-serif; }
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}"><span>GENERATE</span></a>
+    <a class="bmc-btn bmc-btn--blue" href="{{ ea_url().setController(FACILITY_CTRL).setAction('new').generateUrl() }}"><span>NEW TEMPLATE</span></a>
+{% endblock %}
 
-/* ── Filter bar ───────────────────────────────────────────────────────── */
-.fac-filter-bar {
-    display: flex;
-    gap: .5rem;
-    flex-wrap: wrap;
-    align-items: center;
-}
-.fac-filter-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
-    padding: .35rem .85rem;
-    border: 1px solid var(--bs-border-color);
-    background: transparent;
-    color: var(--bs-secondary-color);
-    font-size: .78rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 150ms ease;
-    border-radius: 999px;
-    white-space: nowrap;
-}
-.fac-filter-btn:hover {
-    border-color: var(--bs-primary);
-    color: var(--bs-body-color);
-    background: var(--bs-tertiary-bg);
-}
-.fac-filter-btn.active {
-    background: var(--bs-primary);
-    border-color: var(--bs-primary);
-    color: #fff;
-}
-.fac-filter-btn .fac-count {
-    font-size: .68rem;
-    padding: .05rem .35rem;
-    border-radius: 999px;
-    background: rgba(255,255,255,.2);
-    font-weight: 600;
-    line-height: 1.4;
-}
-.fac-filter-btn:not(.active) .fac-count {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-secondary-color);
-}
+{% block bmc_body %}
 
-/* ── Card grid ────────────────────────────────────────────────────────── */
-.fac-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: .875rem;
-}
-
-/* ── Facility card ────────────────────────────────────────────────────── */
-.fac-card {
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
-    display: flex;
-    flex-direction: column;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
-    position: relative;
-    overflow: hidden;
-}
-.fac-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: var(--fac-accent, #3B82F6);
-    opacity: 0;
-    transition: opacity 150ms ease;
-}
-.fac-card:hover { border-color: var(--fac-accent, #3B82F6); }
-.fac-card:hover::before { opacity: 1; }
-
-/* Card header */
-.fac-card-head {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    padding: .65rem .875rem .5rem;
-}
-.fac-cat-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    font-size: .65rem;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    padding: .2rem .5rem;
-    border-radius: 3px;
-    border: 1px solid;
-    flex-shrink: 0;
-}
-.fac-label {
-    font-weight: 600;
-    font-size: .88rem;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.fac-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: #22C55E;
-}
-.fac-status-dot.inactive { background: #6B7280; }
-
-/* Slug row */
-.fac-slug {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: .7rem;
-    color: var(--bs-secondary-color);
-    padding: 0 .875rem .55rem;
-    letter-spacing: .02em;
-}
-
-/* Divider */
-.fac-divider { height: 1px; background: var(--bs-border-color); margin: 0; }
-
-/* Stat chips */
-.fac-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .35rem;
-    padding: .55rem .875rem;
-}
-.fac-stat {
-    display: inline-flex;
-    align-items: center;
-    gap: .25rem;
-    font-size: .7rem;
-    padding: .18rem .45rem;
-    background: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
-    white-space: nowrap;
-}
-.fac-stat-label {
-    font-size: .62rem;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: var(--bs-secondary-color);
-}
-.fac-stat-val {
-    font-weight: 600;
-    font-family: 'Courier New', Courier, monospace;
-    color: var(--bs-body-color);
-}
-
-/* Gameplay effects */
-.fac-effects {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .3rem;
-    padding: .4rem .875rem .55rem;
-    border-top: 1px solid var(--bs-border-color);
-    min-height: 2.4rem;
-}
-.fac-effect-chip {
-    font-size: .65rem;
-    padding: .15rem .4rem;
-    border-radius: 2px;
-    background: var(--fac-bg);
-    border: 1px solid var(--fac-border);
-    color: var(--fac-accent);
-    font-family: 'Courier New', Courier, monospace;
-    white-space: nowrap;
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.fac-no-effects {
-    font-size: .7rem;
-    color: var(--bs-secondary-color);
-    font-style: italic;
-    align-self: center;
-}
-
-/* Card footer actions */
-.fac-card-foot {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    padding: .5rem .875rem;
-    border-top: 1px solid var(--bs-border-color);
-    background: var(--bs-tertiary-bg);
-    margin-top: auto;
-}
-.fac-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    font-size: .72rem;
-    font-weight: 500;
-    padding: .28rem .65rem;
-    border: 1px solid var(--bs-border-color);
-    background: transparent;
-    color: var(--bs-body-color);
-    cursor: pointer;
-    transition: all 150ms ease;
-    text-decoration: none;
-}
-.fac-btn:hover {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
-    border-color: var(--bs-primary);
-}
-.fac-btn-primary {
-    background: var(--fac-accent);
-    border-color: var(--fac-accent);
-    color: #fff;
-}
-.fac-btn-primary:hover {
-    opacity: .85;
-    color: #fff;
-    background: var(--fac-accent);
-    border-color: var(--fac-accent);
-}
-
-/* Search box */
-.fac-search-wrap {
-    position: relative;
-    flex: 1;
-    max-width: 260px;
-}
-.fac-search-wrap .fa-magnifying-glass {
-    position: absolute;
-    left: .65rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: .72rem;
-    color: var(--bs-secondary-color);
-    pointer-events: none;
-}
-.fac-search {
-    width: 100%;
-    padding: .35rem .7rem .35rem 2rem;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    font-size: .78rem;
-    border-radius: 999px;
-    transition: border-color 150ms ease;
-}
-.fac-search:focus {
-    outline: none;
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .15);
-}
-
-/* ── Modal ────────────────────────────────────────────────────────────── */
-.fac-modal-header {
-    border-bottom: 1px solid var(--bs-border-color);
-    padding: .85rem 1.1rem;
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-}
-.fac-modal-accent-bar {
-    width: 3px;
-    height: 1.4rem;
-    border-radius: 2px;
-    flex-shrink: 0;
-}
-.fac-modal-body { padding: 1rem 1.1rem; }
-.fac-field-label {
-    font-size: .73rem;
-    font-weight: 600;
-    color: var(--bs-secondary-color);
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    margin-bottom: .3rem;
-    display: block;
-}
-.fac-input {
-    width: 100%;
-    padding: .42rem .65rem;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    font-size: .82rem;
-    transition: border-color 150ms ease;
-}
-.fac-input:focus {
-    outline: none;
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .15);
-}
-.fac-input-mono { font-family: 'Courier New', Courier, monospace; }
-select.fac-input { cursor: pointer; }
-.fac-modal-footer {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    padding: .65rem 1.1rem;
-    border-top: 1px solid var(--bs-border-color);
-}
-.fac-toggle {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    cursor: pointer;
-    font-size: .8rem;
-    user-select: none;
-}
-
-/* Empty state */
-.fac-empty {
-    grid-column: 1/-1;
-    padding: 2.5rem;
-    text-align: center;
-    color: var(--bs-secondary-color);
-    border: 1px dashed var(--bs-border-color);
-    font-size: .85rem;
-}
-</style>
-
-<div class="fac-page mt-1">
-
-    {# ── Page header ─────────────────────────────────────────────────────── #}
-    <div class="d-flex align-items-center gap-3 mb-3">
-        <div>
-            <h5 class="fw-semibold mb-0">Facility Templates</h5>
-            <p class="text-muted small mb-0">
-                {{ facilities|length }} template{{ facilities|length != 1 ? 's' : '' }} across {{ byCategory|length }} categor{{ byCategory|length != 1 ? 'ies' : 'y' }}.
-                Edit gameplay effects in the Full Edit view.
-            </p>
-        </div>
-        <div class="ms-auto d-flex gap-2 align-items-center">
-            <a href="{{ ea_url().setController(FACILITY_CTRL).setAction('new') }}"
-               class="btn btn-sm btn-primary">
-                <i class="fa fa-plus me-1"></i>New Template
-            </a>
-        </div>
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="building"></i>
+        <span class="bmc-card__title">FACILITY TEMPLATES</span>
+        <span class="bmc-card__meta">
+            {{ facilities|length }} template{{ facilities|length != 1 ? 's' : '' }} across
+            {{ byCategory|length }} categor{{ byCategory|length != 1 ? 'ies' : 'y' }} · gameplay effects live in Full edit
+        </span>
     </div>
 
-    {# ── Controls: filter bar + search ──────────────────────────────────── #}
-    <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
-        <div class="fac-filter-bar" id="fac-filters">
-            <button class="fac-filter-btn active" data-filter="all" onclick="setFilter('all', this)">
-                <i class="fa fa-layer-group fa-xs"></i>
-                All
-                <span class="fac-count">{{ facilities|length }}</span>
+    <div class="bmc-card__band" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="bmc-segs" id="fac-filters" role="group" aria-label="Filter by category">
+            <button type="button" class="bmc-quick-btn is-on" data-filter="all" aria-pressed="true">
+                ALL <span class="bmc-badge bmc-badge--subtle">{{ facilities|length }}</span>
             </button>
             {% for cat, items in byCategory %}
-                {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280', icon: 'fa-circle' } %}
-                <button class="fac-filter-btn" data-filter="{{ cat }}"
-                        style="--fac-accent: {{ meta.color }}"
-                        onclick="setFilter('{{ cat }}', this)">
-                    <i class="fa {{ meta.icon }} fa-xs" style="color:{{ meta.color }}"></i>
-                    {{ meta.label }}
-                    <span class="fac-count">{{ items|length }}</span>
+                {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280' } %}
+                <button type="button" class="bmc-quick-btn" data-filter="{{ cat }}" aria-pressed="false">
+                    <span class="bmc-dot" style="background:{{ meta.color }}"></span>
+                    {{ meta.label|upper }} <span class="bmc-badge bmc-badge--subtle">{{ items|length }}</span>
                 </button>
             {% endfor %}
         </div>
-
-        <div class="fac-search-wrap ms-auto">
-            <i class="fa fa-magnifying-glass"></i>
-            <input type="search" class="fac-search" id="fac-search"
-                   placeholder="Search templates…" oninput="filterCards()">
-        </div>
+        <span style="flex:1"></span>
+        <label class="bmc-search" style="min-width:220px">
+            <i data-lucide="search" width="16" height="16"></i>
+            <input type="search" class="bmc-input" id="fac-search" placeholder="Search templates…" aria-label="Search templates">
+        </label>
     </div>
+</section>
 
-    {# ── Card grid ───────────────────────────────────────────────────────── #}
-    <div class="fac-grid" id="fac-grid">
-
-        {% for facility in facilities %}
+<div class="bmc-grid" id="fac-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+    {% for facility in facilities %}
         {% set cat  = facility.category %}
-        {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280', bg: 'rgba(107,114,128,.12)', border: 'rgba(107,114,128,.35)', icon: 'fa-circle' } %}
+        {% set meta = CAT_META[cat] ?? { label: cat, color: '#6B7280' } %}
         {% set effects = facility.gameplayEffects %}
 
-        <div class="fac-card"
-             data-category="{{ cat }}"
-             data-label="{{ facility.label|lower }}"
-             data-slug="{{ facility.slug|lower }}"
-             style="--fac-accent:{{ meta.color }};--fac-bg:{{ meta.bg }};--fac-border:{{ meta.border }}">
-
-            {# Header #}
-            <div class="fac-card-head">
-                <span class="fac-cat-badge"
-                      style="color:{{ meta.color }};background:{{ meta.bg }};border-color:{{ meta.border }}">
-                    <i class="fa {{ meta.icon }} fa-xs"></i>
-                    {{ meta.label }}
+        <section class="bmc-card fac-card" data-domain="club"
+                 data-category="{{ cat }}"
+                 data-label="{{ facility.label|lower }}"
+                 data-slug="{{ facility.slug|lower }}"
+                 style="border-left:4px solid {{ meta.color }}">
+            <div class="bmc-card__head">
+                <span class="bmc-dot" style="background:{{ meta.color }}"></span>
+                <span class="bmc-card__title">{{ facility.label }}</span>
+                <span class="bmc-badge bmc-badge--{{ facility.isActive ? 'positive' : 'subtle' }}">
+                    {{ facility.isActive ? 'ACTIVE' : 'INACTIVE' }}
                 </span>
-                <span class="fac-label" title="{{ facility.label }}">{{ facility.label }}</span>
-                <span class="fac-status-dot {{ facility.isActive ? '' : 'inactive' }}"
-                      title="{{ facility.isActive ? 'Active' : 'Inactive' }}"></span>
             </div>
 
-            {# Slug #}
-            <div class="fac-slug">{{ facility.slug }}</div>
+            <div class="bmc-card__band">
+                <code class="bmc-code">{{ facility.slug }}</code>
+            </div>
 
-            <div class="fac-divider"></div>
-
-            {# Stats #}
-            <div class="fac-stats">
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Cost</span>
-                    <span class="fac-stat-val">£{{ (facility.baseCost / 100)|number_format(0, '.', ',') }}</span>
-                </div>
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Upkeep/wk</span>
-                    <span class="fac-stat-val">£{{ (facility.weeklyUpkeepBase / 100)|number_format(0, '.', ',') }}</span>
-                </div>
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Max Lvl</span>
-                    <span class="fac-stat-val">{{ facility.maxLevel }}</span>
-                </div>
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Build Wks</span>
-                    <span class="fac-stat-val">{{ facility.baseConstructionWeeks == 0 ? '—' : facility.baseConstructionWeeks }}</span>
-                </div>
+            <div class="bmc-stats">
+                <div class="bmc-stat"><span class="bmc-stat__label">COST</span><span class="bmc-stat__value">£{{ (facility.baseCost / 100)|number_format(0, '.', ',') }}</span></div>
+                <div class="bmc-stat"><span class="bmc-stat__label">UPKEEP/WK</span><span class="bmc-stat__value">£{{ (facility.weeklyUpkeepBase / 100)|number_format(0, '.', ',') }}</span></div>
+                <div class="bmc-stat"><span class="bmc-stat__label">MAX LVL</span><span class="bmc-stat__value">{{ facility.maxLevel }}</span></div>
+                <div class="bmc-stat"><span class="bmc-stat__label">BUILD WKS</span><span class="bmc-stat__value">{{ facility.baseConstructionWeeks == 0 ? '—' : facility.baseConstructionWeeks }}</span></div>
                 {% if facility.reputationBonus > 0 %}
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Rep Bonus</span>
-                    <span class="fac-stat-val" style="color:#22C55E">+{{ facility.reputationBonus }}</span>
-                </div>
+                    <div class="bmc-stat"><span class="bmc-stat__label">REP BONUS</span><span class="bmc-stat__value ink-positive">+{{ facility.reputationBonus }}</span></div>
                 {% endif %}
                 {% if facility.matchdayIncome %}
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Matchday</span>
-                    <span class="fac-stat-val">£{{ (facility.matchdayIncome / 100)|number_format(0, '.', ',') }}</span>
-                </div>
+                    <div class="bmc-stat"><span class="bmc-stat__label">MATCHDAY</span><span class="bmc-stat__value">£{{ (facility.matchdayIncome / 100)|number_format(0, '.', ',') }}</span></div>
                 {% endif %}
-                <div class="fac-stat">
-                    <span class="fac-stat-label">Sort</span>
-                    <span class="fac-stat-val">{{ facility.sortOrder }}</span>
-                </div>
+                <div class="bmc-stat"><span class="bmc-stat__label">SORT</span><span class="bmc-stat__value">{{ facility.sortOrder }}</span></div>
             </div>
 
-            {# Gameplay effects #}
-            <div class="fac-effects">
+            <div class="bmc-card__body" style="display:flex;flex-wrap:wrap;gap:4px">
                 {% if effects is empty %}
-                    <span class="fac-no-effects">No gameplay effects configured</span>
+                    <span class="bmc-empty-note">NO GAMEPLAY EFFECTS CONFIGURED</span>
                 {% else %}
                     {% for key, val in effects %}
                         {% set displayVal = val is iterable ? val|join(', ') : val %}
-                        <span class="fac-effect-chip" title="{{ key }}: {{ displayVal }}">
+                        <span class="bmc-badge bmc-badge--subtle" title="{{ key }}: {{ displayVal }}">
                             {{ key|replace({'PerLevel': '/lvl', 'Multiplier': '×', 'Delta': 'Δ', 'Growth': '+', 'Bonus': '+'}) }}: {{ displayVal }}
                         </span>
                     {% endfor %}
                 {% endif %}
             </div>
 
-            {# Footer #}
-            <div class="fac-card-foot">
-                <button type="button"
-                        class="fac-btn fac-btn-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#facilityQuickEditModal"
+            <div class="bmc-card__band" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                {# The dialog reads these and re-fetches nothing, so a new field here needs a
+                   matching line in its populate step. #}
+                <button type="button" class="bmc-btn bmc-btn--blue" data-fac-edit
                         data-id="{{ facility.id|ea_as_string }}"
                         data-label="{{ facility.label|e('html_attr') }}"
                         data-description="{{ facility.description|e('html_attr') }}"
@@ -480,220 +133,185 @@ select.fac-input { cursor: pointer; }
                         data-decay-base="{{ facility.decayBase }}"
                         data-is-active="{{ facility.isActive ? '1' : '0' }}"
                         data-csrf="{{ csrf_token('facility_qe_' ~ facility.id|ea_as_string) }}"
-                        data-full-edit="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string) }}"
-                        data-accent="{{ meta.color }}">
-                    <i class="fa fa-pencil fa-xs"></i>Quick Edit
-                </button>
-                <a href="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string) }}"
-                   class="fac-btn ms-auto" title="Full edit in EasyAdmin">
-                    <i class="fa fa-arrow-up-right-from-square fa-xs"></i>Full Edit
-                </a>
+                        data-full-edit="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string).generateUrl() }}"
+                        data-accent="{{ meta.color }}"><span>QUICK EDIT</span></button>
+                <span style="flex:1"></span>
+                <a class="bmc-btn" href="{{ ea_url().setController(FACILITY_CTRL).setAction('edit').setEntityId(facility.id|ea_as_string).generateUrl() }}"
+                   title="Full edit in EasyAdmin"><span>FULL EDIT</span></a>
             </div>
-
-        </div>{# /.fac-card #}
-        {% else %}
-        <div class="fac-empty">
-            <i class="fa fa-building fa-2x mb-2 d-block" style="opacity:.3"></i>
-            No facility templates found. Create one to get started.
-        </div>
-        {% endfor %}
-
-        <div class="fac-empty d-none" id="fac-no-match">
-            <i class="fa fa-magnifying-glass fa-2x mb-2 d-block" style="opacity:.3"></i>
-            No templates match your filter.
-        </div>
-    </div>
-
+        </section>
+    {% else %}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__body"><span class="bmc-empty-note">NO FACILITY TEMPLATES — CREATE ONE TO GET STARTED</span></div>
+        </section>
+    {% endfor %}
 </div>
 
-{# ── Quick Edit Modal ─────────────────────────────────────────────────────── #}
-<div class="modal fade" id="facilityQuickEditModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:520px">
-        <div class="modal-content" style="border:1px solid var(--bs-border-color)">
-            <form method="POST" id="facilityQEForm" action="">
-                <input type="hidden" name="_token" id="qe-token">
+<section class="bmc-card" id="fac-no-match" data-domain="club" hidden>
+    <div class="bmc-card__body"><span class="bmc-empty-note">NO TEMPLATES MATCH YOUR FILTER</span></div>
+</section>
 
-                {# Modal header #}
-                <div class="fac-modal-header">
-                    <div class="fac-modal-accent-bar" id="qe-accent-bar" style="background:#3B82F6"></div>
-                    <div>
-                        <div class="fw-semibold" style="font-size:.88rem">
-                            <i class="fa fa-pencil fa-xs me-1 text-muted"></i>Quick Edit
-                        </div>
-                        <div class="text-muted" id="qe-title-label" style="font-size:.75rem;font-family:'Courier New',monospace"></div>
+{# ── quick edit ──────────────────────────────────────────────────────── #}
+<div class="bmc-overlay">
+    <div class="bmc-dialog-scrim" id="fac-scrim" hidden>
+        <div class="bmc-dialog bmc-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="fac-qe-title">
+            <h2 class="bmc-dialog__title" id="fac-qe-title">QUICK EDIT</h2>
+            <p class="bmc-dialog__msg" id="fac-qe-sub"></p>
+
+            <form id="fac-qe-form" method="post" action="">
+                <input type="hidden" name="_token" id="fac-qe-token" value="">
+
+                <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+                    <div class="bmc-field-col" style="grid-column:1/-1">
+                        <span class="bmc-lbl">LABEL</span>
+                        <label class="bmc-textbox"><input type="text" name="label" id="fac-qe-label" maxlength="100" required placeholder="Display name"></label>
                     </div>
-                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
-                </div>
-
-                {# Modal body #}
-                <div class="fac-modal-body">
-                    <div class="row g-3">
-
-                        {# Label + Category row #}
-                        <div class="col-8">
-                            <label class="fac-field-label" for="qe-label">Label</label>
-                            <input type="text" class="fac-input" id="qe-label" name="label"
-                                   required maxlength="100" placeholder="Display name">
-                        </div>
-                        <div class="col-4">
-                            <label class="fac-field-label" for="qe-category">Category</label>
-                            <select class="fac-input" id="qe-category" name="category">
-                                <option value="TRAINING">Training</option>
-                                <option value="MEDICAL">Medical</option>
-                                <option value="SCOUTING">Scouting</option>
-                                <option value="STADIUM">Stadium</option>
+                    <div class="bmc-field-col" style="grid-column:1/-1">
+                        <span class="bmc-lbl">DESCRIPTION</span>
+                        <label class="bmc-textbox" style="height:auto;padding:6px 8px">
+                            <textarea name="description" id="fac-qe-description" rows="2" maxlength="500"
+                                      style="all:unset;width:100%;font:var(--text-data);color:var(--wk-text);resize:vertical"></textarea>
+                        </label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">CATEGORY</span>
+                        <span class="bmc-select">
+                            <select name="category" id="fac-qe-category" style="width:100%">
+                                {% for value, meta in CAT_META %}
+                                    <option value="{{ value }}">{{ meta.label }}</option>
+                                {% endfor %}
                             </select>
-                        </div>
-
-                        {# Description #}
-                        <div class="col-12">
-                            <label class="fac-field-label" for="qe-description">Description</label>
-                            <textarea class="fac-input" id="qe-description" name="description"
-                                      rows="2" style="resize:vertical" maxlength="500"></textarea>
-                        </div>
-
-                        {# Costs #}
-                        <div class="col-6">
-                            <label class="fac-field-label" for="qe-base-cost">Base Cost (£)</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-base-cost"
-                                   name="baseCost" min="0" step="1" placeholder="e.g. 50000">
-                        </div>
-                        <div class="col-6">
-                            <label class="fac-field-label" for="qe-upkeep">Weekly Upkeep (£)</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-upkeep"
-                                   name="weeklyUpkeepBase" min="0" step="1" placeholder="e.g. 500">
-                        </div>
-
-                        {# Levels & build #}
-                        <div class="col-4">
-                            <label class="fac-field-label" for="qe-max-level">Max Level</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-max-level"
-                                   name="maxLevel" min="1" max="100" required>
-                        </div>
-                        <div class="col-4">
-                            <label class="fac-field-label" for="qe-build-weeks">Build Weeks</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-build-weeks"
-                                   name="baseConstructionWeeks" min="0" max="52">
-                        </div>
-                        <div class="col-4">
-                            <label class="fac-field-label" for="qe-sort">Sort Order</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-sort"
-                                   name="sortOrder" min="0">
-                        </div>
-
-                        {# Bonuses #}
-                        <div class="col-6">
-                            <label class="fac-field-label" for="qe-rep-bonus">Reputation Bonus</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-rep-bonus"
-                                   name="reputationBonus" min="0" step="0.01">
-                        </div>
-                        <div class="col-6">
-                            <label class="fac-field-label" for="qe-decay-base">Decay Base</label>
-                            <input type="number" class="fac-input fac-input-mono" id="qe-decay-base"
-                                   name="decayBase" min="0" step="0.01">
-                        </div>
-
+                        </span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">BASE COST £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="baseCost" id="fac-qe-base-cost" min="0" step="1" inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">UPKEEP/WK £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="weeklyUpkeepBase" id="fac-qe-upkeep" min="0" step="1" inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">MAX LEVEL</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="maxLevel" id="fac-qe-max-level" min="1" max="100" required inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">BUILD WEEKS</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="baseConstructionWeeks" id="fac-qe-build-weeks" min="0" max="52" inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">SORT ORDER</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="sortOrder" id="fac-qe-sort" min="0" inputmode="numeric"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">REP BONUS</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="reputationBonus" id="fac-qe-rep-bonus" min="0" step="0.01" inputmode="decimal"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">DECAY BASE</span>
+                        <label class="bmc-num bmc-num--fill"><input type="number" name="decayBase" id="fac-qe-decay-base" min="0" step="0.01" inputmode="decimal"></label>
                     </div>
                 </div>
 
-                {# Modal footer #}
-                <div class="fac-modal-footer">
-                    <label class="fac-toggle" for="qe-is-active">
-                        <input type="checkbox" class="form-check-input m-0" id="qe-is-active" name="isActive">
-                        <span>Active</span>
-                    </label>
-                    <a href="#" id="qe-full-edit-link" class="fac-btn ms-auto">
-                        <i class="fa fa-arrow-up-right-from-square fa-xs"></i>Full Edit
-                    </a>
-                    <button type="button" class="fac-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="fac-btn fac-btn-primary" id="qe-submit-btn"
-                            style="background:#3B82F6;border-color:#3B82F6">
-                        <i class="fa fa-floppy-disk fa-xs"></i>Save
-                    </button>
+                <label class="bmc-check" style="padding-left:0;margin:12px 0">
+                    <input type="checkbox" name="isActive" id="fac-qe-is-active">
+                    <span class="bmc-tile"></span>
+                    <span class="bmc-data">Active</span>
+                </label>
+
+                <div class="bmc-dialog__actions">
+                    <a class="bmc-btn" id="fac-qe-full" href="#"><span>FULL EDIT</span></a>
+                    <button type="button" class="bmc-btn" data-fac-cancel><span>CANCEL</span></button>
+                    <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE</span></button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block body_javascript %}
+{{ parent() }}
 <script>
-// ── Filter & search ──────────────────────────────────────────────────────
-
-let activeFilter = 'all';
-
-function setFilter(cat, btn) {
-    activeFilter = cat;
-    document.querySelectorAll('.fac-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    filterCards();
-}
-
-function filterCards() {
-    const q    = document.getElementById('fac-search').value.toLowerCase().trim();
-    const cards = document.querySelectorAll('#fac-grid .fac-card');
-    let visible = 0;
-
-    cards.forEach(card => {
-        const catMatch   = activeFilter === 'all' || card.dataset.category === activeFilter;
-        const labelMatch = q === '' || card.dataset.label.includes(q) || card.dataset.slug.includes(q);
-        const show = catMatch && labelMatch;
-        card.style.display = show ? '' : 'none';
-        if (show) visible++;
-    });
-
-    document.getElementById('fac-no-match').classList.toggle('d-none', visible > 0);
-}
-
-// ── Quick-edit modal ──────────────────────────────────────────────────────
-
 (function () {
-    const modal = document.getElementById('facilityQuickEditModal');
-    if (!modal) return;
+    var $ = function (s) { return document.querySelector(s); };
+    var $$ = function (s) { return [].slice.call(document.querySelectorAll(s)); };
 
-    const CAT_COLORS = {
-        TRAINING: '#3B82F6',
-        MEDICAL:  '#F43F5E',
-        SCOUTING: '#F59E0B',
-        STADIUM:  '#8B5CF6',
-    };
+    // ── filter + search ─────────────────────────────────────────────
+    var filter = 'all';
 
-    modal.addEventListener('show.bs.modal', function (ev) {
-        const btn = ev.relatedTarget;
-        const id  = btn.dataset.id;
-        const accent = btn.dataset.accent || '#3B82F6';
+    function apply() {
+        var q = ($('#fac-search').value || '').toLowerCase().trim();
+        var visible = 0;
 
-        // Form action
-        document.getElementById('facilityQEForm').action = '/admin/facilities/' + id + '/quick-edit';
+        $$('#fac-grid .fac-card').forEach(function (card) {
+            var byCat  = filter === 'all' || card.dataset.category === filter;
+            var byText = q === '' || card.dataset.label.indexOf(q) !== -1 || card.dataset.slug.indexOf(q) !== -1;
+            card.hidden = !(byCat && byText);
+            if (!card.hidden) visible++;
+        });
 
-        // Accent bar + submit button colour
-        document.getElementById('qe-accent-bar').style.background = accent;
-        document.getElementById('qe-submit-btn').style.background   = accent;
-        document.getElementById('qe-submit-btn').style.borderColor  = accent;
+        $('#fac-no-match').hidden = visible > 0;
+    }
 
-        // Populate fields
-        document.getElementById('qe-token').value        = btn.dataset.csrf        || '';
-        document.getElementById('qe-title-label').textContent = btn.dataset.label  || '';
-        document.getElementById('qe-label').value         = btn.dataset.label       || '';
-        document.getElementById('qe-description').value   = btn.dataset.description || '';
-        document.getElementById('qe-category').value      = btn.dataset.category    || 'TRAINING';
-        document.getElementById('qe-base-cost').value     = btn.dataset.baseCost    || '';
-        document.getElementById('qe-upkeep').value        = btn.dataset.weeklyUpkeep|| '';
-        document.getElementById('qe-max-level').value     = btn.dataset.maxLevel    || '';
-        document.getElementById('qe-build-weeks').value   = btn.dataset.buildWeeks  || '';
-        document.getElementById('qe-sort').value          = btn.dataset.sortOrder   || '';
-        document.getElementById('qe-rep-bonus').value     = btn.dataset.reputationBonus || '';
-        document.getElementById('qe-decay-base').value    = btn.dataset.decayBase   || '';
-        document.getElementById('qe-is-active').checked   = btn.dataset.isActive === '1';
-        document.getElementById('qe-full-edit-link').href = btn.dataset.fullEdit    || '#';
-
-        // Update accent when category changes
-        document.getElementById('qe-category').onchange = function () {
-            const c = CAT_COLORS[this.value] || '#3B82F6';
-            document.getElementById('qe-accent-bar').style.background  = c;
-            document.getElementById('qe-submit-btn').style.background   = c;
-            document.getElementById('qe-submit-btn').style.borderColor  = c;
-        };
+    $$('#fac-filters [data-filter]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            filter = b.dataset.filter;
+            $$('#fac-filters [data-filter]').forEach(function (o) {
+                o.classList.toggle('is-on', o === b);
+                o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+            });
+            apply();
+        });
     });
+    $('#fac-search').addEventListener('input', apply);
+
+    // ── quick edit ──────────────────────────────────────────────────
+    // Replaces Bootstrap's modal. Same scrim/dialog shape _league_dialogs.html.twig uses:
+    // BMC.confirm() is for yes/no, and this one collects.
+    var scrim = $('#fac-scrim'), form = $('#fac-qe-form');
+    var CAT_COLORS = {{ CAT_META|map(m => m.color)|json_encode|raw }};
+
+    function close() { scrim.hidden = true; document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    function accent(colour) {
+        $('.bmc-dialog', scrim).style.borderColor = colour || 'var(--wk-accent)';
+    }
+
+    $$('[data-fac-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var d = b.dataset;
+
+            form.action = '/admin/facilities/' + d.id + '/quick-edit';
+            $('#fac-qe-token').value       = d.csrf || '';
+            $('#fac-qe-sub').textContent   = d.label || '';
+            $('#fac-qe-label').value       = d.label || '';
+            $('#fac-qe-description').value = d.description || '';
+            $('#fac-qe-category').value    = d.category || 'TRAINING';
+            $('#fac-qe-base-cost').value   = d.baseCost || '';
+            $('#fac-qe-upkeep').value      = d.weeklyUpkeep || '';
+            $('#fac-qe-max-level').value   = d.maxLevel || '';
+            $('#fac-qe-build-weeks').value = d.buildWeeks || '';
+            $('#fac-qe-sort').value        = d.sortOrder || '';
+            $('#fac-qe-rep-bonus').value   = d.reputationBonus || '';
+            $('#fac-qe-decay-base').value  = d.decayBase || '';
+            $('#fac-qe-is-active').checked = d.isActive === '1';
+            $('#fac-qe-full').href         = d.fullEdit || '#';
+
+            accent(d.accent);
+            scrim.hidden = false;
+            document.addEventListener('keydown', onKey);
+            $('#fac-qe-label').focus();
+        });
+    });
+
+    $('#fac-qe-category').addEventListener('change', function () {
+        accent(CAT_COLORS[this.value]);
+    });
+
+    $('[data-fac-cancel]').addEventListener('click', close);
+    scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
 }());
 </script>
 {% endblock %}

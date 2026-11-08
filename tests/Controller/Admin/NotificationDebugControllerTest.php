@@ -59,7 +59,10 @@ class NotificationDebugControllerTest extends WebTestCase
         $client->request('GET', '/admin', ['routeName' => 'admin_notification_debug']);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h5', 'Notification Debug Tools');
+        // The title moved out of an <h5> and into the page strip when this page was rebuilt
+        // on bmc_page. Asserting a control too, so the test still fails on an empty page.
+        self::assertSelectorTextContains('.bmc-title', 'DEBUG TOOLS');
+        self::assertSelectorExists('form[action*="validate-firebase"], form[action*="notification"]');
     }
 
     public function testTriggerActionDispatchesTheExpectedPushMessage(): void

@@ -1,168 +1,144 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  System → Settings & tools, on bmc_page + bmc-pages.css/js.
+  Data: none — every card is a POST to a named route.
 
-{% block content %}
-<div class="row g-4 mt-1">
+  SIX DESTRUCTIVE BUTTONS AND NOTHING ELSE. There is no form state here, so no data-bmc-form
+  and no save bar: each card is one action and one confirm.
 
-    {# ── Developer Tools ───────────────────────────────────────────────── #}
-    <div class="col-12">
-        <h6 class="text-muted text-uppercase fw-semibold mb-1" style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-warning,#ffc107);padding-left:.5rem;">Developer Tools</h6>
-        <p class="text-muted small mb-0 ps-2">These operations affect live data. Use with caution in production.</p>
+  EVERY CONFIRM IS THE PIXELDIALOG NOW. They were window.confirm through a shared
+  confirmAction() helper, with the nuclear reset chaining two of them. data-bmc-dialog-* does
+  the first; the second nuclear confirmation is kept as a deliberate extra step and runs after
+  the dialog resolves — see the script. Note bmc-admin.js binds [data-bmc-confirm] to
+  window.confirm, so that attribute must never appear beside data-bmc-dialog-*.
+
+  THE CSRF FIELD IS _csrf_token on every one of these, not _token. The actions read that name.
+#}
+
+{% set tools = [
+    {
+        title: 'AGE-21 DELETION', icon: 'user-round-x', variant: 'orange',
+        route: 'admin_trigger_age21', token: 'trigger_age21', via_admin: false,
+        button: 'RUN AGE-21 CHECK',
+        body: 'Runs the age-out check across every club. Players who have turned 21 are permanently deleted, with the Guardian and Transfer cascade.',
+        confirm: {title: 'DELETE EVERY PLAYER AGED 21+?', message: 'Runs across every club. Guardians and transfers cascade. This cannot be undone.', ok: 'RUN IT', variant: 'yellow'},
+    },
+    {
+        title: 'CLEANUP OLD ASSIGNED ENTITIES', icon: 'brush-cleaning', variant: '',
+        route: 'admin_cleanup_entities', token: 'cleanup_entities', via_admin: false,
+        button: 'RUN CLEANUP',
+        body: 'Permanently deletes players, staff, sponsors and investors that were assigned to clubs more than 52 weeks ago.',
+        confirm: {title: 'DELETE ASSIGNED ENTITIES OLDER THAN 52 WEEKS?', message: 'Players, staff, sponsors and investors assigned before that cut-off are removed permanently.', ok: 'RUN IT', variant: 'yellow'},
+    },
+    {
+        title: 'CLEAR SPOOF CLUBS', icon: 'ghost', variant: 'danger-outline',
+        route: 'admin_purge_spoof_clubs', token: 'purge_spoof_clubs', via_admin: true,
+        button: 'CLEAR SPOOF CLUBS',
+        body: 'Permanently deletes every spoof club generated for testing, along with the throwaway account that owns it and everything hanging off it — competition entries and their snapshots, leaderboard rows, season records and match results. Real clubs are untouched: an account is only removed when every club it owns is a spoof.',
+        confirm: {title: 'DELETE ALL SPOOF CLUBS AND THEIR ACCOUNTS?', message: 'An account goes only when every club it owns is a spoof. This cannot be undone.', ok: 'DELETE', variant: 'red'},
+    },
+    {
+        title: 'GENERATE LEADERBOARDS', icon: 'trophy', variant: '',
+        route: 'admin_generate_leaderboards', token: 'generate_leaderboards', via_admin: false,
+        button: 'RUN GENERATE',
+        body: 'Recalculates every leaderboard score and rank — empire index, golden boot, playmaker and the rest — and invalidates the leaderboard cache. The same process the cron job runs every five minutes.',
+        confirm: {title: 'RECALCULATE EVERY LEADERBOARD?', message: 'Scores, ranks and the cache. Safe to run at any time — the cron does the same thing.', ok: 'RUN IT', variant: 'yellow'},
+    },
+    {
+        title: 'NUCLEAR RESET', icon: 'skull', variant: 'danger-outline', nuclear: true,
+        route: 'admin_nuclear_reset', token: 'nuclear_reset', via_admin: false,
+        button: 'NUCLEAR RESET',
+        body: 'Wipes <strong>all</strong> player, staff, club, sync, leaderboard and inbox data, and deletes app users. Admin accounts and every setting — game config, starter config, pool config, archetypes — are <strong>preserved</strong>.',
+        confirm: {title: 'NUCLEAR RESET', message: 'Permanently deletes ALL players, staff, clubs, sync records, leaderboard entries and app users. Admin accounts and config settings are preserved. You will be asked once more.', ok: 'CONTINUE', variant: 'red'},
+    },
+] %}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_logs'}) }}"><span>LOGS</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_notification_debug'}) }}"><span>DEBUG TOOLS</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+<div class="bmc-danger">
+    <i data-lucide="triangle-alert"></i>
+    <div class="bmc-danger__text">
+        <span class="bmc-lbl bmc-lbl--ink">THESE OPERATIONS AFFECT LIVE DATA</span>
+        <span class="bmc-data">Every button on this page writes, and most of them delete. None of it can be undone.</span>
     </div>
-
-    {# Age-21 Deletion #}
-    <div class="col-md-4">
-        <div class="card h-100 border-warning">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small">
-                    <i class="fa fa-user-clock text-warning me-1"></i> Age-21 Deletion
-                </h6>
-                <p class="card-text text-muted small">
-                    Runs the age-out check across every club. Players who have turned 21 are permanently deleted (with Guardian and Transfer cascade).
-                </p>
-            </div>
-            <div class="card-footer bg-transparent">
-                <form method="POST" action="{{ path('admin_trigger_age21') }}" class="d-inline" onsubmit="return confirmAction(this, 'Permanently delete all players aged 21+ from every club?')">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('trigger_age21') }}">
-                    <button type="submit" class="btn btn-warning btn-sm">
-                        <i class="fa fa-play me-1"></i> Run Age-21 Check
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# Cleanup Old Assigned Entities #}
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small">
-                    <i class="fa fa-broom text-secondary me-1"></i> Cleanup Old Assigned Entities
-                </h6>
-                <p class="card-text text-muted small">
-                    Permanently deletes players, staff, sponsors, and investors that were assigned to clubs more than 52 weeks ago.
-                </p>
-            </div>
-            <div class="card-footer bg-transparent">
-                <form method="POST" action="{{ path('admin_cleanup_entities') }}" class="d-inline" onsubmit="return confirmAction(this, 'Delete all assigned entities older than 52 weeks?')">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('cleanup_entities') }}">
-                    <button type="submit" class="btn btn-secondary btn-sm">
-                        <i class="fa fa-play me-1"></i> Run Cleanup
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# Clear Spoof Clubs #}
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small">
-                    <i class="fa fa-ghost text-secondary me-1"></i> Clear Spoof Clubs
-                </h6>
-                <p class="card-text text-muted small">
-                    Permanently deletes every spoof club generated for testing, along with the throwaway
-                    account that owns it and everything hanging off it — competition entries and their
-                    snapshots, leaderboard rows, season records and match results. Real clubs are untouched:
-                    an account is only removed when every club it owns is a spoof.
-                </p>
-            </div>
-            <div class="card-footer bg-transparent">
-                {# Posts through EasyAdmin's entry point: this page extends @EasyAdmin/layout.html.twig,
-                   whose `ea` context only exists for routes EasyAdmin created. See
-                   src/Controller/Admin/CLAUDE.md. #}
-                <form method="POST" action="{{ path('admin', {routeName: 'admin_purge_spoof_clubs'}) }}" class="d-inline"
-                      onsubmit="return confirmAction(this, 'Permanently delete ALL spoof clubs and their accounts? This cannot be undone.')">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('purge_spoof_clubs') }}">
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="fa fa-trash me-1"></i> Clear Spoof Clubs
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# Generate Leaderboards #}
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small">
-                    <i class="fa fa-ranking-star text-secondary me-1"></i> Generate Leaderboards
-                </h6>
-                <p class="card-text text-muted small">
-                    Recalculates all leaderboard scores and ranks (empire index, golden boot, playmaker, etc.) and invalidates the leaderboard cache — the same process the cron job runs every 5 minutes.
-                </p>
-            </div>
-            <div class="card-footer bg-transparent">
-                <form method="POST" action="{{ path('admin_generate_leaderboards') }}" class="d-inline" onsubmit="return confirmAction(this, 'Recalculate all leaderboard scores and ranks now?')">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('generate_leaderboards') }}">
-                    <button type="submit" class="btn btn-secondary btn-sm">
-                        <i class="fa fa-play me-1"></i> Run Generate
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# Nuclear Reset #}
-    <div class="col-md-4">
-        <div class="card h-100 border-danger">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small text-danger">
-                    <i class="fa fa-skull-crossbones me-1"></i> Nuclear Reset
-                </h6>
-                <p class="card-text text-muted small">
-                    Wipes <strong>all</strong> player, staff, club, sync, leaderboard, and inbox data.
-                    App users are deleted. Admin accounts and all settings (game config, starter config, pool config, archetypes) are <strong>preserved</strong>.
-                </p>
-            </div>
-            <div class="card-footer bg-transparent">
-                <form method="POST" action="{{ path('admin_nuclear_reset') }}" class="d-inline" onsubmit="return nuclearConfirm(this)">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('nuclear_reset') }}">
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="fa fa-skull-crossbones me-1"></i> Nuclear Reset
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    {# Reset & Seed — CLI only, visually de-emphasised #}
-    <div class="col-md-4">
-        <div class="card h-100" style="opacity:.65;">
-            <div class="card-body">
-                <h6 class="card-title fw-semibold small text-secondary">
-                    <i class="fa fa-database me-1"></i> Reset &amp; Seed Database
-                </h6>
-                <p class="card-text text-muted small">
-                    Wipes all club and game data, preserves admin users, and re-seeds the market pool.
-                    <strong>CLI only</strong> — cannot be executed from the browser.
-                </p>
-                <code class="d-block mt-2 p-2 rounded small" style="background:var(--bs-tertiary-bg,#f1f3f5);">bash scripts/reset_and_seed.sh</code>
-            </div>
-            <div class="card-footer bg-transparent">
-                <button class="btn btn-outline-secondary btn-sm" disabled title="Run this command from the CLI">
-                    <i class="fa fa-terminal me-1"></i> CLI Only
-                </button>
-            </div>
-        </div>
-    </div>
-
 </div>
 
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+    {% for t in tools %}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="{{ t.icon }}"{{ t.variant starts with 'danger' ? ' class="ink-danger"' : '' }}></i>
+                <span class="bmc-card__title">{{ t.title }}</span>
+            </div>
+            <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px;height:100%">
+                <p class="bmc-bodytext" style="flex:1">{{ t.body|raw }}</p>
+                <form method="post"
+                      action="{{ t.via_admin ? path('admin', {routeName: t.route}) : path(t.route) }}"
+                      style="align-self:flex-start"
+                      {{ t.nuclear is defined ? 'data-nuclear' : '' }}>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token(t.token) }}">
+                    <button type="submit" class="bmc-btn{{ t.variant ? ' bmc-btn--' ~ t.variant : '' }}"
+                            data-bmc-dialog-title="{{ t.confirm.title }}"
+                            data-bmc-dialog-message="{{ t.confirm.message }}"
+                            data-bmc-dialog-confirm="{{ t.confirm.ok }}"
+                            data-bmc-dialog-variant="{{ t.confirm.variant }}"><span>{{ t.button }}</span></button>
+                </form>
+            </div>
+        </section>
+    {% endfor %}
+
+    {# Not a button — the one tool that genuinely cannot run from a browser. #}
+    <section class="bmc-card" data-domain="club" style="opacity:.7">
+        <div class="bmc-card__head">
+            <i data-lucide="terminal"></i>
+            <span class="bmc-card__title">RESET &amp; SEED DATABASE</span>
+            <span class="bmc-card__meta">CLI only</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px">
+            <p class="bmc-bodytext">
+                Wipes all club and game data, preserves admin users, and re-seeds the market pool. There is no
+                browser path to this on purpose.
+            </p>
+            <code class="bmc-code bmc-breakall" style="padding:8px 10px;border:2px solid var(--wk-stroke);background:var(--wk-panel)">bash scripts/reset_and_seed.sh</code>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
 <script>
-function confirmAction(form, message) {
-    if (!confirm(message)) return false;
-    const btn = form.querySelector('button[type="submit"]');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Running…'; }
-    return true;
-}
-function nuclearConfirm(form) {
-    if (!confirm('NUCLEAR RESET\n\nThis will permanently delete ALL players, staff, clubs, sync records, leaderboard entries, and app users.\n\nAdmin accounts and all config settings will be preserved.\n\nAre you absolutely sure?')) return false;
-    if (!confirm('Second confirmation required.\n\nThis cannot be undone. Proceed?')) return false;
-    const btn = form.querySelector('button[type="submit"]');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Running…'; }
-    return true;
-}
+(function () {
+    // THE SECOND NUCLEAR CONFIRMATION. data-bmc-dialog-* handles the first and then re-fires
+    // the click, so by the time this submit handler runs the operator has already said yes
+    // once. The extra step is deliberate: it is the only action here that deletes app users.
+    var form = document.querySelector('form[data-nuclear]');
+    if (!form) return;
+
+    var confirmed = false;
+
+    form.addEventListener('submit', function (e) {
+        if (confirmed) return;
+        e.preventDefault();
+
+        BMC.confirm({
+            title:   'LAST CHANCE',
+            message: 'This cannot be undone. Delete every player, staff member, club, sync record, leaderboard entry and app user?',
+            confirm: 'WIPE IT',
+            variant: 'red',
+        }).then(function (ok) {
+            if (!ok) return;
+            confirmed = true;
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn) { btn.disabled = true; btn.querySelector('span').textContent = 'RUNNING…'; }
+            form.submit();
+        });
+    });
+}());
 </script>
 {% endblock %}
