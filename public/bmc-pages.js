@@ -193,7 +193,7 @@
             });
 
             fields.forEach(function (f) {
-                var dirty = norm(f) !== savedOf(f), box = f.closest('.bmc-num') || f.closest('.bmc-trophy-btn');
+                var dirty = norm(f) !== savedOf(f), box = f.closest('.bmc-num') || f.closest('.bmc-textbox') || f.closest('.bmc-trophy-btn');
                 f._dirty = dirty;
                 if (box) { box.classList.toggle('is-changed', dirty && !f._err); box.classList.toggle('is-invalid', !!f._err); }
                 if (dirty) changed++;

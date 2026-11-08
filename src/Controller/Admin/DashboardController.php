@@ -104,6 +104,9 @@ class DashboardController extends AbstractDashboardController
     public function appLinks(): Response
     {
         return $this->render('admin/app_links.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Config',
+            'bmcTitle' => 'App links',
             'config' => $this->gameConfigRepository->getConfig(),
         ]);
     }
@@ -261,6 +264,9 @@ class DashboardController extends AbstractDashboardController
     public function gameConfig(): Response
     {
         return $this->render('admin/game_config.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Config',
+            'bmcTitle' => 'Game config',
             'config' => $this->gameConfigRepository->getConfig(),
         ]);
     }
@@ -1596,7 +1602,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108f';
+    private const BMC_ASSET_VERSION = '20261108g';
 
     public function configureAssets(): Assets
     {

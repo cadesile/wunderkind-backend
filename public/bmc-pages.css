@@ -229,6 +229,22 @@
 .bmc-savebar[data-state="invalid"] .bmc-savebar__dot { background: var(--wk-danger); }
 .bmc-savebar__title { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); }
 .bmc-savebar__sub { flex: 1; min-width: 120px; font: var(--text-data); color: var(--wk-text-dim); }
+/* ── text box ─────────────────────────────────────────────────
+   .bmc-num is a 64px numeric box and .bmc-search is the palette's own field, so neither is
+   right for a URL or an API key. This is .bmc-num's box at a usable width — same 2px stroke,
+   same focus ring, same .is-changed / .is-invalid states, so the form layer's dirty tracking
+   marks it exactly as it marks a number.
+
+   `word-break` on the value line below it, because an App Store URL has no spaces and would
+   otherwise push the card wider than the viewport. */
+.bmc-textbox { display: flex; align-items: center; gap: 6px; height: 36px; width: 100%; padding: 0 8px; box-sizing: border-box; background: var(--wk-panel); border: 2px solid var(--wk-stroke); cursor: text; }
+.bmc-textbox input { all: unset; width: 100%; min-width: 0; font: var(--text-data); font-family: var(--font-data), monospace; color: var(--wk-text); }
+.bmc-textbox input::placeholder { color: var(--wk-text-faint); opacity: 1; }
+.bmc-textbox.is-changed { border-color: var(--wk-info-light); }
+.bmc-textbox.is-invalid { border-color: var(--wk-danger); }
+.bmc-textbox:focus-within { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
+.bmc-breakall { word-break: break-all; }
+
 /* ── fold ─────────────────────────────────────────────────────
    A card whose body collapses. The old Worldpack cache page did this with Bootstrap's
    data-bs-toggle="collapse", which is the one piece of Bootstrap JS the redesigned pages still

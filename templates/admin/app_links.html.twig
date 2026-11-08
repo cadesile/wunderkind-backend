@@ -1,144 +1,134 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Config → App links, on bmc_page + bmc-pages.css/js.
+  Data: DashboardController::appLinks() — config (a GameConfig row).
 
-{% block content %}
-<div class="row g-4 mt-1">
+  ONE FORM, ONE STICKY SAVE BAR. Seven fields, all of them text, all posting together.
 
-    <div class="col-12">
-        <h5 class="fw-semibold mb-0">App Links</h5>
-        <p class="text-muted small mb-0">Download URLs shown on the landing page and returned by <code>GET /api/app-links</code>. Leave a field blank to hide that platform's button.</p>
+  EVERY FIELD IS data-blank="ok" AND THAT IS THE FEATURE. Blank is what hides a platform's
+  button, a social link or the CAPTCHA widget — so "Required" would be exactly the wrong
+  validation here, and data-kind="text" keeps the numeric check off a URL.
+
+  THE RECAPTCHA SECRET IS RENDERED IN PLAIN TEXT, as it was before. The page is behind
+  ROLE_ADMIN and the value has to be editable, but it is worth knowing it reaches the HTML:
+  anyone who can screenshot this page has the key.
+#}
+
+{% set groups = [
+    {
+        title: 'DOWNLOAD URLS',
+        icon: 'smartphone',
+        meta: 'shown on the landing page and returned by GET /api/app-links',
+        fields: [
+            {name: 'androidDownloadUrl', label: 'ANDROID', placeholder: 'https://play.google.com/store/apps/… or APK URL',
+             help: 'Google Play listing or a direct APK link.'},
+            {name: 'iosDownloadUrl', label: 'IOS', placeholder: 'https://apps.apple.com/app/…',
+             help: 'App Store listing URL.'},
+        ],
+    },
+    {
+        title: 'SOCIAL PROFILE LINKS',
+        icon: 'share-2',
+        meta: 'returned by GET /api/app-links and GET /api/game-config',
+        fields: [
+            {name: 'facebookPageUrl', label: 'FACEBOOK PAGE', placeholder: 'https://facebook.com/yourpage',
+             help: 'Shown on the landing page.'},
+            {name: 'xProfileUrl', label: 'X PROFILE', placeholder: 'https://x.com/yourhandle',
+             help: 'Shown on the landing page.'},
+        ],
+    },
+    {
+        title: 'BETA ACCESS REQUESTS',
+        icon: 'mail',
+        meta: 'landing-page request form',
+        fields: [
+            {name: 'betaRequestEmail', label: 'NOTIFICATION EMAIL', placeholder: 'beta@buildmyclub.co.uk',
+             help: 'Receives an email for each beta request. Blank means requests are accepted silently.'},
+            {name: 'recaptchaSiteKey', label: 'RECAPTCHA SITE KEY', placeholder: '6Lc…',
+             help: 'Public, embedded in the landing page HTML. Blank hides the CAPTCHA widget — no bot protection.'},
+            {name: 'recaptchaSecretKey', label: 'RECAPTCHA SECRET KEY', placeholder: '6Lc…',
+             help: 'Private, used server-side to verify responses. Never expose it publicly.'},
+        ],
+    },
+] %}
+
+{% set live = [
+    {label: 'ANDROID',  url: config.androidDownloadUrl},
+    {label: 'IOS',      url: config.iosDownloadUrl},
+    {label: 'FACEBOOK', url: config.facebookPageUrl},
+    {label: 'X',        url: config.xProfileUrl},
+] %}
+
+{% block bmc_page_class %} bmc-page--savebar{% endblock %}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_game_config'}) }}"><span>GAME CONFIG</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+<form method="post" action="{{ path('admin_app_links_save') }}" data-bmc-form id="app-links-form" style="display:contents">
+    <input type="hidden" name="_token" value="{{ csrf_token('save_app_links') }}">
+
+    {% for g in groups %}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="{{ g.icon }}"></i>
+                <span class="bmc-card__title">{{ g.title }}</span>
+                <span class="bmc-card__meta">{{ g.meta }}</span>
+            </div>
+            {% for f in g.fields %}
+                {% set v = attribute(config, f.name) ?? '' %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ f.label }}</span>
+                        <span class="bmc-setting__help">{{ f.help }}</span>
+                        <span class="bmc-setting__hint" data-bmc-hint data-default="{{ v is empty ? 'Not set — hidden' : 'Live' }}"></span>
+                    </div>
+                    <div class="bmc-setting__ctl" style="flex:1 1 340px;min-width:0">
+                        <label class="bmc-textbox">
+                            <input name="{{ f.name }}" value="{{ v }}" data-saved="{{ v }}"
+                                   data-kind="text" data-blank="ok"
+                                   placeholder="{{ f.placeholder }}" aria-label="{{ f.label|lower }}"
+                                   autocomplete="off" spellcheck="false">
+                        </label>
+                        <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved">
+                            <i data-lucide="rotate-ccw" width="16" height="16"></i>
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+    {% endfor %}
+
+    {# ── what is actually live right now ─────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="link"></i>
+            <span class="bmc-card__title">CURRENTLY LIVE</span>
+            <span class="bmc-card__meta">as saved — not what is typed above</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:8px">
+            {% for l in live %}
+                <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                    <span class="bmc-lbl bmc-lbl--ink" style="min-width:84px">{{ l.label }}</span>
+                    {% if l.url %}
+                        {# rel="noopener" on a target=_blank link: without it the opened page can
+                           reach back through window.opener. #}
+                        <a class="bmc-card__link bmc-breakall" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url }}</a>
+                    {% else %}
+                        <span class="bmc-data">not set — hidden</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <div class="bmc-savebar" data-bmc-savebar data-idle="A blank field hides that link rather than clearing it.">
+        <span class="bmc-savebar__dot"></span>
+        <span class="bmc-savebar__title">ALL SAVED</span>
+        <span class="bmc-savebar__sub"></span>
+        <button type="button" class="bmc-btn" data-bmc-discard><span>DISCARD</span></button>
+        <button type="submit" class="bmc-btn bmc-btn--yellow" data-bmc-save><span>SAVE APP LINKS</span></button>
     </div>
-    <div class="col-12">
-    <form method="POST" action="{{ path('admin_app_links_save') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('save_app_links') }}">
-
-        <div class="card">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-mobile-screen text-muted"></i>
-                <span class="fw-semibold small">Download URLs</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label for="androidDownloadUrl" class="form-label fw-semibold">
-                            <i class="fa fa-android text-success me-1"></i> Android
-                        </label>
-                        <input type="url" id="androidDownloadUrl" name="androidDownloadUrl"
-                               value="{{ config.androidDownloadUrl ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="https://play.google.com/store/apps/... or APK URL">
-                        <div class="form-text">Google Play listing or direct APK link. Blank = button hidden.</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="iosDownloadUrl" class="form-label fw-semibold">
-                            <i class="fa fa-apple text-secondary me-1"></i> iOS
-                        </label>
-                        <input type="url" id="iosDownloadUrl" name="iosDownloadUrl"
-                               value="{{ config.iosDownloadUrl ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="https://apps.apple.com/app/...">
-                        <div class="form-text">App Store listing URL. Blank = button hidden.</div>
-                    </div>
-                </div>
-
-                {% if config.androidDownloadUrl or config.iosDownloadUrl %}
-                <div class="mt-4 p-3 bg-body-secondary rounded">
-                    <p class="small fw-semibold mb-2 text-muted">Current live links</p>
-                    <div class="d-flex flex-column gap-1">
-                        {% if config.androidDownloadUrl %}
-                            <a href="{{ config.androidDownloadUrl }}" target="_blank" rel="noopener" class="small text-break">
-                                <i class="fa fa-android text-success me-1"></i>{{ config.androidDownloadUrl }}
-                            </a>
-                        {% else %}
-                            <span class="small text-muted"><i class="fa fa-android me-1"></i>Android — not set</span>
-                        {% endif %}
-                        {% if config.iosDownloadUrl %}
-                            <a href="{{ config.iosDownloadUrl }}" target="_blank" rel="noopener" class="small text-break">
-                                <i class="fa fa-apple text-secondary me-1"></i>{{ config.iosDownloadUrl }}
-                            </a>
-                        {% else %}
-                            <span class="small text-muted"><i class="fa fa-apple me-1"></i>iOS — not set</span>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="card mt-4">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-share-nodes text-muted"></i>
-                <span class="fw-semibold small">Social Profile Links</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label for="facebookPageUrl" class="form-label fw-semibold">
-                            <i class="fa-brands fa-facebook text-primary me-1"></i> Facebook Page
-                        </label>
-                        <input type="url" id="facebookPageUrl" name="facebookPageUrl"
-                               value="{{ config.facebookPageUrl ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="https://facebook.com/yourpage">
-                        <div class="form-text">Shown on the landing page and returned by <code>GET /api/app-links</code> and <code>GET /api/game-config</code>. Blank = link hidden.</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="xProfileUrl" class="form-label fw-semibold">
-                            <i class="fa-brands fa-x-twitter me-1"></i> X Profile
-                        </label>
-                        <input type="url" id="xProfileUrl" name="xProfileUrl"
-                               value="{{ config.xProfileUrl ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="https://x.com/yourhandle">
-                        <div class="form-text">Same as above. Blank = link hidden.</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mt-4">
-            <div class="card-header py-2 d-flex align-items-center gap-2">
-                <i class="fa fa-envelope text-muted"></i>
-                <span class="fw-semibold small">Beta Access Requests</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label for="betaRequestEmail" class="form-label fw-semibold">Notification Email</label>
-                        <input type="email" id="betaRequestEmail" name="betaRequestEmail"
-                               value="{{ config.betaRequestEmail ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="e.g. beta@buildmyclub.co.uk">
-                        <div class="form-text">Receives an email for each beta request submitted via the landing page. Blank = requests are silently accepted without notification.</div>
-                    </div>
-                </div>
-                <hr class="my-4">
-                <p class="small fw-semibold text-muted mb-3">Google reCAPTCHA v2</p>
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label for="recaptchaSiteKey" class="form-label fw-semibold">Site Key <span class="text-muted fw-normal">(public)</span></label>
-                        <input type="text" id="recaptchaSiteKey" name="recaptchaSiteKey"
-                               value="{{ config.recaptchaSiteKey ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="6Lc…">
-                        <div class="form-text">Embedded in the landing page HTML. Leave blank to hide the CAPTCHA widget (no bot protection).</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="recaptchaSecretKey" class="form-label fw-semibold">Secret Key <span class="text-muted fw-normal">(private)</span></label>
-                        <input type="text" id="recaptchaSecretKey" name="recaptchaSecretKey"
-                               value="{{ config.recaptchaSecretKey ?? '' }}"
-                               class="form-control font-monospace"
-                               placeholder="6Lc…">
-                        <div class="form-text">Used server-side to verify CAPTCHA responses. Never expose this publicly.</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-4">
-            <button type="submit" class="btn btn-primary btn-sm">Save App Links</button>
-        </div>
-    </form>
-    </div>
-
-</div>
+</form>
 {% endblock %}
