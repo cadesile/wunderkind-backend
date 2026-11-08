@@ -1539,6 +1539,9 @@ class DashboardController extends AbstractDashboardController
     public function telemetryConfig(\App\Service\LiveTelemetryService $liveTelemetryService): Response
     {
         return $this->render('admin/telemetry_config.html.twig', [
+            // The page strip's crumb and title, using the LIVE sidebar group label.
+            'bmcGroup' => 'Config',
+            'bmcTitle' => 'Telemetry config',
             'snapshot' => $liveTelemetryService->getSnapshot(),
         ]);
     }
@@ -1593,7 +1596,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108e';
+    private const BMC_ASSET_VERSION = '20261108f';
 
     public function configureAssets(): Assets
     {

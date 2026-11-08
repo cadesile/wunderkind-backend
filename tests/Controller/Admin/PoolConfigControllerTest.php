@@ -17,6 +17,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\BrowserKit\Cookie;
+use App\Tests\Support\AssertsFlashTrait;
 
 /**
  * Covers the 3-way split of the former single "Pool Config" admin page into
@@ -26,6 +27,8 @@ use Symfony\Component\BrowserKit\Cookie;
  */
 class PoolConfigControllerTest extends WebTestCase
 {
+    use AssertsFlashTrait;
+
     private const TEST_ADMIN_EMAIL = 'pool-config-split-test-admin@example.com';
 
     /**
@@ -38,17 +41,6 @@ class PoolConfigControllerTest extends WebTestCase
      * upper keeps the test about "did the message arrive" rather than about letter case,
      * and survives the §11 copy rewrite still working through these pages.
      */
-    private function assertFlash(string $message): void
-    {
-        $body = static::getClient()->getResponse()->getContent();
-
-        self::assertStringContainsString(
-            mb_strtoupper($message),
-            mb_strtoupper($body),
-            \sprintf('expected the flash "%s" on the page', $message),
-        );
-    }
-
     /** Same pattern as SocialAuthControllerTest::loginAsAdmin(). */
     private function loginAsAdmin(KernelBrowser $client): void
     {
@@ -157,7 +149,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Player pool rules saved');
+        $this->assertFlash($client, 'Player pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -182,7 +174,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Invalid CSRF token.');
+        $this->assertFlash($client, 'Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(12, $this->getConfig()->getPlayerAgeMin());
@@ -221,7 +213,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Player pool cleared');
+        $this->assertFlash($client, 'Player pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Player::class, $player->getId()), 'player should be deleted');
@@ -247,7 +239,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Staff pool rules saved');
+        $this->assertFlash($client, 'Staff pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -319,7 +311,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Invalid CSRF token.');
+        $this->assertFlash($client, 'Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(40, $this->getConfig()->getCoachAbilityMin());
@@ -360,7 +352,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Staff pool cleared');
+        $this->assertFlash($client, 'Staff pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Staff::class, $staff->getId()), 'staff should be deleted');
@@ -387,7 +379,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Investor pool rules saved');
+        $this->assertFlash($client, 'Investor pool rules saved');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $config = $this->getConfig();
@@ -412,7 +404,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Invalid CSRF token.');
+        $this->assertFlash($client, 'Invalid CSRF token.');
 
         $em->clear();
         $this->assertSame(30, $this->getConfig()->getAgentReputationMin());
@@ -455,7 +447,7 @@ class PoolConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertFlash('Investor pool cleared');
+        $this->assertFlash($client, 'Investor pool cleared');
 
         $em->clear();
         $this->assertNull($em->find(Agent::class, $agent->getId()), 'agent should be deleted');

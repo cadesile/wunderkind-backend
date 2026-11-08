@@ -13,9 +13,12 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\BrowserKit\Cookie;
+use App\Tests\Support\AssertsFlashTrait;
 
 class SocialAuthControllerTest extends WebTestCase
 {
+    use AssertsFlashTrait;
+
     private const TEST_ADMIN_EMAIL = 'social-auth-test-admin@example.com';
 
     /**
@@ -119,7 +122,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token');
+        $this->assertFlash($client, 'Invalid CSRF token');
     }
 
     public function testTestPublishRequiresValidCsrfToken(): void
@@ -136,7 +139,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token');
+        $this->assertFlash($client, 'Invalid CSRF token');
     }
 
     public function testTestPreviewShowsNoDataMessageWhenLeaderboardEmpty(): void
@@ -160,7 +163,7 @@ class SocialAuthControllerTest extends WebTestCase
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('body', 'No leaderboard data');
+        $this->assertFlash($client, 'No leaderboard data');
     }
 
     public function testTestPublishWithMissingTemplateShowsFlashAndDoesNotThrow(): void
@@ -177,7 +180,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Nothing to publish');
+        $this->assertFlash($client, 'Nothing to publish');
     }
 
     public function testAdminSocialRoutesRequireAuthentication(): void
@@ -211,7 +214,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'invalid or missing state parameter');
+        $this->assertFlash($client, 'invalid or missing state parameter');
         $this->assertSame($before, $this->countConnections(), 'No connection should be persisted when state is tampered with.');
     }
 
@@ -227,7 +230,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'invalid or missing state parameter');
+        $this->assertFlash($client, 'invalid or missing state parameter');
         $this->assertSame($before, $this->countConnections());
     }
 
@@ -246,7 +249,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'invalid or missing state parameter');
+        $this->assertFlash($client, 'invalid or missing state parameter');
         $this->assertSame($before, $this->countConnections());
     }
 
@@ -264,7 +267,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'missing PKCE verifier');
+        $this->assertFlash($client, 'missing PKCE verifier');
         $this->assertSame($before, $this->countConnections());
     }
 
@@ -279,7 +282,7 @@ class SocialAuthControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token');
+        $this->assertFlash($client, 'Invalid CSRF token');
     }
 
     public function testIndexListsConnections(): void

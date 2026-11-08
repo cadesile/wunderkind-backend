@@ -10,9 +10,12 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\BrowserKit\Cookie;
+use App\Tests\Support\AssertsFlashTrait;
 
 class TelemetryConfigControllerTest extends WebTestCase
 {
+    use AssertsFlashTrait;
+
     private const TEST_ADMIN_EMAIL = 'telemetry-config-test-admin@example.com';
 
     /**
@@ -85,9 +88,16 @@ class TelemetryConfigControllerTest extends WebTestCase
         $client->request('GET', '/admin?routeName=admin_telemetry_config');
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('body', 'Telemetry Config');
-        $this->assertSelectorTextContains('body', 'Rebuild Snapshot');
-        $this->assertSelectorTextContains('body', 'Raw Data Uses');
+
+        // Structure rather than copy. These were three assertSelectorTextContains('body', …)
+        // calls on mixed-case headings, and the redesign upper-cases every heading on the page
+        // — so all three broke on a change that altered nothing they were testing. What they
+        // were actually checking is that the title rendered, the rebuild control is offered,
+        // and the raw-data section is present; each of those is a thing on the page, so each
+        // is now matched as one.
+        $this->assertSelectorTextContains('.bmc-title', 'TELEMETRY CONFIG');
+        $this->assertSelectorExists('form[action*="telemetry-config/rebuild"] button[type="submit"]');
+        $this->assertSelectorExists('details.bmc-fold', 'the raw-data sources must still be listed');
     }
 
     public function testRebuildSnapshotRefreshesGeneratedAtAndRedirects(): void
@@ -113,7 +123,7 @@ class TelemetryConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Telemetry snapshot rebuilt.');
+        $this->assertFlash($client, 'Telemetry snapshot rebuilt.');
 
         self::getContainer()->get(EntityManagerInterface::class)->clear();
         $after = $repository->getSnapshot()->getGeneratedAt();
@@ -140,7 +150,7 @@ class TelemetryConfigControllerTest extends WebTestCase
 
         $this->assertResponseRedirects();
         $client->followRedirect();
-        $this->assertSelectorTextContains('body', 'Invalid CSRF token.');
+        $this->assertFlash($client, 'Invalid CSRF token.');
 
         $em->clear();
         $this->assertEquals($before, $repository->getSnapshot()->getGeneratedAt());
