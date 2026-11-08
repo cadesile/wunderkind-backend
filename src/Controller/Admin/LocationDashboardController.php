@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Location\Location;
 use App\Repository\Location\CountryProfileRepository;
+use App\Repository\Location\LocationConfigRepository;
 use App\Repository\Location\LocationRepository;
 use App\Service\Location\CountryGoLiveService;
 use App\Service\Location\CountryReadinessService;
@@ -42,6 +43,7 @@ class LocationDashboardController extends AbstractController
         private readonly CountryGoLiveService $goLiveService,
         private readonly LandPlotProvisioner $provisioner,
         private readonly LocationCapacityService $capacityService,
+        private readonly LocationConfigRepository $locationConfigRepository,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -156,13 +158,21 @@ class LocationDashboardController extends AbstractController
     }
 
     /**
-     * The five biggest towns, with their capacity.
+     * The five biggest towns, with their capacity and the plot target their size calls for.
      *
      * Two reused queries rather than one bespoke one: the towns, then
      * LocationCapacityService::forLocations() for plots and claims — so these figures come out
      * of the same shape the API serves rather than a second opinion about the same rows.
      *
-     * @return list<array{location: Location, capacity: array<string, mixed>}>
+     * `target` IS WHAT DECIDES WHETHER TOP UP IS OFFERED, and it has to be read from the
+     * config rather than assumed. The template used to gate the button on a literal `< 4`,
+     * which is only BIG's DEFAULT: a MEDIUM town at its target of 2 showed a button that did
+     * nothing, and raising BIG above 4 on the Configuration screen HID the button on exactly
+     * the towns that then needed it. Resolved here because plotsForCitySize() is where a
+     * hand-edited config row is clamped and defaulted — a second reading of the raw array in
+     * Twig would be the copy that drifts.
+     *
+     * @return list<array{location: Location, capacity: array<string, mixed>, target: int}>
      */
     private function topTowns(string $code): array
     {
@@ -176,10 +186,13 @@ class LocationDashboardController extends AbstractController
             array_map(static fn (Location $l): string => (string) $l->getId(), $towns),
         );
 
+        $config = $this->locationConfigRepository->getConfig();
+
         return array_map(static fn (Location $l): array => [
             'location' => $l,
             // forLocations() omits a location with no plots rather than zero-filling it.
             'capacity' => $capacity[(string) $l->getId()] ?? ['plots' => 0, 'claimed' => 0, 'available' => 0],
+            'target'   => $config->plotsForCitySize($l->getCitySize()),
         ], $towns);
     }
 

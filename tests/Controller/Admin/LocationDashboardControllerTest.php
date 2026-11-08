@@ -28,18 +28,51 @@ class LocationDashboardControllerTest extends WebTestCase
 
     private KernelBrowser $client;
 
+    /**
+     * The plot targets as this suite found them.
+     *
+     * LocationConfig IS A SINGLETON ROW, shared by every test in the run. Two cases here
+     * change the SMALL target to prove the TOP UP gate reads it, and leaving that change
+     * behind would silently re-target every later test's towns — the provisioner, the reaper
+     * and the readiness checks all read the same row. Captured before, restored after.
+     *
+     * @var array<string, int>
+     */
+    private array $originalPlotTargets = [];
+
     protected function setUp(): void
     {
         $this->client = static::createClient();
         $this->purge();
+
+        $this->originalPlotTargets = self::getContainer()
+            ->get(\App\Repository\Location\LocationConfigRepository::class)
+            ->getConfig()
+            ->getPlotsByCitySize();
+
         $this->loginAsAdmin();
     }
 
     protected function tearDown(): void
     {
+        $this->restorePlotTargets();
         $this->purge();
 
         parent::tearDown();
+    }
+
+    private function restorePlotTargets(): void
+    {
+        if ($this->originalPlotTargets === []) {
+            return;
+        }
+
+        $config = self::getContainer()
+            ->get(\App\Repository\Location\LocationConfigRepository::class)
+            ->getConfig();
+
+        $config->setPlotsByCitySize($this->originalPlotTargets);
+        self::getContainer()->get(EntityManagerInterface::class)->flush();
     }
 
     private function purge(): void
@@ -228,5 +261,101 @@ class LocationDashboardControllerTest extends WebTestCase
         self::assertSame(1, $again, 'topping up twice must not stack plots');
 
         $em->clear();
+    }
+
+    /**
+     * Set this country's plot target for SMALL towns, which is what the seeded towns are.
+     *
+     * A new Location defaults to SMALL and nothing reclassifies a three-town country, so SMALL
+     * is the only band these tests ever exercise.
+     */
+    private function setSmallTownPlotTarget(int $plots): void
+    {
+        $repo   = self::getContainer()->get(\App\Repository\Location\LocationConfigRepository::class);
+        $config = $repo->getConfig();
+
+        $config->setPlotsByCitySize(array_merge(
+            $config->getPlotsByCitySize(),
+            [\App\Enum\CitySize::SMALL->value => $plots],
+        ));
+
+        self::getContainer()->get(EntityManagerInterface::class)->flush();
+    }
+
+    private function dashboardHtml(): string
+    {
+        $this->client->request('GET', '/admin', [
+            'routeName'   => 'admin_locations_dashboard',
+            'routeParams' => ['country' => self::CODE],
+        ]);
+
+        self::assertResponseIsSuccessful();
+
+        return (string) $this->client->getResponse()->getContent();
+    }
+
+    /**
+     * TOP UP must read the CONFIGURED target, not a hardcoded 4.
+     *
+     * The template gated the button on `t.capacity.plots < 4`, which is only BIG's DEFAULT.
+     * Two ways that was wrong, and this pins both:
+     *
+     *   - a town already AT its target offered a button that could not do anything, and whose
+     *     flash then said so ("already has the plots its size calls for")
+     *   - a target raised ABOVE 4 on the Configuration screen HID the button on exactly the
+     *     towns that then needed it
+     *
+     * The second is the one a literal can never satisfy, and it is why this is a test rather
+     * than a comment.
+     */
+    public function testTopUpIsNotOfferedToATownAlreadyAtItsTarget(): void
+    {
+        $this->seedCountry(1);
+        $this->setSmallTownPlotTarget(1);
+
+        $id = (string) self::getContainer()->get(\App\Repository\Location\LocationRepository::class)
+            ->findTopByPopulation(self::CODE, 1)[0]->getId();
+
+        $this->client->request('POST', '/admin/locations/dashboard/add-plots', [
+            '_token'   => $this->token('locations_add_plots_' . $id),
+            'location' => $id,
+        ]);
+
+        self::assertStringNotContainsString(
+            'TOP UP',
+            $this->dashboardHtml(),
+            'a town at its target must not be offered a button that would do nothing',
+        );
+    }
+
+    public function testTopUpIsStillOfferedWhenTheTargetIsRaisedAboveFour(): void
+    {
+        $this->seedCountry(1);
+
+        // Six plots wanted, one provisioned: under the old literal this read 1 < 4 and showed
+        // the button by luck. Provision up to five first, so the only thing that can still
+        // offer the button is the configured target.
+        $this->setSmallTownPlotTarget(5);
+        $id = (string) self::getContainer()->get(\App\Repository\Location\LocationRepository::class)
+            ->findTopByPopulation(self::CODE, 1)[0]->getId();
+
+        $this->client->request('POST', '/admin/locations/dashboard/add-plots', [
+            '_token'   => $this->token('locations_add_plots_' . $id),
+            'location' => $id,
+        ]);
+
+        $plots = (int) self::getContainer()->get(Connection::class)->fetchOne(
+            'SELECT COUNT(*) FROM land_plot WHERE location_id = :id',
+            ['id' => $id],
+        );
+        self::assertSame(5, $plots, 'fixture check: the town must now be above the old literal of 4');
+
+        $this->setSmallTownPlotTarget(6);
+
+        self::assertStringContainsString(
+            'TOP UP',
+            $this->dashboardHtml(),
+            'a town below a target of 6 must be offered the button even though it has 5 plots',
+        );
     }
 }

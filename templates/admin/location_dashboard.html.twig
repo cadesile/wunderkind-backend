@@ -175,8 +175,10 @@
                                     {{ l.landPence is null ? '—' : '£' ~ (l.landPence / 100)|round|number_format(0, '.', ',') }}
                                     {%- if l.isLandLocked %} <span title="Hand-set land value — enrichment will not overwrite it">🔒</span>{% endif %}
                                 </span>
-                                <span class="bmc-cellnum">{{ t.capacity.plots }} plot(s)</span>
-                                {% if l.isSellable and t.capacity.plots < 4 %}
+                                <span class="bmc-cellnum">{{ t.capacity.plots }} / {{ t.target }} plot(s)</span>
+                                {# t.target, not a literal: plots per size is configurable and BIG's
+                                   default of 4 is not every town's target. See topTowns(). #}
+                                {% if l.isSellable and t.capacity.plots < t.target %}
                                     <form method="post" action="{{ path('admin', {routeName: 'admin_locations_add_plots'}) }}" style="display:contents">
                                         <input type="hidden" name="_token" value="{{ csrf_token('locations_add_plots_' ~ l.id) }}">
                                         <input type="hidden" name="location" value="{{ l.id }}">
