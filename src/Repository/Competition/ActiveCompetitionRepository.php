@@ -125,11 +125,28 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * This template's current holder — the one row it contributes to `champions[]`.
+     *
+     * Carries the `completedAt IS NOT NULL` guard for the reason set out on
+     * findRecentlyCompletedWithKnownCompletion(): under Postgres's NULLS FIRST, one
+     * COMPLETED-but-undated instance outranks every real date and would be named as this
+     * template's champion. That is a single admin click away — the CRUD form offers `status`
+     * and `completedAt` as independent fields — and unlike the app's `recentlyCompleted`
+     * list, where an undated instance is merely in an odd position, here the position IS the
+     * answer, so an instance that cannot be dated is excluded rather than ranked.
+     *
+     * Consequence worth knowing: a template whose ONLY completed instance is undated now
+     * drops out of `champions[]` entirely. That is consistent rather than lossy —
+     * findCompletedHistory() excludes the same row, so the two keys agree about what counts
+     * as a finished cup.
+     */
     public function findLatestCompletedForTemplate(CompetitionTemplate $template): ?ActiveCompetition
     {
         return $this->createQueryBuilder('a')
             ->where('a.template = :template')
             ->andWhere('a.status = :status')
+            ->andWhere('a.completedAt IS NOT NULL')
             ->setParameter('template', $template->getId())
             ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
             ->orderBy('a.completedAt', 'DESC')
@@ -137,6 +154,45 @@ class ActiveCompetitionRepository extends ServiceEntityRepository
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * EVERY completed instance, newest first — one row per cup won, for the Hall of Fame's
+     * `history[]`. Offset-paginated, mirroring findFiltered().
+     *
+     * Deliberately does NOT join on `template.isActive`: a retired template keeps the
+     * champions it crowned. That is the one thing separating this from findFiltered(), which
+     * hard-filters `t.isActive = true` and so hides a retired competition's whole history
+     * along with its live instances — fine for a discovery list, wrong for a record of who
+     * has won what.
+     *
+     * Carries the same `completedAt IS NOT NULL` guard as
+     * findRecentlyCompletedWithKnownCompletion(), for the reason given there.
+     *
+     * `a.id` is the FINAL tiebreak, not just createdAt. Two cups provisioned and completed
+     * in the same tick share both timestamps, and under offset pagination an unstable sort
+     * does not merely reorder the rows — it drops one and repeats another across the page
+     * boundary, so a client paging the history would never see one of them.
+     *
+     * The template is fetch-joined: every row of the response reads `templateName` and
+     * `trophy` off it, which is one lazy proxy load per row otherwise.
+     *
+     * @return list<ActiveCompetition>
+     */
+    public function findCompletedHistory(int $offset = 0, int $limit = 20): array
+    {
+        return $this->createQueryBuilder('a')
+            ->innerJoin('a.template', 't')->addSelect('t')
+            ->where('a.status = :status')
+            ->andWhere('a.completedAt IS NOT NULL')
+            ->setParameter('status', ActiveCompetitionStatus::COMPLETED)
+            ->orderBy('a.completedAt', 'DESC')
+            ->addOrderBy('a.createdAt', 'DESC')
+            ->addOrderBy('a.id', 'ASC')
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 
     /**

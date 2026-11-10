@@ -16,15 +16,18 @@ use App\Enum\Competition\CompetitionDuration;
 use App\Message\SendPushNotificationMessage;
 use App\Service\Competition\CompetitionDrawService;
 use App\Service\Competition\CompetitionResultsService;
+use App\Service\Competition\HallOfFameService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Messenger\Envelope;
 use App\Tests\Support\EntrantFixtureTrait;
+use App\Tests\Support\PlayedCupFixtureTrait;
 
 class CompetitionControllerTest extends WebTestCase
 {
     use EntrantFixtureTrait;
+    use PlayedCupFixtureTrait;
 
     private KernelBrowser $client;
     private EntityManagerInterface $em;
@@ -994,7 +997,206 @@ class CompetitionControllerTest extends WebTestCase
 
         $this->client->request('GET', '/api/competitions/champions');
         $this->assertResponseStatusCodeSame(200);
-        $this->assertArrayHasKey('champions', $this->responseJson());
+        $championsBody = $this->responseJson();
+        // Counted, not just key-checked. This assertion used to be assertArrayHasKey() alone,
+        // which is how `champions[]` returning a single row for five played cups went
+        // unnoticed: the key was always there and the shape was always an array.
+        $this->assertSame([], $championsBody['champions'], 'nothing has completed, so nobody holds anything');
+        $this->assertSame([], $championsBody['history'], 'and no cup has been won');
+        $this->assertNull($championsBody['nextCursor']);
+    }
+
+    /**
+     * The regression this endpoint was reported for: three runnings of ONE template, three
+     * different champions, and the app seeing only one of them.
+     *
+     * `champions[]` is one row per active template and always was — so it stays at one here,
+     * and `history[]` is the key that carries the other two. Both are asserted together
+     * because the tempting fix, widening `champions[]`, would satisfy the history assertion
+     * while repeating templateId down a list existing clients key on.
+     */
+    public function testChampionsHistoryListsEveryCompletedInstanceOfOneTemplate(): void
+    {
+        $first  = $this->playedCup($this->em, 'First Winners FC', new \DateTimeImmutable('2026-03-01 18:00:00'));
+        $second = $this->playedCup($this->em, 'Second Winners FC', new \DateTimeImmutable('2026-04-01 18:00:00'), templateId: $first->templateId);
+        $third  = $this->playedCup($this->em, 'Third Winners FC', new \DateTimeImmutable('2026-05-01 18:00:00'), templateId: $first->templateId);
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $this->assertResponseStatusCodeSame(200);
+        $body = $this->responseJson();
+
+        $this->assertCount(1, $body['champions'], 'one active template, one current holder — unchanged');
+        $this->assertCount(3, $body['history'], 'three cups were won, so three rows');
+
+        $this->assertSame(
+            ['Third Winners FC', 'Second Winners FC', 'First Winners FC'],
+            array_column(array_column($body['history'], 'champion'), 'clubName'),
+            'three DISTINCT champions, newest first — not the latest one repeated',
+        );
+        $this->assertSame(
+            [$third->instanceId, $second->instanceId, $first->instanceId],
+            array_column($body['history'], 'instanceId'),
+        );
+        $this->assertSame(
+            $body['champions'][0]['instanceId'],
+            $body['history'][0]['instanceId'],
+            'the holder is the newest row of the history, never a fourth opinion',
+        );
+        $this->assertSame('Home Losers FC', $body['history'][0]['runnerUp']['clubName']);
+        $this->assertTrue($body['history'][0]['templateIsActive']);
+    }
+
+    /**
+     * The additive contract, pinned against what production actually served before the
+     * change: every key a shipped client could already be reading is still there, under the
+     * same name, on both the row and the nested champion.
+     *
+     * The list is literal on purpose. The backend deploys well ahead of the app, so a key
+     * quietly renamed here reaches live clients with nothing in between to catch it, and
+     * `champions[]` is read by an app build that has no idea `history[]` exists.
+     */
+    public function testChampionsRowsKeepEveryKeyTheyShippedWith(): void
+    {
+        $this->playedCup($this->em, 'Contract Winners FC', new \DateTimeImmutable('2026-05-05 18:00:00'));
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $body = $this->responseJson();
+
+        foreach (['templateId', 'templateName', 'entrantCapacity', 'trophy', 'instanceId', 'completedAt', 'champion', 'runnerUp'] as $key) {
+            $this->assertArrayHasKey($key, $body['champions'][0], "champions[] lost the shipped key '$key'");
+            $this->assertArrayHasKey($key, $body['history'][0], "history[] must carry the same row shape, missing '$key'");
+        }
+
+        foreach ([
+            'entrantId', 'clubId', 'clubName', 'name', 'abbreviation', 'country', 'ovr',
+            'reputation', 'reputationTier', 'tier', 'seed', 'formation', 'playingStyle',
+            'homeKitConfig', 'awayKitConfig', 'badgeConfig', 'badgeShape', 'identity',
+            'homePrimary', 'homeSecondary', 'awayPrimary', 'awaySecondary',
+            'stadium', 'stadiumName',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $body['champions'][0]['champion'], "the champion block lost '$key'");
+        }
+
+        // championPair() was extracted from serializeInstanceSummary() during this change, and
+        // the same method feeds the CACHED bracket document — where a COMPLETED competition's
+        // state never moves again, so a drift there would be served forever. Identical output
+        // on both paths is the thing that makes that safe.
+        $instanceId = $body['champions'][0]['instanceId'];
+        $this->client->request('GET', '/api/competitions/' . $instanceId);
+        $bracket = $this->responseJson();
+        $this->assertSame($body['champions'][0]['champion'], $bracket['champion']);
+        $this->assertSame($body['champions'][0]['runnerUp'], $bracket['runnerUp']);
+    }
+
+    /** `limit`/`cursor` behave as they do on GET /api/competitions, and the ceiling holds. */
+    public function testChampionsHistoryPaginatesWithLimitAndCursor(): void
+    {
+        $template = null;
+        for ($i = 1; $i <= 3; $i++) {
+            $cup = $this->playedCup(
+                $this->em,
+                sprintf('Winners %02d FC', $i),
+                new \DateTimeImmutable(sprintf('2026-04-%02d 18:00:00', $i)),
+                templateId: $template,
+            );
+            $template ??= $cup->templateId;
+        }
+
+        $this->client->request('GET', '/api/competitions/champions?limit=2');
+        $pageOne = $this->responseJson();
+        $this->assertCount(2, $pageOne['history']);
+        $this->assertSame('2', $pageOne['nextCursor']);
+
+        $this->client->request('GET', '/api/competitions/champions?limit=2&cursor=' . $pageOne['nextCursor']);
+        $pageTwo = $this->responseJson();
+        $this->assertCount(1, $pageTwo['history']);
+        $this->assertNull($pageTwo['nextCursor'], 'the last page says so rather than offering an empty one');
+
+        $this->assertSame(
+            [],
+            array_intersect(array_column($pageOne['history'], 'instanceId'), array_column($pageTwo['history'], 'instanceId')),
+            'the pages must not overlap',
+        );
+
+        // The endpoint is PUBLIC_ACCESS, so the ceiling cannot be a client's to choose.
+        $this->client->request('GET', '/api/competitions/champions?limit=999');
+        $this->assertLessThanOrEqual(HallOfFameService::MAX_HISTORY_LIMIT, count($this->responseJson()['history']));
+    }
+
+    /**
+     * Retiring a template must not erase who won it. `champions[]` drops the template — there
+     * is no current holder of a cup nobody can enter — while the history keeps every final it
+     * ever had, flagged so a client can label it.
+     */
+    public function testChampionsHistoryKeepsARetiredTemplatesChampions(): void
+    {
+        $cup = $this->playedCup($this->em, 'Retired Cup Winners FC', new \DateTimeImmutable('2026-05-02 18:00:00'));
+
+        $template = $this->em->find(CompetitionTemplate::class, $cup->templateId);
+        $template->setIsActive(false);
+        $this->em->flush();
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $body = $this->responseJson();
+
+        $this->assertSame([], $body['champions'], 'a retired cup has no current holder');
+        $this->assertCount(1, $body['history'], 'but its champion is still on the record');
+        $this->assertSame('Retired Cup Winners FC', $body['history'][0]['champion']['clubName']);
+        $this->assertFalse($body['history'][0]['templateIsActive']);
+    }
+
+    /**
+     * COMPLETED with no completedAt is one admin form save away — the CRUD page offers
+     * `status` and `completedAt` independently — and Postgres orders `completed_at DESC`
+     * NULLS FIRST, so that row would outrank every real date and be named as the champion.
+     */
+    public function testChampionsIgnoresACompletedInstanceWithNoCompletedAt(): void
+    {
+        $older  = $this->playedCup($this->em, 'Older Winners FC', new \DateTimeImmutable('2026-01-01 18:00:00'));
+        $newest = $this->playedCup($this->em, 'Newest Winners FC', new \DateTimeImmutable('2026-02-01 18:00:00'), templateId: $older->templateId);
+        $undated = $this->playedCup($this->em, 'Undated Winners FC', completedAt: null, templateId: $older->templateId);
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $body = $this->responseJson();
+
+        $this->assertSame(
+            $newest->instanceId,
+            $body['champions'][0]['instanceId'],
+            'the holder is the newest DATED cup, not the undated row sorting ahead of it',
+        );
+        $this->assertNotContains(
+            $undated->instanceId,
+            array_column($body['history'], 'instanceId'),
+            'an instance that cannot be dated is excluded outright, not merely demoted',
+        );
+        $this->assertCount(2, $body['history']);
+    }
+
+    /**
+     * A completed instance whose final never produced a winner is still a completed
+     * competition. It keeps its row with a null champion rather than being filtered out:
+     * dropping rows after LIMIT would return short pages while the cursor advanced by the
+     * full page, leaving a hole no client could detect.
+     */
+    public function testChampionsHistoryKeepsARowWhoseFinalWasNeverSettled(): void
+    {
+        $unsettled = $this->playedCup($this->em, 'No Winner FC', new \DateTimeImmutable('2026-06-01 18:00:00'), settleFinal: false);
+
+        $this->client->request('GET', '/api/competitions/champions');
+        $body = $this->responseJson();
+
+        $this->assertCount(1, $body['history']);
+        $this->assertSame($unsettled->instanceId, $body['history'][0]['instanceId']);
+        $this->assertNull($body['history'][0]['champion']);
+        $this->assertNull($body['history'][0]['runnerUp']);
+
+        // `champions[]` keeps the row too, with a null champion — the instance IS this
+        // template's latest completed one, there just is no club to name. That is the
+        // behaviour the endpoint already had (the old loop pushed its row before reading the
+        // champion out of it), and preserving it exactly is the point of the additive shape.
+        $this->assertCount(1, $body['champions']);
+        $this->assertSame($unsettled->instanceId, $body['champions'][0]['instanceId']);
+        $this->assertNull($body['champions'][0]['champion']);
     }
 
     // ---------------------------------------------------------------------------------

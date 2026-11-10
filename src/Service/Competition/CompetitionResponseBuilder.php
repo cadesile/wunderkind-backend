@@ -253,6 +253,46 @@ class CompetitionResponseBuilder
     }
 
 
+    /**
+     * `{champion, runnerUp}` for a final fixture the caller already holds — null in both keys
+     * when there is no fixture, or no winner recorded on it yet.
+     *
+     * Runs no queries of its own. Both sides come from serializeEntrantSummary(), which reads
+     * the entrant's stored club display block, so this is cheap enough to call per row of a
+     * long list. That is the point: HallOfFameService builds a 50-row history page from the
+     * batched finals and this method, where reusing serializeInstanceSummary() per row would
+     * have run findCurrentRound, countForCompetition, findByCompetitionOrderedByIndex and
+     * findFinalFixtureForCompetition — plus entry conditions and prizes — to read two keys.
+     *
+     * serializeInstanceSummary() delegates here, which is the part that matters for
+     * correctness: `champion`/`runnerUp` cannot drift between the Hall of Fame and the cached
+     * GET /api/competitions/{id} document, because there is only one copy of the logic.
+     *
+     * @return array{champion: ?array<string, mixed>, runnerUp: ?array<string, mixed>}
+     */
+    public function championPair(?CompetitionFixture $finalFixture): array
+    {
+        $winner = $finalFixture?->getWinnerEntrant();
+        if ($winner === null) {
+            return ['champion' => null, 'runnerUp' => null];
+        }
+
+        $home = $finalFixture->getHomeEntrant();
+        $away = $finalFixture->getAwayEntrant();
+
+        // Compared by id rather than by reference, matching CupResultsBoardService::isHome().
+        // Identical while both sides come from one identity map, and not reliant on it — a
+        // batched fetch-join feeding this from HallOfFameService is a different unit of work.
+        $loser = ($home !== null && $away !== null)
+            ? ($winner->getId()->equals($home->getId()) ? $away : $home)
+            : null;
+
+        return [
+            'champion' => $this->serializeEntrantSummary($winner),
+            'runnerUp' => $this->serializeEntrantSummary($loser),
+        ];
+    }
+
     public function serializeInstanceSummary(ActiveCompetition $instance, ?Club $viewerClub = null): array
     {
         $template        = $instance->getTemplate();
@@ -262,19 +302,14 @@ class CompetitionResponseBuilder
         $totalRounds     = (int) round(log($capacity, 2));
         $entryFeePence   = $template->getEntryFeePence();
 
-        $champion = null;
-        $runnerUp = null;
-        if ($instance->getStatus() === ActiveCompetitionStatus::COMPLETED) {
-            $finalFixture = $this->fixtureRepository->findFinalFixtureForCompetition($instance);
-            if ($finalFixture !== null && $finalFixture->getWinnerEntrant() !== null) {
-                $winner   = $finalFixture->getWinnerEntrant();
-                $home     = $finalFixture->getHomeEntrant();
-                $away     = $finalFixture->getAwayEntrant();
-                $loser    = ($home !== null && $away !== null) ? ($winner === $home ? $away : $home) : null;
-                $champion = $this->serializeEntrantSummary($winner);
-                $runnerUp = $this->serializeEntrantSummary($loser);
-            }
-        }
+        // The status check stays at the CALL SITE, not inside championPair(): a competition
+        // that has not completed must cost zero fixture queries, and it is the only caller
+        // that can know that without asking.
+        ['champion' => $champion, 'runnerUp' => $runnerUp] = $this->championPair(
+            $instance->getStatus() === ActiveCompetitionStatus::COMPLETED
+                ? $this->fixtureRepository->findFinalFixtureForCompetition($instance)
+                : null,
+        );
 
         // Client-facing counter, not the cache key — kept additive so an existing client
         // comparing it numerically is unaffected by the fingerprint change.

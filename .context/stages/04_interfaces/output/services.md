@@ -439,6 +439,26 @@ filename alone.
   never changes once written. Two indexed reads, with the entry fetch **batched**
   (`findTopEntriesForArchives()`) for the same reason `findByEntrants()`/`findBothSides()`
   exist: don't trade a snapshot for an N+1 of the same size.
+- **`App\Service\Competition\HallOfFameService`** — sole owner of the two "who won"
+  keys on `GET /api/competitions/champions` AND `GET /api/club/hub`, which each used to
+  build their own. `currentHolders()` is one row per **active template** (its current
+  holder, via `findLatestCompletedForTemplate()`); `history()` is one row per **completed
+  instance**, newest first, offset-paginated (`findCompletedHistory()`, `DEFAULT_HISTORY_LIMIT`
+  = 20, `MAX_HISTORY_LIMIT` = 50 clamped **in the service** because the route is public);
+  `hubHistory()` is the first `HUB_HISTORY_LIMIT` = 5 of that, matching what the landing
+  page's board shows. Both public readers end in one private `row()` — the anti-drift
+  guarantee, and it closed drift that had already happened: the two controllers' copies read
+  the trophy through different paths (`normalizeTrophy()` vs a `serializeInstanceSummary()`
+  result). **Why `history()` exists at all:** `champions[]` was being read as the historical
+  winners list and cannot be one — its length is the number of active templates, so one
+  template with five finals settled returns one row permanently, which is exactly what the
+  app was reporting. `history()` asks the landing board's question instead (recent finals,
+  whatever template) and, unlike `findFiltered()`, ignores `template.isActive` so a retired
+  cup keeps its champions. Query budget: `history()` is **2 queries regardless of page
+  size** — the page, then `CompetitionFixtureRepository::findFinalFixturesForCompetitions()`
+  for every final at once — feeding `CompetitionResponseBuilder::championPair()`, which runs
+  none. Reusing `serializeInstanceSummary()` per row would have been roughly six queries per
+  row for the two keys a row keeps. Contract: `docs/api/competition-champions-history.md`.
 - **`App\Service\Competition\CupResultsBoardService`** — the landing page's
   `#cup-results` board: the latest completed knockout cup in full (frozen winner and
   runner-up, road to the final, four caption figures) plus up to `EARLIER_LIMIT` = 4

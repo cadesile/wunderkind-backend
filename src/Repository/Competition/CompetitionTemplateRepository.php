@@ -16,11 +16,20 @@ class CompetitionTemplateRepository extends ServiceEntityRepository
         parent::__construct($registry, CompetitionTemplate::class);
     }
 
-    /** @return list<CompetitionTemplate> */
+    /**
+     * Ordered by name because four separate client-facing lists are built by looping this
+     * result — `champions[]` and `available[]` on CompetitionController, and `open[]` plus
+     * `champions[]` on the club hub — and all four inherit whatever order it comes back in.
+     * Unordered, that was whatever Postgres felt like, so the same four lists could reshuffle
+     * between two identical requests.
+     *
+     * @return list<CompetitionTemplate>
+     */
     public function findAllActive(): array
     {
         return $this->createQueryBuilder('t')
             ->where('t.isActive = true')
+            ->orderBy('t.name', 'ASC')
             ->getQuery()
             ->getResult();
     }
