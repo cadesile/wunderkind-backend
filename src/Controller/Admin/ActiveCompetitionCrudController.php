@@ -207,6 +207,13 @@ class ActiveCompetitionCrudController extends AbstractCrudController
         }
 
         return $this->render('admin/competition/active_competition_detail.html.twig', [
+            // The strip's crumb and title. bmc_page is the dashboard's slug, not one of this
+            // page's own: a competition detail has no menu item, so without it the layout
+            // derives nothing and the pin silently does nothing — and pointing it at the
+            // dashboard keeps the highlighted sidebar row agreeing with where you came from.
+            'bmcGroup'                      => 'Seasons & competitions',
+            'bmcTitle'                      => $competition->getTemplate()->getName(),
+            'bmc_page'                      => 'active-competitions',
             'competition'                   => $competition,
             'rounds'                        => $rounds,
             'fixturesByRoundId'             => $fixturesByRoundId,

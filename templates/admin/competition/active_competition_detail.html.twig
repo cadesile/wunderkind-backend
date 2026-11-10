@@ -1,414 +1,356 @@
-{% extends '@EasyAdmin/layout.html.twig' %}
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Active competition detail, on bmc_page + bmc-pages.css/js.
+  Data: ActiveCompetitionCrudController::detail().
 
-{% macro status_badge(color, label) %}
-    <span class="badge bg-{{ color }}-subtle text-{{ color }} border border-{{ color }}-subtle">{{ label }}</span>
-{% endmacro %}
+  THE FORENSICS PAGE. Everything here is admin-only: the event log, the derivation audit, the
+  starting XI with ratings, the raw stored payload. The device gets the score in the bracket
+  and fetches match detail from GET /api/matches/{id} — the panel at the bottom of each
+  expanded fixture says so and links it rather than inlining a payload this screen would have
+  to serialise per fixture to show.
+
+  THE PER-FIXTURE EXPANDER WAS BOOTSTRAP COLLAPSE — data-bs-toggle on the button and
+  `<tr class="collapse">` on the detail row, which needs a matching #id on both halves. A
+  <details> cannot wrap a table row, so this keeps the two-row shape and toggles `hidden` from
+  nine lines of script. One less Bootstrap JS dependency, and no id to mistype into a row that
+  never opens.
+
+  THE ROUND ACTIONS ARE POSTS. Force draw and generate result both write, so they stay forms
+  with their own CSRF token, and both confirm — a forced draw cannot be undrawn.
+#}
+
+{% set COMPETITION_BADGE = {
+    registering: 'subtle', scheduled: 'accent', running: 'warning',
+    completed: 'positive', cancelled: 'danger',
+} %}
+{% set ROUND_BADGE = {
+    draw_pending: 'subtle', drawn: 'warning', results_published: 'positive', cancelled: 'danger',
+} %}
+{% set FIXTURE_BADGE = { pending: 'subtle', complete: 'positive', bye: 'subtle' } %}
 
 {% macro player_name(lineup, id) %}
     {%- if id is null -%}
-        &mdash;
+        —
     {%- else -%}
         {%- set matches = lineup|filter(e => e.id == id) -%}
-        {%- if matches|length > 0 -%}
-            {{- (matches|first).name ?? id -}}
-        {%- else -%}
-            {{- id -}}
-        {%- endif -%}
+        {{- matches|length > 0 ? ((matches|first).name ?? id) : id -}}
     {%- endif -%}
 {% endmacro %}
 
-{% set competitionStatusColor = {
-    registering: 'secondary',
-    scheduled:   'primary',
-    running:     'warning',
-    completed:   'success',
-    cancelled:   'danger',
-} %}
-
-{% set roundStatusColor = {
-    draw_pending:      'secondary',
-    drawn:              'warning',
-    results_published: 'success',
-    cancelled:          'danger',
-} %}
-
-{% set fixtureStatusColor = {
-    pending:  'secondary',
-    complete: 'success',
-    bye:      'secondary',
-} %}
-
-{% block content %}
-<div class="row g-4 mt-1">
-    <div class="col-12 d-flex justify-content-between align-items-start flex-wrap gap-2">
-        <div>
-            <h5 class="fw-semibold mb-0">{{ competition.template.name }}</h5>
-            <p class="text-muted small mb-0">
-                {{ _self.status_badge(competitionStatusColor[competition.status.value] ?? 'secondary', competition.status.value) }}
-                &middot; {{ competition.entrantCapacity }} entrants &middot; {{ competition.durationOption.value }}
-                {% if competition.startsAt %}&middot; starts {{ competition.startsAt|date('Y-m-d H:i') }}{% endif %}
-                {% if competition.endsAt %}&middot; ends {{ competition.endsAt|date('Y-m-d H:i') }}{% endif %}
-            </p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-            {% if canGenerateSpoof %}
-                <a href="{{ generateSpoofUrl }}" class="btn btn-sm btn-outline-primary">
-                    <i class="fa fa-clone"></i> Generate Spoof Entrants
-                </a>
-            {% endif %}
-            {% if canSpoofAll %}
-                <a href="{{ spoofAllUrl }}" class="btn btn-sm btn-outline-primary">
-                    <i class="fa fa-users"></i> Spoof All Entrants
-                </a>
-            {% endif %}
-        </div>
-    </div>
-
-    {% if rounds is empty %}
-        <div class="col-12">
-            <p class="text-muted small">No rounds yet — this competition is still REGISTERING.</p>
-        </div>
+{% block bmc_strip_right %}
+    {% if canGenerateSpoof %}
+        <a class="bmc-btn bmc-btn--teal" href="{{ generateSpoofUrl }}"><span>GENERATE SPOOF ENTRANTS</span></a>
     {% endif %}
+    {% if canSpoofAll %}
+        <a class="bmc-btn bmc-btn--teal" href="{{ spoofAllUrl }}"><span>SPOOF ALL ENTRANTS</span></a>
+    {% endif %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_active_competitions_dashboard'}) }}"><span>ALL COMPETITIONS</span></a>
+{% endblock %}
 
-    {% for round in rounds %}
-        {% set fixtures = fixturesByRoundId[round.id|ea_as_string] ?? [] %}
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header py-2 d-flex align-items-center gap-2">
-                    <span class="fw-semibold small">{{ round.label }}</span>
-                    {{ _self.status_badge(roundStatusColor[round.status.value] ?? 'secondary', round.status.value) }}
-                    {% if round.matchEngineIdentifier %}
-                        <span class="badge bg-dark-subtle text-dark border border-dark-subtle">{{ round.matchEngineIdentifier.value }}</span>
-                    {% endif %}
-                    {% if round.status.value == 'draw_pending' %}
-                        <span class="ms-auto text-muted small">draw due {{ round.scheduledAt|date('Y-m-d H:i') }}</span>
-                        <form method="post" action="{{ forceDrawUrlByRoundId[round.id|ea_as_string] }}" class="d-inline">
-                            <input type="hidden" name="_token" value="{{ csrf_token('force_draw_round') }}">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
-                                <i class="fa fa-bolt"></i> Force Draw
-                            </button>
-                        </form>
-                    {% elseif round.status.value == 'drawn' %}
-                        <span class="ms-auto text-muted small">results due {{ round.matchesResolveAt|date('Y-m-d H:i') }}</span>
-                    {% else %}
-                        <span class="ms-auto text-muted small">completed {{ round.completedAt|date('Y-m-d H:i') }}</span>
-                    {% endif %}
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 small align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Home</th>
-                                <th>Away</th>
-                                <th class="text-center">Score</th>
-                                <th>Status</th>
-                                <th class="pe-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for fixture in fixtures %}
-                                {% set result = resultsByFixtureId[fixture.id|ea_as_string] ?? null %}
-                                {# Admin-only forensics, batch-fetched by the controller — never reached through the result. #}
-                                {% set resultAudit = result is null ? null : (auditsByResultId[result.id|ea_as_string] ?? null) %}
-                                {% set rowId = 'fixture-' ~ fixture.id %}
-                                <tr>
-                                    <td class="ps-3">
-                                        {% if fixture.homeEntrant %}
-                                            {{ fixture.homeEntrant.displayName }}
-                                            <span class="text-muted">#{{ fixture.homeEntrant.seed }}</span>
-                                        {% else %}
-                                            <span class="text-muted">BYE</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if fixture.awayEntrant %}
-                                            {{ fixture.awayEntrant.displayName }}
-                                            <span class="text-muted">#{{ fixture.awayEntrant.seed }}</span>
-                                        {% else %}
-                                            <span class="text-muted">BYE</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-center fw-semibold">
-                                        {% if result %}
-                                            {{ result.homeScore }} &ndash; {{ result.awayScore }}
-                                            {% if result.wentToPenalties %}
-                                                <br><span class="badge bg-warning text-dark fw-normal">Pens {{ result.penaltyHomeScore }}-{{ result.penaltyAwayScore }}</span>
-                                            {% elseif result.wentToExtraTime %}
-                                                <br><span class="badge bg-info text-dark fw-normal">AET</span>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">&mdash;</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ _self.status_badge(fixtureStatusColor[fixture.status.value] ?? 'secondary', fixture.status.value) }}</td>
-                                    <td class="pe-3 text-end">
-                                        {% if result %}
-                                            <button type="button" class="btn btn-sm btn-outline-secondary"
-                                                    data-bs-toggle="collapse" data-bs-target="#{{ rowId }}" aria-expanded="false">
-                                                <i class="fa fa-magnifying-glass"></i> Details
-                                            </button>
-                                        {% elseif fixture.status.value == 'pending' and fixture.homeEntrant and fixture.awayEntrant %}
-                                            <form method="post" action="{{ generateResultUrlByFixtureId[fixture.id|ea_as_string] }}" class="d-inline">
-                                                <input type="hidden" name="_token" value="{{ csrf_token('generate_fixture_result') }}">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">
-                                                    <i class="fa fa-bolt"></i> Generate Result
-                                                </button>
-                                            </form>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% if result %}
-                                    {% set homeLineup = result.homeLineupJson %}
-                                    {% set awayLineup = result.awayLineupJson %}
-                                    <tr class="collapse" id="{{ rowId }}">
-                                        <td colspan="5" class="bg-body-tertiary">
-                                            <div class="p-3">
-                                                <div class="d-flex gap-3 mb-2 small text-muted">
-                                                    <span class="fw-semibold text-body">{{ result.homeClubJson.name ?? 'Home' }} vs {{ result.awayClubJson.name ?? 'Away' }}</span>
-                                                    <span><i class="fa fa-microchip me-1"></i>{{ result.engineIdentifier.value }}</span>
-                                                    <span><i class="fa fa-clock me-1"></i>{{ result.generatedAt|date('Y-m-d H:i:s') }}</span>
-                                                </div>
-                                                {% if resultAudit is not null and resultAudit.eventLogJson is not empty %}
-                                                    <table class="table table-sm mb-2">
-                                                        <thead>
-                                                            <tr class="text-muted small">
-                                                                <th style="width:4rem;">Min</th>
-                                                                <th>Type</th>
-                                                                <th>Team</th>
-                                                                <th>Player</th>
-                                                                <th>Assist</th>
-                                                            </tr>
-                                                        </thead>
+{% block bmc_body %}
+
+{# ── what this competition is ────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="match">
+    <div class="bmc-card__head">
+        <i data-lucide="trophy"></i>
+        <span class="bmc-card__title">{{ competition.template.name }}</span>
+        <span class="bmc-badge bmc-badge--{{ COMPETITION_BADGE[competition.status.value] ?? 'subtle' }}">{{ competition.status.value }}</span>
+    </div>
+    <div class="bmc-stats">
+        <div class="bmc-stat"><span class="bmc-stat__label">ENTRANTS</span><span class="bmc-stat__value">{{ competition.entrantCapacity }}</span></div>
+        <div class="bmc-stat"><span class="bmc-stat__label">DURATION</span><span class="bmc-stat__value" style="font:var(--text-body-step)">{{ competition.durationOption.value }}</span></div>
+        <div class="bmc-stat"><span class="bmc-stat__label">ROUNDS</span><span class="bmc-stat__value">{{ rounds|length }}</span></div>
+        {% if competition.startsAt %}
+            <div class="bmc-stat"><span class="bmc-stat__label">STARTS</span><span class="bmc-stat__value" style="font:var(--text-data)">{{ competition.startsAt|date('Y-m-d H:i') }}</span></div>
+        {% endif %}
+        {% if competition.endsAt %}
+            <div class="bmc-stat"><span class="bmc-stat__label">ENDS</span><span class="bmc-stat__value" style="font:var(--text-data)">{{ competition.endsAt|date('Y-m-d H:i') }}</span></div>
+        {% endif %}
+    </div>
+</section>
+
+{% if rounds is empty %}
+    <section class="bmc-card" data-domain="match">
+        <div class="bmc-card__body"><span class="bmc-empty-note">NO ROUNDS YET — THIS COMPETITION IS STILL REGISTERING</span></div>
+    </section>
+{% endif %}
+
+{% for round in rounds %}
+    {% set fixtures = fixturesByRoundId[round.id|ea_as_string] ?? [] %}
+    <section class="bmc-card" data-domain="match">
+        <div class="bmc-card__head">
+            <i data-lucide="git-branch"></i>
+            <span class="bmc-card__title">{{ round.label }}</span>
+            <span class="bmc-badge bmc-badge--{{ ROUND_BADGE[round.status.value] ?? 'subtle' }}">{{ round.status.value }}</span>
+            {% if round.matchEngineIdentifier %}
+                <span class="bmc-badge bmc-badge--subtle">{{ round.matchEngineIdentifier.value }}</span>
+            {% endif %}
+            <span style="flex:1"></span>
+            {% if round.status.value == 'draw_pending' %}
+                <span class="bmc-data">draw due {{ round.scheduledAt|date('Y-m-d H:i') }}</span>
+            {% elseif round.status.value == 'drawn' %}
+                <span class="bmc-data">results due {{ round.matchesResolveAt|date('Y-m-d H:i') }}</span>
+            {% else %}
+                <span class="bmc-data">completed {{ round.completedAt|date('Y-m-d H:i') }}</span>
+            {% endif %}
+        </div>
+
+        {% if round.status.value == 'draw_pending' %}
+            <div class="bmc-card__band">
+                <form method="post" action="{{ forceDrawUrlByRoundId[round.id|ea_as_string] }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('force_draw_round') }}">
+                    <button type="submit" class="bmc-btn bmc-btn--orange"
+                            data-bmc-dialog-title="FORCE THE DRAW FOR {{ round.label|upper }}?"
+                            data-bmc-dialog-message="Pairs every entrant now rather than at the scheduled time. A draw cannot be undrawn."
+                            data-bmc-dialog-confirm="FORCE DRAW" data-bmc-dialog-variant="yellow"><span>FORCE DRAW</span></button>
+                </form>
+            </div>
+        {% endif %}
+
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:680px">
+                <thead><tr>
+                    <th>HOME</th><th>AWAY</th><th class="is-right">SCORE</th><th>STATUS</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for fixture in fixtures %}
+                    {% set result = resultsByFixtureId[fixture.id|ea_as_string] ?? null %}
+                    {# Admin-only forensics, batch-fetched by the controller — never reached through the result. #}
+                    {% set resultAudit = result is null ? null : (auditsByResultId[result.id|ea_as_string] ?? null) %}
+                    {% set rowId = 'fixture-' ~ fixture.id %}
+                    <tr>
+                        <td>
+                            {%- if fixture.homeEntrant %}<span class="bmc-celltext">{{ fixture.homeEntrant.displayName }}</span> <span class="bmc-data">#{{ fixture.homeEntrant.seed }}</span>
+                            {%- else %}<span class="ink-dim">BYE</span>{% endif -%}
+                        </td>
+                        <td>
+                            {%- if fixture.awayEntrant %}<span class="bmc-celltext">{{ fixture.awayEntrant.displayName }}</span> <span class="bmc-data">#{{ fixture.awayEntrant.seed }}</span>
+                            {%- else %}<span class="ink-dim">BYE</span>{% endif -%}
+                        </td>
+                        <td class="is-right">
+                            {% if result %}
+                                <span class="bmc-cellnum">{{ result.homeScore }} – {{ result.awayScore }}</span>
+                                {% if result.wentToPenalties %}
+                                    <span class="bmc-badge bmc-badge--warning">PENS {{ result.penaltyHomeScore }}-{{ result.penaltyAwayScore }}</span>
+                                {% elseif result.wentToExtraTime %}
+                                    <span class="bmc-badge bmc-badge--subtle">AET</span>
+                                {% endif %}
+                            {% else %}<span class="ink-dim">—</span>{% endif %}
+                        </td>
+                        <td><span class="bmc-badge bmc-badge--{{ FIXTURE_BADGE[fixture.status.value] ?? 'subtle' }}">{{ fixture.status.value }}</span></td>
+                        <td style="text-align:right">
+                            {% if result %}
+                                <button type="button" class="bmc-quick-btn" data-expand="{{ rowId }}" aria-expanded="false">DETAILS</button>
+                            {% elseif fixture.status.value == 'pending' and fixture.homeEntrant and fixture.awayEntrant %}
+                                <form method="post" action="{{ generateResultUrlByFixtureId[fixture.id|ea_as_string] }}" style="display:inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('generate_fixture_result') }}">
+                                    <button type="submit" class="bmc-btn"
+                                            data-bmc-dialog-title="GENERATE A RESULT FOR THIS FIXTURE?"
+                                            data-bmc-dialog-message="Runs the match engine now and stores the result. It cannot be regenerated."
+                                            data-bmc-dialog-confirm="GENERATE" data-bmc-dialog-variant="yellow"><span>GENERATE RESULT</span></button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    {% if result %}
+                        {% set homeLineup = result.homeLineupJson %}
+                        {% set awayLineup = result.awayLineupJson %}
+                        <tr id="{{ rowId }}" hidden>
+                            <td colspan="5" style="background:var(--wk-bg-mid);padding:12px">
+                                <div style="display:flex;flex-direction:column;gap:12px">
+
+                                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                                        <span class="bmc-celltext">{{ result.homeClubJson.name ?? 'Home' }} vs {{ result.awayClubJson.name ?? 'Away' }}</span>
+                                        <span class="bmc-data">engine <code class="bmc-code">{{ result.engineIdentifier.value }}</code></span>
+                                        <span class="bmc-data">{{ result.generatedAt|date('Y-m-d H:i:s') }}</span>
+                                    </div>
+
+                                    {# ── event log ───────────────────────────────── #}
+                                    {% if resultAudit is not null and resultAudit.eventLogJson is not empty %}
+                                        <div style="overflow-x:auto">
+                                            <table class="bmc-minitable" style="min-width:520px">
+                                                <thead><tr><th style="width:64px">MIN</th><th>TYPE</th><th>TEAM</th><th>PLAYER</th><th>ASSIST</th></tr></thead>
+                                                <tbody>
+                                                    {% for event in resultAudit.eventLogJson %}
+                                                        {% set eventLineup = event.team == 'home' ? homeLineup : awayLineup %}
+                                                        <tr>
+                                                            <td><span class="bmc-cellnum">{{ event.minute ?? '' }}'</span></td>
+                                                            <td><span class="bmc-data">{{ event.type ?? '' }}</span></td>
+                                                            <td><span class="bmc-data">{{ event.team ?? '' }}</span></td>
+                                                            <td><span class="bmc-celltext">{{ _self.player_name(eventLineup, event.scorer ?? event.player ?? null) }}</span></td>
+                                                            <td><span class="bmc-data">{{ event.assist is defined ? _self.player_name(eventLineup, event.assist) : '' }}</span></td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <span class="bmc-empty-note">NO EVENT LOG RECORDED</span>
+                                    {% endif %}
+
+                                    {% if result.narrativePayloadPretty %}
+                                        <pre class="bmc-logview" style="max-height:220px;border-top:0;border:2px solid var(--wk-stroke)">{{ result.narrativePayloadPretty }}</pre>
+                                    {% endif %}
+
+                                    {# ── both lineups ────────────────────────────── #}
+                                    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px">
+                                        {% for side in [{label: result.homeClubJson.name ?? 'Home', lineup: homeLineup}, {label: result.awayClubJson.name ?? 'Away', lineup: awayLineup}] %}
+                                            <div class="bmc-field-col">
+                                                <span class="bmc-lbl bmc-lbl--ink">{{ side.label|upper }} — STARTING XI</span>
+                                                <div style="overflow-x:auto">
+                                                    <table class="bmc-minitable" style="min-width:360px">
+                                                        <thead><tr>
+                                                            <th>PLAYER</th><th>POS</th>
+                                                            <th class="is-right">G</th><th class="is-right">A</th>
+                                                            <th class="is-right">YC</th><th class="is-right">RC</th>
+                                                            <th class="is-right">RATING</th>
+                                                        </tr></thead>
                                                         <tbody>
-                                                            {% for event in resultAudit.eventLogJson %}
-                                                                {% set eventLineup = event.team == 'home' ? homeLineup : awayLineup %}
+                                                            {% for player in side.lineup %}
                                                                 <tr>
-                                                                    <td>{{ event.minute ?? '' }}'</td>
-                                                                    <td>{{ event.type ?? '' }}</td>
-                                                                    <td>{{ event.team ?? '' }}</td>
-                                                                    <td>{{ _self.player_name(eventLineup, event.scorer ?? event.player ?? null) }}</td>
-                                                                    <td>{{ event.assist is defined ? _self.player_name(eventLineup, event.assist) : '' }}</td>
+                                                                    <td><span class="bmc-celltext">{{ player.name ?? player.id }}</span></td>
+                                                                    <td><span class="bmc-data">{{ player.position ?? '' }}</span></td>
+                                                                    <td class="is-right bmc-cellnum">{{ player.goals }}</td>
+                                                                    <td class="is-right bmc-cellnum">{{ player.assists }}</td>
+                                                                    <td class="is-right bmc-cellnum">{{ player.yellowCards }}</td>
+                                                                    <td class="is-right bmc-cellnum">{{ player.redCards }}</td>
+                                                                    <td class="is-right bmc-cellnum">{{ player.rating }}</td>
                                                                 </tr>
                                                             {% endfor %}
                                                         </tbody>
                                                     </table>
-                                                {% else %}
-                                                    <p class="text-muted small mb-2">No event log recorded.</p>
-                                                {% endif %}
-                                                {% if result.narrativePayloadPretty %}
-                                                    <pre class="small bg-body p-2 mb-2">{{ result.narrativePayloadPretty }}</pre>
-                                                {% endif %}
-
-                                                <div class="row g-2 mb-2">
-                                                    <div class="col-12 col-lg-6">
-                                                        <div class="text-muted small fw-semibold mb-1">{{ result.homeClubJson.name ?? 'Home' }} — Starting XI</div>
-                                                        <div class="table-responsive">
-                                                            <table class="table table-sm mb-0">
-                                                                <thead>
-                                                                    <tr class="text-muted small">
-                                                                        <th>Player</th><th>Pos</th>
-                                                                        <th class="text-center">G</th><th class="text-center">A</th>
-                                                                        <th class="text-center">YC</th><th class="text-center">RC</th>
-                                                                        <th class="text-center">Rating</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {% for player in homeLineup %}
-                                                                        <tr>
-                                                                            <td>{{ player.name ?? player.id }}</td>
-                                                                            <td>{{ player.position ?? '' }}</td>
-                                                                            <td class="text-center">{{ player.goals }}</td>
-                                                                            <td class="text-center">{{ player.assists }}</td>
-                                                                            <td class="text-center">{{ player.yellowCards }}</td>
-                                                                            <td class="text-center">{{ player.redCards }}</td>
-                                                                            <td class="text-center fw-semibold">{{ player.rating }}</td>
-                                                                        </tr>
-                                                                    {% endfor %}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12 col-lg-6">
-                                                        <div class="text-muted small fw-semibold mb-1">{{ result.awayClubJson.name ?? 'Away' }} — Starting XI</div>
-                                                        <div class="table-responsive">
-                                                            <table class="table table-sm mb-0">
-                                                                <thead>
-                                                                    <tr class="text-muted small">
-                                                                        <th>Player</th><th>Pos</th>
-                                                                        <th class="text-center">G</th><th class="text-center">A</th>
-                                                                        <th class="text-center">YC</th><th class="text-center">RC</th>
-                                                                        <th class="text-center">Rating</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {% for player in awayLineup %}
-                                                                        <tr>
-                                                                            <td>{{ player.name ?? player.id }}</td>
-                                                                            <td>{{ player.position ?? '' }}</td>
-                                                                            <td class="text-center">{{ player.goals }}</td>
-                                                                            <td class="text-center">{{ player.assists }}</td>
-                                                                            <td class="text-center">{{ player.yellowCards }}</td>
-                                                                            <td class="text-center">{{ player.redCards }}</td>
-                                                                            <td class="text-center fw-semibold">{{ player.rating }}</td>
-                                                                        </tr>
-                                                                    {% endfor %}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {% if resultAudit is not null and resultAudit.computationAuditJson %}
-                                                    {% set audit = resultAudit.computationAuditJson %}
-                                                    <div class="card border-secondary-subtle mb-2 mt-2">
-                                                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center small">
-                                                            <span class="fw-semibold">
-                                                                <i class="fa fa-calculator me-1"></i>Computation &amp; Derivation Audit
-                                                            </span>
-                                                            <span class="text-muted">
-                                                                Engine: <code>{{ audit.engine.resolvedBy ?? result.engineIdentifier.value }}</code>
-                                                                {% if audit.engine.delegatedFrom is defined and audit.engine.delegatedFrom %}
-                                                                    (delegated from <code>{{ audit.engine.delegatedFrom }}</code>)
-                                                                {% endif %}
-                                                                {% if audit.fixture.rngSeed is defined %}
-                                                                    &middot; Seed: <code>{{ audit.fixture.rngSeed }}</code>
-                                                                {% endif %}
-                                                                {% if audit.outcome.resolutionMethod is defined %}
-                                                                    &middot; Decided by: <span class="badge text-bg-secondary">{{ audit.outcome.resolutionMethod }}</span>
-                                                                {% endif %}
-                                                            </span>
-                                                        </div>
-                                                        <div class="card-body p-2">
-                                                            {% if audit.engine.fallbackReason is defined and audit.engine.fallbackReason %}
-                                                                <div class="alert alert-warning py-1 px-2 small mb-2">
-                                                                    <i class="fa fa-triangle-exclamation me-1"></i>{{ audit.engine.fallbackReason }}
-                                                                </div>
-                                                            {% endif %}
-                                                            {% if audit.dominance is defined and audit.regulation is defined %}
-                                                                <div class="table-responsive mb-2">
-                                                                    <table class="table table-sm table-bordered mb-0 small">
-                                                                        <thead>
-                                                                            <tr class="text-muted">
-                                                                                <th>Metric</th>
-                                                                                <th>{{ result.homeClubJson.name ?? 'Home' }}</th>
-                                                                                <th>{{ result.awayClubJson.name ?? 'Away' }}</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            <tr>
-                                                                                <td class="text-muted">Playing Style</td>
-                                                                                <td><code>{{ audit.dominance.home.playingStyle ?? 'default' }}</code></td>
-                                                                                <td><code>{{ audit.dominance.away.playingStyle ?? 'default' }}</code></td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Raw XI Base Score Sum</td>
-                                                                                <td>{{ (audit.dominance.home.rawPlayerScoreSum ?? 0)|number_format(2) }}</td>
-                                                                                <td>{{ (audit.dominance.away.rawPlayerScoreSum ?? 0)|number_format(2) }}</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Tactical Multiplier</td>
-                                                                                <td>&times;{{ (audit.dominance.home.tacticalAdvantage.multiplier ?? 1)|number_format(3) }}</td>
-                                                                                <td>&times;{{ (audit.dominance.away.tacticalAdvantage.multiplier ?? 1)|number_format(3) }}</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Manager Multiplier</td>
-                                                                                <td>&times;{{ (audit.dominance.home.manager.multiplier ?? 1)|number_format(4) }} (ability {{ audit.dominance.home.manager.ability ?? 50 }}, mot {{ audit.dominance.home.manager.motivation ?? 60 }})</td>
-                                                                                <td>&times;{{ (audit.dominance.away.manager.multiplier ?? 1)|number_format(4) }} (ability {{ audit.dominance.away.manager.ability ?? 50 }}, mot {{ audit.dominance.away.manager.motivation ?? 60 }})</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Personality Multiplier</td>
-                                                                                <td>&times;{{ (audit.dominance.home.personality.multiplier ?? 1)|number_format(4) }} (avg {{ (audit.dominance.home.personality.averageTraitScore ?? 10.5)|number_format(2) }})</td>
-                                                                                <td>&times;{{ (audit.dominance.away.personality.multiplier ?? 1)|number_format(4) }} (avg {{ (audit.dominance.away.personality.averageTraitScore ?? 10.5)|number_format(2) }})</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Cohesion (Pass / Error)</td>
-                                                                                <td>{{ audit.dominance.home.cohesion.rawValue ?? 'neutral' }} (&times;{{ (audit.dominance.home.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) }} / &divide;{{ (audit.dominance.home.cohesion.errorRateMultiplier ?? 1)|number_format(2) }})</td>
-                                                                                <td>{{ audit.dominance.away.cohesion.rawValue ?? 'neutral' }} (&times;{{ (audit.dominance.away.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) }} / &divide;{{ (audit.dominance.away.cohesion.errorRateMultiplier ?? 1)|number_format(2) }})</td>
-                                                                            </tr>
-                                                                            <tr class="fw-semibold">
-                                                                                <td>Final Dominance &amp; Share</td>
-                                                                                <td>{{ (audit.dominance.homeDominance ?? 0)|number_format(2) }} ({{ ((audit.dominance.homeRatio ?? 0.5) * 100)|number_format(1) }}%)</td>
-                                                                                <td>{{ (audit.dominance.awayDominance ?? 0)|number_format(2) }} ({{ ((audit.dominance.awayRatio ?? 0.5) * 100)|number_format(1) }}%)</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="text-muted">Regulation Poisson &lambda; (xG) &rarr; Goals</td>
-                                                                                <td>{{ (audit.regulation.homeExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>{{ audit.regulation.homeGoals ?? 0 }}</strong></td>
-                                                                                <td>{{ (audit.regulation.awayExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>{{ audit.regulation.awayGoals ?? 0 }}</strong></td>
-                                                                            </tr>
-                                                                            {% if audit.extraTime.triggered is defined and audit.extraTime.triggered %}
-                                                                                <tr>
-                                                                                    <td class="text-muted">Extra Time Poisson &lambda; (xG) &rarr; Goals</td>
-                                                                                    <td>{{ (audit.extraTime.homeExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>+{{ audit.extraTime.homeGoals ?? 0 }}</strong></td>
-                                                                                    <td>{{ (audit.extraTime.awayExpectedGoals ?? 0)|number_format(3) }} &rarr; <strong>+{{ audit.extraTime.awayGoals ?? 0 }}</strong></td>
-                                                                                </tr>
-                                                                            {% endif %}
-                                                                            {% if audit.penaltyShootout.triggered is defined and audit.penaltyShootout.triggered %}
-                                                                                <tr>
-                                                                                    <td class="text-muted">Penalty Shootout</td>
-                                                                                    <td><strong>{{ audit.penaltyShootout.penaltyHomeScore }}</strong></td>
-                                                                                    <td><strong>{{ audit.penaltyShootout.penaltyAwayScore }}</strong></td>
-                                                                                </tr>
-                                                                            {% endif %}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            {% endif %}
-                                                            <details class="small">
-                                                                <summary class="text-muted fw-semibold" style="cursor: pointer;">Raw Computation Audit JSON (per-player weights, RNG rolls &amp; rating math)</summary>
-                                                                <pre class="small bg-body p-2 mt-1 mb-0" style="max-height: 280px; overflow:auto;">{{ resultAudit.computationAuditJsonPretty }}</pre>
-                                                            </details>
-                                                        </div>
-                                                    </div>
-                                                {% endif %}
-
-                                                <div class="row g-2 mt-1">
-                                                    <div class="col-12 col-lg-8">
-                                                        <div class="text-muted small fw-semibold mb-1">
-                                                            <i class="fa fa-database me-1"></i>Full stored payload (CompetitionResult, raw)
-                                                        </div>
-                                                        <pre class="small bg-body p-2 mb-0" style="max-height: 320px; overflow:auto;">{{ result.getFullPayloadPretty(resultAudit) }}</pre>
-                                                    </div>
-                                                    <div class="col-12 col-lg-4">
-                                                        <div class="text-muted small fw-semibold mb-1">
-                                                            <i class="fa fa-mobile-screen me-1"></i>What the device receives
-                                                        </div>
-                                                        {#
-                                                            This used to inline CompetitionResult::toClientSummary(),
-                                                            which was also the bracket's per-fixture `result` block. The
-                                                            bracket no longer carries that — match detail is served by
-                                                            GET /api/matches/{id} — so inlining it here would have shown
-                                                            a payload the device does not actually receive. Linking the
-                                                            real endpoint keeps the panel's promise without this screen
-                                                            serialising every fixture in the bracket to do it.
-                                                        #}
-                                                        <a class="btn btn-sm btn-outline-secondary"
-                                                           href="/api/matches/{{ fixture.id|ea_as_string }}"
-                                                           target="_blank" rel="noopener">
-                                                            <i class="fa fa-arrow-up-right-from-square me-1"></i>GET /api/matches/{{ fixture.id|ea_as_string|slice(0, 8) }}…
-                                                        </a>
-                                                        <p class="text-muted small mb-0 mt-2">
-                                                            The event log, derivation audit, starting XI with ratings,
-                                                            engine and timestamp above are admin-only. The device gets
-                                                            the score in the bracket, and fetches full match detail —
-                                                            both lineups, the commentary timeline and each club's
-                                                            display data — from the match endpoint above. The bracket
-                                                            stopped embedding that per fixture because it measured at
-                                                            ~74% of an 805KB response at capacity 64.
-                                                        </p>
-                                                    </div>
                                                 </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                {% endif %}
-                            {% else %}
-                                <tr><td colspan="5" class="text-muted small p-3">No fixtures.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                        {% endfor %}
+                                    </div>
+
+                                    {# ── how the score was derived ───────────────── #}
+                                    {% if resultAudit is not null and resultAudit.computationAuditJson %}
+                                        {% set audit = resultAudit.computationAuditJson %}
+                                        <div class="bmc-inset">
+                                            <span class="bmc-inset__title">COMPUTATION &amp; DERIVATION AUDIT</span>
+                                            <span class="bmc-data">
+                                                Engine <code class="bmc-code">{{ audit.engine.resolvedBy ?? result.engineIdentifier.value }}</code>
+                                                {%- if audit.engine.delegatedFrom is defined and audit.engine.delegatedFrom %}, delegated from <code class="bmc-code">{{ audit.engine.delegatedFrom }}</code>{% endif -%}
+                                                {%- if audit.fixture.rngSeed is defined %} · seed <code class="bmc-code">{{ audit.fixture.rngSeed }}</code>{% endif -%}
+                                                {%- if audit.outcome.resolutionMethod is defined %} · decided by <span class="bmc-badge bmc-badge--subtle">{{ audit.outcome.resolutionMethod }}</span>{% endif -%}
+                                            </span>
+
+                                            {% if audit.engine.fallbackReason is defined and audit.engine.fallbackReason %}
+                                                <span class="bmc-note"><i data-lucide="triangle-alert"></i>{{ audit.engine.fallbackReason }}</span>
+                                            {% endif %}
+
+                                            {% if audit.dominance is defined and audit.regulation is defined %}
+                                                {% set home = audit.dominance.home %}
+                                                {% set away = audit.dominance.away %}
+                                                {% set metrics = [
+                                                    {label: 'Playing style', h: '<code class="bmc-code">' ~ (home.playingStyle ?? 'default') ~ '</code>', a: '<code class="bmc-code">' ~ (away.playingStyle ?? 'default') ~ '</code>'},
+                                                    {label: 'Raw XI base score sum', h: (home.rawPlayerScoreSum ?? 0)|number_format(2), a: (away.rawPlayerScoreSum ?? 0)|number_format(2)},
+                                                    {label: 'Tactical multiplier', h: '×' ~ (home.tacticalAdvantage.multiplier ?? 1)|number_format(3), a: '×' ~ (away.tacticalAdvantage.multiplier ?? 1)|number_format(3)},
+                                                    {label: 'Manager multiplier', h: '×' ~ (home.manager.multiplier ?? 1)|number_format(4) ~ ' (ability ' ~ (home.manager.ability ?? 50) ~ ', mot ' ~ (home.manager.motivation ?? 60) ~ ')', a: '×' ~ (away.manager.multiplier ?? 1)|number_format(4) ~ ' (ability ' ~ (away.manager.ability ?? 50) ~ ', mot ' ~ (away.manager.motivation ?? 60) ~ ')'},
+                                                    {label: 'Personality multiplier', h: '×' ~ (home.personality.multiplier ?? 1)|number_format(4) ~ ' (avg ' ~ (home.personality.averageTraitScore ?? 10.5)|number_format(2) ~ ')', a: '×' ~ (away.personality.multiplier ?? 1)|number_format(4) ~ ' (avg ' ~ (away.personality.averageTraitScore ?? 10.5)|number_format(2) ~ ')'},
+                                                    {label: 'Cohesion (pass / error)', h: (home.cohesion.rawValue ?? 'neutral') ~ ' (×' ~ (home.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) ~ ' / ÷' ~ (home.cohesion.errorRateMultiplier ?? 1)|number_format(2) ~ ')', a: (away.cohesion.rawValue ?? 'neutral') ~ ' (×' ~ (away.cohesion.passAccuracyMultiplier ?? 1)|number_format(2) ~ ' / ÷' ~ (away.cohesion.errorRateMultiplier ?? 1)|number_format(2) ~ ')'},
+                                                    {label: 'Final dominance & share', strong: true, h: (audit.dominance.homeDominance ?? 0)|number_format(2) ~ ' (' ~ ((audit.dominance.homeRatio ?? 0.5) * 100)|number_format(1) ~ '%)', a: (audit.dominance.awayDominance ?? 0)|number_format(2) ~ ' (' ~ ((audit.dominance.awayRatio ?? 0.5) * 100)|number_format(1) ~ '%)'},
+                                                    {label: 'Regulation Poisson λ (xG) → goals', h: (audit.regulation.homeExpectedGoals ?? 0)|number_format(3) ~ ' → <strong>' ~ (audit.regulation.homeGoals ?? 0) ~ '</strong>', a: (audit.regulation.awayExpectedGoals ?? 0)|number_format(3) ~ ' → <strong>' ~ (audit.regulation.awayGoals ?? 0) ~ '</strong>'},
+                                                ] %}
+                                                {% if audit.extraTime.triggered is defined and audit.extraTime.triggered %}
+                                                    {% set metrics = metrics|merge([{label: 'Extra time Poisson λ (xG) → goals', h: (audit.extraTime.homeExpectedGoals ?? 0)|number_format(3) ~ ' → <strong>+' ~ (audit.extraTime.homeGoals ?? 0) ~ '</strong>', a: (audit.extraTime.awayExpectedGoals ?? 0)|number_format(3) ~ ' → <strong>+' ~ (audit.extraTime.awayGoals ?? 0) ~ '</strong>'}]) %}
+                                                {% endif %}
+                                                {% if audit.penaltyShootout.triggered is defined and audit.penaltyShootout.triggered %}
+                                                    {% set metrics = metrics|merge([{label: 'Penalty shootout', strong: true, h: '<strong>' ~ audit.penaltyShootout.penaltyHomeScore ~ '</strong>', a: '<strong>' ~ audit.penaltyShootout.penaltyAwayScore ~ '</strong>'}]) %}
+                                                {% endif %}
+
+                                                <div style="overflow-x:auto">
+                                                    <table class="bmc-minitable" style="min-width:560px">
+                                                        <thead><tr>
+                                                            <th>METRIC</th>
+                                                            <th>{{ result.homeClubJson.name ?? 'Home' }}</th>
+                                                            <th>{{ result.awayClubJson.name ?? 'Away' }}</th>
+                                                        </tr></thead>
+                                                        <tbody>
+                                                            {% for m in metrics %}
+                                                                <tr>
+                                                                    <td><span class="{{ m.strong is defined ? 'bmc-celltext' : 'bmc-data' }}">{{ m.label }}</span></td>
+                                                                    <td><span class="bmc-data">{{ m.h|raw }}</span></td>
+                                                                    <td><span class="bmc-data">{{ m.a|raw }}</span></td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            {% endif %}
+
+                                            <details class="bmc-fold">
+                                                <summary style="display:flex;align-items:center;gap:8px">
+                                                    <span class="bmc-lbl bmc-lbl--ink">RAW COMPUTATION AUDIT JSON</span>
+                                                    <span class="bmc-data">per-player weights, RNG rolls &amp; rating math</span>
+                                                    <i data-lucide="chevron-right" class="bmc-fold__chev" width="14" height="14"></i>
+                                                </summary>
+                                                <pre class="bmc-logview" style="max-height:280px;border-top:0;border:2px solid var(--wk-stroke);margin-top:8px">{{ resultAudit.computationAuditJsonPretty }}</pre>
+                                            </details>
+                                        </div>
+                                    {% endif %}
+
+                                    {# ── stored vs served ────────────────────────── #}
+                                    <div class="bmc-grid" style="grid-template-columns:2fr 1fr;gap:12px">
+                                        <div class="bmc-field-col">
+                                            <span class="bmc-lbl bmc-lbl--ink">FULL STORED PAYLOAD — CompetitionResult, RAW</span>
+                                            <pre class="bmc-logview" style="max-height:320px;border-top:0;border:2px solid var(--wk-stroke)">{{ result.getFullPayloadPretty(resultAudit) }}</pre>
+                                        </div>
+                                        <div class="bmc-field-col">
+                                            <span class="bmc-lbl bmc-lbl--ink">WHAT THE DEVICE RECEIVES</span>
+                                            {#
+                                                This used to inline CompetitionResult::toClientSummary(), which was also
+                                                the bracket's per-fixture `result` block. The bracket no longer carries
+                                                that — match detail is served by GET /api/matches/{id} — so inlining it
+                                                here would show a payload the device does not actually receive. Linking
+                                                the real endpoint keeps the panel's promise without this screen
+                                                serialising every fixture in the bracket to do it.
+                                            #}
+                                            <a class="bmc-btn" href="/api/matches/{{ fixture.id|ea_as_string }}" target="_blank" rel="noopener">
+                                                <span>GET /api/matches/{{ fixture.id|ea_as_string|slice(0, 8) }}…</span>
+                                            </a>
+                                            <p class="bmc-bodytext">
+                                                The event log, derivation audit, starting XI with ratings, engine and
+                                                timestamp above are admin-only. The device gets the score in the bracket
+                                                and fetches full match detail — both lineups, the commentary timeline and
+                                                each club's display data — from the endpoint above. The bracket stopped
+                                                embedding that per fixture because it measured at ~74% of an 805KB
+                                                response at capacity 64.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                {% else %}
+                    <tr><td colspan="5"><span class="bmc-empty-note">NO FIXTURES</span></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
-    {% endfor %}
-</div>
+    </section>
+{% endfor %}
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+// The per-fixture expander. A <details> cannot wrap a table row, so the two-row shape stays
+// and the second row's `hidden` is toggled — which is all Bootstrap's collapse was doing here,
+// minus the matching #id on both halves that could be mistyped into a row that never opens.
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-expand]');
+    if (!btn) return;
+
+    var row = document.getElementById(btn.dataset.expand);
+    if (!row) return;
+
+    row.hidden = !row.hidden;
+    btn.setAttribute('aria-expanded', row.hidden ? 'false' : 'true');
+    btn.textContent = row.hidden ? 'DETAILS' : 'HIDE';
+});
+</script>
 {% endblock %}
