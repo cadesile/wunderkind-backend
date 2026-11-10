@@ -60,6 +60,31 @@ class BmcPagesAssetsSmokeTest extends WebTestCase
         self::assertStringContainsString('BMC.confirm', $js);
     }
 
+    /**
+     * The int validator accepts a leading minus; the money one still does not.
+     *
+     * Six game-config settings are negative by design — bondMin at -100, the bond and coach
+     * trust thresholds at -20 — and a digits-only check marked each of them "Whole number" on
+     * its own saved value, so the save bar opened pinned to invalid.
+     */
+    public function testTheIntegerValidatorAcceptsNegativeValues(): void
+    {
+        $js = file_get_contents(\dirname(__DIR__, 3) . '/public/bmc-pages.js');
+
+        self::assertStringContainsString("kind === 'money' ? /^\\d+$/ : /^-?\\d+$/", $js);
+        self::assertStringContainsString('function intOf(el) { var v = norm(el); return /^-?\\d+$/', $js);
+
+        $twig = file_get_contents(\dirname(__DIR__, 3) . '/templates/admin/game_config.html.twig');
+
+        foreach (['bondMin', 'bondDecayFloor', 'coachManagerTrustThreshold'] as $name) {
+            self::assertMatchesRegularExpression(
+                \sprintf('~name="%s"[^>]*data-min="-\d~', $name),
+                $twig,
+                "{$name} declares a negative minimum, so the validator must allow a minus",
+            );
+        }
+    }
+
     public function testTheBaseTemplateAndDialogArePresent(): void
     {
         $base = \dirname(__DIR__, 3) . '/templates/admin/';
