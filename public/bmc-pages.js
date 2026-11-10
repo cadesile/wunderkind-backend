@@ -129,7 +129,7 @@
     // ── form state ──────────────────────────────────────────────────────
     function norm(el) { return el.getAttribute('data-kind') === 'money' ? BMC.digits(el.value) : String(el.value).trim(); }
     function savedOf(el) { var s = el.getAttribute('data-saved'); return el.getAttribute('data-kind') === 'money' ? BMC.digits(s) : String(s == null ? '' : s).trim(); }
-    function intOf(el) { var v = norm(el); return /^\d+$/.test(v) ? parseInt(v, 10) : null; }
+    function intOf(el) { var v = norm(el); return /^-?\d+$/.test(v) ? parseInt(v, 10) : null; }
 
     function fieldError(el) {
         var v = norm(el), kind = el.getAttribute('data-kind') || 'int';
@@ -150,7 +150,11 @@
             return '';
         }
 
-        if (!/^\d+$/.test(v)) return kind === 'money' ? 'Whole pounds only' : 'Whole number';
+        // SIGNED INTEGERS. Money is unsigned by nature, but plenty of int settings sit below
+        // zero on purpose — bondMin (-100), the bond/trust thresholds (-20) — and the
+        // digits-only test reported every one of them as 'Whole number' on its saved value,
+        // pinning the save bar to invalid before the operator touched anything.
+        if (!(kind === 'money' ? /^\d+$/ : /^-?\d+$/).test(v)) return kind === 'money' ? 'Whole pounds only' : 'Whole number';
         var n = parseInt(v, 10), lo = el.getAttribute('data-min'), hi = el.getAttribute('data-max');
         if ((lo !== null && n < +lo) || (hi !== null && n > +hi)) return lo + '–' + hi + ' only';
         return '';
