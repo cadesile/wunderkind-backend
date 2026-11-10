@@ -1,0 +1,135 @@
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  The per-domain Import / Export detail page, on bmc_page + bmc-pages.css/js.
+
+  ONE TEMPLATE FOR FOUR ROUTES. World, Config, Narrative and Translations each had their own
+  file and all four were the same page: an Export card listing what the file carries, an
+  Import card with a file input and a clear-first tick. ~340 lines of near-identical markup,
+  which is four places to fix a layout bug and four chances to fix only three of them.
+
+  Each caller passes `domain`; only Translations passes anything else, because only it needs a
+  language on both halves. The route names, CSRF ids and file-input NAMES stay exactly as they
+  were — this is a presentation change and nothing about what posts where has moved.
+
+  WHY THESE PAGES STILL EXIST at all, given System → Import / Export does the same four
+  domains on one screen: that hub is the index, with one line per domain, and links here for
+  the detail. The longer explanation and the list of what a file actually contains live here.
+#}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_import_export'}) }}"><span>ALL DOMAINS</span></a>
+{% endblock %}
+
+{% block bmc_body %}
+
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="{{ domain.icon }}"></i>
+        <span class="bmc-card__title">{{ domain.title|upper }}</span>
+        <span class="bmc-card__meta">move this domain between environments as JSON</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">{{ domain.blurb|raw }}</p>
+    </div>
+</section>
+
+<div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(400px,1fr))">
+
+    {# ── export ──────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="download"></i>
+            <span class="bmc-card__title">EXPORT</span>
+            <span class="bmc-card__meta">reads only</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px;height:100%">
+            <p class="bmc-bodytext">
+                Downloads a <code class="bmc-code">.json</code> snapshot of this environment's {{ domain.title|lower }}.
+            </p>
+
+            {% if domain.carries is defined %}
+                <ul class="bmc-bodytext" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+                    {% for item in domain.carries %}<li>{{ item|raw }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if domain.key == 'translations' %}
+                {% if languages|length == 0 %}
+                    <span class="bmc-note">
+                        <i data-lucide="triangle-alert"></i>
+                        No languages are configured yet — add one under Translations → Languages first.
+                    </span>
+                {% else %}
+                    <form method="get" action="{{ path(domain.export) }}"
+                          style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:auto">
+                        <div class="bmc-field-col">
+                            <label class="bmc-lbl bmc-lbl--ink" for="export_language">LANGUAGE</label>
+                            <span class="bmc-select">
+                                <select id="export_language" name="language" required style="min-width:190px">
+                                    {% for language in languages %}
+                                        <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </span>
+                        </div>
+                        <button type="submit" class="bmc-btn bmc-btn--blue"><span>DOWNLOAD JSON</span></button>
+                    </form>
+                {% endif %}
+            {% else %}
+                <a class="bmc-btn bmc-btn--blue" href="{{ path(domain.export) }}" style="align-self:flex-start;margin-top:auto"><span>DOWNLOAD JSON</span></a>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ── import ──────────────────────────────────────────────────────── #}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="upload"></i>
+            <span class="bmc-card__title">IMPORT</span>
+            <span class="bmc-card__meta">writes to this environment</span>
+        </div>
+        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px;height:100%">
+            <p class="bmc-bodytext">{{ domain.importBlurb|raw }}</p>
+
+            {% if domain.key == 'translations' and languages|length == 0 %}
+                <span class="bmc-empty-note">NOTHING TO IMPORT INTO UNTIL A LANGUAGE EXISTS</span>
+            {% else %}
+                <form method="post" action="{{ path(domain.import) }}" enctype="multipart/form-data"
+                      style="display:flex;flex-direction:column;gap:10px;margin-top:auto">
+                    <input type="hidden" name="_token" value="{{ csrf_token(domain.token) }}">
+
+                    {% if domain.key == 'translations' %}
+                        <div class="bmc-field-col">
+                            <label class="bmc-lbl bmc-lbl--ink" for="import_language">TARGET LANGUAGE</label>
+                            <span class="bmc-select">
+                                <select id="import_language" name="language" required style="min-width:190px">
+                                    {% for language in languages %}
+                                        <option value="{{ language.code }}">{{ language.name }} ({{ language.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </span>
+                        </div>
+                    {% endif %}
+
+                    <label class="bmc-lbl bmc-lbl--ink" for="{{ domain.file }}">JSON FILE</label>
+                    <input type="file" id="{{ domain.file }}" name="{{ domain.file }}"
+                           accept=".json,application/json" required class="bmc-data">
+
+                    {% if domain.clear is defined %}
+                        <label class="bmc-check" style="padding-left:0">
+                            <input type="checkbox" id="clear_before_import" name="clear_before_import">
+                            <span class="bmc-tile"></span>
+                            <span class="bmc-data ink-danger">{{ domain.clear }}</span>
+                        </label>
+                    {% endif %}
+
+                    <button type="submit" class="bmc-btn bmc-btn--orange" style="align-self:flex-start"
+                            data-bmc-dialog-title="IMPORT {{ domain.title|upper }}?"
+                            data-bmc-dialog-message="{{ domain.clear is defined ? 'If you ticked clear-first, existing records are deleted before the file is applied. ' : '' }}This writes to the live environment."
+                            data-bmc-dialog-confirm="IMPORT" data-bmc-dialog-variant="yellow"><span>IMPORT</span></button>
+                </form>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -54,6 +54,14 @@ class AdminShellCoverageTest extends WebTestCase
         'admin_player_pool_config'   => 'PLAYER POOL',
         'admin_staff_pool_config'    => 'STAFF POOL',
         'admin_investor_pool_config' => 'INVESTOR POOL',
+
+        // The four per-domain Import / Export details. No menu item of their own — reached
+        // only from System → Import / Export — so they are the one group here that depends on
+        // the controller passing bmc_page explicitly.
+        'admin_world_content'        => 'WORLD IMPORT / EXPORT',
+        'admin_config_content'       => 'CONFIG IMPORT / EXPORT',
+        'admin_narrative_content'    => 'NARRATIVE IMPORT / EXPORT',
+        'admin_translations_content' => 'TRANSLATIONS IMPORT / EXPORT',
     ];
 
     /** Markup and hooks that must not survive on a redesigned page. */

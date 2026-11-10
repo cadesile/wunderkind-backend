@@ -33,7 +33,7 @@
 .bmc-shell input::placeholder, .bmc-overlay input::placeholder { color: var(--wk-text-dim); opacity: 1; }
 
 /* ── shell ─────────────────────────────────────────────────────── */
-.bmc-shell { display: grid; grid-template-columns: var(--bmc-side-w) minmax(0,1fr); height: 100vh; overflow: hidden; background: var(--wk-bg); color: var(--wk-text); }
+.bmc-shell { display: grid; grid-template-columns: var(--bmc-side-w) minmax(0,1fr); overflow: hidden; background: var(--wk-bg); color: var(--wk-text); }
 .bmc-side { display: flex; flex-direction: column; min-height: 0; background: var(--wk-panel); border-right: 3px solid var(--wk-stroke); }
 .bmc-side__head { display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 12px; border-bottom: 3px solid var(--wk-stroke); }
 .bmc-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
