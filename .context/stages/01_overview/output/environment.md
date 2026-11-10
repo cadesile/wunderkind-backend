@@ -126,17 +126,28 @@ lando ssh -s appserver -c 'TEST_TOKEN=master php vendor/bin/phpunit --no-coverag
 `doctrine:schema:update --dump-sql --env=test`, which should report nothing to update —
 that zero-drift baseline is what makes a failure meaningful instead of noise.
 
-**One caveat: `schema:create` builds structure, not content.** A fresh per-branch DB has no
-`game_event_template` rows, so `MatchNarrativeGeneratorService` generates an empty timeline
-and any test asserting on a narrative payload fails for that reason alone (seen on
-`CompetitionControllerTest::testShowIncludesResultsOnceRoundsAreProcessed`). Copy the
-content across rather than debugging it:
+**One caveat, and it bites more than once: `schema:create` builds structure, not content.**
+Operator-authored content lives in tables the suite does not seed, so a fresh per-branch DB
+fails every content-dependent test for that reason alone. Confirmed cases:
+
+| Empty table | What fails, and how it reads |
+|---|---|
+| `game_event_template` | `MatchNarrativeGeneratorService` yields an empty timeline — `CompetitionControllerTest::testShowIncludesResultsOnceRoundsAreProcessed` ("non-empty narrative timeline") |
+| `archetype` | `ArchetypeShowcaseServiceTest` — "actual size 0 matches expected size 4", plus a rotation test that cannot rotate one card |
+| `starter_config` | `StartingGrantServiceTest` — an admin-edited range reads back as the entity default (`1`, not `123000000`) |
+
+The tell is always a zero/default where content was expected, never a schema error. Copy the
+content across rather than debugging it (add `--table=` per table):
 
 ```bash
 docker exec wunderkindbackend_database_1 bash -c \
-  "pg_dump -U postgres -d wunderkind_test --data-only --table=game_event_template \
+  "pg_dump -U postgres -d wunderkind_test --data-only \
+     --table=game_event_template --table=archetype --table=starter_config \
    | psql -U postgres -d wunderkind_testmaster -q"
 ```
+
+`master` has far fewer content-dependent tests than `development` (1148 vs 1576 in
+`tests/Service`), so a fresh DB looking clean on one branch does not mean it will on the other.
 
 **Syncing the test DB:**
 
