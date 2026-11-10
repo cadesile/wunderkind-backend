@@ -64,7 +64,7 @@
    version, which means "body text", would have reset the font and colour of the container on
    all fifteen shipped list pages. --text-body-step is a real token there, so it was not even
    inert. The one template that used it (the activity log's tick/dash cell) moves with it. */
-.bmc-bodytext { font: var(--text-body-step); color: var(--wk-text); }
+.bmc-bodytext { font: var(--text-body-step); color: var(--wk-text); max-width: 78ch; }
 .bmc-fig  { font: var(--text-figure); color: var(--wk-text); white-space: nowrap; }
 .bmc-hero { font: var(--text-hero); color: var(--wk-text); white-space: nowrap; }
 .bmc-pretty { text-wrap: pretty; }
@@ -132,6 +132,13 @@
 .bmc-setting { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 12px; border-bottom: 1px solid var(--wk-stroke); }
 .bmc-setting:last-child { border-bottom: 0; }
 .bmc-setting__text { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* A READABLE MEASURE. .bmc-setting__text is flex:1, so on a full-width card its help text ran
+   the whole 1400px — four or five words past the point the eye can track back to the next
+   line. 78ch caps the line without fixing the column: a narrow card still fills, because
+   max-width only ever takes away. Applied to the text, not the row, so the control on the
+   right stays where it is. */
+.bmc-setting__help, .bmc-setting__hint { max-width: 78ch; }
 .bmc-setting__label { display: flex; align-items: center; gap: 8px; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); text-transform: uppercase; }
 .bmc-setting__help { font: var(--text-data); color: var(--wk-text-dim); }
 .bmc-setting__hint { font: var(--text-data); color: var(--wk-text-dim); }        /* live hint; state colours below */
@@ -169,7 +176,25 @@
 .bmc-pick-row:nth-child(even) { background: rgba(0,0,0,.15); }
 .bmc-pick-row[aria-checked="true"] { background: var(--wk-pressed); }
 .bmc-pick-head:active, .bmc-pick-row:active { background: var(--wk-pressed); }
-.bmc-code { height: 22px; display: flex; align-items: center; justify-content: center; background: var(--wk-panel); border: 2px solid var(--wk-stroke); font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); }
+/* INLINE, NOT A FLEX BOX. This was `display: flex` with a fixed 22px height, which was
+   right for the one place it started life — a chip alone in a table cell — and wrong
+   everywhere it has since been used, which is inside prose. display:flex makes an inline
+   element block-level, so every <code> in a sentence broke the line, stretched to the full
+   card width and centred itself: the Starter config help text was being cut into bands by
+   "UserLedger" and "POST /api/club/fund".
+
+   The fixed height goes with it. A flex box cannot wrap its own text, so a long value like a
+   file path would have overflowed 22px rather than running onto a second line. */
+.bmc-code {
+    display: inline;
+    padding: 1px 5px;
+    background: var(--wk-panel);
+    border: 2px solid var(--wk-stroke);
+    font: var(--text-label);
+    letter-spacing: .5px;
+    color: var(--wk-text-dim);
+    overflow-wrap: anywhere;
+}
 [aria-checked="true"] > .bmc-code { color: var(--wk-accent); }
 .bmc-pick-row__name { font: var(--text-body-step); color: var(--wk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bmc-pick-row__n { font: var(--text-body-step); color: var(--wk-text-dim); text-align: right; white-space: nowrap; }

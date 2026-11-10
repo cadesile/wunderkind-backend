@@ -765,7 +765,30 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function narrativeContent(): Response
     {
-        return $this->render('admin/narrative_content.html.twig');
+        return $this->render('admin/content_import_export.html.twig', [
+            // SYSTEM, not the domain's own group, and the pin slug of the sidebar entry
+            // these hang off. They have no menu item of their own — the only way in is the
+            // "Details" link on System → Import / Export — so without bmc_page the layout
+            // derives no slug at all and the pin silently does nothing. Pointing both at the
+            // parent keeps the crumb and the highlighted sidebar row agreeing with each other.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Narrative import / export',
+            'bmc_page' => 'import-export',
+            'domain'   => [
+                'key'   => 'narrative', 'title' => 'Narrative content', 'icon' => 'scroll',
+                'export' => 'admin_narrative_export', 'import' => 'admin_narrative_import',
+                'token' => 'narrative_import', 'file' => 'narrative_file',
+                'blurb' => 'The authored content the engine draws on, as one JSON file.',
+                'carries' => [
+                    'Event templates, all categories',
+                    'Facility templates, active and inactive',
+                    'Player archetypes',
+                    'Tactical advantages — the matrix',
+                ],
+                'importBlurb' => 'Upserted by slug. Records absent from the file are left alone, so a partial export adds without removing.',
+                'clear' => 'Clear existing narrative content before importing',
+            ],
+        ]);
     }
 
     #[Route('/admin/narrative/export', name: 'admin_narrative_export', methods: ['GET'])]
@@ -843,7 +866,28 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function configContent(): Response
     {
-        return $this->render('admin/config_content.html.twig');
+        return $this->render('admin/content_import_export.html.twig', [
+            // SYSTEM, not the domain's own group, and the pin slug of the sidebar entry
+            // these hang off. They have no menu item of their own — the only way in is the
+            // "Details" link on System → Import / Export — so without bmc_page the layout
+            // derives no slug at all and the pin silently does nothing. Pointing both at the
+            // parent keeps the crumb and the highlighted sidebar row agreeing with each other.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Config import / export',
+            'bmc_page' => 'import-export',
+            'domain'   => [
+                'key'   => 'config', 'title' => 'Configuration', 'icon' => 'sliders-horizontal',
+                'export' => 'admin_config_export', 'import' => 'admin_config_import',
+                'token' => 'config_import', 'file' => 'config_file',
+                'blurb' => 'Game, starter and pool settings as one JSON file.',
+                'carries' => [
+                    'Game config — engine, scouting, morale, guardian, incidents',
+                    'Starter config — starting balance, initial staff counts, tiers',
+                    'Pool config — generation ranges, position weights, pool targets',
+                ],
+                'importBlurb' => 'Only keys present in the file are applied, so a partial export is safe to import. There is deliberately no clear-first here and no undo — <strong>export a backup first</strong>.',
+            ],
+        ]);
     }
 
     #[Route('/admin/config/export', name: 'admin_config_export', methods: ['GET'])]
@@ -913,7 +957,23 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function translationsContent(LanguageRepository $languageRepository): Response
     {
-        return $this->render('admin/translations_content.html.twig', [
+        return $this->render('admin/content_import_export.html.twig', [
+            // SYSTEM, not the domain's own group, and the pin slug of the sidebar entry
+            // these hang off. They have no menu item of their own — the only way in is the
+            // "Details" link on System → Import / Export — so without bmc_page the layout
+            // derives no slug at all and the pin silently does nothing. Pointing both at the
+            // parent keeps the crumb and the highlighted sidebar row agreeing with each other.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'Translations import / export',
+            'bmc_page' => 'import-export',
+            'domain'   => [
+                'key'   => 'translations', 'title' => 'Generic translations', 'icon' => 'languages',
+                'export' => 'admin_translations_export', 'import' => 'admin_translations_import',
+                'token' => 'translations_import', 'file' => 'translations_file',
+                'blurb' => 'The generic UI-copy catalogue, one language at a time. Narrative text has its own Translations action on each entity and is not covered here.',
+                'importBlurb' => 'Keys in the file are written against the target language. Anything already there and not in the file is left alone.',
+                'clear' => "Clear this language's values before importing",
+            ],
             'languages' => $languageRepository->findEnabled(),
         ]);
     }
@@ -1254,7 +1314,28 @@ class DashboardController extends AbstractDashboardController
     #[IsGranted('ROLE_ADMIN')]
     public function worldContent(): Response
     {
-        return $this->render('admin/world_content.html.twig');
+        return $this->render('admin/content_import_export.html.twig', [
+            // SYSTEM, not the domain's own group, and the pin slug of the sidebar entry
+            // these hang off. They have no menu item of their own — the only way in is the
+            // "Details" link on System → Import / Export — so without bmc_page the layout
+            // derives no slug at all and the pin silently does nothing. Pointing both at the
+            // parent keeps the crumb and the highlighted sidebar row agreeing with each other.
+            'bmcGroup' => 'System',
+            'bmcTitle' => 'World import / export',
+            'bmc_page' => 'import-export',
+            'domain'   => [
+                'key'   => 'world', 'title' => 'World data', 'icon' => 'earth',
+                'export' => 'admin_world_export', 'import' => 'admin_world_import',
+                'token' => 'world_import', 'file' => 'world_file',
+                'blurb' => 'Leagues and NPC clubs as one JSON file. Import handles the country and tier mapping itself, so this is how the world structure moves between environments.',
+                'carries' => [
+                    'Leagues — country, tier, name, prize money, promotion spots',
+                    'NPC clubs — name, colours, stadium, balance, playing style, formation',
+                ],
+                'importBlurb' => 'Existing leagues are matched on country and tier, clubs on name, country and tier. Anything in the file that does not exist yet is created.',
+                'clear' => 'Clear all existing leagues and clubs before importing',
+            ],
+        ]);
     }
 
     #[Route('/admin/world/export', name: 'admin_world_export', methods: ['GET'])]
@@ -1623,7 +1704,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261108h';
+    private const BMC_ASSET_VERSION = '20261110a';
 
     public function configureAssets(): Assets
     {
