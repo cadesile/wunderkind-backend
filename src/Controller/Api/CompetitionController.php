@@ -20,6 +20,7 @@ use App\Service\Competition\CompetitionRegistrationService;
 use App\Service\Competition\CompetitionResponseCacheService;
 use App\Service\Competition\CompetitionResponseBuilder;
 use App\Service\Competition\EligibilityEvaluator;
+use App\Service\Competition\HallOfFameService;
 use App\Service\Competition\SnapshotValidator;
 use App\Service\Notification\PushNotificationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -52,6 +53,7 @@ class CompetitionController extends AbstractController
         private readonly PushNotificationService $pushNotificationService,
         private readonly CompetitionResponseBuilder $responseBuilder,
         private readonly CompetitionResponseCacheService $responseCache,
+        private readonly HallOfFameService $hallOfFame,
     ) {}
 
     #[Route('', name: 'api_competitions_list', methods: ['GET'])]
@@ -103,30 +105,33 @@ class CompetitionController extends AbstractController
         ]);
     }
 
+    /**
+     * The Hall of Fame, in two keys that answer two different questions.
+     *
+     * `champions[]` is who holds each cup NOW — one row per active template, unchanged. It is
+     * not, and never was, a list of past winners: its length is the number of active
+     * templates, so with one template and five finals played it is one row no matter what
+     * you ask it. `history[]` is the list of past winners — one row per completed instance,
+     * newest first, paginated with `limit`/`cursor`, and it keeps a retired template's
+     * champions.
+     *
+     * Both were added as separate keys rather than by widening `champions[]`, because
+     * widening it would have repeated `templateId` down a list that existing clients key on.
+     * See docs/api/competition-champions-history.md.
+     */
     #[Route('/champions', name: 'api_competitions_champions', methods: ['GET'])]
-    public function champions(): JsonResponse
+    public function champions(Request $request): JsonResponse
     {
-        $champions = [];
-        foreach ($this->templateRepository->findAllActive() as $template) {
-            $latest = $this->activeCompetitionRepository->findLatestCompletedForTemplate($template);
-            if ($latest === null) {
-                continue;
-            }
-            $summary     = $this->responseBuilder->serializeInstanceSummary($latest, null);
-            $champions[] = [
-                'templateId'      => (string) $template->getId(),
-                'templateName'    => $template->getName(),
-                'entrantCapacity' => $latest->getEntrantCapacity(),
-                'trophy'          => $this->responseBuilder->normalizeTrophy($template->getTrophy()),
-                'instanceId'      => (string) $latest->getId(),
-                'completedAt'     => $latest->getCompletedAt()?->format(DATE_ATOM),
-                'champion'        => $summary['champion'],
-                'runnerUp'        => $summary['runnerUp'],
-            ];
-        }
+        $cursor  = $request->query->get('cursor');
+        $history = $this->hallOfFame->history(
+            offset: is_numeric($cursor) ? max(0, (int) $cursor) : 0,
+            limit: (int) $request->query->get('limit', HallOfFameService::DEFAULT_HISTORY_LIMIT),
+        );
 
         return $this->json([
-            'champions'  => $champions,
+            'champions'  => $this->hallOfFame->currentHolders(),
+            'history'    => $history['rows'],
+            'nextCursor' => $history['nextCursor'],
             'serverTime' => (new \DateTimeImmutable())->format(DATE_ATOM),
         ]);
     }

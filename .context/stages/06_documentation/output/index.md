@@ -91,6 +91,15 @@ claiming canonical status)
   snapshot fields for match-engine parity, plus a `MATCH`/`MATCH_NARRATIVE`
   client-integration section (retiring bundled `narrativeContent.json`,
   display scoping, impacts-still-apply note)
+- `docs/api/competition-champions-history.md` (2026-11-10) — the additive `history[]` key on
+  `GET /api/competitions/champions` (and on `GET /api/club/hub`). Earns its place because the
+  distinction it draws is not guessable from the payload: `champions[]` is one row per
+  **active template** — its current holder — and reads exactly like a winners list while being
+  bounded by the template count, which is how an app showing historical winners came to show
+  one. `history[]` is one row per **completed instance**, `limit`/`cursor` paginated, and keeps
+  a retired template's champions where `GET /api/competitions` filters them out. Also records
+  the two nullable cases a client must handle and why undated COMPLETED rows are excluded from
+  both keys. Cited from `CompetitionController::champions()`.
 - `docs/api/translations.md` (2026-10-03) — `GET /api/languages` +
   `GET /api/translations/{code}[/version]` (generic UI-copy catalogue, same
   shape as the bundled locale files), plus the `?lang=` localize-in-place
