@@ -4,21 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\Competition;
 
-use App\Entity\Club;
-use App\Entity\Competition\ActiveCompetition;
-use App\Entity\Competition\CompetitionEntrant;
-use App\Entity\Competition\CompetitionFixture;
-use App\Entity\Competition\CompetitionResult;
-use App\Entity\Competition\CompetitionRound;
-use App\Entity\Competition\CompetitionTemplate;
-use App\Entity\User;
-use App\Enum\Competition\ActiveCompetitionStatus;
-use App\Enum\Competition\CompetitionDuration;
-use App\Enum\Competition\CompetitionFixtureStatus;
-use App\Enum\Competition\CompetitionRoundStatus;
-use App\Enum\Competition\MatchEngineIdentifier;
 use App\Service\Competition\CupResultsBoardService;
 use App\Tests\Support\EntrantFixtureTrait;
+use App\Tests\Support\PlayedCupFixtureTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -41,6 +29,7 @@ class CupResultsBoardServiceTest extends KernelTestCase
     private CupResultsBoardService $service;
 
     use EntrantFixtureTrait;
+    use PlayedCupFixtureTrait;
 
     protected function setUp(): void
     {
@@ -57,7 +46,7 @@ class CupResultsBoardServiceTest extends KernelTestCase
 
     public function testTheBoardReportsAnAwaySideWinnerAsTheChampion(): void
     {
-        $name = $this->playedCup();
+        $name = $this->playedCup($this->em)->templateName;
 
         $latest = $this->service->getBoard()['latest'];
         self::assertSame($name, $latest['name'], 'the future completedAt must make this the latest cup');
@@ -90,7 +79,7 @@ class CupResultsBoardServiceTest extends KernelTestCase
      */
     public function testTheRoadToTheFinalReportsScoresFromTheWinnersPointOfView(): void
     {
-        $this->playedCup();
+        $this->playedCup($this->em);
 
         $road = $this->service->getBoard()['latest']['road'];
 
@@ -108,7 +97,7 @@ class CupResultsBoardServiceTest extends KernelTestCase
      */
     public function testPlayerOfTheFinalComesFromTheWinningSideWearingItsKit(): void
     {
-        $this->playedCup();
+        $this->playedCup($this->em);
 
         $figures = $this->service->getBoard()['latest']['figures'];
         self::assertSame(['owner', 'manager', 'trophy', 'player'], array_column($figures, 'kind'));
@@ -138,138 +127,11 @@ class CupResultsBoardServiceTest extends KernelTestCase
      */
     public function testAnUndatedCompletedCupCannotPoseAsTheLatestFinal(): void
     {
-        $name = $this->playedCup();
-        $this->playedCup(undated: true);
+        $name = $this->playedCup($this->em)->templateName;
+        $this->playedCup($this->em, completedAt: null);
 
         $board = $this->service->getBoard();
         self::assertSame($name, $board['latest']['name']);
         self::assertSame([], $board['earlier'], 'the undated cup is excluded outright, not demoted');
-    }
-
-    /**
-     * A two-round cup — SF then FINAL — won from the away side in both, with the final
-     * settled on penalties. Returns the template name, which is unique per call.
-     *
-     * `$undated` builds the one case the board has to reject: COMPLETED with no completedAt.
-     */
-    private function playedCup(bool $undated = false): string
-    {
-        $completedAt = $undated ? null : new \DateTimeImmutable('2026-05-01 18:00:00');
-
-        $suffix   = uniqid('', true);
-        $name     = 'Cup Results Trophy ' . $suffix;
-        $template = new CompetitionTemplate($name, 'cup-results-' . $suffix, 4, CompetitionDuration::TEN_HOURS);
-        $template->setVictorPrize(500000);
-        $template->setTrophy([
-            'style'           => 'cup',
-            'finish'          => 'gold',
-            'ribbons'         => true,
-            'ribbonPrimary'   => '#112233',
-            'ribbonSecondary' => '#445566',
-        ]);
-        $this->em->persist($template);
-
-        $competition = new ActiveCompetition($template);
-        $competition->setStatus(ActiveCompetitionStatus::COMPLETED);
-        $competition->setCompletedAt($completedAt);
-        $this->em->persist($competition);
-
-        // The winner's own identity is the one the board must freeze and draw: a distinctive
-        // home kit (merged into the player sprite) and a country that keys a real flag file.
-        $winner = $this->entrant($competition, 'Away Winners FC', 1, [
-            'country'       => 'ES',
-            'formation'     => '4-4-2',
-            'stadiumName'   => 'The Away End',
-            'homeKitConfig' => ['kit' => 'stripes', 'primary' => '#112233', 'secondary' => '#445566', 'shorts' => 'black', 'socks' => 'primary'],
-        ]);
-        $runnerUp = $this->entrant($competition, 'Home Losers FC', 2);
-        $victim   = $this->entrant($competition, 'Semi Victims FC', 3);
-
-        // Capacity 4 labels its rounds ['SF', 'FINAL'] (BracketLabeler), and finalOf() reads
-        // the LAST round's slot 0 — so the FINAL has to be the higher round index.
-        $sf = $this->round($competition, 1, 'SF');
-        $this->playedFixture($sf, home: $victim, away: $winner, homeScore: 0, awayScore: 3, winner: $winner);
-
-        $final       = $this->round($competition, 2, 'FINAL');
-        $finalResult = $this->playedFixture($final, home: $runnerUp, away: $winner, homeScore: 1, awayScore: 1, winner: $winner, awayLineup: [
-            ['id' => 'a1', 'name' => 'Away Also Played', 'position' => 'DEF', 'goals' => 0, 'rating' => 6.1, 'appearance' => ['hair' => 'crop', 'skin' => 's2']],
-            ['id' => 'a2', 'name' => 'Away Match Winner', 'position' => 'FWD', 'goals' => 2, 'rating' => 8.4, 'appearance' => ['hair' => 'bald', 'skin' => 's3']],
-        ], homeLineup: [
-            ['id' => 'h1', 'name' => 'Home Star', 'position' => 'FWD', 'goals' => 1, 'rating' => 9.9, 'appearance' => ['hair' => 'afro', 'skin' => 's1']],
-        ]);
-
-        // Home 3, away 5 — the away side wins the shootout, so the board has to swap them.
-        $finalResult->setShootoutInfo(true, true, 3, 5);
-
-        $this->em->flush();
-        $this->em->clear();
-
-        return $name;
-    }
-
-    private function round(ActiveCompetition $competition, int $index, string $label): CompetitionRound
-    {
-        $round = new CompetitionRound($competition, $index, $label, new \DateTimeImmutable('-2 hours'));
-        $round->setStatus(CompetitionRoundStatus::RESULTS_PUBLISHED);
-        $this->em->persist($round);
-
-        return $round;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $homeLineup
-     * @param list<array<string, mixed>> $awayLineup
-     */
-    private function playedFixture(
-        CompetitionRound $round,
-        CompetitionEntrant $home,
-        CompetitionEntrant $away,
-        int $homeScore,
-        int $awayScore,
-        CompetitionEntrant $winner,
-        array $homeLineup = [],
-        array $awayLineup = [],
-    ): CompetitionResult {
-        $fixture = new CompetitionFixture($round, 0, $home, $away);
-        $fixture->setStatus(CompetitionFixtureStatus::COMPLETE);
-        $fixture->setWinnerEntrant($winner);
-        $this->em->persist($fixture);
-
-        // Frozen from each entrant's own display block, exactly as
-        // CompetitionResultsService::clubJsonOf() does it — the board reads nothing else.
-        $result = new CompetitionResult(
-            $fixture,
-            $homeScore,
-            $awayScore,
-            MatchEngineIdentifier::DETERMINISTIC,
-            $home->getClubDisplayJson(),
-            $away->getClubDisplayJson(),
-            $homeLineup,
-            $awayLineup,
-        );
-        $this->em->persist($result);
-
-        return $result;
-    }
-
-    /** @param array<string, mixed> $clubExtras */
-    private function entrant(ActiveCompetition $competition, string $name, int $seed, array $clubExtras = []): CompetitionEntrant
-    {
-        $user = new User(sprintf('cup-results-%s@example.com', uniqid('', true)));
-        $user->setPassword('x');
-        $club = new Club($name, $user);
-        $this->em->persist($user);
-        $this->em->persist($club);
-
-        $players = [];
-        for ($i = 0; $i < 11; $i++) {
-            $players[] = ['id' => "$name-p$i", 'name' => "$name Player $i", 'position' => 'MID', 'currentAbility' => 60];
-        }
-
-        return $this->makeEntrantFromEnvelope($this->em, $competition, $club, $seed, [
-            'club'    => array_merge(['id' => (string) $club->getId(), 'name' => $name], $clubExtras),
-            'players' => $players,
-            'staff'   => [['id' => 's1', 'role' => 'MANAGER', 'name' => "$name Boss"]],
-        ]);
     }
 }

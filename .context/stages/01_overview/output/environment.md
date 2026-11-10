@@ -97,6 +97,47 @@ cascading through everything that loads a `StarterConfig`. Exactly one was real.
 the danger: it is easy to read a wall of red as "my change broke everything" or, worse, as
 "this suite is always flaky" and push past it.
 
+**`wunderkind_test` is shared across branches, and that is a trap when you switch.**
+There is ONE test database for every branch, so it is only ever in sync with whichever
+branch last synced it — and `master` can sit far behind `development`. Checking out the
+other branch and running the suite then fails in bulk for reasons that have nothing to do
+with your change, and the direction of the failure tells you which way the mismatch runs:
+
+- DB **behind** the entities -> `Undefined column: ... does not exist` (e.g. on
+  `development`, `location_config.big_share_percent`).
+- DB **ahead** of the entities -> `Not null violation` on a column the older branch's
+  entity never sets (e.g. on `master`, `club.name_normalised` — 137 errors, none real).
+
+**Do not "fix" this by re-syncing the shared DB**: that just moves the breakage to the
+other branch. `config/packages/doctrine.yaml` sets
+`dbname_suffix: '_test%env(default::TEST_TOKEN)%'`, so a per-branch database is one env
+var away and costs nothing:
+
+```bash
+# the wunderkind role cannot CREATE DATABASE - go through the postgres superuser
+docker exec wunderkindbackend_database_1 \
+  psql -U postgres -c 'CREATE DATABASE wunderkind_testmaster OWNER wunderkind;'
+lando ssh -s appserver -c 'TEST_TOKEN=master php bin/console doctrine:schema:create --env=test'
+lando ssh -s appserver -c 'TEST_TOKEN=master php vendor/bin/phpunit --no-coverage tests/...'
+```
+
+`TEST_TOKEN` must be set INSIDE the container (`lando ssh -s appserver -c '...'`); prefixing
+`lando php` sets it on the host CLI, where Symfony never sees it. Verify with
+`doctrine:schema:update --dump-sql --env=test`, which should report nothing to update —
+that zero-drift baseline is what makes a failure meaningful instead of noise.
+
+**One caveat: `schema:create` builds structure, not content.** A fresh per-branch DB has no
+`game_event_template` rows, so `MatchNarrativeGeneratorService` generates an empty timeline
+and any test asserting on a narrative payload fails for that reason alone (seen on
+`CompetitionControllerTest::testShowIncludesResultsOnceRoundsAreProcessed`). Copy the
+content across rather than debugging it:
+
+```bash
+docker exec wunderkindbackend_database_1 bash -c \
+  "pg_dump -U postgres -d wunderkind_test --data-only --table=game_event_template \
+   | psql -U postgres -d wunderkind_testmaster -q"
+```
+
 **Syncing the test DB:**
 
 1. `lando php bin/console doctrine:schema:update --dump-sql --env=test` — shows the real diff.

@@ -16,6 +16,7 @@ use App\Repository\Friendly\FriendlyChallengeRepository;
 use App\Repository\InboxMessageRepository;
 use App\Service\ClubResolver;
 use App\Service\Competition\CompetitionResponseBuilder;
+use App\Service\Competition\HallOfFameService;
 use App\Service\Competition\MatchQueryService;
 use App\Service\Friendly\FriendlyChallengeService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -39,6 +40,7 @@ class ClubHubController extends AbstractController
         private readonly FriendlyChallengeService $friendlyService,
         private readonly MatchQueryService $matchQueryService,
         private readonly InboxMessageRepository $inboxMessageRepository,
+        private readonly HallOfFameService $hallOfFame,
     ) {}
 
     #[Route('/api/club/competitions', name: 'api_club_competitions', methods: ['GET'])]
@@ -127,26 +129,10 @@ class ClubHubController extends AbstractController
         );
 
         $openCompetitions = [];
-        $champions        = [];
         foreach ($this->templateRepository->findAllActive() as $template) {
             $openInstance = $this->activeCompetitionRepository->findOpenForTemplate($template);
             if ($openInstance !== null) {
                 $openCompetitions[] = $this->competitionResponseBuilder->serializeInstanceSummary($openInstance, $club);
-            }
-
-            $latestCompleted = $this->activeCompetitionRepository->findLatestCompletedForTemplate($template);
-            if ($latestCompleted !== null) {
-                $summary     = $this->competitionResponseBuilder->serializeInstanceSummary($latestCompleted, null);
-                $champions[] = [
-                    'templateId'      => (string) $template->getId(),
-                    'templateName'    => $template->getName(),
-                    'entrantCapacity' => $latestCompleted->getEntrantCapacity(),
-                    'trophy'          => $summary['trophy'],
-                    'instanceId'      => (string) $latestCompleted->getId(),
-                    'completedAt'     => $latestCompleted->getCompletedAt()?->format(DATE_ATOM),
-                    'champion'        => $summary['champion'],
-                    'runnerUp'        => $summary['runnerUp'],
-                ];
             }
         }
 
@@ -164,7 +150,13 @@ class ClubHubController extends AbstractController
             'upcoming'      => array_slice($upcoming, 0, 5),
             'recent'        => $recent,
             'open'          => $openCompetitions,
-            'champions'     => $champions,
+            // Both come from HallOfFameService so the hub cannot drift from
+            // GET /api/competitions/champions, which is how the trophy on these rows came to
+            // be read through two different code paths. `champions` is the current holder per
+            // active template, as before; `history` is the last few cups actually won — a
+            // fixed slice, since the hub has no cursor of its own.
+            'champions'     => $this->hallOfFame->currentHolders(),
+            'history'       => $this->hallOfFame->hubHistory(),
             'serverTime'    => $now->format(DATE_ATOM),
         ]);
     }
