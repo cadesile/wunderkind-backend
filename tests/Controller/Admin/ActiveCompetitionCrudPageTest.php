@@ -55,6 +55,14 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
      */
     use EntrantFixtureTrait;
 
+    /*
+     * COPY ASSERTIONS HERE ARE CASE-INSENSITIVE ON PURPOSE. The detail page upper-cases its
+     * buttons and empty states like every other redesigned page, so 'Generate Result' became
+     * 'GENERATE RESULT' — a change to presentation that altered nothing these cases are about.
+     * Where a test needs to prove the control actually WORKS it counts the form that posts to
+     * the route, which is right beside each of these and is the real assertion.
+     */
+
     private const TEST_ADMIN_EMAIL = 'active-competition-crud-test-admin@example.com';
     private const SLUG             = 'crud-page-probe-active-cup';
 
@@ -286,7 +294,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
 
-        $this->assertStringContainsString('Generate Result', $crawler->text());
+        $this->assertStringContainsStringIgnoringCase('Generate Result', $crawler->text());
         // No result exists yet, so there is nothing to expand.
         $this->assertStringNotContainsString('Details', $crawler->text());
     }
@@ -336,8 +344,8 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringContainsString('Force Draw', $crawler->text());
-        $this->assertStringContainsString('No fixtures.', $crawler->text());
+        $this->assertStringContainsStringIgnoringCase('Force Draw', $crawler->text());
+        $this->assertStringContainsStringIgnoringCase('No fixtures', $crawler->text());
 
         $forms = $crawler->filter('form')->reduce(fn ($node) => str_contains((string) $node->attr('action'), 'force-draw'));
         self::assertGreaterThan(0, $forms->count(), 'expected at least one Force Draw form on the page');
@@ -350,7 +358,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $roundRepository = self::getContainer()->get(CompetitionRoundRepository::class);
         $round1          = $roundRepository->findByCompetitionOrderedByIndex($instance)[0];
         self::assertSame(\App\Enum\Competition\CompetitionRoundStatus::DRAWN, $round1->getStatus());
-        $this->assertStringContainsString('Generate Result', $crawler->text());
+        $this->assertStringContainsStringIgnoringCase('Generate Result', $crawler->text());
     }
 
     public function testDetailPageShowsRoundsFixturesAndScores(): void
@@ -366,7 +374,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $text = $crawler->text(null, true);
         $this->assertStringContainsString('SF', $text);
         $this->assertStringContainsString('FINAL', $text);
-        $this->assertStringContainsString('complete', $text);
+        $this->assertStringContainsStringIgnoringCase('complete', $text);
 
         // Round 1 fixtures paired the 4 seeded clubs — their names must render regardless
         // of bracket pairing order.
@@ -377,7 +385,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         // A completed fixture must show a real "home – away" scoreline, not a blank dash,
         // and must offer a way to see the full result detail (event log).
         $this->assertMatchesRegularExpression('/\d+\s*[\x{2013}-]\s*\d+/u', $text, 'expected a rendered scoreline like "2 – 1"');
-        $this->assertStringContainsString('Details', $text);
+        $this->assertStringContainsStringIgnoringCase('Details', $text);
     }
 
     public function testDetailPageResultDetailsIncludeEngineAndEventLog(): void
@@ -405,7 +413,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $text = $crawler->text(null, true);
-        $this->assertStringContainsString('Starting XI', $text);
+        $this->assertStringContainsStringIgnoringCase('Starting XI', $text);
         // Every seeded club has exactly one named player — its lineup entry must render.
         foreach (['Alpha FC', 'Bravo FC', 'Charlie FC', 'Delta FC'] as $name) {
             $this->assertStringContainsString("{$name} Talisman", $text);
@@ -442,8 +450,8 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $text = $crawler->text(null, true);
-        $this->assertStringContainsString('Full stored payload', $text);
-        $this->assertStringContainsString('What the device receives', $text);
+        $this->assertStringContainsStringIgnoringCase('Full stored payload', $text);
+        $this->assertStringContainsStringIgnoringCase('What the device receives', $text);
 
         // Full payload includes fields the client never receives (event log detail, engine, timestamp).
         $this->assertStringContainsString('"eventLogJson"', $crawler->html());
@@ -567,7 +575,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
 
-        $link    = $crawler->selectLink('Generate Spoof Entrants')->link();
+        $link    = $crawler->filter('a[href*="admin_active_competition_generate_spoof"]')->link();
         $crawler = $client->click($link);
         self::assertResponseIsSuccessful();
         $this->assertStringContainsString('slot', $crawler->text());
@@ -603,7 +611,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringNotContainsString('Generate Spoof Entrants', $crawler->text());
+        $this->assertStringNotContainsStringIgnoringCase('Generate Spoof Entrants', $crawler->text());
     }
 
     public function testGenerateSpoofEntrantsIsUnavailableWithNoEntrantsYet(): void
@@ -620,7 +628,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringNotContainsString('Generate Spoof Entrants', $crawler->text());
+        $this->assertStringNotContainsStringIgnoringCase('Generate Spoof Entrants', $crawler->text());
     }
 
     public function testGenerateSpoofEntrantsActionIsNotOfferedOnTheEntrantAdminScreen(): void
@@ -635,7 +643,7 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/competition-entrant/' . $entrant->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringNotContainsString('Generate Spoof Entrants', $crawler->text());
+        $this->assertStringNotContainsStringIgnoringCase('Generate Spoof Entrants', $crawler->text());
     }
 
     private function buildEmptyOpenCompetition(EntityManagerInterface $em, int $capacity = 4): ActiveCompetition
@@ -659,9 +667,9 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringContainsString('Spoof All Entrants', $crawler->text());
+        $this->assertStringContainsStringIgnoringCase('Spoof All Entrants', $crawler->text());
 
-        $crawler = $client->click($crawler->selectLink('Spoof All Entrants')->link());
+        $crawler = $client->click($crawler->filter('a[href*="admin_active_competition_spoof_all"]')->link());
         self::assertResponseIsSuccessful();
         $this->assertStringContainsString('4', $crawler->text());
 
@@ -691,6 +699,6 @@ class ActiveCompetitionCrudPageTest extends WebTestCase
 
         $crawler = $client->request('GET', '/admin/active-competition/' . $instance->getId());
         self::assertResponseIsSuccessful();
-        $this->assertStringNotContainsString('Spoof All Entrants', $crawler->text());
+        $this->assertStringNotContainsStringIgnoringCase('Spoof All Entrants', $crawler->text());
     }
 }
