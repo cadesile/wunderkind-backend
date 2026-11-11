@@ -56,6 +56,35 @@ registrations/sec forward.
   than via a feature branch/PR; it's also the integration branch active work
   propagates to `dev` and `master` from.
 
+## The merge flow — two spokes, never a chain
+
+`development` is the hub. Both deploy branches are fed **from it**, separately:
+
+```
+          ┌──────────────► dev      (staging deploy)
+development
+          └──────────────► master   (production deploy)
+
+              dev ──✘──► master     never
+```
+
+**Never merge `dev` into `master`.** `dev` is allowed to carry unreleased,
+in-progress work for testing — that is its whole purpose — so a `dev` → `master`
+merge ships whatever happens to be sitting in staging, which is exactly the set
+of commits nobody decided to release. The same argument blocks `dev` →
+`development`: it would drag that unreleased work back into the hub and from
+there into the next production merge.
+
+So a change reaches production by being merged from `development`, and only from
+`development`. If a fix exists *only* on `dev`, it does not get promoted — land it
+on `development` first (cherry-pick is the one-off escape hatch here, per rule 3),
+then merge down the two spokes as usual.
+
+A corollary worth stating: the two merges are independent, not sequential stages
+of one pipeline. Merging into `dev` is not a step on the way to `master` and
+grants nothing — `master` still takes its own merge from `development`. It is
+normal and expected for `dev` to be ahead of `master` indefinitely.
+
 ## Rules
 
 1. Do most work directly on `development`, after confirming it's up to date
@@ -63,9 +92,11 @@ registrations/sec forward.
    `dev` — those are only ever reached by merging `development` in.
 2. When a task is complete: merge `development` → `dev` and push (external
    dev/staging testing), then merge `development` → `master` and push
-   (production release) — two **separate** merges, in that order.
-3. Use a real `git merge` to move changes between `development`, `dev`, and
-   `master` — never `git cherry-pick` as the standard propagation method.
+   (production release) — two **separate** merges, in that order, both
+   sourced from `development`. Never merge `dev` into `master`, and never
+   merge `dev` back into `development` — see "The merge flow" above.
+3. Use a real `git merge` to move changes out of `development` to `dev` and
+   to `master` — never `git cherry-pick` as the standard propagation method.
    Cherry-pick is only acceptable as a one-off fix to transplant a specific
    commit onto a branch that doesn't share its ancestry.
 4. Before merging into `master`, check for master-only commits first
