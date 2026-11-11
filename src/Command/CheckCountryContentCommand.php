@@ -11,6 +11,7 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\CountryContent\CountryNamingContentProvider;
 use App\Service\Location\CountryReadinessService;
 use App\Service\Location\LocationCatalogueService;
 use App\Service\NameGeneratorService;
@@ -39,6 +40,7 @@ class CheckCountryContentCommand extends Command
         private readonly CountryProfileRepository         $countryProfileRepository,
         private readonly LocationCatalogueService         $locationCatalogue,
         private readonly CountryReadinessService          $readinessService,
+        private readonly CountryNamingContentProvider     $namingContent,
     ) {
         parent::__construct();
     }
@@ -90,19 +92,41 @@ class CheckCountryContentCommand extends Command
             ? '<info>Ready: this country may be set Live.</info>'
             : '<comment>Not ready: ' . implode(', ', $readiness['blocking']) . '</comment>');
 
-        $io->section('CountryContentRegistry content');
-        // `places` is excluded: it is answered above, from the database.
-        $missing = array_values(array_filter(
-            CountryContentRegistry::missingCategories($country),
-            static fn (string $category): bool => $category !== 'places',
-        ));
-        $io->table(['Category', 'Status'], [
-            ['Prestige suffixes', in_array('prestigeSuffixes', $missing, true) ? 'MISSING (falls back to [FC])' : count(CountryContentRegistry::prestigeSuffixes($country)) . ' entries'],
-            ['Generic suffixes', in_array('genericSuffixes', $missing, true) ? 'MISSING (falls back to [FC])' : count(CountryContentRegistry::genericSuffixes($country)) . ' entries'],
-            ['Stadium formats', in_array('stadiumFormats', $missing, true) ? 'MISSING (generic fallback)' : count(CountryContentRegistry::stadiumFormats($country)) . ' entries'],
-            ['World region (skin tone)', CountryContentRegistry::worldRegion($country)?->name ?? 'none (uniform fallback)'],
-            ['Business cluster', CountryContentRegistry::businessCluster($country) ?? 'none (falls back to _fallback)'],
-        ]);
+        $io->section('Club-naming content');
+        // Driven off describe(), so each row says WHERE its values came from. An operator
+        // looking at "10 entries" needs to know whether that is the PHP fallback or something
+        // they authored on the locations dashboard — the two behave identically and are
+        // changed in completely different ways. `places` is not asked about here: it is
+        // answered above, from the database.
+        $fallbacks = [
+            'prestigeSuffixes' => 'MISSING (falls back to [FC])',
+            'genericSuffixes'  => 'MISSING (falls back to [FC])',
+            'stadiumFormats'   => 'MISSING (generic fallback)',
+        ];
+        $labels = [
+            'prestigeSuffixes' => 'Prestige suffixes',
+            'genericSuffixes'  => 'Generic suffixes',
+            'stadiumFormats'   => 'Stadium formats',
+        ];
+        $rows = [];
+
+        foreach ($this->namingContent->describe($country) as $category => $state) {
+            $rows[] = [
+                $labels[$category],
+                $state['values'] === []
+                    ? $fallbacks[$category]
+                    : sprintf(
+                        '%d entries (%s)',
+                        count($state['values']),
+                        $state['source'] === CountryNamingContentProvider::SOURCE_OVERRIDE ? 'admin override' : 'PHP registry',
+                    ),
+            ];
+        }
+
+        $rows[] = ['World region (skin tone)', CountryContentRegistry::worldRegion($country)?->name ?? 'none (uniform fallback)'];
+        $rows[] = ['Business cluster', CountryContentRegistry::businessCluster($country) ?? 'none (falls back to _fallback)'];
+
+        $io->table(['Category', 'Status'], $rows);
 
         $io->section('Name pool');
         $hasPool = NameGeneratorService::hasNamePool($country->nationality());

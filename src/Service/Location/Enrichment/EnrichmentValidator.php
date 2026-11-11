@@ -144,7 +144,7 @@ final class EnrichmentValidator
 
         $bbox = $location->getCountry()->getBbox();
 
-        if ($this->isUsableBbox($bbox)) {
+        if (self::isUsableBbox($bbox)) {
             $inside = $lat >= $bbox['minLat'] && $lat <= $bbox['maxLat']
                 && $lng >= $bbox['minLng'] && $lng <= $bbox['maxLng'];
 
@@ -327,8 +327,17 @@ final class EnrichmentValidator
         $accepted['region'] = $region;
     }
 
-    /** @param array<string, mixed>|null $bbox */
-    private function isUsableBbox(?array $bbox): bool
+    /**
+     * Whether a stored bounding box is complete and the right way round.
+     *
+     * PUBLIC AND STATIC because CountryProfileValidator asks the same question of a box the
+     * model has just proposed, before it is stored. Two copies of "what makes a box usable"
+     * would drift, and the half that drifted would be the one deciding whether a town's
+     * coordinates get checked at all.
+     *
+     * @param array<string, mixed>|null $bbox
+     */
+    public static function isUsableBbox(?array $bbox): bool
     {
         if ($bbox === null) {
             return false;

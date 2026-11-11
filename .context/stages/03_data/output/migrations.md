@@ -517,6 +517,7 @@ was not safe to retry:
 |---|---|
 | `Version20261103120000` | Geography: `country_profile` (natural PK `code`), `location`, `location_rival` (+2 raw CHECKs), `land_plot` |
 | `Version20261103150000` | AI enrichment history: `location_enrichment_run`, `location_enrichment_attempt` |
+| `Version20261111120000` | `country_profile.prestige_suffixes` / `generic_suffixes` / `stadium_formats` (json, nullable) — operator-authored club-naming content, overriding `CountryContentRegistry`'s PHP consts. NULL is the normal state; no data migrated |
 | `Version20261103180000` | `user_ledger`: nullable `club_id` + SET NULL, `source_kind`/`source_ref` + partial unique |
 | `Version20261103200000` | `stadium_estimate` + `stadium_estimate_input` |
 | `Version20261103220000` | `plot_hold`, `plot_claim`, `plot_claim_valuation` — three partial uniques |

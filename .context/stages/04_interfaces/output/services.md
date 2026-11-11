@@ -1170,6 +1170,39 @@ No `src/EventListener/` directory exists.
   `LocationEnrichmentService` (the lease, the dispatch, the write-back),
   `LocationEnrichmentOrchestrator` (the three admin triggers, with a stacked-sweep guard
   copying `StarterPoolAuditService`'s undrained-queue count).
+- **`CountryEnrichment\*`** — the same seven-file shape one level up, for the COUNTRY row:
+  `CountryProfileEnricherInterface`, `ClaudeCountryProfileEnricher`, `Unconfigured…`, a
+  factory on the same `LOCATION_ENRICHER_*` trio, `CountryProfileValidator`,
+  `CountryProfileEnrichmentService`. **Synchronous, and that is the whole design decision** —
+  one call for a dozen short scalars, so a queue would cost a transport, a handler, a consumer
+  and a poll to make a two-second call feel slower.
+  **The check worth knowing about is in the validator**: a proposed bounding box that excludes
+  towns already placed in that country is refused outright and the rejection names the extent
+  those towns span, because those coordinates have already been through `EnrichmentValidator`
+  and a review pass. It gets stronger the more of a country is enriched.
+  `EnrichmentValidator::isUsableBbox()` was made public static so both validators share one
+  definition of a usable box.
+- **`CountryContent\CountryNamingContentProvider`** — an operator's naming content if there is
+  one, `CountryContentRegistry`'s const otherwise. **The registry is not replaced and nothing
+  is removed from it**: its statics stay static (`worldRegion()` and `capitalAliases()` are
+  called from enum methods with no container) and `CountryContentRegistry::missingCategories()`
+  keeps its exact behaviour, `places` included — which is what leaves `CountryContentRegistryTest`
+  and `PolandContentTest` untouched. The provider's own `missingCategories()` never reports
+  `places` and is what `CountryReadinessService` now asks. No memoisation: `findByCode()` is a
+  PK `find()`, so the identity map already serves it, and a second cache could only go stale
+  against the admin's own save.
+- **`CountryContent\NamingContentValidator`** / **`NamingContentService`** /
+  **`CountryContent\Suggestion\*`** — the write half and the one-call-per-country AI
+  suggester. The strictness is all in one place and for one reason: a stadium format is handed
+  to `sprintf()`, which THROWS in PHP 8, so an operator-typed percent sign would otherwise be a
+  fatal inside club generation a long way from the form. Four rules guard it, the last of which
+  simply runs the template. `NpcClubGenerationService::generateStadiumName()` wraps its
+  `sprintf` as a second line of defence.
+- **`StarterAbilityRangeService`** — `app:country:bootstrap` step 3, lifted out so the admin
+  button and the command cannot drift. It also forced a fix on the Starter config screen: that
+  form's grid is built from countries that already have `League` rows, and its save wrote the
+  whole `league_ability_ranges` column, so **every unrendered country's band was being deleted
+  on any save** — including the one this button exists to create. The save now merges.
 
 **Sixth Messenger transport, `enrichment`.** Its own queue for the reason every transport
 below `async` has its own: an "enrich all remaining" sweep queues one message per town —

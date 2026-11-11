@@ -25,13 +25,22 @@ use Doctrine\DBAL\Connection;
  */
 final class LocationDashboardService
 {
+    /**
+     * Country-level fields an enrichment pass can fill.
+     *
+     * The eight nullable columns on country_profile, and nothing else: `name`,
+     * `default_locale` and `distance_unit` are NOT NULL with values from the seeder, so
+     * counting them would make every country look partly done before anything had run.
+     */
+    public const PROFILE_FIELDS = 8;
+
     public function __construct(private readonly Connection $connection) {}
 
     /**
      * Every country profile, with its towns, enrichment split and sellable count.
      *
      * @return array<string, array{code: string, name: string, status: string, total: int,
-     *     counts: array<string, int>, sellable: int}>
+     *     counts: array<string, int>, sellable: int, profileSet: int, profileTotal: int}>
      */
     public function countryRows(): array
     {
@@ -47,10 +56,26 @@ final class LocationDashboardService
                     -- ever drift, this screen and the gate that opens a country disagree.
                     COUNT(l.id) FILTER (
                         WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL AND l.land_pence IS NOT NULL
-                    ) AS sellable
+                    ) AS sellable,
+                    -- How much of the COUNTRY's own row is filled in. Counted here rather
+                    -- than in Twig because the bbox and the land band are what every town
+                    -- answer in this country is validated against, so a progress figure that
+                    -- left them out would be incomplete -- and a second count elsewhere would
+                    -- be the copy that drifts, which is why the status breakdown above moved
+                    -- into this service in the first place.
+                    (
+                        (c.bbox IS NOT NULL)::int + (c.land_pence_min IS NOT NULL)::int
+                      + (c.land_pence_max IS NOT NULL)::int + (c.iso_alpha3 IS NOT NULL)::int
+                      + (c.continent IS NOT NULL)::int + (c.default_timezone IS NOT NULL)::int
+                      + (c.currency_code IS NOT NULL)::int + (c.land_price_currency_code IS NOT NULL)::int
+                    ) AS profile_set
                FROM country_profile c
                LEFT JOIN location l ON l.country_code = c.code AND l.status = 'active'
-              GROUP BY c.code, c.name, c.status
+              -- GROUPED BY THE PRIMARY KEY ALONE, not by every column selected from it.
+              -- Postgres resolves the rest by functional dependency on country_profile.code,
+              -- and it has to: `bbox` is json, which has no equality operator, so naming it
+              -- in GROUP BY is an outright error rather than merely redundant.
+              GROUP BY c.code
               ORDER BY c.name",
         );
 
@@ -63,6 +88,10 @@ final class LocationDashboardService
                 'status'   => (string) $row['status'],
                 'total'    => (int) $row['total'],
                 'sellable' => (int) $row['sellable'],
+                // Out of PROFILE_FIELDS. A country at full marks needs no attention; anything
+                // less is how many facts its towns are NOT being validated against.
+                'profileSet'   => (int) $row['profile_set'],
+                'profileTotal' => self::PROFILE_FIELDS,
                 'counts'   => [
                     'pending'      => (int) $row['pending'],
                     'queued'       => (int) $row['queued'],

@@ -9,7 +9,7 @@ use App\Enum\Location\EnrichmentStatus;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\LocationRepository;
 use App\Repository\StarterConfigRepository;
-use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\CountryContent\CountryNamingContentProvider;
 use Doctrine\DBAL\Connection;
 
 /**
@@ -19,8 +19,8 @@ use Doctrine\DBAL\Connection;
  * go live". Nothing new is invented to express that: the league pyramid
  * (LeagueService::generateLeaguesForCountry(), eight tiers), the per-country ability ranges
  * (StarterConfig::$leagueAbilityRanges) and the club-naming content
- * (CountryContentRegistry::missingCategories()) all already exist. This service only reads
- * them, adds the location and enrichment checks, and returns a single verdict.
+ * (CountryNamingContentProvider::missingCategories()) all already exist. This service only
+ * reads them, adds the location and enrichment checks, and returns a single verdict.
  *
  * Enforced everywhere a country can reach LIVE, so a half-built one cannot leak out. All
  * three write paths go through CountryGoLiveService rather than setting the status directly:
@@ -33,10 +33,15 @@ use Doctrine\DBAL\Connection;
  * Plus the read side: GET /api/locations only returns locations of LIVE countries, and
  * app:country:check prints the verdict without changing anything.
  *
- * NOTE ON `places`: CountryContentRegistry::missingCategories() still reports a `places`
- * category, but place data now lives in the `location` table, so that one entry is dropped
- * here and replaced by the real location checks below. The registry's other categories
- * (suffixes, stadium formats) are still authored in PHP and still count.
+ * NOTE ON `places`: place data lives in the `location` table and is covered by the location
+ * checks below, so the content check never asks about it —
+ * CountryNamingContentProvider::missingCategories() answers about the three naming categories
+ * only. (CountryContentRegistry's own static of that name still reports `places`; it answers
+ * a different question, about what is authored in PHP, and its tests assert exactly that.)
+ *
+ * THE CONTENT CHECK IS NO LONGER A DEPLOY-SHAPED BLOCKER. Suffixes and stadium formats can be
+ * authored from the locations dashboard and stored on country_profile, with the PHP consts as
+ * the fallback — which is why this reads the provider rather than the registry.
  *
  * WHAT THIS DOES AND DOES NOT DECIDE. It answers "is the data ready", not "has an operator
  * chosen to open this country" — passing every check does not make a country live, it only
@@ -61,14 +66,15 @@ final class CountryReadinessService
      */
     public const MAX_LEAGUE_TIERS = 8;
 
-    /** Registry category that is now satisfied by the `location` table, not by PHP. */
-    private const DB_BACKED_CATEGORY = 'places';
-
     public function __construct(
         private readonly LeagueRepository        $leagueRepository,
         private readonly LocationRepository      $locationRepository,
         private readonly StarterConfigRepository $starterConfigRepository,
         private readonly Connection              $connection,
+        // Appended rather than slotted in beside the other content dependency: several tests
+        // build this service positionally, and inserting an argument mid-list breaks every one
+        // of them for no gain.
+        private readonly CountryNamingContentProvider $namingContent,
     ) {}
 
     /**
@@ -165,18 +171,19 @@ final class CountryReadinessService
             ];
         }
 
-        // `places` is excluded: it moved to the `location` table. See the class docblock.
-        $missing = array_values(array_filter(
-            CountryContentRegistry::missingCategories($country),
-            static fn (string $category): bool => $category !== self::DB_BACKED_CATEGORY,
-        ));
+        // The provider's answer, not the registry's: it never reports `places`, and it counts
+        // an admin override as authored.
+        $missing = $this->namingContent->missingCategories($country);
 
         return [
             'key'    => 'content',
             'ok'     => $missing === [],
             'detail' => $missing === []
                 ? 'club-naming content authored'
-                : 'missing from CountryContentRegistry: ' . implode(', ', $missing),
+                // NAMES WHERE TO FIX IT, which is the whole point of the change. This used to
+                // read "missing from CountryContentRegistry", pointing an operator at a PHP
+                // file they could not edit and a deploy they could not make.
+                : 'no club-naming content: ' . implode(', ', $missing) . ' — set it on this screen',
         ];
     }
 

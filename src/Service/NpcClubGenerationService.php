@@ -51,6 +51,9 @@ class NpcClubGenerationService
      */
     private const ANCHOR_TOWNS = 5;
 
+    /** Used when a country has no formats of its own, and when a stored one will not run. */
+    private const FALLBACK_STADIUM_FORMATS = ['%s Stadium', '%s Ground', 'The %s Arena'];
+
     private const TRAINING_SLUGS = ['training_pitch', 'strength_suite'];
     private const STANDS_SLUGS   = ['north_stand', 'south_stand', 'east_stand', 'west_stand'];
 
@@ -63,6 +66,12 @@ class NpcClubGenerationService
         private readonly LocationCatalogueService    $locationCatalogue,
         private readonly CountryProfileRepository     $countryProfileRepository,
         private readonly \App\Service\Location\NpcClubPlotSeatingService $plotSeating,
+        // Suffixes and stadium formats now come from here, not from CountryContentRegistry
+        // directly: an operator can author them on the locations dashboard, and the PHP
+        // consts are the fallback. The registry is still read for allPlaceNames() and
+        // suffixLeadsName(), neither of which is admin-editable.
+        private readonly \App\Service\CountryContent\CountryNamingContentProvider $namingContent,
+        private readonly \Psr\Log\LoggerInterface $logger,
     ) {}
 
     /**
@@ -141,8 +150,8 @@ class NpcClubGenerationService
         }
 
         return array_merge(
-            CountryContentRegistry::prestigeSuffixes($country),
-            CountryContentRegistry::genericSuffixes($country),
+            $this->namingContent->prestigeSuffixes($country),
+            $this->namingContent->genericSuffixes($country),
         );
     }
 
@@ -169,8 +178,8 @@ class NpcClubGenerationService
         $countryEnum = Country::tryFrom($country);
         $placeData  = $this->locationCatalogue->placesForGenerationOrPlaceholder($country);
         $classifiedPlaces = $this->withBandStandings($this->classifyPlaces($placeData));
-        $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
-        $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
+        $prestigeSuffixes = ($countryEnum !== null ? $this->namingContent->prestigeSuffixes($countryEnum) : []) ?: ['FC'];
+        $genericSuffixes  = ($countryEnum !== null ? $this->namingContent->genericSuffixes($countryEnum) : []) ?: ['FC'];
         $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier($tier, $tierCount);
         $suffixLeads      = $countryEnum !== null && CountryContentRegistry::suffixLeadsName($countryEnum);
         $usedNames        = [];
@@ -528,8 +537,8 @@ class NpcClubGenerationService
         $countryEnum = Country::tryFrom($countryCode);
         $placeData = $this->locationCatalogue->placesForGenerationOrPlaceholder($countryCode);
         $classifiedPlaces = $this->classifyPlaces($placeData);
-        $prestigeSuffixes = ($countryEnum !== null ? CountryContentRegistry::prestigeSuffixes($countryEnum) : []) ?: ['FC'];
-        $genericSuffixes  = ($countryEnum !== null ? CountryContentRegistry::genericSuffixes($countryEnum) : []) ?: ['FC'];
+        $prestigeSuffixes = ($countryEnum !== null ? $this->namingContent->prestigeSuffixes($countryEnum) : []) ?: ['FC'];
+        $genericSuffixes  = ($countryEnum !== null ? $this->namingContent->genericSuffixes($countryEnum) : []) ?: ['FC'];
         $tierCount        = $this->tierCountFor($countryCode);
         $weights          = $this->gameConfigRepository->getConfig()->getNpcClubSizeWeightsForTier(max(1, min($tierCount, $tier)), $tierCount);
 
@@ -543,9 +552,25 @@ class NpcClubGenerationService
     public function generateStadiumName(string $place, string $country): string
     {
         $countryEnum = Country::tryFrom($country);
-        $formats = ($countryEnum !== null ? CountryContentRegistry::stadiumFormats($countryEnum) : []) ?: ['%s Stadium', '%s Ground', 'The %s Arena'];
+        $formats = ($countryEnum !== null ? $this->namingContent->stadiumFormats($countryEnum) : []) ?: self::FALLBACK_STADIUM_FORMATS;
         $format  = $formats[array_rand($formats)];
-        return sprintf($format, $place);
+
+        // WRAPPED, because a format is now operator-typed and sprintf() THROWS in PHP 8 on a
+        // malformed one. NamingContentValidator refuses a bad template at the form, but a value
+        // written by a direct SQL edit, an older build or a future CRUD field would still
+        // arrive here — and a fatal inside club generation is a long way from whatever stored
+        // it. Degrading to the generic name is the right failure: the club still exists.
+        try {
+            return sprintf($format, $place);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Unusable stadium format for {country}; fell back to the generic name.', [
+                'country' => $country,
+                'format'  => $format,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return sprintf(self::FALLBACK_STADIUM_FORMATS[0], $place);
+        }
     }
 
     /** @return array{0:int,1:int} */

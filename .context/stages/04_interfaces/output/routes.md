@@ -464,3 +464,27 @@ action could link to it, and the attempt to make a money-spending GET safe with 
 in the query string does not work — Symfony's `SameOriginCsrfTokenManager` issues
 double-submit tokens that cannot be validated from a URL parameter. The row action now
 links to the enrichment screen, which carries the button.
+
+**A fourth trigger, `admin_country_profile_enrich` (POST), fills in the COUNTRY's own row** —
+`bbox`, the land band and the reference codes — from the PROGRESS BY COUNTRY table's new
+PROFILE column. It is the one AI trigger here that is **synchronous**: a dozen short scalars
+is not a 300-town pull, so there is no queue, no handler and no poll, and the flash names
+every field written and refused while the operator is still looking at the country. Fill-gaps
+only unless `overwrite` is set, because `country_profile` has no per-field lock columns.
+Recorded as one complete `location_enrichment_run` under the new
+`EnrichmentTrigger::ADMIN_COUNTRY_PROFILE`; **no attempt row**, so its tokens do not reach the
+screen's 30-day usage figure — the same gap the two town-suggestion triggers have.
+
+**The locations dashboard gained four POST actions, all per-country CSRF** (`..._{CODE}`, the
+`admin_locations_go_live` precedent):
+
+| Route | What it does |
+|---|---|
+| `admin_locations_seed_ability_ranges` | Writes `StarterConfig::$leagueAbilityRanges[<CODE>]` from the standard eight-tier defaults. Free, idempotent, generates nothing. Lifted out of `app:country:bootstrap` step 3 into `StarterAbilityRangeService` so the button and the command share it. |
+| `admin_locations_save_content` | Stores operator-authored `prestigeSuffixes` / `genericSuffixes` / `stadiumFormats` on `country_profile`. One token per line. |
+| `admin_locations_suggest_content` | One billed call asking the model for all three. Validated, then written; will not replace a list the operator authored unless `overwrite` is set. |
+| `admin_locations_clear_content` | Back to the built-in PHP lists. |
+
+Both blockers they clear used to name something the operator could not reach — a console
+command and a 2,364-line PHP file — and the readiness panel's rows now carry the action in
+their fourth grid cell (`SEED DEFAULTS`, `AUTHOR CONTENT`).

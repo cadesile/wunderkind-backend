@@ -128,6 +128,59 @@ clients keep receiving the old `region`/`citySize` until that country is rebuilt
 (`app:worldpack:warm <CODE>`). Rebuilding on every enriched row would regenerate a country
 hundreds of times during a sweep.
 
+## 3b. The country's own data comes first
+
+Everything in §4 below is checked against two things the country row holds: its **bounding
+box** and its **land price band**. Until this feature existed, nothing populated either of
+them — `app:locations:seed` writes only the code, the name and the locale, and the only other
+writers were the country's own admin form and a JSON import. So a country nobody had
+hand-typed a bounding box for ran its entire sweep on the weaker global checks, which cannot
+tell Birmingham, England from Birmingham, Alabama.
+
+**Locations & land → Enrichment → PROGRESS BY COUNTRY** now carries a **PROFILE** column
+reading `n/8`. Click the number to ask the model for the rest:
+
+```bash
+# the same thing, from the CLI
+lando php bin/console app:locations:enrich-country PL --dry-run
+lando php bin/console app:locations:enrich-country PL
+```
+
+The eight are `bbox`, `land_pence_min`, `land_pence_max`, `iso_alpha3`, `continent`,
+`default_timezone`, `currency_code` and `land_price_currency_code`. `distance_unit` is also
+offered, but only on an explicit overwrite — it is NOT NULL with a default, so every country
+already has one and there is no gap to fill.
+
+**One billed call per country, and it is synchronous.** A dozen short scalars is not a town
+pull: there is no queue, no consumer and no progress poll, and the flash names every field
+written and every field refused while you are still looking at the country. The reply is
+asked for at `effort: low` with a 30s ceiling, well under the 60s an nginx in front of this
+will wait.
+
+**Fill gaps only, unless you tick overwrite.** `country_profile` has no per-field lock columns
+the way `location` does, so this is how "a re-run never undoes a hand correction" is kept: a
+field that already holds a value is skipped and reported as skipped — not as a rejection, and
+not as a write.
+
+### What the box is checked against
+
+Nothing it returns is trusted here either, and one check is worth naming because it gets
+better the more of a country is enriched: **a proposed box that excludes towns already
+placed in that country is refused outright**, and the rejection names the extent those towns
+actually span so you can widen the box by hand. Those coordinates have already been through
+§4 and a review pass; a box that would start rejecting them is provably wrong rather than
+merely suspicious.
+
+The rest: the box must be complete, the right way round, inside ±90/±180, not collapsed to a
+point and not bigger than the planet; the land band must have both ends, be the right way
+round, and sit inside the global `LAND_PENCE_MIN`/`MAX` backstop; the time zone must be a real
+IANA identifier (`Europe/Wales` passes any regex anyone would write and throws the first time
+a `DateTimeZone` is built from it); the continent must be one of the seven; and the three
+codes must be three letters.
+
+**The land band is asked for in POUNDS and multiplied by 100**, for the same reason §3 gives
+for a town's valuation.
+
 ## 4. Nothing it returns is trusted
 
 `EnrichmentValidator` decides, **per field**, never per response:
@@ -262,6 +315,9 @@ lando php bin/console app:plots:refresh-estimates            # stadium prices
 
 ```
 app:locations:seed EN                              # the 865 curated towns + plots
+app:locations:enrich-country EN                    # the country's own box and band FIRST —
+                                                   #   it is what every town answer below is
+                                                   #   validated against
 app:locations:import-names EN --dry-run            # preview the bare names
 app:locations:import-names EN --with-plots         # the rest of the catalogue, unpriced
 app:locations:enrich EN --limit=3 --sync           # iterate the prompt on three rows

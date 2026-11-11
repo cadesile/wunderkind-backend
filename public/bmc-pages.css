@@ -172,10 +172,19 @@
 .bmc-picklist { position: relative; max-height: 440px; overflow-y: auto; display: flex; flex-direction: column; background: var(--wk-surface-people-inset); border: 2px solid var(--wk-stroke); }
 .bmc-pick-head { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 16px minmax(0,1fr) auto auto; gap: 10px; align-items: center; min-height: 34px; padding: 0 12px; background: var(--wk-panel); border-bottom: 2px solid var(--wk-stroke); text-align: left; }
 .bmc-pick-head__label { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bmc-pick-row { display: grid; grid-template-columns: 16px 46px minmax(0,1fr) 60px 88px; gap: 10px; align-items: center; min-height: 36px; padding: 2px 12px; border-bottom: 1px solid var(--wk-stroke); text-align: left; }
+.bmc-pick-row { display: grid; grid-template-columns: 16px 46px minmax(0,1fr) 60px 88px; gap: 10px; align-items: center; min-height: 36px; padding: 2px 12px 2px 9px; border-left: 3px solid transparent; border-bottom: 1px solid var(--wk-stroke); text-align: left; cursor: pointer; }
 .bmc-pick-row:nth-child(even) { background: rgba(0,0,0,.15); }
-.bmc-pick-row[aria-checked="true"] { background: var(--wk-pressed); }
+/* A SELECTED ROW NEEDS MORE THAN --wk-pressed. #2a1e38 against the picklist's own
+   #2b254e is a few points of hue apart, so a picked row was all but indistinguishable
+   from an unpicked one — reported from the worldpack cache screen. Same treatment as
+   .bmc-palette__row[aria-selected]: an accent bar down the left edge.
+   The 3px border is on the base rule as `transparent` and taken out of the left padding,
+   so selecting a row cannot shift its columns. */
+.bmc-pick-row[aria-checked="true"] { background: var(--wk-pressed); border-left-color: var(--wk-accent); }
 .bmc-pick-head:active, .bmc-pick-row:active { background: var(--wk-pressed); }
+/* Focusable rather than `hidden`: display:none cannot take focus, so the picker was
+   mouse-only. Same arrangement as .bmc-check's input — off-screen but alive. */
+.bmc-pick-row input[type="checkbox"] { position: absolute; opacity: 0; pointer-events: none; }
 /* INLINE, NOT A FLEX BOX. This was `display: flex` with a fixed 22px height, which was
    right for the one place it started life — a chip alone in a table cell — and wrong
    everywhere it has since been used, which is inside prose. display:flex makes an inline
@@ -269,6 +278,21 @@
 .bmc-textbox.is-invalid { border-color: var(--wk-danger); }
 .bmc-textbox:focus-within { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
 .bmc-breakall { word-break: break-all; }
+
+/* ── text area ────────────────────────────────────────────────
+   .bmc-textbox's box at multi-line height. Added when country naming content needed three
+   multi-line fields on one card: game_config.html.twig and facilities_content.html.twig both
+   style their textareas with bare inline rules, and three more copies of that is the point at
+   which it stops being right. Same 2px stroke, same focus ring, same .is-changed /
+   .is-invalid states, so the form layer marks it exactly as it marks a number. */
+.bmc-textarea { display: block; width: 100%; padding: 8px; box-sizing: border-box; background: var(--wk-panel); border: 2px solid var(--wk-stroke); }
+.bmc-textarea textarea,
+textarea.bmc-textarea { all: unset; display: block; width: 100%; min-width: 0; font: var(--text-data); font-family: var(--font-data), monospace; color: var(--wk-text); resize: vertical; white-space: pre; overflow: auto; }
+textarea.bmc-textarea { padding: 8px; box-sizing: border-box; background: var(--wk-panel); border: 2px solid var(--wk-stroke); }
+.bmc-textarea::placeholder, .bmc-textarea textarea::placeholder { color: var(--wk-text-faint); opacity: 1; }
+.bmc-textarea.is-changed { border-color: var(--wk-info-light); }
+.bmc-textarea.is-invalid { border-color: var(--wk-danger); }
+.bmc-textarea:focus-within, textarea.bmc-textarea:focus { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
 
 /* ── log view ─────────────────────────────────────────────────
    Deliberately NOT on the design tokens. Log output is read as a terminal, and the level

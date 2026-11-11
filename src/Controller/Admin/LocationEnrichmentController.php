@@ -8,11 +8,15 @@ use App\Entity\Admin;
 use App\Enum\Country;
 use App\Enum\Location\EnrichmentStatus;
 use App\Enum\Location\EnrichmentTrigger;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\Location\LocationEnrichmentAttemptRepository;
 use App\Repository\Location\LocationEnrichmentRunRepository;
 use App\Repository\Location\LocationRepository;
 use App\Repository\Location\TownSuggestionBatchRepository;
 use App\Service\Location\Enrichment\EnrichmentSweepInProgressException;
+use App\Service\Location\CountryEnrichment\CountryEnrichmentUnavailableException;
+use App\Service\Location\CountryEnrichment\CountryProfileEnrichmentService;
+use App\Service\Location\CountryEnrichment\ValidatedCountryProfile;
 use App\Service\Location\Enrichment\LocationEnricherInterface;
 use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
@@ -62,6 +66,8 @@ class LocationEnrichmentController extends AbstractController
         private readonly TownSuggestionBatchRepository       $batchRepository,
         private readonly MessageBusInterface                 $messageBus,
         private readonly CacheInterface                      $cache,
+        private readonly CountryProfileEnrichmentService     $countryEnrichment,
+        private readonly CountryProfileRepository            $countryProfileRepository,
     ) {}
 
     /**
@@ -159,6 +165,11 @@ class LocationEnrichmentController extends AbstractController
             'suggestionRun'        => $this->latestSuggestionRunPayload($country),
             // Rendered into the form rather than hardcoded in Twig, so the card and the service
             // cannot drift on what a batch is or what the cap is.
+            // The PROFILE column's switch, read from the query string the same way `country`
+            // is — it has to survive the redirect every row button causes, and a checkbox
+            // inside twenty-five row forms would not.
+            'countryOverwrite'     => $this->countryOverwriteRequested($request),
+            'profileTotal'         => LocationDashboardService::PROFILE_FIELDS,
             'batchSize'            => TownSuggestionService::BATCH_SIZE,
             'defaultMax'           => TownSuggestionService::DEFAULT_MAX,
             'hardMax'              => TownSuggestionService::HARD_MAX,
@@ -300,6 +311,94 @@ class LocationEnrichmentController extends AbstractController
         }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_location_enrichment']));
+    }
+
+    /**
+     * Fill in one COUNTRY's own facts: its bounding box, land band and reference metadata.
+     *
+     * WHY THIS BUTTON EXISTS AT ALL. Every sweep on this page is validated against
+     * CountryProfile::$bbox and the country's land band — they are what catch a town placed
+     * in the wrong country and a valuation out by three orders of magnitude. Nothing
+     * populated them: the seeder leaves them null by design, and the only writers were the
+     * country's own CRUD form and the JSON importer. So a country nobody had hand-typed a
+     * bounding box for ran its whole sweep on the weaker global checks.
+     *
+     * SYNCHRONOUS, unlike every other trigger here. One call, a dozen short scalars — see
+     * CountryProfileEnrichmentService for why a queue would cost more than it bought.
+     *
+     * POST-only and CSRF-guarded like the rest, because it spends money.
+     */
+    #[Route('/admin/locations/enrichment/country', name: 'admin_country_profile_enrich', methods: ['POST'])]
+    public function enrichCountryProfile(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('country_profile_enrich', (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token — nothing was asked for.');
+
+            return $this->backToScreen();
+        }
+
+        $code    = $this->normalisedCountry($request->request->get('country'));
+        $profile = $code === null ? null : $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('warning', sprintf('No country profile for %s — nothing was asked for.', $code ?? '(none given)'));
+
+            return $this->backToScreen();
+        }
+
+        $overwrite = $request->request->getBoolean('overwrite');
+
+        try {
+            $verdict = $this->countryEnrichment->enrich($profile, $overwrite, $this->currentAdmin());
+        } catch (CountryEnrichmentUnavailableException $e) {
+            // "Could not ask" is its own outcome and must not read like "asked, got nonsense":
+            // the country row is untouched either way, but only one of them is the operator's
+            // configuration to fix.
+            $this->addFlash('danger', $e->getMessage());
+
+            return $this->backToScreen($overwrite);
+        }
+
+        $this->addFlash(
+            $verdict->hasAnything() ? 'success' : 'warning',
+            $this->describeVerdict($profile->getName(), $verdict),
+        );
+
+        // Said separately so a refusal cannot be lost at the end of a success line. Each one
+        // names the field AND the reason, because "rejected" alone leaves an operator with
+        // nothing to do about it.
+        foreach ($verdict->rejected as $field => $why) {
+            $this->addFlash('warning', sprintf('%s was refused: %s', $field, $why));
+        }
+
+        return $this->backToScreen($overwrite);
+    }
+
+    /** One line saying what landed, what was left alone, and how many were refused. */
+    private function describeVerdict(string $countryName, ValidatedCountryProfile $verdict): string
+    {
+        if (!$verdict->hasAnything() && $verdict->rejected === [] && $verdict->skipped !== []) {
+            return sprintf(
+                '%s already had every field the model offered. Tick "overwrite" to replace them.',
+                $countryName,
+            );
+        }
+
+        if (!$verdict->hasAnything()) {
+            return sprintf('Nothing was stored for %s — see below.', $countryName);
+        }
+
+        $parts = [sprintf('Wrote %s for %s', implode(', ', array_keys($verdict->accepted)), $countryName)];
+
+        if ($verdict->skipped !== []) {
+            $parts[] = sprintf('left %s alone (already set)', implode(', ', $verdict->skipped));
+        }
+
+        if ($verdict->rejected !== []) {
+            $parts[] = sprintf('refused %d', count($verdict->rejected));
+        }
+
+        return implode('; ', $parts) . '.';
     }
 
     private function currentAdmin(): ?Admin
@@ -777,6 +876,24 @@ class LocationEnrichmentController extends AbstractController
     }
 
     /** Country code normalised for the export scope, or null for "everything". */
+    /**
+     * Whether the PROFILE column should overwrite values a country already has.
+     *
+     * Read from both places for the reason the country and location params are: EasyAdmin
+     * FORWARDS to this route, so a routeParams value arrives as a request attribute and never
+     * reaches $request->query.
+     */
+    private function countryOverwriteRequested(Request $request): bool
+    {
+        if ($request->query->has('overwrite')) {
+            return $request->query->getBoolean('overwrite');
+        }
+
+        $nested = $request->query->all('routeParams');
+
+        return isset($nested['overwrite']) && (string) $nested['overwrite'] === '1';
+    }
+
     private function normalisedCountry(mixed $raw): ?string
     {
         $code = strtoupper(trim((string) $raw));
@@ -790,8 +907,17 @@ class LocationEnrichmentController extends AbstractController
      * Via generateUrl('admin', ...) and NOT redirectToRoute(), per src/Controller/Admin/CLAUDE.md
      * — EasyAdmin needs the dashboard route or the redirect dies on an "i18n on null" Twig error.
      */
-    private function backToScreen(): Response
+    private function backToScreen(bool $keepOverwrite = false): Response
     {
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_location_enrichment']));
+        $params = ['routeName' => 'admin_location_enrichment'];
+
+        // Carried back only by the country action, so a twenty-five-country pass does not make
+        // the operator re-arm the switch between every row — while every other trigger still
+        // lands on a screen whose overwrite reads OFF, which is what it should default to.
+        if ($keepOverwrite) {
+            $params['routeParams'] = ['overwrite' => 1];
+        }
+
+        return $this->redirect($this->generateUrl('admin', $params));
     }
 }

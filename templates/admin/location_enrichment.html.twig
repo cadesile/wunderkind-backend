@@ -255,6 +255,23 @@
         </form>
     </div>
 
+    {# The country column's own switch. A GET with ?overwrite=1 rather than a field inside each
+       row's form, because there is one of these and twenty-five of those — and the choice has
+       to survive the page reload that every row button causes. #}
+    <div class="bmc-card__band" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="bmc-lbl bmc-lbl--ink">PROFILE</span>
+        <span class="bmc-data">
+            The country's own bounding box, land price band and reference codes — what
+            <strong>every town answer in that country is validated against</strong>. The number
+            in the column is how many of the {{ profileTotal }} are filled in; click it to ask
+            the model for the rest. One billed call per country.
+        </span>
+        <span style="flex:1"></span>
+        <a class="bmc-btn {{ countryOverwrite ? 'bmc-btn--yellow' : '' }}"
+           href="{{ path('admin', {routeName: 'admin_location_enrichment', routeParams: {overwrite: countryOverwrite ? 0 : 1}}) }}"
+           title="Off by default, so a re-run can never undo a value you set by hand."><span>OVERWRITE: {{ countryOverwrite ? 'ON' : 'OFF' }}</span></a>
+    </div>
+
     {% if countries is empty %}
         <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
             <span class="bmc-empty-note">NO COUNTRIES SEEDED YET</span>
@@ -280,6 +297,7 @@
                     <th class="is-right">REVIEW</th>
                     <th class="is-right">FAILED</th>
                     <th>STATUS</th>
+                    <th class="is-right">PROFILE</th>
                     <th class="is-right">SWEEP</th>
                 </tr></thead>
                 <tbody>
@@ -294,6 +312,26 @@
                         <td class="is-right">{{ row.counts.needs_review > 0 ? '<span class="bmc-badge bmc-badge--warning">' ~ row.counts.needs_review ~ '</span>'|raw : '—' }}</td>
                         <td class="is-right">{{ row.counts.failed > 0 ? '<span class="bmc-badge bmc-badge--danger">' ~ row.counts.failed ~ '</span>'|raw : '—' }}</td>
                         <td><span class="bmc-badge bmc-badge--subtle">{{ row.status }}</span></td>
+                        {# The country's OWN row, not its towns. The bounding box and the land
+                           band here are what every town answer in this country is checked
+                           against, so a country sitting at 0/8 is sweeping on the weak global
+                           checks — which is invisible unless it is said out loud. #}
+                        <td class="is-right">
+                            {% if row.profileSet == row.profileTotal %}
+                                <span class="bmc-badge bmc-badge--positive">{{ row.profileSet }}/{{ row.profileTotal }}</span>
+                            {% else %}
+                                <form method="post" action="{{ path('admin', {routeName: 'admin_country_profile_enrich'}) }}" style="display:inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('country_profile_enrich') }}">
+                                    <input type="hidden" name="country" value="{{ row.code }}">
+                                    <input type="hidden" name="overwrite" value="{{ countryOverwrite ? 1 : 0 }}">
+                                    <button type="submit" class="bmc-btn bmc-btn--orange" {{ connection.ok ? '' : 'disabled' }}
+                                            title="Ask the model for {{ row.name }}'s bounding box, land band and reference data"
+                                            data-bmc-dialog-title="ASK ABOUT {{ row.name|upper }}?"
+                                            data-bmc-dialog-message="One billed API call for this country's own data — its bounding box, land price band and reference codes. Towns are not touched."
+                                            data-bmc-dialog-confirm="ASK" data-bmc-dialog-variant="yellow"><span>{{ row.profileSet }}/{{ row.profileTotal }}</span></button>
+                                </form>
+                            {% endif %}
+                        </td>
                         <td class="is-right">
                             {% if due > 0 %}
                                 <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_sweep'}) }}" style="display:inline">

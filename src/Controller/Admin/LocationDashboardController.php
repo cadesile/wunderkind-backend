@@ -13,6 +13,10 @@ use App\Service\Location\CountryReadinessService;
 use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\LocationCapacityService;
 use App\Service\Location\LocationDashboardService;
+use App\Service\CountryContent\CountryNamingContentProvider;
+use App\Service\CountryContent\NamingContentService;
+use App\Service\CountryContent\Suggestion\NamingContentUnavailableException;
+use App\Service\StarterAbilityRangeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -44,6 +48,9 @@ class LocationDashboardController extends AbstractController
         private readonly LandPlotProvisioner $provisioner,
         private readonly LocationCapacityService $capacityService,
         private readonly LocationConfigRepository $locationConfigRepository,
+        private readonly StarterAbilityRangeService $abilityRangeService,
+        private readonly CountryNamingContentProvider $namingContent,
+        private readonly NamingContentService $namingContentService,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -68,6 +75,19 @@ class LocationDashboardController extends AbstractController
             'verdict'      => $verdict,
             'topTowns'     => $selected === null ? [] : $this->topTowns($selected),
             'minSellable'  => CountryReadinessService::MIN_SELLABLE_LOCATIONS,
+            // The CONTENT card's state: each category's effective values and where they came
+            // from, so the form can say whether you are editing the built-in list or your own.
+            'namingContent' => $this->namingContentFor($selected),
+            // isConfigured(), not a live connection check: this screen makes no provider call
+            // today and must not start making one on every page load.
+            'namingAiReady' => $this->namingContentService->suggesterIsConfigured(),
+            'namingLimits'  => [
+                'minSuffixes' => \App\Service\CountryContent\NamingContentValidator::MIN_SUFFIXES,
+                'minFormats'  => \App\Service\CountryContent\NamingContentValidator::MIN_STADIUM_FORMATS,
+                'prestige'    => \App\Service\CountryContent\NamingContentValidator::SUGGESTED_PRESTIGE,
+                'generic'     => \App\Service\CountryContent\NamingContentValidator::SUGGESTED_GENERIC,
+                'formats'     => \App\Service\CountryContent\NamingContentValidator::SUGGESTED_FORMATS,
+            ],
             'bmcGroup'     => 'Locations & land',
             'bmcTitle'     => 'Locations',
         ]);
@@ -105,6 +125,49 @@ class LocationDashboardController extends AbstractController
 
         $result = $this->goLiveService->goLive($profile);
         $this->addFlash($result['ok'] ? 'success' : 'danger', $result['message']);
+
+        return $this->backToScreen($code);
+    }
+
+    /**
+     * Give this country the standard eight-tier player ability band.
+     *
+     * THE BLOCKER USED TO NAME A SHELL COMMAND. "no StarterConfig::$leagueAbilityRanges entry
+     * — app:country:bootstrap seeds it" is an admin panel telling an operator to go and find a
+     * terminal, for nine lines of work that cost nothing and change no rows but one JSON
+     * column. This is that step of the bootstrap, and nothing else of it.
+     *
+     * NOT REACHABLE FROM THE STARTER CONFIG SCREEN, which is why it has to live here. That
+     * screen's grid is built from countries that already have League rows, so a country with
+     * no pyramid yet — the state this blocker describes — has no row to type into.
+     *
+     * CSRF is per country, for the same reason goLive()'s is.
+     */
+    #[Route('/admin/locations/dashboard/ability-ranges', name: 'admin_locations_seed_ability_ranges', methods: ['POST'])]
+    public function seedAbilityRanges(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_ability_ranges_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen($code);
+        }
+
+        if ($this->countryProfileRepository->findByCode($code) === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        $seeded = $this->abilityRangeService->seedDefaults($code);
+
+        $this->addFlash(
+            $seeded ? 'success' : 'info',
+            $seeded
+                ? sprintf('Seeded the standard eight-tier ability band for %s.', $code)
+                : sprintf('%s already has an ability band — nothing was changed.', $code),
+        );
 
         return $this->backToScreen($code);
     }
@@ -155,6 +218,180 @@ class LocationDashboardController extends AbstractController
         );
 
         return $this->backToScreen($code);
+    }
+
+    /**
+     * Author this country's club-naming content.
+     *
+     * THE BLOCKER THIS CLEARS USED TO NEED A DEPLOY. "missing from CountryContentRegistry"
+     * pointed an operator at a 2,364-line PHP file; forty-six of the seventy-one Country cases
+     * are in that state, so it is the normal condition of a new country rather than an edge.
+     *
+     * Validated hard before anything is stored — one of these lists is fed to sprintf(), and a
+     * stray percent sign typed here would otherwise become a fatal inside club generation, a
+     * long way from this form.
+     */
+    #[Route('/admin/locations/dashboard/content', name: 'admin_locations_save_content', methods: ['POST'])]
+    public function saveContent(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_content_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen($code);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        $input = [];
+
+        foreach (CountryNamingContentProvider::CATEGORIES as $category) {
+            $input[$category] = NamingContentService::splitLines((string) $request->request->get($category, ''));
+        }
+
+        $verdict = $this->namingContentService->save($profile, $input);
+
+        if ($verdict->isEmpty() && !$verdict->hasRejections()) {
+            $this->addFlash('info', sprintf('Nothing changed for %s.', $profile->getName()));
+        } elseif (!$verdict->isEmpty()) {
+            $this->addFlash('success', sprintf(
+                'Saved %s for %s.',
+                implode(', ', array_keys($verdict->accepted)),
+                $profile->getName(),
+            ));
+        }
+
+        // Each refusal names its category AND its reason. "Rejected" on its own leaves an
+        // operator with nothing to do about it, and this is a form they are standing in front
+        // of — the reason is the whole value.
+        foreach ($verdict->rejected as $category => $why) {
+            $this->addFlash('warning', sprintf('%s was not saved: %s', $category, $why));
+        }
+
+        foreach ($verdict->flatNotes() as $note) {
+            $this->addFlash('info', $note);
+        }
+
+        return $this->backToScreen($code);
+    }
+
+    /**
+     * Ask the model for this country's naming content.
+     *
+     * One billed call. POST-only and CSRF-guarded like every other spending trigger in this
+     * codebase, and for the same reason: a crawler or a browser prefetch must not be able to
+     * spend money.
+     */
+    #[Route('/admin/locations/dashboard/content/suggest', name: 'admin_locations_suggest_content', methods: ['POST'])]
+    public function suggestContent(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_suggest_content_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token — nothing was asked for.');
+
+            return $this->backToScreen($code);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        try {
+            $result = $this->namingContentService->suggest($profile, $request->request->getBoolean('overwrite'));
+        } catch (NamingContentUnavailableException $e) {
+            // "Could not ask" is the operator's configuration to fix, and must not read like
+            // "asked, got something unusable" — which is reported per category below.
+            $this->addFlash('danger', $e->getMessage());
+
+            return $this->backToScreen($code);
+        }
+
+        /** @var \App\Service\CountryContent\ValidatedNamingContent $verdict */
+        $verdict = $result['verdict'];
+
+        // Accepted MINUS skipped: a category the validator was happy with but the overwrite
+        // guard held back was not written, and saying it was would be a lie the operator
+        // could only catch by reading the fields.
+        $written = array_values(array_diff(array_keys($verdict->accepted), $result['skipped']));
+
+        if ($written !== []) {
+            $this->addFlash('success', sprintf(
+                'Wrote %s for %s. Read them over before going live.',
+                implode(', ', $written),
+                $profile->getName(),
+            ));
+        }
+
+        if ($result['skipped'] !== []) {
+            $this->addFlash('info', sprintf(
+                'Left %s alone — you had already authored them. Tick overwrite to replace them.',
+                implode(', ', $result['skipped']),
+            ));
+        }
+
+        foreach ($verdict->rejected as $category => $why) {
+            $this->addFlash('warning', sprintf('%s was not usable: %s', $category, $why));
+        }
+
+        if ($written === [] && $verdict->rejected === [] && $result['skipped'] === []) {
+            $this->addFlash('warning', sprintf('The model offered nothing usable for %s.', $profile->getName()));
+        }
+
+        return $this->backToScreen($code);
+    }
+
+    /** Put a country back on the built-in PHP lists. */
+    #[Route('/admin/locations/dashboard/content/clear', name: 'admin_locations_clear_content', methods: ['POST'])]
+    public function clearContent(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_clear_content_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen($code);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        $this->namingContentService->clear($profile);
+        $this->addFlash('success', sprintf('%s is back on the built-in lists.', $profile->getName()));
+
+        return $this->backToScreen($code);
+    }
+
+    /**
+     * Each naming category's effective values and source, for the form.
+     *
+     * @return array<string, array{values: list<string>, source: string}>
+     */
+    private function namingContentFor(?string $code): array
+    {
+        $country = $code === null ? null : \App\Enum\Country::tryFrom($code);
+
+        if ($country === null) {
+            return [];
+        }
+
+        return $this->namingContent->describe($country);
     }
 
     /**
