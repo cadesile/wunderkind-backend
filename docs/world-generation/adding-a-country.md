@@ -13,7 +13,32 @@ If not — a genuinely new country (e.g. adding Poland as a real playable countr
 name pool) — add a new `case`, plus one `match` arm each in `label()`, `nationality()`,
 `locale()`. Leave `isGenerationCapable()` returning `false` for it until step 3 is done.
 
-## 2. Author the content in `CountryContentRegistry`
+## 2. Author the club-naming content
+
+**You no longer need a deploy for the three naming categories.** `prestigeSuffixes`,
+`genericSuffixes` and `stadiumFormats` can be authored from **Locations & land → Dashboard →
+CLUB-NAMING CONTENT**, stored per country on `country_profile`, with the PHP consts below as
+the fallback. That card is what the readiness panel's **AUTHOR CONTENT** button jumps to.
+
+- **One token per line** — not commas and not JSON. The shipped data contains `1. FC`,
+  `Città di` and `Estadio Municipal de %s`, so any separator that can appear inside a token is
+  a trap waiting on the first country that uses one.
+- **Stadium formats are `sprintf` templates**: exactly one `%s`, and no other percent sign
+  anywhere. A bad one is refused at the form rather than becoming a fatal inside club
+  generation later.
+- **SUGGEST WITH AI** asks the configured provider for all three lists in one billed call.
+  What comes back is validated and stored, and lands in the fields for you to read over —
+  these are culture rather than fact, and the model is better at some countries than others.
+  It will not replace a list you authored unless you tick the box.
+- **REVERT TO BUILT IN** drops your lists and goes back to the PHP consts.
+- Changing any of this affects **clubs generated from now on**. Names already given to clubs
+  are their own and never change, and clients keep the old stadium names until that country's
+  world pack is rebuilt (`app:worldpack:warm <CODE>`).
+
+Everything else in the registry — places, world region, suffix order, business cluster — is
+still PHP, and still needs the pass below.
+
+## 2a. Author the rest in `CountryContentRegistry`
 
 `src/Service/CountryContent/CountryContentRegistry.php` is the single file holding everything
 that used to be scattered across `NpcClubGenerationService`, `WorldRegion`, and
@@ -42,10 +67,12 @@ that used to be scattered across `NpcClubGenerationService`, `WorldRegion`, and
   fine to make this equal to the flat name list of what you put in `PLACE_NAMES_BY_COUNTRY` —
   `getRemainingPlaceNames()` then correctly returns `[]`.
 - **`PRESTIGE_SUFFIXES_BY_COUNTRY`** (~10) and **`GENERIC_SUFFIXES_BY_COUNTRY`** (~15-20) —
+  *(or author these in the admin, per §2 — the consts are the fallback)* —
   club-name suffix tokens reflecting real local football-club naming conventions. Prestige
   suffixes get used for BIG-city clubs, generic for SMALL (MEDIUM picks randomly between the
   two) — see `pickSuffixForCitySize()`. Names are composed as `"{place} {suffix}"`.
-- **`STADIUM_FORMATS_BY_COUNTRY`** (~4-6 `sprintf` templates, one `%s` placeholder) —
+- **`STADIUM_FORMATS_BY_COUNTRY`** (~4-6 `sprintf` templates, one `%s` placeholder)
+  *(or author these in the admin, per §2)* —
   reflecting local stadium-naming convention.
 - **`WORLD_REGIONS`** — map the country's code to the closest existing `WorldRegion` case
   (skin-tone distribution for appearance generation). Add a new `WorldRegion` case (with a
@@ -111,6 +138,18 @@ generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<
   already bootstrapped gives it a second full set of clubs.
 - `--enable-only` — promote to LIVE and do nothing else. This is the one to use on an
   already-bootstrapped country.
+
+### The ability-range step on its own, from the admin
+
+The seed-if-missing of `StarterConfig::leagueAbilityRanges[<CODE>]` is also a button:
+**Locations & land → Dashboard**, the READINESS panel's **ABILITY RANGES** row carries
+**SEED DEFAULTS** while that check is failing. Both go through
+`StarterAbilityRangeService::seedDefaults()`, so they cannot drift.
+
+It exists because the blocker used to name this command and nothing else — and the Starter
+config screen could not help either: its grid is built from countries that already have League
+rows, so a country with no pyramid yet has no row to type into. The button is free, writes no
+clubs, and does nothing to a country that already has a band.
 
 ## 5. Verify
 

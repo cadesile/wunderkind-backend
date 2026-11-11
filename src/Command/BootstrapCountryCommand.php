@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Entity\StarterConfig;
 use App\Enum\Country;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Service\Location\CountryGoLiveService;
-use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\CountryContent\CountryNamingContentProvider;
 use App\Service\LeagueService;
+use App\Service\StarterAbilityRangeService;
 use App\Service\NpcClubGenerationService;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -38,10 +37,10 @@ class BootstrapCountryCommand extends Command
         private readonly LeagueService              $leagueService,
         private readonly LeagueRepository           $leagueRepository,
         private readonly NpcClubGenerationService    $npcClubGenerationService,
-        private readonly StarterConfigRepository     $starterConfigRepository,
+        private readonly StarterAbilityRangeService  $abilityRangeService,
         private readonly CountryProfileRepository    $countryProfileRepository,
         private readonly CountryGoLiveService        $goLiveService,
-        private readonly EntityManagerInterface      $em,
+        private readonly CountryNamingContentProvider $namingContent,
     ) {
         parent::__construct();
     }
@@ -84,10 +83,20 @@ class BootstrapCountryCommand extends Command
             return Command::SUCCESS;
         }
 
-        $missing = CountryContentRegistry::missingCategories($country);
+        // THE NAMING CATEGORIES COME FROM THE PROVIDER, so a country whose content an operator
+        // authored on the locations dashboard is no longer refused here. `places` is still
+        // asked about directly: the provider does not answer for it, and a country with no
+        // curated towns still has nothing to generate clubs in. Bundling the two was what
+        // CountryContentRegistry::missingCategories() used to do; splitting them is the same
+        // refusal, said out loud.
+        $missing = $this->namingContent->missingCategories($country);
+
+        if (CountryContentRegistry::places($country) === null) {
+            array_unshift($missing, 'places');
+        }
         if ($missing !== [] && !$force) {
             $io->warning(sprintf(
-                "%s is missing club-generation content: %s.\nClubs will use generic placeholder names (e.g. \"Capital FC\"). Re-run with --force to proceed anyway, or author the content in CountryContentRegistry first.",
+                "%s is missing club-generation content: %s.\nClubs will use generic placeholder names (e.g. \"Capital FC\"). Re-run with --force to proceed anyway, or author the content on the locations dashboard first.",
                 $countryCode,
                 implode(', ', $missing),
             ));
@@ -122,12 +131,11 @@ class BootstrapCountryCommand extends Command
         }
 
         // ── 3. Starter ability-range defaults, if this country has none yet ──
-        $config = $this->starterConfigRepository->getConfig();
-        $ranges = $config->getLeagueAbilityRanges();
-        if (!isset($ranges[$countryCode])) {
-            $ranges[$countryCode] = StarterConfig::defaultTierRanges();
-            $config->setLeagueAbilityRanges($ranges);
-            $this->em->flush();
+        //
+        // MOVED TO StarterAbilityRangeService so the admin's "Seed defaults" button on the
+        // locations dashboard runs this exact code. The readiness blocker names this command
+        // by name, and an operator who cannot open a shell needed the same nine lines.
+        if ($this->abilityRangeService->seedDefaults($countryCode)) {
             $io->text("Seeded default tier ability ranges for {$countryCode} on StarterConfig.");
         }
 

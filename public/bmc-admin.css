@@ -29,7 +29,6 @@
 :where(.bmc-shell, .bmc-overlay) * { border-radius: 0; }
 .bmc-label { font: var(--text-label); letter-spacing: .5px; text-transform: uppercase; }
 .bmc-sr { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
-.bmc-selbox input:focus-visible + .bmc-tile { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
 .bmc-shell input::placeholder, .bmc-overlay input::placeholder { color: var(--wk-text-dim); opacity: 1; }
 
 /* ── shell ─────────────────────────────────────────────────────── */
@@ -108,11 +107,17 @@
 .bmc-check:active { background: var(--wk-pressed); }
 .bmc-check input { position: absolute; opacity: 0; pointer-events: none; }
 .bmc-tile { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--wk-panel); border: 2px solid var(--wk-stroke); font: 400 16px/1 var(--font-data); color: var(--wk-stroke); box-sizing: content-box; }
-.bmc-check input:checked + .bmc-tile, .bmc-selbox input:checked + .bmc-tile, .bmc-tile.is-on { background: var(--wk-accent); }
-.bmc-check input:checked + .bmc-tile::after, .bmc-selbox input:checked + .bmc-tile::after, .bmc-tile.is-on::after { content: "✓"; }
+/* NOT SCOPED TO A WRAPPER CLASS, and that is the fix for a real bug. These read
+   `.bmc-check input:checked + .bmc-tile, .bmc-selbox input:checked + .bmc-tile`, so a tile
+   only filled inside those two labels — and the worldpack cache page's country picker, whose
+   label is a `.bmc-pick-row`, rendered a checkbox that never changed when it was ticked. The
+   scoping bought nothing: `.bmc-tile` is our own class and exists nowhere we do not put it,
+   so "a checked input fills the tile next to it" is the whole rule. */
+input:checked + .bmc-tile, .bmc-tile.is-on { background: var(--wk-accent); }
+input:checked + .bmc-tile::after, .bmc-tile.is-on::after { content: "✓"; }
 .bmc-tile.is-mixed { background: var(--wk-accent); }
 .bmc-tile.is-mixed::after { content: "–"; }
-.bmc-check input:focus-visible + .bmc-tile { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
+input:focus-visible + .bmc-tile { outline: 2px solid var(--wk-accent); outline-offset: 1px; }
 .bmc-check__text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; overflow: hidden; }
 .bmc-check__label { font: var(--text-body-step); color: var(--wk-text); }
 .bmc-check.is-empty .bmc-check__label { color: var(--wk-text-dim); } /* zero matches */

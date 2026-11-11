@@ -75,7 +75,7 @@
                 {% for code, name in enabledCountries %}
                     {% set cached = (byCountry[code] ?? [])|length %}
                     <label class="bmc-pick-row{{ cached == 0 ? ' is-zero' : '' }}" aria-checked="false">
-                        <input type="checkbox" class="country-checkbox" value="{{ code }}" hidden>
+                        <input type="checkbox" class="country-checkbox" value="{{ code }}" aria-label="{{ name }}">
                         <span class="bmc-tile"></span>
                         <span class="bmc-vchip__code">{{ code }}</span>
                         <span class="bmc-pick-row__name">{{ name }}</span>

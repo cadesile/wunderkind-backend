@@ -140,14 +140,150 @@
                     {% endif %}
                 </div>
                 <div class="bmc-rows bmc-rows--flush">
+                    {# The fourth cell is the row's action slot. .bmc-checkrow's grid already
+                       ends in `auto` (bmc-pages.css), so a button drops in with no CSS change,
+                       and a check with nothing to offer keeps the empty span it always had. #}
                     {% for check in verdict.checks %}
                         <div class="bmc-checkrow">
                             <span class="bmc-mark {{ check.ok ? 'is-ok' : 'is-bad' }}" aria-hidden="true">{{ check.ok ? '✓' : '!' }}</span>
                             <span class="bmc-lbl bmc-lbl--ink">{{ check.key|replace({'_': ' '})|upper }}</span>
                             <span class="bmc-data">{{ check.detail }}</span>
-                            <span></span>
+                            {% if check.key == 'content' and not check.ok %}
+                                {# An in-page anchor, not a route and not a POST: nothing is
+                                   written by looking at a blocker, and the card that fixes it
+                                   is on this same screen. #}
+                                <a class="bmc-btn bmc-btn--yellow" href="#country-content"><span>AUTHOR CONTENT</span></a>
+                            {% elseif check.key == 'ability_ranges' and not check.ok %}
+                                {# Free, and writes no clubs — said on the button because every
+                                   other control on these screens either spends money or
+                                   generates rows, so an operator has learned to hesitate. #}
+                                <form method="post" action="{{ path('admin', {routeName: 'admin_locations_seed_ability_ranges'}) }}" style="display:contents">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('locations_ability_ranges_' ~ selected) }}">
+                                    <input type="hidden" name="country" value="{{ selected }}">
+                                    <button type="submit" class="bmc-btn bmc-btn--green"
+                                            title="Writes the standard eight-tier band. Free, generates no clubs."><span>SEED DEFAULTS</span></button>
+                                </form>
+                            {% else %}
+                                <span></span>
+                            {% endif %}
                         </div>
                     {% endfor %}
+                </div>
+            </section>
+
+            {# ── club-naming content ────────────────────────────── #}
+            {#
+              THE CONTENT READINESS BLOCKER, FIXABLE IN PLACE. It used to read "missing from
+              CountryContentRegistry", which is a 2,364-line PHP file — so the only way past it
+              was a deploy. Forty-six of the seventy-one countries are in that state.
+
+              ONE TOKEN PER LINE, not JSON and not commas. The shipped data contains '1. FC',
+              'Città di' and 'Estadio Municipal de %s': any separator that can appear inside a
+              token is a trap waiting on the first country that uses one.
+
+              Stadium formats are the dangerous field — they are fed to sprintf(), which throws
+              on a bad template. NamingContentValidator refuses one here rather than letting it
+              become a fatal inside club generation.
+            #}
+            <section class="bmc-card" data-domain="club" id="country-content">
+                <form method="post" data-bmc-form action="{{ path('admin', {routeName: 'admin_locations_save_content'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('locations_content_' ~ selected) }}">
+                    <input type="hidden" name="country" value="{{ selected }}">
+
+                    <div class="bmc-card__head">
+                        <i data-lucide="type"></i>
+                        <span class="bmc-card__title">CLUB-NAMING CONTENT</span>
+                        <span class="bmc-card__meta">one per line</span>
+                    </div>
+
+                    <div class="bmc-card__body">
+                        <p class="bmc-bodytext">
+                            What generated clubs in {{ profile ? profile.name : selected }} are called, and what
+                            their grounds are called. Changing these affects <strong>clubs generated from now
+                            on</strong> — names already given to clubs are their own and never change — and
+                            clients keep the old stadium names until that country's world pack is rebuilt
+                            (<span class="bmc-data">app:worldpack:warm {{ selected }}</span>).
+                        </p>
+                    </div>
+
+                    {% set contentLabels = {
+                        'prestigeSuffixes': ['PRESTIGE SUFFIXES', 'Carried by big-city clubs. About ' ~ namingLimits.prestige ~ ', at least ' ~ namingLimits.minSuffixes ~ '.'],
+                        'genericSuffixes':  ['GENERIC SUFFIXES', 'Carried by smaller clubs; medium towns pick from either list. About ' ~ namingLimits.generic ~ ', at least ' ~ namingLimits.minSuffixes ~ '.'],
+                        'stadiumFormats':   ['STADIUM FORMATS', 'Templates with %s where the town name goes, like “%s Park” or “Estadio %s”. About ' ~ namingLimits.formats ~ ', at least ' ~ namingLimits.minFormats ~ '. Exactly one %s each, and no other percent sign.'],
+                    } %}
+
+                    {% for category, state in namingContent %}
+                        {% set text = state.values|join("\n") %}
+                        <div class="bmc-setting">
+                            <span class="bmc-setting__text">
+                                <span class="bmc-setting__label">
+                                    {{ contentLabels[category][0] }}
+                                    {% if state.source == 'override' %}
+                                        <span class="bmc-badge bmc-badge--positive">YOURS</span>
+                                    {% elseif state.source == 'registry' %}
+                                        <span class="bmc-badge bmc-badge--subtle">BUILT IN</span>
+                                    {% else %}
+                                        <span class="bmc-badge bmc-badge--danger">MISSING</span>
+                                    {% endif %}
+                                    <span class="bmc-data">{{ state.values|length }}</span>
+                                </span>
+                                <span class="bmc-setting__help">{{ contentLabels[category][1] }}</span>
+                            </span>
+                            <span class="bmc-setting__ctl" style="flex:1 1 320px">
+                                <textarea class="bmc-textarea" name="{{ category }}" rows="7"
+                                          data-saved="{{ text }}" data-kind="text" data-blank="ok"
+                                          aria-label="{{ contentLabels[category][0] }}">{{ text }}</textarea>
+                            </span>
+                        </div>
+                    {% endfor %}
+
+                    {# INLINE, not sticky. The dashboard would otherwise have two save bars
+                       pinned at bottom:0 — the point location_config.html.twig already makes. #}
+                    <div class="bmc-savebar bmc-savebar--inline" data-bmc-savebar
+                         data-idle="A list identical to the built-in one is stored as built in, not as a copy — so saving an unchanged form changes nothing.">
+                        <span class="bmc-savebar__title">ALL SAVED</span>
+                        <span class="bmc-savebar__sub"></span>
+                        <button type="submit" class="bmc-btn bmc-btn--green" data-bmc-save><span>SAVE CONTENT</span></button>
+                    </div>
+                </form>
+
+                {# One billed call, so a POST with its own confirm — and the button is dead
+                   unless the provider is actually configured, said in its title rather than
+                   discovered after a click. #}
+                <div class="bmc-card__band">
+                    <form method="post" action="{{ path('admin', {routeName: 'admin_locations_suggest_content'}) }}"
+                          style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <input type="hidden" name="_token" value="{{ csrf_token('locations_suggest_content_' ~ selected) }}">
+                        <input type="hidden" name="country" value="{{ selected }}">
+                        <button type="submit" class="bmc-btn bmc-btn--orange" {{ namingAiReady ? '' : 'disabled' }}
+                                title="{{ namingAiReady ? 'One billed API call for this country' : 'Set LOCATION_ENRICHER_PROVIDER, _MODEL and _API_KEY first' }}"
+                                data-bmc-dialog-title="ASK THE MODEL FOR {{ selected }} CONTENT?"
+                                data-bmc-dialog-message="One billed API call. What comes back is validated and stored, and lands in the fields above for you to read over."
+                                data-bmc-dialog-confirm="ASK" data-bmc-dialog-variant="yellow"><span>SUGGEST WITH AI</span></button>
+                        <label class="bmc-check" style="padding-left:0"
+                               title="Off by default, so a suggestion can never replace a list you wrote.">
+                            <input type="checkbox" name="overwrite" value="1">
+                            <span class="bmc-tile"></span>
+                            <span class="bmc-data">replace lists I authored</span>
+                        </label>
+                        <span class="bmc-data">
+                            Local club-name words for {{ profile ? profile.name : selected }}. Read them over —
+                            they are culture, not fact, and the model is better at some countries than others.
+                        </span>
+                    </form>
+                </div>
+
+                <div class="bmc-card__band">
+                    <form method="post" action="{{ path('admin', {routeName: 'admin_locations_clear_content'}) }}"
+                          style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <input type="hidden" name="_token" value="{{ csrf_token('locations_clear_content_' ~ selected) }}">
+                        <input type="hidden" name="country" value="{{ selected }}">
+                        <button type="submit" class="bmc-btn"
+                                data-bmc-dialog-title="BACK TO THE BUILT-IN LISTS?"
+                                data-bmc-dialog-message="Discards the content you authored for this country. The built-in PHP lists take over again — which for most countries means none."
+                                data-bmc-dialog-confirm="REVERT"><span>REVERT TO BUILT IN</span></button>
+                        <span class="bmc-data">Discards what you typed here. Generated clubs keep their names.</span>
+                    </form>
                 </div>
             </section>
 

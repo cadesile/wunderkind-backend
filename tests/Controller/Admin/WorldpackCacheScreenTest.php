@@ -178,4 +178,60 @@ class WorldpackCacheScreenTest extends WebTestCase
         self::assertCount(1, $crawler->filter('[data-pick="none"]'));
         self::assertCount(1, $crawler->filter('#regenerate-btn'));
     }
+
+    /**
+     * Ticking a country has to LOOK like it did something.
+     *
+     * Reported from this screen: "the checkbox doesn't appear to fill or change colour". It
+     * did not, and could not. `.bmc-tile` is painted by
+     * `.bmc-check input:checked + .bmc-tile, .bmc-selbox input:checked + .bmc-tile` — both
+     * scoped to a wrapper class this row does not carry, since its label is a
+     * `.bmc-pick-row`. The third alternative, `.bmc-tile.is-on`, is set by the nationality
+     * picker's JS but not by this page's, which only moves `aria-checked` on the row. So all
+     * three ways to fill the tile missed, on every row, in both states.
+     *
+     * ASSERTED AGAINST THE SHIPPED STYLESHEET rather than the page, for the same reason
+     * SidebarServerClockTest reads bmc-admin.js: the rule is in a file the HTML only links
+     * to. A markup-only assertion would have passed throughout the bug.
+     */
+    public function testATickedCountryFillsItsCheckbox(): void
+    {
+        $crawler = $this->open();
+
+        // display:none cannot take focus, so `hidden` here made the picker mouse-only — and
+        // would make the focus-visible rule below unreachable.
+        $box = $crawler->filter('#country-pick .bmc-pick-row input.country-checkbox')->first();
+        self::assertNull($box->attr('hidden'), 'the checkbox must stay focusable');
+
+        // COMMENTS STRIPPED FIRST. What is asserted below is the absence of a SELECTOR, and
+        // the comment above that selector names the old one it replaced — so a raw search
+        // finds the prose and fails on a stylesheet that is perfectly correct.
+        $css = self::rules(\dirname(__DIR__, 3) . '/public/bmc-admin.css');
+
+        // The fill rule must not require a wrapper class. `.bmc-tile` is ours and exists
+        // nowhere we do not put it, so the whole rule is "a checked input fills the tile
+        // next to it" — which is what makes it work in a .bmc-pick-row as well as a
+        // .bmc-check.
+        self::assertStringContainsString('input:checked + .bmc-tile', $css);
+        self::assertStringNotContainsString('.bmc-check input:checked + .bmc-tile', $css);
+        self::assertStringNotContainsString('.bmc-selbox input:checked + .bmc-tile', $css);
+
+        // And the row itself has to read as picked: --wk-pressed alone is a few points of
+        // hue off the picklist's own background, which is what made a picked row hard to
+        // pick out at all.
+        self::assertMatchesRegularExpression(
+            '/\.bmc-pick-row\[aria-checked="true"\][^}]*border-left-color:\s*var\(--wk-accent\)/',
+            self::rules(\dirname(__DIR__, 3) . '/public/bmc-pages.css'),
+            'a picked row needs more than a background shift',
+        );
+    }
+
+    /** A stylesheet with its /* … *\/ comments removed, so an assertion sees rules only. */
+    private static function rules(string $path): string
+    {
+        $css = file_get_contents($path);
+        self::assertNotFalse($css, $path . ' must be readable');
+
+        return (string) preg_replace('#/\*.*?\*/#s', '', $css);
+    }
 }

@@ -56,9 +56,32 @@ class LocationDashboardControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->restorePlotTargets();
+        $this->forgetAbilityBand();
         $this->purge();
 
         parent::tearDown();
+    }
+
+    /**
+     * Take this country back out of the shared StarterConfig row.
+     *
+     * starter_config IS A SINGLETON, exactly like LocationConfig above: the seed-defaults case
+     * writes a ZD key into league_ability_ranges, and leaving it there would make the
+     * readiness check pass for a country a later test expects to be blocked.
+     */
+    private function forgetAbilityBand(): void
+    {
+        $repo   = self::getContainer()->get(\App\Repository\StarterConfigRepository::class);
+        $config = $repo->getConfig();
+        $ranges = $config->getLeagueAbilityRanges();
+
+        if (!isset($ranges[self::CODE])) {
+            return;
+        }
+
+        unset($ranges[self::CODE]);
+        $config->setLeagueAbilityRanges($ranges);
+        self::getContainer()->get(EntityManagerInterface::class)->flush();
     }
 
     private function restorePlotTargets(): void
@@ -357,5 +380,83 @@ class LocationDashboardControllerTest extends WebTestCase
             $this->dashboardHtml(),
             'a town below a target of 6 must be offered the button even though it has 5 plots',
         );
+    }
+
+    /**
+     * The ABILITY RANGES blocker, fixed from the screen that reports it.
+     *
+     * Its detail text names app:country:bootstrap, which an operator without a shell cannot
+     * run — and the Starter config screen cannot help either, because its grid is built from
+     * countries that already have League rows and this one has none.
+     */
+    public function testSeedDefaultsGivesTheCountryAnAbilityBand(): void
+    {
+        $this->seedCountry();
+
+        $repo = self::getContainer()->get(\App\Repository\StarterConfigRepository::class);
+        self::assertArrayNotHasKey(
+            self::CODE,
+            $repo->getConfig()->getLeagueAbilityRanges(),
+            'precondition: this country starts with no band',
+        );
+
+        $this->client->request('POST', '/admin/locations/dashboard/ability-ranges', [
+            '_token'  => $this->token('locations_ability_ranges_' . self::CODE),
+            'country' => self::CODE,
+        ]);
+
+        self::assertResponseRedirects();
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+
+        self::assertSame(
+            \App\Entity\StarterConfig::defaultTierRanges(),
+            $repo->getConfig()->getLeagueAbilityRanges()[self::CODE] ?? null,
+        );
+    }
+
+    public function testSeedDefaultsNeedsThatCountrysOwnToken(): void
+    {
+        $this->seedCountry();
+
+        $this->client->request('POST', '/admin/locations/dashboard/ability-ranges', [
+            '_token'  => $this->token('locations_ability_ranges_EN'),
+            'country' => self::CODE,
+        ]);
+
+        self::assertResponseRedirects();
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+
+        self::assertArrayNotHasKey(
+            self::CODE,
+            self::getContainer()->get(\App\Repository\StarterConfigRepository::class)
+                ->getConfig()->getLeagueAbilityRanges(),
+            'a token minted for another country must write nothing',
+        );
+    }
+
+    public function testSeedDefaultsIsOnlyOfferedWhileTheCheckIsFailing(): void
+    {
+        $this->seedCountry();
+
+        self::assertStringContainsString('SEED DEFAULTS', $this->dashboardHtml());
+
+        $this->client->request('POST', '/admin/locations/dashboard/ability-ranges', [
+            '_token'  => $this->token('locations_ability_ranges_' . self::CODE),
+            'country' => self::CODE,
+        ]);
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+
+        // The row has gone green, so the action slot goes back to being empty — a button that
+        // would now only report "nothing was changed" is noise on a readiness panel.
+        self::assertStringNotContainsString('SEED DEFAULTS', $this->dashboardHtml());
+    }
+
+    public function testSeedDefaultsIsAGetFreeAction(): void
+    {
+        $this->seedCountry();
+
+        $this->client->request('GET', '/admin/locations/dashboard/ability-ranges', ['country' => self::CODE]);
+
+        self::assertResponseStatusCodeSame(405);
     }
 }

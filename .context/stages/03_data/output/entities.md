@@ -913,6 +913,17 @@ action, not a deploy — see `docs/world-generation/adding-a-country.md`.
   `status:CountryProfileStatus(draft|tier_ready|live|retired)`,
   `tierStructureReadyAt`, `locationsLiveAt`, `bbox:?array` (json) and
   `landPenceMin/Max:?int`.
+  **Three nullable json columns carry operator-authored club-naming content** —
+  `prestige_suffixes`, `generic_suffixes`, `stadium_formats`, added 2026-11-11. NULL is the
+  normal state: the 25 countries authored in `CountryContentRegistry` keep their PHP consts,
+  which remain the fallback, and nothing was migrated. **Three columns rather than one blob**
+  because every layer above is already per category, and a column each makes the tri-state a
+  database fact. **The setters coerce `[]` to null** and that is load-bearing, not tidiness:
+  an empty list reaches `$pool[array_rand($pool)]` in `NpcClubGenerationService`, and
+  `array_rand([])` throws. Read them through `CountryNamingContentProvider`, never directly.
+  **Deliberately absent from `CountryProfileCrudController`** — raw-JSON textareas would
+  bypass `NamingContentValidator`, and one of these lists is fed to `sprintf()`.
+
   **`bbox` and the land band exist for `EnrichmentValidator`** — they are what catches
   an AI coordinate in the wrong country (there is a Birmingham in Alabama) and a
   hallucinated valuation. **`App\Enum\Country` is NOT retired**: it remains the

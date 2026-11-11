@@ -83,6 +83,15 @@ class NpcClubPlaceWeightingTest extends TestCase
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.
             new NpcClubPlotSeatingService($this->createStub(Connection::class)),
+            // A REAL provider over a stubbed repository, for the same reason the two services
+            // above are built that way: it is final. findByCode() on a stub returns null, so
+            // every lookup falls through to CountryContentRegistry's consts — which is what
+            // these expectations were written against, and what proves the move changed
+            // nothing for an authored country.
+            new \App\Service\CountryContent\CountryNamingContentProvider(
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
+            new \Psr\Log\NullLogger(),
         );
     }
 
@@ -124,6 +133,15 @@ class NpcClubPlaceWeightingTest extends TestCase
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.
             new NpcClubPlotSeatingService($this->createStub(Connection::class)),
+            // A REAL provider over a stubbed repository, for the same reason the two services
+            // above are built that way: it is final. findByCode() on a stub returns null, so
+            // every lookup falls through to CountryContentRegistry's consts — which is what
+            // these expectations were written against, and what proves the move changed
+            // nothing for an authored country.
+            new \App\Service\CountryContent\CountryNamingContentProvider(
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
+            new \Psr\Log\NullLogger(),
         );
     }
 

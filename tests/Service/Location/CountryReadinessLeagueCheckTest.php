@@ -69,6 +69,11 @@ class CountryReadinessLeagueCheckTest extends TestCase
             $this->createStub(LocationRepository::class),
             $this->createStub(StarterConfigRepository::class),
             $this->createStub(Connection::class),
+            // A real provider over a stubbed repository: findByCode() returns null, so the
+            // content check falls through to CountryContentRegistry exactly as before.
+            new \App\Service\CountryContent\CountryNamingContentProvider(
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
         );
 
         // leagueCheck() is private; evaluate() is the public surface and returns every

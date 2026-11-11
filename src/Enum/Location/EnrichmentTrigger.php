@@ -60,4 +60,36 @@ enum EnrichmentTrigger: string
      * rather than in this table's columns.
      */
     case ADMIN_TOWN_BATCH = 'town_batch';
+
+    /**
+     * Admin asked the model for one COUNTRY's own facts — its bounding box, land band and
+     * reference metadata — from the enrichment screen or app:locations:enrich-country.
+     *
+     * Not a town enrichment, but it shares everything a run record exists to answer: which
+     * provider, which model, which country, which admin, and when. Same reuse of this table
+     * as ADMIN_TOWN_SUGGESTION above, and for the same reason.
+     *
+     * COUNTERS ARE FIELDS HERE, NOT ROWS:
+     *   queued    = fields the model answered with something
+     *   succeeded = fields actually written to country_profile
+     *   failed    = fields the validator refused
+     *
+     * `needsReview` is unused, deliberately. Fields left alone because the country already
+     * had a value are reported in the admin flash, but they are not a review queue — nobody
+     * needs to look at them, and putting them in the column the screen labels REVIEW would
+     * say the opposite. A country field is either stored or refused; whether it is BELIEVABLE
+     * is settled by an operator reading the country's own form, which is twelve values long.
+     *
+     * The run is written COMPLETE, in one go, because the call is synchronous — there is no
+     * queue to drain and no later tick to close it.
+     *
+     * NO ATTEMPT ROW IS WRITTEN. location_enrichment_attempt.location_id is NOT NULL and an
+     * attempt means nothing without a location; widening that for a dozen country fields a
+     * human reads at a glance would weaken a table whose shape is load-bearing. The
+     * consequence, knowingly accepted: these calls do not appear in the enrichment screen's
+     * 30-day token figure, which sums attempt rows — the same gap the two triggers above have.
+     *
+     * The backing value is short because trigger_type is VARCHAR(16).
+     */
+    case ADMIN_COUNTRY_PROFILE = 'country_prof';
 }

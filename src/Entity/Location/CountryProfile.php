@@ -87,6 +87,40 @@ class CountryProfile
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $bbox = null;
 
+    /**
+     * Operator-set club-naming content, overriding CountryContentRegistry's PHP consts.
+     *
+     * THREE COLUMNS, NOT ONE BLOB, because every layer above them is already per category:
+     * the readiness check reports per category, the validator accepts or rejects per category,
+     * the form has a field per category, and reverting to the built-in list is per category. A
+     * column each makes the tri-state a DATABASE fact — NULL is no override, non-empty is an
+     * override, and `[]` is never stored — so no reader has to re-implement a key-presence
+     * convention in which absent, empty and malformed all have to mean the same thing.
+     *
+     * NULL IS THE NORMAL STATE. Twenty-five countries are authored in PHP and keep their
+     * consts; a row is written here only when an operator sets one. Read them through
+     * CountryNamingContentProvider, never directly — the effective value is the override if
+     * there is one and the registry const otherwise.
+     *
+     * DELIBERATELY ABSENT FROM CountryProfileCrudController. Three raw-JSON textareas whose
+     * only check is "is it JSON" would bypass NamingContentValidator entirely — and one of
+     * these lists is fed to sprintf(), where a stray percent sign is a fatal a long way from
+     * the form that stored it. Two editors for one column is two validation stories; there is
+     * one, on the locations dashboard.
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $prestigeSuffixes = null;
+
+    /** @var list<string>|null See $prestigeSuffixes. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $genericSuffixes = null;
+
+    /** @var list<string>|null See $prestigeSuffixes. sprintf templates, one %s each. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $stadiumFormats = null;
+
     /** Lower bound for a plausible per-plot land valuation in this country, pence. */
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $landPenceMin = null;
@@ -216,6 +250,52 @@ class CountryProfile
         if ($decoded !== null) {
             $this->bbox = $decoded === [] ? null : $decoded;
         }
+    }
+
+    /** @return list<string>|null */
+    public function getPrestigeSuffixes(): ?array { return $this->prestigeSuffixes; }
+
+    /** @return list<string>|null */
+    public function getGenericSuffixes(): ?array { return $this->genericSuffixes; }
+
+    /** @return list<string>|null */
+    public function getStadiumFormats(): ?array { return $this->stadiumFormats; }
+
+    /**
+     * The setters coerce [] to null, and that is load-bearing rather than tidy.
+     *
+     * An empty override is indistinguishable from "authored as nothing", and it reaches code
+     * that cannot survive it: NpcClubGenerationService::pickSuffixForCitySize() does
+     * $pool[array_rand($pool)] with no guard, and array_rand([]) throws. Its callers currently
+     * cover that with `?: ['FC']`, but a new write path must not depend on its caller's
+     * fallback for a guarantee it can make itself.
+     *
+     * @param list<string>|null $values
+     */
+    public function setPrestigeSuffixes(?array $values): void
+    {
+        $this->prestigeSuffixes = self::listOrNull($values);
+    }
+
+    /** @param list<string>|null $values */
+    public function setGenericSuffixes(?array $values): void
+    {
+        $this->genericSuffixes = self::listOrNull($values);
+    }
+
+    /** @param list<string>|null $values */
+    public function setStadiumFormats(?array $values): void
+    {
+        $this->stadiumFormats = self::listOrNull($values);
+    }
+
+    /**
+     * @param  list<string>|null $values
+     * @return list<string>|null
+     */
+    private static function listOrNull(?array $values): ?array
+    {
+        return ($values === null || $values === []) ? null : array_values($values);
     }
 
     public function getLandPenceMin(): ?int { return $this->landPenceMin; }

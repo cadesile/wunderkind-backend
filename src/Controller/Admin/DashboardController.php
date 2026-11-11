@@ -730,6 +730,17 @@ class DashboardController extends AbstractDashboardController
                 $bounds['max'] = (int) ($bounds['max'] ?? 100);
             }
         }
+        unset($countryTiers, $bounds);
+
+        // MERGED OVER WHAT IS STORED, NOT WRITTEN IN PLACE OF IT. The grid above is built
+        // from countries that already have League rows (see starterConfig()), so a country
+        // without a pyramid has no inputs on this page at all — and replacing the whole
+        // column therefore DELETED its band, silently, on any save of this form for any
+        // reason. That is exactly the country the locations dashboard's "Seed defaults"
+        // button exists to give a band to, so the two features would have undone each other.
+        // A country absent from the form keeps whatever it has; one present is replaced.
+        $ranges = array_replace($config->getLeagueAbilityRanges(), $ranges);
+
         // Write league ability ranges directly — Doctrine's JSON change-detection
         // can silently skip updates when the stored data has mixed string/int types.
         $this->em->getConnection()->executeStatement(
@@ -1704,7 +1715,7 @@ class DashboardController extends AbstractDashboardController
      * to public/bmc-admin.{css,js} or public/bmc-pages.{css,js}. Same approach
      * as templates/admin/dashboard.html.twig's dash_v.
      */
-    private const BMC_ASSET_VERSION = '20261110b';
+    private const BMC_ASSET_VERSION = '20261111a';
 
     public function configureAssets(): Assets
     {
