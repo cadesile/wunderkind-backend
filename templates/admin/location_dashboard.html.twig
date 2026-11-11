@@ -148,7 +148,15 @@
                             <span class="bmc-mark {{ check.ok ? 'is-ok' : 'is-bad' }}" aria-hidden="true">{{ check.ok ? '✓' : '!' }}</span>
                             <span class="bmc-lbl bmc-lbl--ink">{{ check.key|replace({'_': ' '})|upper }}</span>
                             <span class="bmc-data">{{ check.detail }}</span>
-                            {% if check.key == 'content' and not check.ok %}
+                            {% if check.key == 'leagues' and not check.ok and canGenerateLeagues %}
+                                {# A LINK, not a button. Generating a pyramid creates League
+                                   rows and can DELETE tiers and their pool clubs when the
+                                   depth chosen is shallower than what exists — that belongs
+                                   on the form that warns about it, not in a one-line action
+                                   slot. Hidden entirely for a country the generate form
+                                   cannot offer: its list is Country::generationCapable(). #}
+                                <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}#league-structure"><span>GENERATE LEAGUES</span></a>
+                            {% elseif check.key == 'content' and not check.ok %}
                                 {# An in-page anchor, not a route and not a POST: nothing is
                                    written by looking at a blocker, and the card that fixes it
                                    is on this same screen. #}
