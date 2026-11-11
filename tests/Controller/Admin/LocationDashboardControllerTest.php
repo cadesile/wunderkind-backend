@@ -40,6 +40,17 @@ class LocationDashboardControllerTest extends WebTestCase
      */
     private array $originalPlotTargets = [];
 
+    /**
+     * Country codes seeded by a case that needs one other than self::CODE.
+     *
+     * country_profile has no cascade from this class's own purge, so a row left behind would
+     * reach every later test file — and two of these cases need a REAL Country case to
+     * exercise the generation-capable split, which self::CODE deliberately is not.
+     *
+     * @var list<string>
+     */
+    private array $extraCodes = [];
+
     protected function setUp(): void
     {
         $this->client = static::createClient();
@@ -101,6 +112,14 @@ class LocationDashboardControllerTest extends WebTestCase
     private function purge(): void
     {
         $c = self::getContainer()->get(Connection::class);
+
+        foreach ($this->extraCodes as $code) {
+            $c->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => $code]);
+            $c->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => $code]);
+        }
+
+        $this->extraCodes = [];
+
         $c->executeStatement("DELETE FROM land_plot WHERE location_id IN (SELECT id FROM location WHERE country_code = :c)", ['c' => self::CODE]);
         $c->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => self::CODE]);
         $c->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => self::CODE]);
@@ -458,5 +477,65 @@ class LocationDashboardControllerTest extends WebTestCase
         $this->client->request('GET', '/admin/locations/dashboard/ability-ranges', ['country' => self::CODE]);
 
         self::assertResponseStatusCodeSame(405);
+    }
+
+    /**
+     * The LEAGUES row points at the screen that owns league generation.
+     *
+     * A LINK rather than a button, deliberately: generating a pyramid creates League rows and
+     * DELETES surplus tiers and their pool clubs when the depth chosen is shallower than what
+     * exists. That warning lives on the generate form, and a one-line action slot on a
+     * readiness panel is the wrong place to take a destructive decision.
+     */
+    public function testTheLeaguesRowLinksToTheGenerateScreenForAGenerationCapableCountry(): void
+    {
+        $this->seedCountryCoded('PL', 'Polandia');
+
+        $html = $this->dashboardHtmlFor('PL');
+
+        self::assertStringContainsString('#league-structure', $html);
+        self::assertStringContainsString('GENERATE LEAGUES', $html);
+    }
+
+    /**
+     * And says nothing at all when the generate form could not help.
+     *
+     * Its country list is Country::generationCapable() — 25 of the 71 cases — so for the rest
+     * the link would be a dead end, and the real blocker is the enum, which is a deploy.
+     */
+    public function testTheLeaguesRowOffersNothingWhenTheCountryCannotBeGenerated(): void
+    {
+        // The Faroe Islands are a real Country case and not generation-capable.
+        $this->seedCountryCoded('FO', 'Faroe Islands');
+
+        self::assertStringNotContainsString('#league-structure', $this->dashboardHtmlFor('FO'));
+    }
+
+    /** Seed a country under a code other than this class's own, and clean it up after. */
+    private function seedCountryCoded(string $code, string $name): void
+    {
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $c = self::getContainer()->get(Connection::class);
+        $c->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => $code]);
+        $c->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => $code]);
+        $em->clear();
+
+        $em->persist(new CountryProfile($code, $name));
+        $em->flush();
+
+        $this->extraCodes[] = $code;
+    }
+
+    private function dashboardHtmlFor(string $code): string
+    {
+        $this->client->request('GET', '/admin', [
+            'routeName'   => 'admin_locations_dashboard',
+            'routeParams' => ['country' => $code],
+        ]);
+
+        self::assertResponseIsSuccessful();
+
+        return (string) $this->client->getResponse()->getContent();
     }
 }

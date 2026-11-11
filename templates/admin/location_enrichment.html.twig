@@ -119,16 +119,26 @@
 
                 <div class="bmc-field-col">
                     <label class="bmc-lbl bmc-lbl--ink" for="suggestCountry">COUNTRY</label>
-                    {# No "All countries" option at all. The simplest way to make a paid fan-out
-                       across 25 countries impossible rather than merely discouraged. #}
+                    {# EVERY country, not the 25 the curated registry happens to hold — a
+                       country with no place list is the one most worth pulling towns for, and
+                       the picker used to exclude exactly those. Countries already under way
+                       are grouped first so a 71-entry list stays readable.
+
+                       Still no "All countries" option: the simplest way to make a paid fan-out
+                       across every country impossible rather than merely discouraged. #}
+                    <label class="bmc-textbox" style="min-width:190px;margin-bottom:6px">
+                        <input type="search" id="suggestFilter" placeholder="Filter countries…"
+                               autocomplete="off" aria-controls="suggestCountry">
+                    </label>
                     <span class="bmc-select">
                         <select name="country" id="suggestCountry" required style="min-width:190px">
                             <option value="" disabled selected>Country…</option>
-                            {% for row in seedable %}
-                                <option value="{{ row.code }}"{{ selectedCountry == row.code ? ' selected' : '' }}>{{ row.code }} — {{ row.name }}</option>
+                            {% for row in pullable %}
+                                <option value="{{ row.code }}" data-seeded="{{ row.seeded ? '1' : '0' }}"{{ selectedCountry == row.code ? ' selected' : '' }}>{{ row.code }} — {{ row.name }}{% if row.seeded %} ({{ row.towns }}){% endif %}</option>
                             {% endfor %}
                         </select>
                     </span>
+                    <span class="bmc-data" id="suggestCountryCount"></span>
                 </div>
 
                 <div class="bmc-field-col">
@@ -309,8 +319,19 @@
                         <td class="is-right bmc-cellnum">{{ row.total|number_format }}</td>
                         <td class="is-right bmc-cellnum">{{ row.counts.enriched|number_format }}</td>
                         <td class="is-right bmc-cellnum">{{ left > 0 ? left|number_format : '—' }}</td>
-                        <td class="is-right">{{ row.counts.needs_review > 0 ? '<span class="bmc-badge bmc-badge--warning">' ~ row.counts.needs_review ~ '</span>'|raw : '—' }}</td>
-                        <td class="is-right">{{ row.counts.failed > 0 ? '<span class="bmc-badge bmc-badge--danger">' ~ row.counts.failed ~ '</span>'|raw : '—' }}</td>
+                        {# MARKUP AS MARKUP, not as a string with |raw on the end of it. These two
+                           built their badge by concatenation and finished with |raw, which binds
+                           to the last LITERAL rather than to the concatenation — so the filter
+                           applied to '</span>' alone and autoescaping then printed the whole tag
+                           as text. The operator saw the span source in the cell. #}
+                        <td class="is-right">
+                            {%- if row.counts.needs_review > 0 %}<span class="bmc-badge bmc-badge--warning">{{ row.counts.needs_review }}</span>
+                            {%- else %}—{% endif -%}
+                        </td>
+                        <td class="is-right">
+                            {%- if row.counts.failed > 0 %}<span class="bmc-badge bmc-badge--danger">{{ row.counts.failed }}</span>
+                            {%- else %}—{% endif -%}
+                        </td>
                         <td><span class="bmc-badge bmc-badge--subtle">{{ row.status }}</span></td>
                         {# The country's OWN row, not its towns. The bounding box and the land
                            band here are what every town answer in this country is checked
@@ -512,6 +533,54 @@
 <script>
 // Keeps the download link's ?country= in step with the select, so the button exports what the
 // operator just chose rather than whatever the page loaded with.
+// Filters the Pull towns picker, which is now seventy-one entries long.
+//
+// REBUILDS THE OPTION LIST FROM A HELD COPY rather than hiding <option> elements. Hiding them
+// with display:none works in Chrome and Firefox and does nothing at all in Safari, so the
+// filter would silently not filter for some operators — and a filter you cannot trust is worse
+// than none. Removing and re-adding is the one approach every browser agrees on.
+//
+// The <select> keeps its name and its `required`, so the form posts and validates exactly as
+// it did before, and with JS off the full list is simply there.
+(function () {
+    var filter = document.getElementById('suggestFilter');
+    var select = document.getElementById('suggestCountry');
+    var count  = document.getElementById('suggestCountryCount');
+    if (!filter || !select) { return; }
+
+    var all = Array.prototype.slice.call(select.options);
+    var placeholder = all[0];
+
+    function apply() {
+        var q = filter.value.trim().toLowerCase();
+        var chosen = select.value;
+        var shown = 0;
+
+        select.textContent = '';
+        select.appendChild(placeholder);
+
+        all.forEach(function (opt) {
+            if (opt === placeholder) { return; }
+            if (q !== '' && opt.textContent.toLowerCase().indexOf(q) === -1) { return; }
+            select.appendChild(opt);
+            shown++;
+        });
+
+        // Keep the operator's pick if it survived the filter; otherwise fall back to the
+        // placeholder so the form cannot post a country that is no longer on screen.
+        select.value = chosen;
+        if (select.selectedIndex === -1) { select.value = ''; }
+
+        if (count) {
+            count.textContent = q === '' ? '' : shown + ' of ' + (all.length - 1) + ' match';
+        }
+    }
+
+    filter.addEventListener('input', apply);
+    // Enter in a filter box would otherwise submit the form and start a paid pull.
+    filter.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); } });
+})();
+
 (function () {
     var select = document.getElementById('exportCountry'), link = document.getElementById('exportLink');
     if (!select || !link) { return; }

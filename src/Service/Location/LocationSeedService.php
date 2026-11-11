@@ -67,6 +67,62 @@ final class LocationSeedService
      *
      * @throws \InvalidArgumentException with a message fit to show an operator
      */
+    /**
+     * Resolve a code to a Country, WITHOUT asking whether it has curated places.
+     *
+     * resolveCountry() below refuses a country the registry has no place list for, which is
+     * right for seeding — there would be nothing to write. It is wrong for pulling town names,
+     * whose whole purpose is to get towns for a country the registry never had, so that path
+     * uses this instead.
+     */
+    public function resolveAnyCountry(string $code): Country
+    {
+        $code    = strtoupper(trim($code));
+        $country = Country::tryFrom($code);
+
+        if ($country === null) {
+            throw new \InvalidArgumentException(sprintf(
+                "'%s' is not an App\\Enum\\Country case. A genuinely new country needs an enum case "
+                . 'first — see docs/world-generation/adding-a-country.md.',
+                $code,
+            ));
+        }
+
+        return $country;
+    }
+
+    /**
+     * The country's profile row, created if it does not exist yet.
+     *
+     * WHY THIS IS NOT JUST A SIDE EFFECT OF importNames(). That method refuses a country with
+     * no profile, deliberately, and its comment explains why: a catalogue of bare names with no
+     * curated anchor used to mean nothing priced, nothing generatable, and a readiness gate
+     * that could never pass. Two of those three are no longer true — enrichment prices an
+     * imported town lazily, and `sellable` now asks for 25 priced towns rather than all of
+     * them — but the refusal is still the right default for a caller handing it a file of
+     * names. So the admin's Pull towns button asks for the row explicitly instead, and
+     * importNames() keeps its guard for everyone else.
+     *
+     * `name` and `defaultLocale` are MIRRORED from the enum, exactly as seedCountry() does, so
+     * a label can be corrected later without a deploy.
+     */
+    public function ensureCountryProfile(Country $country): CountryProfile
+    {
+        $profile = $this->countryProfileRepository->findByCode($country->value);
+
+        if ($profile !== null) {
+            return $profile;
+        }
+
+        $profile = new CountryProfile($country->value, $country->label());
+        $profile->setDefaultLocale($country->locale());
+
+        $this->em->persist($profile);
+        $this->em->flush();
+
+        return $profile;
+    }
+
     public function resolveCountry(string $code): Country
     {
         $code    = strtoupper(trim($code));

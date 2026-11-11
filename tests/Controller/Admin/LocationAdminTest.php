@@ -41,6 +41,9 @@ class LocationAdminTest extends WebTestCase
      */
     private const SEEDABLE    = 'WA';
 
+    /** A real Country case with NO entry in CountryContentRegistry::PLACE_NAMES_BY_COUNTRY. */
+    private const UNAUTHORED  = 'FO';
+
     /**
      * Log in, and stop the kernel rebooting between requests.
      *
@@ -96,6 +99,55 @@ class LocationAdminTest extends WebTestCase
             $this->suggestionTransport()->getSent(),
             \sprintf('%d towns at %d a batch is %d message(s)', $towns, TownSuggestionService::BATCH_SIZE, $expected),
         );
+    }
+
+    /**
+     * A country the curated registry has never heard of can still be pulled for.
+     *
+     * THE PICKER USED TO EXCLUDE EXACTLY THESE. It was built from the registry's curated place
+     * lists — 25 of the 71 Country cases — which meant the one feature whose purpose is to get
+     * towns for a country that has none could not be pointed at one. Two things blocked it
+     * underneath: resolveCountry() refuses a country with no curated places, and importNames()
+     * refuses one with no country_profile row, which app:locations:seed cannot create for an
+     * unauthored country either.
+     */
+    public function testPullingTownsWorksForACountryTheRegistryHasNoPlacesFor(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->purgeSuggestionRuns();
+        $this->purgeUnauthored();
+
+        // The Faroe Islands: a real Country case with no entry in PLACE_NAMES_BY_COUNTRY.
+        self::assertNull(
+            \App\Service\CountryContent\CountryContentRegistry::places(\App\Enum\Country::FO),
+            'fixture check: this country must have no curated places',
+        );
+
+        $client->request('POST', '/admin/locations/suggest-towns', [
+            '_token'    => $this->csrfToken($client, 'locations_suggest_towns'),
+            'country'   => self::UNAUTHORED,
+            'max_towns' => (string) TownSuggestionService::BATCH_SIZE,
+        ]);
+
+        self::assertResponseRedirects();
+        self::assertCount(1, $this->suggestionTransport()->getSent(), 'the pull must actually queue');
+
+        // And it gave the country the profile row the import path requires, mirroring the
+        // enum's own label rather than inventing one.
+        $profile = self::getContainer()->get(\App\Repository\Location\CountryProfileRepository::class)
+            ->findByCode(self::UNAUTHORED);
+
+        self::assertNotNull($profile, 'the pull must create the profile row it needs');
+        self::assertSame(\App\Enum\Country::FO->label(), $profile->getName());
+    }
+
+    private function purgeUnauthored(): void
+    {
+        $c = self::getContainer()->get(Connection::class);
+        $c->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => self::UNAUTHORED]);
+        $c->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => self::UNAUTHORED]);
+        self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class)->clear();
     }
 
     public function testASecondPullIsRefusedWhileBatchesAreStillQueued(): void

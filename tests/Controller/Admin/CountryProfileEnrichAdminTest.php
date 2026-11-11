@@ -242,4 +242,66 @@ class CountryProfileEnrichAdminTest extends WebTestCase
 
         return $value;
     }
+
+    /**
+     * The REVIEW and FAILED cells render a badge, not its source.
+     *
+     * They built the markup by concatenation and finished with |raw, which binds to the last
+     * string LITERAL rather than to the concatenation — so the filter applied to '</span>'
+     * alone and autoescaping printed the opening tag as text. An operator saw
+     * `<span class="bmc-badge bmc-badge--danger">1</span>` sitting in the cell.
+     */
+    public function testTheReviewAndFailedCellsRenderMarkupRatherThanItsSource(): void
+    {
+        $this->seedCountryWithFailedTown();
+
+        $html = $this->screenHtml();
+
+        self::assertStringNotContainsString('&lt;span class=&quot;bmc-badge', $html);
+        self::assertStringContainsString('<span class="bmc-badge bmc-badge--danger">1</span>', $html);
+    }
+
+    /**
+     * The Pull towns picker offers every country, not the 25 the registry happens to hold.
+     *
+     * Limiting it to the curated list excluded exactly the countries the feature exists for:
+     * pulling town names is how a country the registry never had gets any.
+     */
+    public function testThePullTownsPickerOffersEveryCountry(): void
+    {
+        $html = $this->screenHtml();
+
+        // A country with curated places, and one without — the Faroe Islands have no registry
+        // entry at all and were previously unreachable from this picker.
+        self::assertStringContainsString('value="EN"', $html);
+        self::assertStringContainsString('value="FO"', $html);
+        self::assertStringContainsString('id="suggestFilter"', $html, 'and it is filterable');
+    }
+
+    private function seedCountryWithFailedTown(): void
+    {
+        $em      = self::getContainer()->get(EntityManagerInterface::class);
+        $profile = $this->seedCountry();
+
+        $location = new \App\Entity\Location\Location($profile, 'Failville', self::CODE . '-f1', 'failville');
+        $location->setRegion('R');
+        $em->persist($location);
+        $em->flush();
+
+        // settle() writes the status with raw SQL, so the fixture does too.
+        self::getContainer()->get(Connection::class)->executeStatement(
+            "UPDATE location SET enrichment_status = 'failed' WHERE id = :id",
+            ['id' => (string) $location->getId()],
+        );
+        $em->clear();
+    }
+
+    private function screenHtml(): string
+    {
+        $this->client->request('GET', '/admin', ['routeName' => 'admin_location_enrichment']);
+
+        self::assertResponseIsSuccessful();
+
+        return (string) $this->client->getResponse()->getContent();
+    }
 }
