@@ -158,6 +158,12 @@ class LocationEnrichmentController extends AbstractController
             // seeded — so the seed picker can offer the unseeded ones first and label the rest
             // honestly rather than looking like it does nothing.
             'seedable'      => $this->seedableRows(),
+            // EVERY country, for the Pull towns picker — which is a different question from
+            // what SEED can offer. Seeding writes rows from the curated registry, so it can
+            // only offer the 25 countries that have one; pulling town names exists precisely
+            // to get towns for a country the registry never had, so limiting it to the same 25
+            // made it unable to do the one thing it is for.
+            'pullable'      => $this->pullableRows(),
             // So the Pull towns card can resume its progress poll after a reload. The whole
             // point of queueing is that the operator is no longer pinned to the request, so
             // they will navigate away and come back mid-run.
@@ -425,6 +431,38 @@ class LocationEnrichmentController extends AbstractController
         return array_values($this->dashboardService->countryRows());
     }
     /**
+     * Every Country case, flagged with whether it already holds towns.
+     *
+     * The flag is what keeps a 71-entry list readable: the picker puts the countries that are
+     * already under way first and labels the rest, rather than presenting seventy-one
+     * undifferentiated codes.
+     *
+     * @return list<array{code: string, name: string, seeded: bool, towns: int}>
+     */
+    private function pullableRows(): array
+    {
+        $rows = [];
+
+        foreach ($this->countryRows() as $row) {
+            $rows[$row['code']] = (int) $row['total'];
+        }
+
+        $out = array_map(
+            static fn (Country $c): array => [
+                'code'   => $c->value,
+                'name'   => $c->label(),
+                'seeded' => isset($rows[$c->value]),
+                'towns'  => $rows[$c->value] ?? 0,
+            ],
+            Country::cases(),
+        );
+
+        usort($out, static fn (array $a, array $b): int => [$b['seeded'], $a['name']] <=> [$a['seeded'], $b['name']]);
+
+        return $out;
+    }
+
+    /**
      * Seedable countries, each flagged with whether it already has locations.
      *
      * Drives the seed picker. The flag matters: seeding is act-only-when-empty per country, so
@@ -619,7 +657,16 @@ class LocationEnrichmentController extends AbstractController
         }
 
         try {
-            $country = $this->seedService->resolveCountry($code);
+            // resolveAnyCountry(), NOT resolveCountry(): the latter refuses a country the
+            // registry has no curated places for, which is right for seeding and exactly
+            // backwards here — a country with no place list is the one most worth pulling
+            // towns for.
+            $country = $this->seedService->resolveAnyCountry($code);
+
+            // And give it a profile row if it has none, because importNames() refuses without
+            // one and app:locations:seed cannot create it for an unauthored country. Without
+            // this the picker would offer 46 countries that could only ever fail.
+            $this->seedService->ensureCountryProfile($country);
         } catch (\InvalidArgumentException $e) {
             $this->addFlash('danger', $e->getMessage());
 

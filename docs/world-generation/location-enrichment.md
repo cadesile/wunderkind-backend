@@ -355,6 +355,23 @@ was typed into that PHP array — Argentina's curated list is 40 entries, and th
 reads 40. `app:locations:suggest-towns <country> [--max=300] [--dry-run]`, and the admin **Pull
 towns** button beside Seed, ask the configured provider for more names.
 
+**Every country is on the picker, not just the curated 25.** It used to be built from the
+registry's place lists, which excluded exactly the countries the feature exists for — one with
+no place list is the one most worth pulling towns for. The picker is filterable, because
+seventy-one entries is too many to scan, and it groups the countries already under way first.
+
+**Pulling for a country with no profile row creates one**, mirroring `name` and
+`defaultLocale` from the enum the way `app:locations:seed` does. It has to: `importNames()`
+refuses a country with no profile, and `seed` cannot create one for a country the registry has
+no places for, so the two guards between them made an unauthored country unreachable. A country
+started this way has **no curated populations**, so nothing in it is priced or generatable until
+enrichment runs — which is the same lazy design bare imported names already follow, and why
+`findForClassification()` and `findForGeneration()` both filter on a non-null population.
+
+Paired with §3b's country enrichment and the dashboard's club-naming content card, that is a
+whole country from nothing to Live without touching PHP — apart from its `App\Enum\Country`
+case, which is still a deploy.
+
 **It asks for names and nothing else.** Coordinates, population, region and land value stay
 enrichment's job. That is not laziness: a population written at suggestion time would be a
 guess, and `EnrichmentValidator` keeps a seeded population when a later figure diverges by more
