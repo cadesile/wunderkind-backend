@@ -194,15 +194,47 @@ src/Entity/Location/        13 entities (geography, holds, claims, estimates, en
 src/Enum/Location/           9 enums
 src/Repository/Location/     9 repositories
 src/Service/Location/        7 services + Enrichment/ (6 more)
+                             + Suggestion/ (town names) + CountryEnrichment/ (the country row)
 src/Exception/Location/      PlotUnavailableException
 src/Message/Location/        EnrichLocationMessage
 src/MessageHandler/Location/ EnrichLocationMessageHandler
 ```
 
 Plus `src/Command/` gains `SeedLocationsCommand`, `EnrichLocationsCommand`,
-`LocationRivalsCommand`, `RefreshStadiumEstimatesCommand`; `src/Controller/Api/` gains
-`PlotHoldController` and `PlotClaimController`; `src/Controller/Admin/` gains three CRUD
-controllers and `LocationEnrichmentController`.
+`LocationRivalsCommand`, `RefreshStadiumEstimatesCommand`, `EnrichCountryProfileCommand`;
+`src/Controller/Api/` gains `PlotHoldController` and `PlotClaimController`;
+`src/Controller/Admin/` gains three CRUD controllers, `LocationEnrichmentController` and
+`LocationDashboardController`.
+
+**THREE AI SUB-NAMESPACES NOW, ALL THE SAME SEVEN-FILE SHAPE** (interface, Claude
+implementation, `Unconfigured*`, factory, validator, result, service), added 2026-11-11:
+
+```
+src/Service/Location/Enrichment/        one town   — coordinates, population, land value
+src/Service/Location/Suggestion/        town names — more towns for a country
+src/Service/Location/CountryEnrichment/ the COUNTRY row — bbox, land band, reference codes
+src/Service/CountryContent/Suggestion/  club-naming content — suffixes, stadium formats
+```
+
+The repetition is the point: a fourth AI feature is a directory of small classes against
+the shared `App\Service\Ai\AnthropicJsonClient`, not a new way of doing things. All four
+read the SAME `LOCATION_ENRICHER_PROVIDER` / `_MODEL` / `_API_KEY` trio — one provider, one
+key — and all four fall back to a loud refusal rather than to silence.
+
+**But they do not all queue, and that distinction is the useful one.** Town enrichment and
+the town pull are queued because 865 messages and a 12,000-token generation respectively
+demand it. `CountryEnrichment` and `CountryContent\Suggestion` are **one short call each**
+and run synchronously in the admin request: a queue there would buy a transport, a handler,
+a consumer script and a progress poll in exchange for making a two-second call feel slower,
+and would lose the thing that makes the buttons worth having — the operator seeing which
+fields landed and which were refused while still looking at the country.
+
+`src/Service/CountryContent/` also gained `CountryNamingContentProvider`,
+`NamingContentValidator`, `NamingContentService` and `ValidatedNamingContent`, which put a
+DB override layer over `CountryContentRegistry`'s PHP consts **without replacing it** — the
+registry's statics are still called from enum methods that have no container. And
+`src/Service/` gained `StarterAbilityRangeService`, lifted out of `app:country:bootstrap`
+so an admin button and the command cannot drift.
 
 **Messenger now has SIX transports.** `enrichment` was added alongside `async`,
 `worldpack`, `pool`, `competition` and `registration`, with the same justification each
@@ -214,6 +246,8 @@ another sweep. Drained by `docker/enrichment-consume.sh` (still to be added to t
 `Dockerfile` crontab).
 
 **The AI provider is deliberately not chosen.** Everything sits behind
-`LocationEnricherInterface`, aliased in `config/services.yaml` to
-`UnconfiguredLocationEnricher`, which throws. Wiring a real provider is one class plus
-repointing that alias; nothing else in the feature names a vendor.
+`LocationEnricherInterface` and its three siblings, each selected in `config/services.yaml`
+by a FACTORY rather than an alias — `alias: '%env(...)%'` does not compile, so picking a
+provider from an environment variable has to happen in PHP. Each falls back to its
+`Unconfigured*` implementation, which throws and says in the log whether the provider was
+not selected or selected-but-unusable. Nothing else in the feature names a vendor.
