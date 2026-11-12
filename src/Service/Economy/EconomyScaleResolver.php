@@ -191,6 +191,34 @@ final class EconomyScaleResolver
     }
 
     /**
+     * What the owner may put into a club this season, in pence. 0 means the feature is off.
+     *
+     * `base x countryFactor x tierFactor x inflationIndex(season)`, and this is **the only
+     * server-side consumer of the inflation index**. Everything else the backend publishes is
+     * base-year and the app compounds it — but a ceiling has to be checked against the season
+     * being claimed for, or a save twenty seasons in would be held to year-one money.
+     *
+     * Uses `combinedFactorBp`, which is country x tier already composed, so the scaling chain
+     * is the same one that prices a wage. One intdiv per factor, no floats.
+     *
+     * ZERO IS THE SHIPPED ANSWER, because `economySeasonInvestmentBasePence` ships at 0. Every
+     * investment is then above the ceiling and the endpoint refuses — which is how the feature
+     * and its two new error codes ship unreachable.
+     */
+    public function seasonInvestmentCeilingPence(string $country, int $tier, int $season): int
+    {
+        $base = $this->gameConfigRepository->getConfig()->getEconomySeasonInvestmentBasePence();
+
+        if ($base <= 0) {
+            return 0;
+        }
+
+        $scaled = intdiv($base * $this->resolve($country, $tier)->combinedFactorBp, self::BP);
+
+        return intdiv($scaled * $this->inflationIndexBp($season), self::BP);
+    }
+
+    /**
      * The compounded inflation index for a season, in basis points. 10000 = no inflation.
      *
      * Season 1 is the base year and is always exactly 10000 — the first season a club plays has

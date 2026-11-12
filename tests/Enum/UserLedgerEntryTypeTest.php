@@ -55,6 +55,10 @@ class UserLedgerEntryTypeTest extends TestCase
      * rejected. The four per-site FACILITY_* cases, their FACILITY_BUILD fallback and
      * CLUB_FUNDING joined it with the setup endpoints. The per-site split exists because the
      * client localises a ledger row on its type and ships one i18n key per site.
+     *
+     * SEASON_INVESTMENT joined 2026-11-12. It is a debit with ONE fixed direction — money only
+     * ever leaves the owner's account — which is what separates it from CUSTOM_INCOME, the one
+     * type that is deliberately absent from this list because its sign varies per row.
      */
     public function testOnlyPurchasesAreDebits(): void
     {
@@ -76,6 +80,7 @@ class UserLedgerEntryTypeTest extends TestCase
                 'facility_stadium',
                 'facility_build',
                 'club_funding',
+                'season_investment',
             ],
             $debits,
         );

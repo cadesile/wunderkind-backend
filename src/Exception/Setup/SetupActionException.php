@@ -39,6 +39,10 @@ class SetupActionException extends \RuntimeException
     public const ALREADY_ANSWERED = 'already_answered';
     /** The submitted ordinal is not one of the options offered. */
     public const INVALID_ANSWER = 'invalid_answer';
+    /** The owner has already invested in this club THIS SEASON, with a different amount. */
+    public const ALREADY_INVESTED_THIS_SEASON = 'already_invested_this_season';
+    /** The gift is above the owner's per-season ceiling for this club's country and tier. */
+    public const ABOVE_SEASON_CEILING = 'above_season_ceiling';
 
     private function __construct(
         public readonly string $reason,
@@ -145,6 +149,53 @@ class SetupActionException extends \RuntimeException
         return new self(
             self::ALREADY_ANSWERED,
             'You have already answered that question. The quiz is one attempt per account.',
+        );
+    }
+
+    /**
+     * Carries the amount already invested AND the season, not just the refusal.
+     *
+     * Same reasoning as siteAlreadyBuilt(): a client that got this because its retry lost a
+     * race needs to know what actually stands, and one that got it because the player edited
+     * the figure needs to show them what they already gave. The season is in there because
+     * the backend decides which season it is — from its own SeasonRecord count, not from the
+     * device — so the client cannot work it out to explain the refusal.
+     */
+    public static function alreadyInvestedThisSeason(int $investedPence, int $season): self
+    {
+        return new self(
+            self::ALREADY_INVESTED_THIS_SEASON,
+            sprintf(
+                'You have already invested %s in this club for season %d.',
+                number_format($investedPence / 100, 2),
+                $season,
+            ),
+            ['investedPence' => $investedPence, 'season' => $season],
+        );
+    }
+
+    /**
+     * Carries the ceiling, because the client cannot compute it.
+     *
+     * The ceiling is `base x countryFactor x tierFactor x inflationIndex(season)` and the app
+     * is deliberately never told a country factor, so a refusal without the figure is a dead
+     * end: the player cannot be shown what they CAN give.
+     *
+     * A CEILING OF ZERO IS THE SHIPPED STATE, so this is the refusal every request gets until
+     * an operator authors a base figure. Worth knowing when this turns up in a log.
+     */
+    public static function aboveSeasonCeiling(int $amountPence, int $ceilingPence, int $season): self
+    {
+        return new self(
+            self::ABOVE_SEASON_CEILING,
+            $ceilingPence <= 0
+                ? sprintf('Season investment is not enabled for this club (season %d).', $season)
+                : sprintf(
+                    'The most you can invest this season is %s; you offered %s.',
+                    number_format($ceilingPence / 100, 2),
+                    number_format($amountPence / 100, 2),
+                ),
+            ['amountPence' => $amountPence, 'ceilingPence' => $ceilingPence, 'season' => $season],
         );
     }
 

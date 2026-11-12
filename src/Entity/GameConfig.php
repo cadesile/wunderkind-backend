@@ -1494,6 +1494,26 @@ class GameConfig
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private int $inflationRatePerSeasonBp = 0;
 
+    /**
+     * The BASE one-season owner investment ceiling, in pence, before country and tier scaling.
+     *
+     * SHIPS AT 0, WHICH MAKES THE WHOLE FEATURE UNREACHABLE. A ceiling of zero means every
+     * investment is above it, so `POST /api/club/season-investment` refuses with 422 and the
+     * two new error codes are unreachable until an operator authors a figure. That is the same
+     * compatibility mechanism `max_enrichment_requests_per_user` uses in reverse: a new limit
+     * arrives in the position that changes nothing, and turning it on is a form.
+     *
+     * The resolved ceiling is `base x countryFactor x tierFactor x inflationIndex(season)` —
+     * see EconomyScaleResolver::seasonInvestmentCeilingPence(). Base-year pence; the index is
+     * the one place the backend applies inflation itself, because a ceiling has to be checked
+     * against the season being claimed for.
+     */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $economySeasonInvestmentBasePence = 0;
+
+    public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
+    public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
+
     public function getEconomyWageModel(): EconomyWageModel { return $this->economyWageModel; }
     public function setEconomyWageModel(EconomyWageModel $v): static { $this->economyWageModel = $v; return $this; }
 

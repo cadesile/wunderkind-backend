@@ -1193,6 +1193,30 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`SeasonInvestmentService` — the owner gifting their own money into a club, once a season.**
+Modelled on `ClubFundingService`: same natural-key idempotency, same "the server debits the
+account and the DEVICE credits the club" split, same exception type.
+
+**THE SEASON COMES FROM `SeasonRecord` ROWS, NOT `club.currentSeason`**, and that is the decision
+worth knowing. That column is device-mirrored — `SyncService::process()` overwrites it from the
+payload — so a client could report season 50 and both raise its own ceiling (the ceiling grows
+with the inflation index) and claim for seasons it never played. `SeasonRecordRepository::countByClub()
++ 1` is backend-owned: those rows are written only by `concludeSeason()`, one per `(club, season)`
+behind `uq_season_record_club_season`, so a device claiming season 50 writes ONE record and moves
+the count from n to n+1. Chosen over a new counter column because it needs no migration, no
+second write path, and reuses a constraint that is already load-bearing.
+
+Residual exposure, stated rather than hidden: a late retro-conclude for a genuinely missed season
+also adds a row, so it opens one extra window — bounded at one per conclude that actually
+archives a season.
+
+**The replay check runs BEFORE the amount and ceiling checks**, deliberately: a retry after a
+dropped response must succeed even if an operator has since lowered the ceiling, or re-tuning the
+economy would turn a harmless retry into a permanent failure for a debit that already happened.
+
+`creditClubPence` is an INSTRUCTION, not a report — the service never writes `club.balance`,
+because the device overwrites it absolutely on every sync.
+
 **`WageModelResolver` — what a generated player or staff member costs, and the only place that
 answers it.** Replaced FOUR copies of the same arithmetic:
 `WorldPackClubGenerationService::playerWageMultiplier()`,

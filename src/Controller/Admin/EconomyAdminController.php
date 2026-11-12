@@ -175,6 +175,17 @@ class EconomyAdminController extends AbstractController
             $config->setEconomyBaselineTurnoverPence($current);
         }
 
+        // POUNDS IN, PENCE STORED, and BLANK MEANS ZERO here rather than "leave it alone" —
+        // zero is the off switch for the whole season-investment feature, so an operator has
+        // to be able to clear the field to turn it back off. The placeholder says "off".
+        $seasonBase = $request->request->get('seasonInvestmentBasePounds');
+        if ($seasonBase !== null) {
+            $raw = str_replace(',', '', trim((string) $seasonBase));
+            $config->setEconomySeasonInvestmentBasePence(
+                $raw === '' ? 0 : (int) round(((float) $raw) * 100),
+            );
+        }
+
         $parachute = $request->request->get('leagueParachute');
         if ($parachute !== null) {
             // Verbatim, like the per-league block — see League::$parachute. Blank clears;

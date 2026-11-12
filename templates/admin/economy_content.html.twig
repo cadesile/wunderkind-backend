@@ -163,6 +163,46 @@
 
     <section class="bmc-card" data-domain="club">
         <div class="bmc-card__head">
+            <i data-lucide="hand-coins"></i>
+            <span class="bmc-card__title">OWNER SEASON INVESTMENT</span>
+            <span class="bmc-card__meta">
+                {% if config.economySeasonInvestmentBasePence > 0 %}
+                    <span class="ink-warning">LIVE</span>
+                {% else %}
+                    <span class="ink-info">OFF — every request is refused</span>
+                {% endif %}
+            </span>
+        </div>
+        <div class="bmc-rows">
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">BASE CEILING (£)</span>
+                    <span class="bmc-setting__help">
+                        What an owner may gift into one club per season, before scaling. The resolved ceiling is
+                        <code>base x countryFactor x tierFactor x inflationIndex(season)</code> — the one place the backend applies
+                        inflation itself, because a ceiling has to be checked against the season being claimed for.
+                        <strong>0 switches the feature off</strong>: every amount is then above the ceiling and
+                        <code>POST /api/club/season-investment</code> refuses, which is how its two new error codes ship
+                        unreachable by a client that does not understand them yet.
+                    </span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--fill" style="min-width:150px">
+                        <span class="bmc-num__unit">£</span>
+                        <input name="seasonInvestmentBasePounds" inputmode="decimal" data-kind="money" data-blank="ok"
+                               value="{{ config.economySeasonInvestmentBasePence > 0
+                                        ? (config.economySeasonInvestmentBasePence / 100)|number_format(0, '.', '')
+                                        : '' }}"
+                               placeholder="off"
+                               aria-label="season investment base ceiling pounds">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
             <i data-lucide="parachute"></i>
             <span class="bmc-card__title">GLOBAL PARACHUTE</span>
             <span class="bmc-card__meta">used by any league with no override</span>

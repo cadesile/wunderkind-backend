@@ -1177,6 +1177,26 @@ Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_prof
 is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
 against this database. Production unverified.
 
+### `GameConfig::$economySeasonInvestmentBasePence` (2026-11-12)
+
+The base owner-investment ceiling, from `Version20261112210000`. **Ships at 0, which is an OFF
+SWITCH rather than a neutral default**: the resolved ceiling is
+`base x countryFactor x tierFactor x inflationIndex(season)`, so a base of zero makes every
+amount above the ceiling and `POST /api/club/season-investment` refuses everything. That is how
+both of that endpoint's new client-visible error codes ship unreachable by a client that does
+not understand them — the same shape as `429 enrichment_quota_exhausted` arriving behind a cap
+of 0 = unlimited.
+
+`EconomyScaleResolver::seasonInvestmentCeilingPence()` is **the only server-side consumer of the
+inflation index**. Everything else the backend publishes is base-year and the app compounds it,
+but a ceiling has to be checked against the season being claimed for or a long-running save
+would be held to year-one money.
+
+**No ledger migration accompanied it.** `UserLedgerEntryType::SEASON_INVESTMENT` is a new case
+on a `varchar(30)` column whose longest value was already 17 characters, and `season_investment`
+is also 17 — `UserLedgerEntryTypeTest` asserts that bound. Idempotency reuses the existing
+`uq_user_ledger_backend_source` partial unique index.
+
 ### Parachutes — `League::$parachute` and `GameConfig::$leagueParachute` (2026-11-12)
 
 Two nullable json columns from `Version20261112200000`, resolved **`league ?? gameConfig`**

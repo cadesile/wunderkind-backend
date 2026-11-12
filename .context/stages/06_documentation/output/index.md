@@ -162,3 +162,9 @@ claiming canonical status)
   before touching sponsor money: `sponsorWeeklyPence` is **weekly** while the six existing
   sponsor band columns are **per season**, and the two are not convertible by dividing by a
   season length — they describe different deals.
+- **`docs/api/season-investment.md`** — the owner's once-a-season gift into a club. Leads with
+  the two things a client must get right: `creditClubPence` is an **instruction the device
+  applies**, not a report (the server cannot credit `club.balance`), and the **season is not a
+  parameter** — it is the backend's own `SeasonRecord` count, because `club.currentSeason` is
+  device-mirrored and a claimed season would raise the owner's own ceiling. Lists the two new
+  client-visible error codes and notes both are unreachable while the base ceiling is 0.
