@@ -1,0 +1,418 @@
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  World → Economy. Data: EconomyAdminController::index().
+
+  THE SCREEN'S JOB IS TO MAKE TURNING THIS ON DELIBERATE. Every control ships in its "no
+  change" position, so the PREVIEW is the feature — it is the only way to see what the
+  `turnover` wage model would pay before committing, and it runs the real resolver rather than
+  a copy of the arithmetic.
+
+  THREE SEPARATE FORMS, ON PURPOSE. The scalar knobs and the two per-tier tables save together
+  because they are only meaningful together; the country factors save separately because moving
+  the baseline is a different kind of write (one UPDATE with a CASE, see the controller); and
+  the inflation rate saves on its own because it writes an audit row and changes every existing
+  save retroactively — it should not ride along with a typo in a turnover field.
+
+  POUNDS IN THE TURNOVER INPUTS, PENCE IN THE COLUMN. England tier 1 is around half a billion
+  pounds, and typing that in pence is how two orders of magnitude go missing unnoticed.
+#}
+
+{% block bmc_strip_right %}
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_leagues_overview'}) }}"><span>LEAGUE OVERVIEW</span></a>
+    <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_game_config'}) }}"><span>GAME CONFIG</span></a>
+{% endblock %}
+
+{% macro money(pence) %}{{ pence is null ? '—' : '£' ~ (pence / 100)|number_format(2) }}{% endmacro %}
+{% macro bp(v) %}{{ (v / 100)|number_format(2) }}%{% endmacro %}
+
+{% block bmc_body %}
+
+{# ── where the switch is ──────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="activity"></i>
+        <span class="bmc-card__title">STATUS</span>
+        <span class="bmc-card__meta">
+            {% if config.economyWageModel.value == 'legacy' %}
+                <span class="ink-info">LEGACY — nothing generated so far was priced by the turnover model</span>
+            {% else %}
+                <span class="ink-warning">TURNOVER — LIVE</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="bmc-card__body">
+        <div class="bmc-data">
+            Flipping the wage model re-prices every player the world generates <em>from then on</em>, and
+            <strong>cached world packs hold wages</strong>. Pack content changes without pack shape changing, which is the
+            one case <code>WORLD_PACK_VERSION</code> (currently <strong>{{ worldPackVersion }}</strong>) does not catch on
+            its own — bump it in the same pass or every already-cached country serves pre-flip wages forever.
+            Run <code>app:economy:wage-table</code> first; it refuses on the same checks this preview warns about.
+        </div>
+    </div>
+</section>
+
+{# ── scalar knobs + the two per-tier tables ───────────────────────────── #}
+<form method="post" action="{{ path('admin', {routeName: 'admin_economy_save'}) }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('economy_save') }}">
+    <input type="hidden" name="preview" value="{{ previewCountry }}">
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="sliders-horizontal"></i>
+            <span class="bmc-card__title">WAGE MODEL</span>
+            <span class="bmc-card__meta">blank leaves a value alone</span>
+        </div>
+        <div class="bmc-rows">
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">MODEL</span>
+                    <span class="bmc-setting__help">
+                        <code>legacy</code> is wage bands x ability x a random roll — what priced every row in the world so far,
+                        and a supported mode rather than dead code. <code>turnover</code> anchors each tier's scale to a share of
+                        its turnover.
+                    </span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <span class="bmc-select"><select name="economyWageModel">
+                        {% for m in wageModels %}
+                            <option value="{{ m.value }}" {{ m == config.economyWageModel ? 'selected' : '' }}>{{ m.label }}</option>
+                        {% endfor %}
+                    </select></span>
+                </div>
+            </div>
+
+            {% set knobs = [
+                {n: 'economyWageToTurnoverRatioBp', l: 'WAGE : TURNOVER (bp)', v: config.economyWageToTurnoverRatioBp,
+                 h: 'Share of a tier\'s turnover that goes on wages. 6000 = 60%.'},
+                {n: 'economyStaffWageShareBp', l: 'STAFF SHARE (bp)', v: config.economyStaffWageShareBp,
+                 h: 'How much of the wage budget is staff rather than players. 2500 = 25%. Capped below 10000 — at 100% every player would be free.'},
+                {n: 'economyWageCurveExponentBp', l: 'CURVE EXPONENT k (bp)', v: config.economyWageCurveExponentBp,
+                 h: 'Ability curve exponent. 25000 = 2.5. Basis points so the whole chain stays integer; the one float is a single pow() in the resolver.'},
+                {n: 'economyReputationSpreadBp', l: 'REPUTATION SPREAD (bp)', v: config.economyReputationSpreadBp,
+                 h: 'How far a club\'s reputation moves a wage either side of its tier. 0 = flat. A non-zero spread REDISTRIBUTES a tier\'s bill between its clubs rather than inflating it — the calibration is anchored at reputation 50.'},
+                {n: 'economyWeeksPerSeason', l: 'WEEKS PER SEASON', v: config.economyWeeksPerSeason,
+                 h: '46 — what the APP charges wages for. Deliberately not the backend\'s own 52-week financial year, so six of its weeks are unpriced by this model.'},
+            ] %}
+
+            {% for k in knobs %}
+                <div class="bmc-setting" data-bmc-setting>
+                    <div class="bmc-setting__text">
+                        <span class="bmc-setting__label">{{ k.l }}</span>
+                        <span class="bmc-setting__help">{{ k.h }}</span>
+                    </div>
+                    <div class="bmc-setting__ctl">
+                        <label class="bmc-num bmc-num--104">
+                            <input name="{{ k.n }}" value="{{ k.v }}" data-saved="{{ k.v }}" data-kind="int"
+                                   data-blank="ok" inputmode="numeric" aria-label="{{ k.l|lower }}">
+                        </label>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="table"></i>
+            <span class="bmc-card__title">PER-TIER TABLES</span>
+            <span class="bmc-card__meta">tier t reads row t — no stretching for a shallow pyramid</span>
+        </div>
+        <div class="bmc-card__body">
+            <div class="bmc-data" style="margin-bottom:10px">
+                <strong>Baseline turnover ships as zeros, which is not a usable configuration and deliberately not a harmless one.</strong>
+                The wage scale divides by turnover, so zero makes the turnover model <em>undefined</em> rather than cheap and the
+                resolver refuses it — which is what keeps the model unreachable until somebody authors these.
+                Figures are <strong>base-year</strong> for the baseline country; the app applies inflation.
+            </div>
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" style="min-width:560px">
+                    <thead><tr>
+                        <th>TIER</th>
+                        <th class="is-right">TIER FACTOR (bp)</th>
+                        <th class="is-right">BASELINE TURNOVER (£)</th>
+                    </tr></thead>
+                    <tbody>
+                        {% for i in 0..7 %}
+                            <tr>
+                                <td>T{{ i + 1 }}</td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="tierFactorsBp[{{ i }}]" inputmode="numeric" data-kind="int"
+                                               value="{{ config.economyTierFactorsBp[i]|default(10000) }}"
+                                               aria-label="tier {{ i + 1 }} factor basis points">
+                                    </label>
+                                </td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--fill" style="min-width:150px">
+                                        <span class="bmc-num__unit">£</span>
+                                        <input name="baselineTurnoverPounds[{{ i }}]" inputmode="decimal" data-kind="money"
+                                               value="{{ config.economyBaselineTurnoverPence[i]|default(0) > 0
+                                                         ? (config.economyBaselineTurnoverPence[i] / 100)|number_format(0, '.', '')
+                                                         : '' }}"
+                                               placeholder="unauthored"
+                                               aria-label="tier {{ i + 1 }} baseline turnover pounds">
+                                    </label>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="parachute"></i>
+            <span class="bmc-card__title">GLOBAL PARACHUTE</span>
+            <span class="bmc-card__meta">used by any league with no override</span>
+        </div>
+        <div class="bmc-card__body">
+            <div class="bmc-field-col">
+                <label for="leagueParachute">Parachute (JSON)</label>
+                <textarea id="leagueParachute" name="leagueParachute" rows="4" data-kind="text" data-blank="ok"
+                          placeholder='{"seasons":3,"perSeasonPence":[550000000,450000000,200000000]}'>{{ config.leagueParachute is null ? '' : config.leagueParachute|json_encode }}</textarea>
+                <div class="bmc-data">
+                    Served <strong>verbatim</strong> — the backend stores and publishes this without reading inside it, so the app
+                    owns the shape. Resolution is <code>league ?? this</code>, <strong>whole-value</strong>: a league override
+                    replaces this entirely rather than merging with it. Money in <strong>base-year pence</strong>.
+                    Blank clears it; malformed JSON is ignored and leaves the stored value alone.
+                </div>
+            </div>
+        </div>
+        <div class="bmc-card__band">
+            <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE ECONOMY SETTINGS</span></button>
+        </div>
+    </section>
+</form>
+
+{# ── per-country factors + the baseline ───────────────────────────────── #}
+<form method="post" action="{{ path('admin', {routeName: 'admin_economy_countries'}) }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('economy_countries') }}">
+    <input type="hidden" name="preview" value="{{ previewCountry }}">
+
+    <section class="bmc-card" data-domain="location">
+        <div class="bmc-card__head">
+            <i data-lucide="globe"></i>
+            <span class="bmc-card__title">COUNTRY FACTORS</span>
+            <span class="bmc-card__meta">
+                baseline:
+                {% if baseline %}<span class="ink-accent">{{ countryLabels[baseline.code]|default(baseline.code) }}</span>
+                {% else %}<span class="ink-warning">NONE — every country resolves at parity</span>{% endif %}
+            </span>
+        </div>
+        <div class="bmc-card__body">
+            <div class="bmc-data" style="margin-bottom:10px">
+                A factor is a <strong>percentage of the baseline</strong>, normalised against the baseline row's own value — so
+                setting the baseline to 12000 does not shift every other country as a side effect, and the baseline is always
+                exactly parity with itself. <strong>Exactly one baseline</strong> is enforced by a partial unique index, not by this
+                form: two baselines would make the whole chain ambiguous, with "slightly wrong money everywhere" as the only symptom.
+            </div>
+            {% if profiles is empty %}
+                <span class="bmc-empty-note">NO COUNTRY PROFILES YET</span>
+            {% else %}
+                <div style="overflow-x:auto">
+                    <table class="bmc-minitable" style="min-width:520px">
+                        <thead><tr>
+                            <th>COUNTRY</th><th>TIERS</th>
+                            <th class="is-right">FACTOR (bp)</th>
+                            <th class="is-right">OF BASELINE</th>
+                            <th class="is-right">BASELINE</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for p in profiles %}
+                                <tr>
+                                    <td>{{ countryLabels[p.code]|default(p.code) }} <span class="bmc-data">{{ p.code }}</span></td>
+                                    <td>{{ p.leagueTierCount }}</td>
+                                    <td class="is-right">
+                                        <label class="bmc-num bmc-num--104">
+                                            <input name="factorBp[{{ p.code }}]" inputmode="numeric" data-kind="int"
+                                                   value="{{ p.economyFactorBp }}" aria-label="{{ p.code }} factor basis points">
+                                        </label>
+                                    </td>
+                                    <td class="is-right">
+                                        {% if baseline and baseline.economyFactorBp > 0 %}
+                                            {{ _self.bp((p.economyFactorBp * 10000) // baseline.economyFactorBp) }}
+                                        {% else %}
+                                            <span class="bmc-data">100.00%</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="is-right">
+                                        <input type="radio" name="baselineCountry" value="{{ p.code }}"
+                                               {{ p.isEconomyBaseline ? 'checked' : '' }}
+                                               aria-label="make {{ p.code }} the baseline">
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+        <div class="bmc-card__band">
+            <button type="submit" class="bmc-btn bmc-btn--yellow"><span>SAVE COUNTRY FACTORS</span></button>
+        </div>
+    </section>
+</form>
+
+{# ── inflation ────────────────────────────────────────────────────────── #}
+<form method="post" action="{{ path('admin', {routeName: 'admin_economy_inflation'}) }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('economy_inflation') }}">
+    <input type="hidden" name="preview" value="{{ previewCountry }}">
+
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="trending-up"></i>
+            <span class="bmc-card__title">INFLATION</span>
+            <span class="bmc-card__meta">{{ config.inflationRatePerSeasonBp }} bp per season</span>
+        </div>
+        <div class="bmc-card__body">
+            <div class="bmc-data" style="margin-bottom:10px">
+                <strong>The backend holds the rate and nothing else.</strong> It is never applied to a generated row, a stored
+                value or a world pack — every money figure published is base-year and the app compounds the index itself.
+                <strong>Changing it moves every existing save's derived prices retroactively</strong>, which is why each change is
+                recorded below. Deflation is not supported: a negative rate would make a long save's ceiling approach zero,
+                so the owner who played longest could invest least.
+                <br>At the current rate, season 10 multiplies by <strong>{{ _self.bp(preview.indexAt10) }}</strong>
+                and season 25 by <strong>{{ _self.bp(preview.indexAt25) }}</strong>.
+            </div>
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">RATE (bp / season)</span>
+                    <span class="bmc-setting__help">0 = no inflation. 250 = 2.5% a season, compounded.</span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--104">
+                        <input name="inflationRatePerSeasonBp" value="{{ config.inflationRatePerSeasonBp }}"
+                               data-kind="int" inputmode="numeric" aria-label="inflation rate basis points">
+                    </label>
+                </div>
+            </div>
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">NOTE</span>
+                    <span class="bmc-setting__help">Why, in your own words. The one field a later reader actually wants.</span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--fill" style="min-width:260px">
+                        <input name="note" maxlength="255" placeholder="optional" aria-label="change note">
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="bmc-card__band">
+            <button type="submit" class="bmc-btn bmc-btn--orange"><span>SET RATE &amp; RECORD</span></button>
+        </div>
+    </section>
+</form>
+
+{% if history is not empty %}
+    <section class="bmc-card" data-domain="club">
+        <div class="bmc-card__head">
+            <i data-lucide="history"></i>
+            <span class="bmc-card__title">RATE HISTORY</span>
+            <span class="bmc-card__meta">append-only · nothing computes from it</span>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:560px">
+                <thead><tr><th>WHEN (UTC)</th><th class="is-right">FROM</th><th class="is-right">TO</th><th>BY</th><th>NOTE</th></tr></thead>
+                <tbody>
+                    {% for h in history %}
+                        <tr>
+                            <td>{{ h.recordedAt|date('Y-m-d H:i') }}</td>
+                            <td class="is-right">{{ h.previousRatePerSeasonBp is null ? '—' : h.previousRatePerSeasonBp ~ ' bp' }}</td>
+                            <td class="is-right">{{ h.ratePerSeasonBp }} bp</td>
+                            <td>{{ h.changedBy ? h.changedBy.email : '—' }}</td>
+                            <td>{{ h.note ?? '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+{% endif %}
+
+{# ── the preview ──────────────────────────────────────────────────────── #}
+<section class="bmc-card" data-domain="location" id="preview">
+    <div class="bmc-card__head">
+        <i data-lucide="search-check"></i>
+        <span class="bmc-card__title">RESOLVER PREVIEW — {{ countryLabels[previewCountry]|default(previewCountry) }}</span>
+        <span class="bmc-card__meta">{{ preview.tierCount }} tier(s) · the real resolver, not a copy</span>
+    </div>
+    <div class="bmc-card__body">
+        <form method="get" action="{{ path('admin') }}" style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+            <input type="hidden" name="routeName" value="admin_economy">
+            <span class="bmc-select"><select name="preview">
+                {% for p in profiles %}
+                    <option value="{{ p.code }}" {{ p.code == previewCountry ? 'selected' : '' }}>
+                        {{ countryLabels[p.code]|default(p.code) }}
+                    </option>
+                {% endfor %}
+            </select></span>
+            <button type="submit" class="bmc-btn bmc-btn--blue"><span>PREVIEW</span></button>
+        </form>
+
+        {% if preview.warnings is not empty %}
+            <div class="bmc-data" style="margin-bottom:10px">
+                {% for w in preview.warnings %}
+                    <div class="ink-warning">⚠ {{ w }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:1080px">
+                <thead><tr>
+                    <th>T</th>
+                    <th class="is-right">COUNTRY</th>
+                    <th class="is-right">TIER</th>
+                    <th class="is-right">COMBINED</th>
+                    <th class="is-right">TURNOVER</th>
+                    <th class="is-right">S_tier (p)</th>
+                    <th>BAND</th>
+                    <th class="is-right">SQUAD</th>
+                    <th class="is-right">MIN /wk</th>
+                    <th class="is-right">MID /wk</th>
+                    <th class="is-right">MAX /wk</th>
+                    <th class="is-right">TV/CLUB</th>
+                    <th class="is-right">TV % T/O</th>
+                </tr></thead>
+                <tbody>
+                    {% for r in preview.rows %}
+                        <tr>
+                            <td>T{{ r.tier }}</td>
+                            <td class="is-right">{{ _self.bp(r.countryFactorBp) }}</td>
+                            <td class="is-right">{{ _self.bp(r.tierFactorBp) }}</td>
+                            <td class="is-right">{{ _self.bp(r.combinedBp) }}</td>
+                            <td class="is-right">{{ _self.money(r.turnoverPence) }}</td>
+                            {% if r.resolvable %}
+                                <td class="is-right">{{ (r.scaleMicroPence / wageScaleUnit)|number_format(4) }}</td>
+                                <td>{{ r.band.min }}-{{ r.band.max }}</td>
+                                <td class="is-right">{{ r.squad }}</td>
+                                <td class="is-right">{{ _self.money(r.wageMin) }}</td>
+                                <td class="is-right">{{ _self.money(r.wageMid) }}</td>
+                                <td class="is-right">{{ _self.money(r.wageMax) }}</td>
+                            {% else %}
+                                <td class="is-right ink-warning">UNAUTHORED</td>
+                                <td>{{ r.band.min }}-{{ r.band.max }}</td>
+                                <td class="is-right">{{ r.squad }}</td>
+                                <td class="is-right" colspan="3"><span class="bmc-data">no turnover authored for this tier</span></td>
+                            {% endif %}
+                            <td class="is-right">{{ _self.money(r.tvPerClubPence) }}</td>
+                            <td class="is-right{{ r.tvSharePct is not null and r.tvSharePct > 100 ? ' ink-danger' : '' }}">
+                                {{ r.tvSharePct is null ? '—' : (r.tvSharePct|number_format(1) ~ '%') }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bmc-data" style="margin-top:10px">
+            Wages are shown at <strong>reputation 50</strong>, the calibration anchor where the modifier is exactly 1.0.
+            <code>S_tier</code> is pence per unit of <code>ability^k</code> and should decrease strictly down the table.
+            Everything here is <strong>base-year</strong>.
+        </div>
+    </div>
+</section>
+
+{% endblock %}

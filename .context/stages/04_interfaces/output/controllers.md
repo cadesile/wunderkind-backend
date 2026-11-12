@@ -169,6 +169,45 @@ actually *does* (which service/repo it calls), not restated route paths.
   quick-edit screen for one GameEventTemplate/FacilityTemplate/Excursion
   row, via `NarrativeTranslationService` + `LanguageRepository`.
 
+### `EconomyAdminController` — World → Economy (added 2026-11-12)
+
+`/admin/economy` plus three POST actions. Where the country x tier scaling gets turned on, and
+the screen's job is to make that deliberate: every control ships in its "no change" position,
+so the **resolver preview is the feature** — it runs the real `EconomyScaleResolver` and
+`WageModelResolver`, not a copy, because a second implementation of the arithmetic would agree
+with itself and disagree with the world.
+
+**THE BASELINE MOVE IS THE ONE NON-OBVIOUS WRITE, and it bit once.**
+`uq_country_profile_economy_baseline` is a PARTIAL unique index, and Postgres checks a
+non-deferrable unique index **per row during an UPDATE** — not at statement end. So the obvious
+one-statement `SET is_economy_baseline = (code = :code)` fails roughly half the time, depending
+on row order: it sets the new baseline before clearing the old and hits the index as a 500 on a
+completely ordinary operator action. A partial unique index also **cannot be made DEFERRABLE**
+(Postgres defers constraints, and a partial unique cannot be a constraint), so there is no way
+to let the statement settle.
+
+The working shape is **clear every baseline, then set one, inside a transaction**: zero
+baselines is legal for the index and is a state `EconomyScaleResolver` already handles by
+resolving every country at parity, while two is what it refuses. The transaction is what stops
+a concurrent request observing the gap. `EconomyAdminTest::testTheBaselineIsNeverMomentarilyDuplicatedOrAbsent`
+moves the baseline four times and is what caught the original version.
+
+**Blank means "leave it alone" on every scalar field**, which is the guard the game-config
+screen's `contractValueRandMin/Max` pair needed and did not have. The exception is the baseline
+turnover table, where blank means **zero** — because zero is "unauthored", a real and useful
+state (it is what makes the turnover model refuse to run), so an operator has to be able to
+clear a tier back to it.
+
+**The per-tier tables are read BY INDEX, not through `array_values()`.** The inputs are named
+`[0]`..`[7]` and the index IS the tier, so collapsing a sparse post would silently move tier 8's
+figure to tier 2 — a handler that only works when every field arrives fails by re-pricing the
+wrong division rather than by erroring.
+
+**The inflation rate saves on its own** and writes an `InflationRateHistory` row, because it is
+the one economy figure whose past values keep mattering: the app compounds it over a club's
+season count, so changing it moves every existing save's prices retroactively. Setting the same
+value records nothing (an audit trail of non-changes is noise).
+
 ## `src/Controller/Admin/*CrudController.php`
 
 37 EasyAdmin CRUD controllers, one per entity (full list in

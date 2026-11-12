@@ -1885,6 +1885,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::subMenu('World', 'globe')->setSubItems([
             MenuItem::linkTo(LeagueCrudController::class, 'Leagues'),
             MenuItem::linkToRoute('League overview', null, 'admin_leagues_overview'),
+            MenuItem::linkToRoute('Economy', null, 'admin_economy'),
             MenuItem::linkTo(NpcClubCrudController::class, 'NPC clubs'),
             MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical matrix'),
             MenuItem::linkToRoute('Generate', null, 'admin_npc_clubs_content'),
