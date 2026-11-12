@@ -16,7 +16,6 @@ use App\Enum\Appearance\KitStyle;
 use App\Enum\Country;
 use App\Repository\FacilityTemplateRepository;
 use App\Repository\GameConfigRepository;
-use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\ClubInitializationService;
 use App\Service\CountryContent\CountryContentRegistry;
@@ -64,7 +63,7 @@ class NpcClubGenerationService
         private readonly LeagueService               $leagueService,
         private readonly GameConfigRepository        $gameConfigRepository,
         private readonly LocationCatalogueService    $locationCatalogue,
-        private readonly CountryProfileRepository     $countryProfileRepository,
+        private readonly \App\Service\Economy\EconomyScaleResolver $economyScaleResolver,
         private readonly \App\Service\Location\NpcClubPlotSeatingService $plotSeating,
         // Suffixes and stadium formats now come from here, not from CountryContentRegistry
         // directly: an operator can author them on the locations dashboard, and the PHP
@@ -77,14 +76,19 @@ class NpcClubGenerationService
     /**
      * How deep this country's pyramid is meant to be.
      *
-     * Read from the profile's declared intent rather than counted from the league rows:
-     * clubs are often generated while a structure is still being built, and rescaling them
-     * against a half-finished count would bake in the wrong reputations and balances.
-     * Falls back to the full eight for a country with no profile yet.
+     * DELEGATED SINCE 2026-11-12. The lookup itself moved to EconomyScaleResolver, which is now
+     * the single owner of every per-country economy input — this was the only place in the
+     * codebase that read leagueTierCount, and the resolver needs it anyway to clamp a requested
+     * tier to a pyramid that does not have it. Kept as a method here because reputationForTier()
+     * reads it on a hot loop and the resolver memoises per request.
+     *
+     * The reasoning behind the value is unchanged: it is the profile's DECLARED intent rather
+     * than a count of league rows, because clubs are often generated while a structure is still
+     * being built and rescaling them against a half-finished count bakes in wrong figures.
      */
     private function tierCountFor(string $country): int
     {
-        return $this->countryProfileRepository->findByCode(strtoupper($country))?->getLeagueTierCount() ?? 8;
+        return $this->economyScaleResolver->tierCountFor($country);
     }
 
     /** @return string[] */
@@ -202,7 +206,7 @@ class NpcClubGenerationService
             $citySize       = $place['city_size'];
             $standing       = (float) ($place['standing'] ?? 0.5);
             $reputation     = $this->reputationForTier($tier, $citySize, $tierCount, $standing);
-            $balance        = $this->balanceForTier($tier, $citySize, $tierCount, $standing);
+            $balance        = $this->balanceForTier($tier, $citySize, $standing);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $identity       = $this->generateIdentity($name);
             $stadiumName    = $this->generateStadiumName($place['name'], $country);
@@ -635,9 +639,16 @@ class NpcClubGenerationService
         return $this->rollAtStanding($min, $max, $standing);
     }
 
-    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, int $tierCount = 8, float $standing = 0.5): int
+    /**
+     * NO $tierCount PARAMETER ANY MORE. The balance table is now indexed raw — tier t reads row
+     * t — so a shallow country's bottom division draws its OWN tier's band rather than the
+     * tier-8 one it used to be stretched onto. Reversing that was deliberate; the reasoning is
+     * in GameConfig::getNpcClubBalanceRangeForTier(). Depth still shapes reputation, which
+     * interpolates rather than looking a row up.
+     */
+    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, float $standing = 0.5): int
     {
-        $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier, $tierCount);
+        $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
         $min   = max(0, (int) $range['min']);
         $max   = max($min, (int) $range['max']);
         [$skewMin, $skewMax] = $this->skewRange($min, $max, $citySize);

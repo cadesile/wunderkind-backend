@@ -78,7 +78,16 @@ class NpcClubPlaceWeightingTest extends TestCase
             $this->createStub(LeagueService::class),
             $gameConfigRepo,
             $this->makeCatalogue($capitalIndex, $withIds, $priced),
-            $this->createStub(CountryProfileRepository::class),
+            // A REAL resolver over stubbed repositories, for the same reason the two services
+            // below are built that way: it is final. It replaced a direct
+            // CountryProfileRepository here when the leagueTierCount lookup moved into it —
+            // findByCode() on a stub returns null, so every country resolves at the full eight
+            // tiers, which is what these expectations were written against.
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(CountryProfileRepository::class),
+            ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.
@@ -128,7 +137,12 @@ class NpcClubPlaceWeightingTest extends TestCase
             $this->createStub(LeagueService::class),
             $gameConfigRepo,
             $this->makeCatalogue(self::CAPITAL_IS_LARGEST, false, true, [$index => $pence]),
-            $this->createStub(CountryProfileRepository::class),
+            // Same real-resolver-over-stubs reasoning as makeService() above.
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(CountryProfileRepository::class),
+            ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.

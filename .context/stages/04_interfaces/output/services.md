@@ -1124,6 +1124,75 @@ not a description of current output, and must never be edited to match new outpu
 
 No `src/EventListener/` directory exists.
 
+## Economy scaling (`App\Service\Economy`, added 2026-11-12)
+
+**`EconomyScaleResolver` — THE only place country and tier compose into a money
+figure.** Read it before adding any per-country or per-tier money calculation;
+the point of the class is that there is nowhere else to put one.
+
+Why one class rather than a helper per caller: the chain is short, but its
+inputs live in three tables (`country_profile`, `game_config`,
+`starter_config`) and its output gets *baked into generated rows that outlive
+the request*. Two call sites composing the same factors in a different order,
+or rounding at a different step, produce clubs in the same division that
+disagree about what a player costs — and nothing surfaces that except a player
+noticing. This codebase has already made that mistake once, with the three
+copy-pasted wage-multiplier tier-walks in `WorldPackClubGenerationService`,
+`MarketPoolService` and `StaffGenerationService`.
+
+**Integer basis points, one division at the end.** Every factor is an integer
+in basis points and the chain divides exactly once, with `intdiv`, where it
+becomes pence. No float enters it. The single exception is the ability curve,
+which needs `pow()` with a fractional exponent: it is computed in ONE method
+and rounded ONCE, and the result is carried as **pence × 10⁶**
+(`WAGE_SCALE_UNIT`) so the per-player multiply downstream stays integer too.
+That unit is not fussiness — `S_tier` for a bottom division is a fraction of a
+penny per unit of ability^k, so rounding it to pence would quantise every wage
+in the division to a handful of values, and at a small country factor would
+round it to zero and make every player free.
+
+**The reference squad is read from the same config the world generator uses** —
+`starterConfig.npcSquadConfig` for size, `starterConfig.leagueAbilityRanges`
+for the ability band — so the figure the wage scale is calibrated against is
+the figure that actually gets paid. `gameConfig.leaguePlayerAbilityRanges` is
+the third ability table in the codebase; it is published to the app, has no
+server-side generator consumer, and is **deliberately not read here**.
+
+**`tierCountFor()` moved here from `NpcClubGenerationService`**, which was the
+only place in the codebase that read `leagueTierCount`. It belongs with the
+other per-country economy inputs, and the resolver needs it anyway to clamp a
+requested tier to a pyramid that does not have it. `NpcClubGenerationService`
+delegates; `reputationForTier()` still reads it on a hot loop, which is why the
+resolver memoises per request (a world-pack build resolves the same country and
+tier once per club, and without the cache the baseline lookup is one query per
+club).
+
+**Raw row indexing, reversing an earlier convention.** Tier t reads row t; a
+4-tier country uses rows 1-4 and is not stretched across the eight-rung tables.
+`GameConfig::scaleTierToEight()` is gone and
+`getNpcClubBalanceRangeForTier()`'s `$tierCount` parameter with it. The
+reasoning is in that method's docblock: one link of a money chain stretching
+while the others do not is worse than a bottom division that is merely
+generous. **Still asymmetric with two interpolations, deliberately** —
+`NpcClubGenerationService::reputationForTier()` and
+`GameConfig::getNpcClubSizeWeightsForTier()` span the country's own depth,
+because they have no rows to index and a fixed divisor of 7 would strand a
+3-tier country 28% along its own scale. `GameConfigTierScalingTest` pins both
+halves of that line.
+
+`inflationIndexBp()` is computed here and applied **almost nowhere** — never to
+a generated row, a published value, or a world pack. Compounded in integers one
+season at a time rather than with `pow()`, because an operator may have to
+reproduce a ceiling by hand from the audit record and `(1+r)^n` in floating
+point does not reproduce by hand. The season arrives from a device-mirrored
+column so it is bounded (200) rather than trusted.
+
+`EconomyScale` is the returned value object, and **the breakdown is the
+product, not a debugging extra**: the admin preview screen renders exactly its
+fields, and a resolver returning a single integer would be impossible to
+sanity-check before turning scaling on for a country. `isResolvable` is false
+when the turnover row is unauthored — the shipped state.
+
 ## Location & land economy (`App\Service\Location`, added 2026-11-03)
 
 - **`Haversine`** — great-circle distance in PHP *and* as a SQL fragment, in one file so

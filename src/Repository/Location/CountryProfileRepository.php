@@ -24,6 +24,19 @@ class CountryProfileRepository extends ServiceEntityRepository
         return $this->find(strtoupper(trim($code)));
     }
 
+    /**
+     * The one country flagged as the economy baseline, or null if none is.
+     *
+     * NULL IS A LEGITIMATE ANSWER, not a broken state: a fresh database has no flag and
+     * EconomyScaleResolver resolves every country at parity in that case. "Exactly one" is
+     * guaranteed by the partial unique index uq_country_profile_economy_baseline, so this does
+     * not have to pick a winner between two.
+     */
+    public function findEconomyBaseline(): ?CountryProfile
+    {
+        return $this->findOneBy(['isEconomyBaseline' => true]);
+    }
+
     /** @return list<CountryProfile> */
     public function findLive(): array
     {

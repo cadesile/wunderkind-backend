@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\EconomyWageModel;
 use App\Enum\StatCategory;
 use App\Enum\StatsPeriod;
 use App\Repository\GameConfigRepository;
@@ -1343,6 +1344,191 @@ class GameConfig
     public function getRecaptchaSecretKey(): ?string { return $this->recaptchaSecretKey; }
     public function setRecaptchaSecretKey(?string $v): static { $this->recaptchaSecretKey = $v ?: null; return $this; }
 
+    // ── Economy model ─────────────────────────────────────────────────────
+    //
+    // EVERY DEFAULT IN THIS BLOCK MEANS "BEHAVE EXACTLY AS BEFORE". The wage model is `legacy`,
+    // every tier factor is parity, and the inflation rate is zero, so applying the migration
+    // that adds these columns cannot change a single generated figure. That is the same
+    // compatibility mechanism `starter_config.max_enrichment_requests_per_user` uses
+    // (0 = unlimited), and for the same reason: the backend ships ahead of the app, so a new
+    // knob has to arrive switched off and be turned on deliberately, per country, by an
+    // operator looking at a calibration preview.
+    //
+    // THE EXCEPTION IS `economyBaselineTurnoverPence`, WHICH SHIPS AS ZEROS AND IS NOT A
+    // USABLE CONFIGURATION. Zero turnover makes the turnover model undefined rather than
+    // harmless, so EconomyScaleResolver refuses it instead of dividing by it. That is
+    // deliberate: an unset turnover table must not silently resolve to free players, and the
+    // only way to reach the turnover model is to author the table first.
+
+    /** Which formula prices generated wages. Ships as LEGACY — see the enum. */
+    #[ORM\Column(type: 'string', length: 16, enumType: EconomyWageModel::class, options: ['default' => 'legacy'])]
+    private EconomyWageModel $economyWageModel = EconomyWageModel::LEGACY;
+
+    /**
+     * Per-tier economic scale in basis points, index 0 = tier 1. 10000 = parity.
+     *
+     * The TIER half of the country x tier chain, where `country_profile.economy_factor_bp` is
+     * the country half. Separate from `economyBaselineTurnoverPence` because they answer
+     * different questions: turnover says what a division is worth in money, this says how the
+     * non-wage figures derived from it (the season-investment ceiling, and the fines, floors
+     * and caps Pyramid Investigations will later express the same way) step between tiers.
+     *
+     * RAW ROW INDEXING: tier t reads index t-1, with no stretching for a shallow pyramid. A
+     * 4-tier country uses rows 1-4. See getNpcClubBalanceRangeForTier(), which this convention
+     * was aligned to.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyTierFactorsBp = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000];
+
+    /**
+     * Baseline-year season turnover per tier in PENCE, index 0 = tier 1, for the baseline country.
+     *
+     * A CONFIGURED NUMBER, NOT A MEASUREMENT. It is deliberately not derived from live club
+     * revenue: the backend is a data pool and has no revenue to read (the device owns a club's
+     * money), and a wage anchored to live revenue would drift with every sync. This is the
+     * fixed post the wage scale is nailed to, in base-year terms, and the app applies inflation
+     * to anything it derives from it.
+     *
+     * SHIPS AS ZEROS, which is an unauthored table rather than a free world — see the block
+     * comment above.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyBaselineTurnoverPence = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    /** Share of a tier's baseline turnover that goes on wages, in basis points. 6000 = 60%. */
+    #[ORM\Column(type: 'integer', options: ['default' => 6000])]
+    private int $economyWageToTurnoverRatioBp = 6000;
+
+    /**
+     * Exponent of the ability curve, in basis points. 25000 = 2.5.
+     *
+     * BASIS POINTS FOR AN EXPONENT LOOKS ODD AND IS STILL RIGHT. It keeps the admin form and
+     * the config export dealing in integers like every other figure in this block, and the one
+     * place it becomes a float is the single pow() inside EconomyScaleResolver, which is also
+     * the only place the chain rounds. A float column would put a second rounding step in the
+     * middle of an otherwise exact integer chain.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 25000])]
+    private int $economyWageCurveExponentBp = 25000;
+
+    /** Share of the wage budget taken by staff rather than players, in basis points. 2500 = 25%. */
+    #[ORM\Column(type: 'integer', options: ['default' => 2500])]
+    private int $economyStaffWageShareBp = 2500;
+
+    /**
+     * Weeks a season pays wages for.
+     *
+     * 46, BECAUSE THE APP IS THE PAYER. The reference-squad calibration only means anything if
+     * the number of weeks the server divides by is the number of weeks the device actually
+     * charges for, and the device's paid season is 46 weeks.
+     *
+     * NOT THE SAME AS THE BACKEND'S OWN FINANCIAL YEAR, which is 52 — see
+     * Club::crossedFinancialYearEnd(), which is what triggers
+     * EconomicService::processFinancialYearEnd(). Six weeks of the backend's year are therefore
+     * unpriced by this model. That is a known gap, recorded here rather than papered over,
+     * because the two numbers measure different things and forcing them equal would make one
+     * of them wrong.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 46])]
+    private int $economyWeeksPerSeason = 46;
+
+    /**
+     * How far a club's reputation moves a wage either side of its tier's scale, in basis points.
+     *
+     * SHIPS AT 0, so the modifier is a flat 1.0 and a tier's wage depends on ability alone.
+     * The calibration is derived at modifier 1.0, so a non-zero spread REDISTRIBUTES a tier's
+     * wage bill between its clubs rather than inflating it — worth stating, because the
+     * obvious reading of "reputation raises wages" is that the bill goes up.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $economyReputationSpreadBp = 0;
+
+    /**
+     * Inflation per season in basis points. SHIPS AT 0.
+     *
+     * THE BACKEND HOLDS THE RATE AND NOTHING ELSE. It is never applied to a generated row, a
+     * stored value, or a world pack — the pack cache is keyed (country, tier) with no season
+     * dimension, so baking an index into pack content would make a pack silently wrong for
+     * every save at a different season. Every money figure the backend publishes is base-year,
+     * and the app applies the index.
+     *
+     * The one server-side use is the season-investment ceiling, which has to be checked against
+     * the season the claim is for. See EconomyScaleResolver::inflationIndexBp().
+     *
+     * Every change is also appended to inflation_rate_history, because a rate is the one
+     * economy figure whose PAST values stay meaningful after it is changed.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $inflationRatePerSeasonBp = 0;
+
+    public function getEconomyWageModel(): EconomyWageModel { return $this->economyWageModel; }
+    public function setEconomyWageModel(EconomyWageModel $v): static { $this->economyWageModel = $v; return $this; }
+
+    /** @return list<int> */
+    public function getEconomyTierFactorsBp(): array { return $this->economyTierFactorsBp; }
+    /** @param list<int> $v */
+    public function setEconomyTierFactorsBp(array $v): static { $this->economyTierFactorsBp = self::normaliseTierBpList($v, 10000); return $this; }
+
+    /** @return list<int> */
+    public function getEconomyBaselineTurnoverPence(): array { return $this->economyBaselineTurnoverPence; }
+    /** @param list<int> $v */
+    public function setEconomyBaselineTurnoverPence(array $v): static { $this->economyBaselineTurnoverPence = self::normaliseTierBpList($v, 0); return $this; }
+
+    public function getEconomyWageToTurnoverRatioBp(): int { return $this->economyWageToTurnoverRatioBp; }
+    public function setEconomyWageToTurnoverRatioBp(int $v): static { $this->economyWageToTurnoverRatioBp = max(0, $v); return $this; }
+
+    public function getEconomyWageCurveExponentBp(): int { return $this->economyWageCurveExponentBp; }
+    /** Floored at 1bp: a zero exponent makes every ability cost the same, which is not a curve. */
+    public function setEconomyWageCurveExponentBp(int $v): static { $this->economyWageCurveExponentBp = max(1, $v); return $this; }
+
+    public function getEconomyStaffWageShareBp(): int { return $this->economyStaffWageShareBp; }
+    /** Capped below 10000: at 100% the player budget is zero and every player is free. */
+    public function setEconomyStaffWageShareBp(int $v): static { $this->economyStaffWageShareBp = max(0, min(9999, $v)); return $this; }
+
+    public function getEconomyWeeksPerSeason(): int { return $this->economyWeeksPerSeason; }
+    public function setEconomyWeeksPerSeason(int $v): static { $this->economyWeeksPerSeason = max(1, min(104, $v)); return $this; }
+
+    public function getEconomyReputationSpreadBp(): int { return $this->economyReputationSpreadBp; }
+    public function setEconomyReputationSpreadBp(int $v): static { $this->economyReputationSpreadBp = max(0, $v); return $this; }
+
+    public function getInflationRatePerSeasonBp(): int { return $this->inflationRatePerSeasonBp; }
+
+    /**
+     * Floored at 0 — DEFLATION IS NOT SUPPORTED, and that is a decision rather than an omission.
+     * The index is compounded over a club's season count and then used as a CEILING multiplier;
+     * a negative rate makes a long-running save's ceiling approach zero, so an owner who has
+     * played longest could invest least. If deflation is ever wanted it needs its own floor on
+     * the index, not just a negative rate here.
+     */
+    public function setInflationRatePerSeasonBp(int $v): static { $this->inflationRatePerSeasonBp = max(0, $v); return $this; }
+
+    /**
+     * Coerces a submitted per-tier list to exactly eight integers.
+     *
+     * EIGHT ALWAYS, whatever arrives. These are read by index and a short list would make a
+     * deep country's lower tiers resolve to null mid-chain — an error that surfaces as a wage
+     * of zero rather than as an exception. A long list is truncated for the same reason the
+     * tier columns are capped at 8 everywhere else: there is no ninth tier to read it.
+     *
+     * @param  array<array-key, mixed> $values
+     * @return list<int>
+     */
+    private static function normaliseTierBpList(array $values, int $pad): array
+    {
+        $out = [];
+        $raw = array_values($values);
+
+        for ($i = 0; $i < 8; $i++) {
+            $out[] = isset($raw[$i]) && is_numeric($raw[$i]) ? max(0, (int) $raw[$i]) : $pad;
+        }
+
+        return $out;
+    }
+
     // ── NPC Club Finances ─────────────────────────────────────────────────
 
     /**
@@ -1370,38 +1556,33 @@ class GameConfig
     public function setNpcClubBalanceRanges(array $ranges): static { $this->npcClubBalanceRanges = $ranges; return $this; }
 
     /**
-     * Returns the {min, max} range for a given tier (1–8).
-     * Falls back to the tier-8 entry if the tier is out of bounds.
+     * Returns the {min, max} range for a given tier (1–8). Tier t reads row t.
+     *
+     * RAW ROW INDEXING SINCE 2026-11-12, AND THIS REVERSED AN EXPLICIT EARLIER DECISION. The
+     * stored ranges used to be treated as eight rungs of a ladder that a shallower pyramid was
+     * STRETCHED across (via a since-removed scaleTierToEight()), so a 4-tier country's bottom
+     * division drew the tier-8-of-8 band rather than the tier-4 one. The argument for that was
+     * real — a bottom division should scrape the floor wherever it sits — but it cannot survive
+     * the economy scaling chain: country x tier factors, baseline turnover and the wage scale
+     * are all raw per-tier tables, and one link stretching while the others do not is how a
+     * Scottish bottom-tier club ends up with a tier-8 budget and tier-4 wages.
+     *
+     * One convention, applied everywhere, chosen over two defensible conventions disagreeing.
+     * Every new game is a fresh start, so re-scaling generated NPC balances for shallow
+     * countries costs nobody a save.
+     *
+     * STILL ASYMMETRIC WITH REPUTATION, deliberately and worth knowing:
+     * NpcClubGenerationService::reputationForTier() interpolates across the country's own depth
+     * and was left alone. It is a continuous interpolation rather than a row lookup, so it has
+     * no row to index raw, and reputation is not part of the money chain.
+     *
      * @return array{min:int,max:int}
      */
-    public function getNpcClubBalanceRangeForTier(int $tier, int $tierCount = 8): array
+    public function getNpcClubBalanceRangeForTier(int $tier): array
     {
-        // The stored ranges are eight rungs of a ladder, so a shallower pyramid has to be
-        // stretched across them rather than take the first N. Without this, the bottom
-        // division of a 3-tier country gets the tier-3-of-8 band — comfortably wealthy —
-        // when it should be scraping the floor like tier 8 does.
-        $idx = self::scaleTierToEight($tier, $tierCount) - 1;
+        $idx = max(1, min(8, $tier)) - 1;
 
         return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
-    }
-
-    /**
-     * Map tier N of M onto the equivalent rung of the canonical 8-tier ladder.
-     *
-     * Tier 1 always maps to 1 and the bottom tier always maps to 8, so the top and bottom
-     * of any pyramid land on the extremes the config tables were written for. A one-tier
-     * country is the degenerate case and maps to 1: its only division is its top one.
-     */
-    public static function scaleTierToEight(int $tier, int $tierCount): int
-    {
-        $tierCount = max(1, min(8, $tierCount));
-        $tier      = max(1, min($tierCount, $tier));
-
-        if ($tierCount === 1) {
-            return 1;
-        }
-
-        return (int) round(1 + (($tier - 1) / ($tierCount - 1)) * 7);
     }
 
     // ── League Tier Defaults ───────────────────────────────────────────────

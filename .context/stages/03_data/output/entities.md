@@ -1086,6 +1086,92 @@ RESTRICT-referenced by `plot_claim`, so a town that re-bands downward keeps what
   Scoped **per location, not per country** — the name IS town plus affix, so two
   "Burnley FC"s only collide at Burnley.
 
+### The economy model block on `GameConfig` (2026-11-12)
+
+Nine columns, **every default meaning "behave exactly as before"**, added by
+`Version20261112160100`. `economyWageModel` is `legacy`, all eight
+`economyTierFactorsBp` are 10000 (parity), `inflationRatePerSeasonBp` is 0 — so
+applying the migration cannot move a generated figure. Same compatibility
+mechanism as `starter_config.max_enrichment_requests_per_user` (0 = unlimited):
+the knob arrives switched off and is turned on per country by an operator.
+
+- `economyWageModel` (`EconomyWageModel` enum: `legacy` | `turnover`).
+  **`legacy` is a supported mode, not dead code** — it must keep producing
+  byte-identical figures to the pre-unification generators.
+- `economyTierFactorsBp`, `economyBaselineTurnoverPence` — json, eight rows,
+  **indexed RAW by tier** (tier t reads row t). Both setters pad/truncate to
+  exactly eight, because these are read by index and a short list resolves a
+  deep country's lower tiers to null mid-chain, which surfaces as a wage of
+  zero rather than an exception.
+- `economyWageToTurnoverRatioBp` (6000), `economyStaffWageShareBp` (2500,
+  capped below 10000 so the player budget cannot be zero),
+  `economyWageCurveExponentBp` (25000 = k 2.5, floored at 1 — a zero exponent
+  prices every ability the same), `economyReputationSpreadBp` (0 = flat 1.0).
+- `economyWeeksPerSeason` — **46, which is NOT the backend's own financial
+  year of 52** (`Club::crossedFinancialYearEnd()`). 46 is what the app charges
+  wages for, and the reference-squad calibration is only meaningful against
+  the payer's number. Six weeks of the backend's year are therefore unpriced
+  by this model; recorded, not reconciled.
+- `inflationRatePerSeasonBp` — **the rate and nothing else.** Never applied to
+  a generated row, a stored value, or a world pack (the pack cache is keyed
+  `(country, tier)` with no season dimension, so an inflated pack would be
+  wrong for every save at a different season). Floored at 0: deflation would
+  make a long save's ceiling approach zero, so the owner who played longest
+  could invest least.
+
+**`economyBaselineTurnoverPence` ships as eight ZEROS, which is not a usable
+configuration and deliberately not a harmless one.** The wage scale divides by
+turnover, so zero makes the turnover model *undefined* rather than cheap —
+`EconomyScaleResolver` reports `isResolvable: false` instead of dividing. A
+plausible-looking default here would be the dangerous choice: it would let the
+model be switched on against numbers nobody authored.
+
+`scaleTierToEight()` was **removed** in the same pass — see
+`GameConfig::getNpcClubBalanceRangeForTier()`.
+
+### `CountryProfile` gained an economy scale (2026-11-12)
+
+`isEconomyBaseline:bool` (default false) and `economyFactorBp:int` (default
+10000 = parity), from `Version20261112160000`, which flags `EN` in `postUp()`.
+
+- **Exactly one baseline, enforced by a partial unique index**
+  (`uq_country_profile_economy_baseline`, `WHERE (is_economy_baseline = true)`)
+  rather than by a service. Every country's factor is normalised against the
+  baseline row's *own* value, so two baselines make the whole country × tier
+  chain ambiguous — and the only symptom is money that is quietly a bit wrong
+  everywhere, which nobody traces back to a flag. Partial because `false` is
+  the normal state for 25 of 26 rows.
+- **Normalised on read, not assumed to be 10000.** An operator may set England
+  to 12000 thinking in absolutes; the baseline must still resolve to parity
+  with itself or every other country shifts as a side effect.
+- **No baseline flagged at all resolves every country at parity** — the inert
+  state, deliberately not an exception, so a half-configured economy degrades
+  to "no scaling" rather than a 500.
+- `setEconomyFactorBp()` floors at 1, never 0: zero resolves every wage,
+  balance and ceiling in the country to nothing, which reads as "the economy
+  is off here" rather than as the typo it is.
+
+### `InflationRateHistory` — append-only, and nothing computes from it (2026-11-12)
+
+`ratePerSeasonBp`, `previousRatePerSeasonBp` (null only on the first row),
+`changedBy` → `Admin` (nullable, **ON DELETE SET NULL** — an audit row outlives
+the account that wrote it, same reasoning as `UserLedger::$sourceSyncRecord`),
+`note`, `recordedAt`. Created empty by `Version20261112160200`.
+
+**Why the rate gets a history when no other economy figure does:** changing a
+tier factor re-prices what the backend *generates* from then on and the old
+value stops meaning anything. The inflation rate is different in kind — the app
+compounds it over a club's season count, so changing it moves every existing
+save's prices retroactively, and with only the current value stored there is no
+way to answer "why was that club's ceiling that" afterwards.
+
+**The index is always derived from the CURRENT rate in `game_config`, never
+replayed from this table**, and that is worth not quietly improving: a replayed
+history would make a club's ceiling depend on when an operator clicked save.
+`previousRatePerSeasonBp` is *stored* rather than inferred from the preceding
+row, because reconstructing it from a timestamp ordering breaks the first time
+two changes land in the same second.
+
 ## Misc / cache / analytics
 
 - **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory)

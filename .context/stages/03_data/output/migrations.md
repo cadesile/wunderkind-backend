@@ -40,6 +40,42 @@ history — not part of the live migration chain.
 
 ## Live migration chain: `migrations/` (144 files)
 
+### 2026-11-12 — the economy scaffolding, three migrations, all provably inert
+
+`Version20261112160000` / `...160100` / `...160200`. The whole point of the set
+is that **applying it changes nothing**: country factors default to parity, the
+wage model to `legacy`, the inflation rate to 0. Turning anything on is a later
+operator action. Verified by building a scratch database from the dev schema,
+applying all three, diffing the result against a schema built from the mapping
+alone (identical), then running every `down()` and confirming nothing of theirs
+remained.
+
+Two things in that set are worth copying:
+
+- **A new NOT NULL json column is added WITH a default and then has the default
+  DROPPED, in the same migration.** `game_config` is a populated singleton, so
+  NOT NULL needs something to put in the existing row — but a json column that
+  *keeps* a database-side default is drift the mapping does not declare, and
+  `Version20261011134810` exists precisely because six json columns were added
+  that way and left that way, after which `migrations:diff` proposed
+  re-dropping those defaults on every unrelated change. Populate from the
+  default, then drop it.
+- **The partial unique index is declared in the ORM mapping as well as the
+  migration**, with the predicate spelled exactly as
+  `pg_get_expr(indpred, indrelid)` reports it (`(is_economy_baseline = true)`),
+  per the rule at the top of `schema.md`.
+
+`...160000` adds `country_profile.is_economy_baseline` + `economy_factor_bp`
+and the partial unique index, and flags `EN` in `postUp()` — written as an
+unconditional UPDATE, because a database with no `EN` row simply gets no
+baseline and the resolver treats "no baseline" as parity for everyone, which is
+the same inert state the defaults give.
+
+`...160100` adds the nine `game_config` economy columns.
+`...160200` creates `inflation_rate_history`, empty.
+
+
+
 Most recent migrations (chronological):
 
 1. `Version20260913203511`, `Version20260914090400`,
