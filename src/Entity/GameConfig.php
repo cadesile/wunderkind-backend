@@ -914,6 +914,35 @@ class GameConfig
     public function getLeaguePositionDecreasePercent(): int { return $this->leaguePositionDecreasePercent; }
     public function setLeaguePositionDecreasePercent(int $v): static { $this->leaguePositionDecreasePercent = $v; return $this; }
 
+    /**
+     * The GLOBAL parachute schedule, used by any league with no override of its own.
+     *
+     * The other half of `League::$parachute`'s `league ?? gameConfig` resolution, and served
+     * through exactly the same verbatim passthrough — the backend stores it, picks which one
+     * applies, and publishes it without reading inside. The reasoning is on that property.
+     *
+     * SHIPS AS NULL, WHICH IS THE INERT STATE. A league with no override and no global default
+     * publishes `parachute: null`, so an old build sees a key it does not read and a new build
+     * sees "no parachute scheme configured" — not an empty one it might try to pay out.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $leagueParachute = null;
+
+    /** @return array<string, mixed>|null */
+    public function getLeagueParachute(): ?array { return $this->leagueParachute; }
+
+    /** @param array<string, mixed>|null $v */
+    public function setLeagueParachute(?array $v): static
+    {
+        // `[]` to null, same reasoning as League::setParachute(): an empty schedule and "no
+        // schedule" are indistinguishable, and only one of them is a thing to author.
+        $this->leagueParachute = ($v === null || $v === []) ? null : $v;
+
+        return $this;
+    }
+
     // ── Financial Penalties ───────────────────────────────────────────────────
 
     /**
@@ -1758,25 +1787,25 @@ class GameConfig
      * to be LeagueService::LEAGUE_TIER_DEFAULTS, a hardcoded const that only ever fed
      * newly-generated leagues and couldn't be edited without a code change.
      *
-     * @var array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}>
+     * @var array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}>
      */
     #[ORM\Column(type: 'json')]
     private array $leagueTierDefaults = [
-        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
-        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
     ];
 
     /**
      * Every row is normalised on the way out (see normaliseTierRow), so the admin
      * bulk-edit screen never has to know the retired trophy keys existed.
      *
-     * @return array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}>
+     * @return array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}>
      */
     public function getLeagueTierDefaults(): array
     {
@@ -1790,7 +1819,7 @@ class GameConfig
      * Normalised on write too, so a saved config converges on the new shape and
      * the legacy fold becomes dead weight rather than a permanent read-time cost.
      *
-     * @param array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}> $v
+     * @param array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}> $v
      */
     public function setLeagueTierDefaults(array $v): static
     {
@@ -1803,7 +1832,7 @@ class GameConfig
     }
 
     /**
-     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}
      */
     public function getLeagueTierDefaultsForTier(int $tier): array
     {
@@ -1822,7 +1851,7 @@ class GameConfig
         return [
             'promotionSpots' => 2, 'tvDeal' => null, 'tvPoolPence' => null, 'prizeMoney' => null,
             'leaguePositionPot' => null, 'leaguePositionDecreasePercent' => null,
-            'sponsorCount' => 0, 'trophy' => null,
+            'sponsorCount' => 0, 'trophy' => null, 'parachute' => null,
         ];
     }
 
@@ -1837,7 +1866,7 @@ class GameConfig
      * rather than only in the migration means neither quietly loses its trophy.
      *
      * @param array<string, mixed> $row
-     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}
      */
     private static function normaliseTierRow(array $row): array
     {
@@ -1859,6 +1888,7 @@ class GameConfig
         // what keeps the returned shape total for every caller that reads keys off it.
         $row['tvPoolPence'] ??= null;
         $row['leaguePositionDecreasePercent'] ??= null;
+        $row['parachute'] ??= null;
 
         return $row;
     }

@@ -37,7 +37,7 @@ final class LeagueTierDefaultDiff
      */
     private const FIELDS = [
         'promotionSpots', 'tvDeal', 'tvPoolPence', 'prizeMoney', 'leaguePositionPot',
-        'leaguePositionDecreasePercent', 'sponsorCount', 'trophy',
+        'leaguePositionDecreasePercent', 'sponsorCount', 'trophy', 'parachute',
     ];
 
     /**
@@ -77,6 +77,11 @@ final class LeagueTierDefaultDiff
             // that normalisation existed would read as differing from an identical trophy,
             // forever. Both sides canonical, then compared.
             'trophy'            => TrophyConfigFactory::validateNullable($league->getTrophy()),
+            // RAW, unlike `trophy` above. There is no validator to put both sides through
+            // because the backend has no opinion about this block's shape — see
+            // League::$parachute. `same()` compares arrays loosely, so key ORDER does not
+            // matter, which is the only normalisation a verbatim passthrough can get.
+            'parachute'         => $league->getParachute(),
         ];
 
         $differs = [];

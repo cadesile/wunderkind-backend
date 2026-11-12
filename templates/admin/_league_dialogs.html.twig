@@ -66,6 +66,16 @@
                         <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="leaguePositionPot" id="qe-pot" placeholder="none"></label>
                     </div>
                     <div class="bmc-field-col">
+                        <span class="bmc-lbl">PARACHUTE (JSON)</span>
+                        <textarea name="parachute" id="qe-parachute" rows="3" placeholder="no override — uses the global default"></textarea>
+                        <span class="bmc-data">
+                            Served <strong>verbatim</strong>: the backend stores and publishes this without reading inside it,
+                            so the app owns the shape. Money in <strong>base-year pence</strong> — the app applies inflation.
+                            Blank clears the override; malformed JSON is ignored and leaves the stored value alone.
+                            Agreed shape: <code>docs/api/economy-config.md</code>.
+                        </span>
+                    </div>
+                    <div class="bmc-field-col">
                         <span class="bmc-lbl">TROPHY</span>
                         <button type="button" class="bmc-trophy-btn" data-trophy-open="qe" title="Edit this league's trophy" aria-label="Edit this league's trophy">
                             <span class="bmc-trophy" data-trophy-sprite="qe"></span>

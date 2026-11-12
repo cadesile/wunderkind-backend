@@ -89,6 +89,12 @@ than the per-tier count: a properly-bootstrapped country's bottom tier is one sh
 slot belongs to the player's club, so the maximum is the playing size and using it makes `slots`
 uniform per country (EN/DE/IT 18, six countries 16, five 8, SC 3).
 
+`Version20261112200000` (same day, step 6) adds `league.parachute` and
+`game_config.league_parachute`, both nullable and both shipping null — so every league publishes
+`parachute: null` and nothing changes (verified on a full data clone: 120 of 120 leagues). Unlike
+the json columns in the earlier migrations of this series there is no default to drop, because
+nullable columns need nothing for the existing rows.
+
 `Version20261112190000` (same day, step 5) lifts the five staff wage bands out of code into
 `game_config`, seeded with StaffGenerationService's literals so `legacy` generation is unchanged.
 It settles a disagreement rather than inventing values: `GenerateMarketDataCommand` held a second

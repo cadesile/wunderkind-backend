@@ -47,6 +47,7 @@ class LeagueImportExportService
                 'leaguePositionPot'    => $l->getLeaguePositionPot(),
                 'sponsorCount'         => $l->getSponsorCount(),
                 'trophy'               => $l->getTrophy(),
+                'parachute'            => $l->getParachute(),
             ];
         }
 
@@ -156,6 +157,11 @@ class LeagueImportExportService
                 // that size may not have been inserted yet.
                 if (array_key_exists('tvPoolPence', $row))
                     $league->setTvPoolPence($row['tvPoolPence'] !== null ? (int) $row['tvPoolPence'] : null);
+                // VERBATIM BOTH WAYS. No cast, no validation — the backend has no opinion
+                // about this block's shape, so a round trip must return exactly what it was
+                // given or the export stops being a backup.
+                if (array_key_exists('parachute', $row))
+                    $league->setParachute(is_array($row['parachute']) ? $row['parachute'] : null);
                 if (array_key_exists('slots', $row))
                     $league->setSlots((int) $row['slots']);
                 if (array_key_exists('leaguePositionDecreasePercent', $row))

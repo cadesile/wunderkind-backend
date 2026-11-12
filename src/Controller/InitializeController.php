@@ -172,8 +172,10 @@ class InitializeController extends AbstractController
      * Requires starter to be initialized first.
      */
     #[Route('/leagues', name: 'api_initialize_leagues', methods: ['GET'])]
-    public function leagues(\App\Service\Economy\LeagueSizeResolver $leagueSizeResolver): JsonResponse
-    {
+    public function leagues(
+        \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
+        \App\Repository\GameConfigRepository $gameConfigRepository,
+    ): JsonResponse {
         /** @var User $user */
         $user = $this->getUser();
         $club = $this->clubResolver->resolveFromRequest($user);
@@ -189,7 +191,8 @@ class InitializeController extends AbstractController
             );
         }
 
-        $leagues = $this->leagueRepository->findByCountry($club->getCountry());
+        $leagues    = $this->leagueRepository->findByCountry($club->getCountry());
+        $gameConfig = $gameConfigRepository->getConfig();
 
         $data = array_map(fn($league) => [
             'id'                => (string) $league->getId(),
@@ -205,6 +208,10 @@ class InitializeController extends AbstractController
             // two new keys without a WORLD_PACK_VERSION bump.
             'tvPoolPence'       => $league->getTvPoolPence(),
             'clubCount'         => $leagueSizeResolver->sizeOf($league),
+            // Resolved whole-value, `league ?? gameConfig` — the same resolution the sync
+            // snapshot and the season pyramid do, so a client reading any of the three gets
+            // one answer.
+            'parachute'         => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
             'trophy'            => $league->getTrophy(),
         ], $leagues);
 

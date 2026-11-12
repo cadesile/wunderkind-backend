@@ -830,6 +830,10 @@ class SyncService
             // reached, per .context/shared/api-backwards-compatibility.md.
             'tvPoolPence'                   => $league->getTvPoolPence(),
             'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
+            // Resolved whole-value, `league ?? gameConfig`. Null when neither is authored,
+            // which is the shipped state — a key an old build does not read, and a new build
+            // reads as "no parachute scheme" rather than as an empty one to pay out.
+            'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
             'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),
                 'name'           => $c->getName(),

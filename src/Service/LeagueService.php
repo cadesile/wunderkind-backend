@@ -300,6 +300,10 @@ class LeagueService
                 // loop here; the device runs the economy).
                 'tvPoolPence'                   => $league->getTvPoolPence(),
                 'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
+                // RESOLVED WHOLE-VALUE, `league ?? gameConfig`. Not merged key by key — that
+                // would need the backend to understand the keys, which is exactly what a
+                // verbatim passthrough declines to do.
+                'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
                 'clubs'                         => $clubs,
                 'fixtures'                      => $fixtures,
             ];

@@ -47,11 +47,11 @@
             <span class="bmc-card__meta">Saved every time · applied only to leagues ticked below</span>
         </div>
         <div class="bmc-card__body" style="overflow-x:auto">
-            <div class="bmc-tiergrid" style="min-width:1040px">
+            <div class="bmc-tiergrid" style="min-width:1240px">
                 <div class="bmc-tiergrid__head">
                     <span>TIER</span><span>TROPHY</span><span>PROMOTED</span>
                     <span>TV POOL</span><span>TV DEAL</span><span>PRIZE MONEY</span><span>POSITION POT</span>
-                    <span>TAPER %</span><span>SPONSORS</span><span>LEAGUES</span>
+                    <span>TAPER %</span><span>PARACHUTE</span><span>SPONSORS</span><span>LEAGUES</span>
                 </div>
                 {% for tier in 1..8 %}
                     {% set row = tierDefaults[tier] ?? {} %}
@@ -101,6 +101,12 @@
                                    value="{{ row.leaguePositionDecreasePercent|default('') }}"
                                    data-min="0" data-max="100" data-blank="ok"
                                    aria-label="tier {{ tier }} position taper percent">
+                        </label>
+
+                        <label class="bmc-ta bmc-ta--parachute">
+                            <textarea name="tiers[{{ tier }}][parachute]" rows="2"
+                                      placeholder="none"
+                                      aria-label="tier {{ tier }} parachute json">{{ row.parachute is defined and row.parachute is not null ? row.parachute|json_encode : '' }}</textarea>
                         </label>
 
                         <label class="bmc-num bmc-num--76">
@@ -227,6 +233,7 @@
                                 data-qe-tvpool="{{ _self.money(league.tvPoolPence) }}"
                                 data-qe-slots="{{ league.slots > 0 ? league.slots : '' }}"
                                 data-qe-taper="{{ league.leaguePositionDecreasePercent is null ? '' : league.leaguePositionDecreasePercent }}"
+                                data-qe-parachute="{{ league.parachute is null ? '' : league.parachute|json_encode }}"
                                 data-qe-clubcount="{{ leagueSizes[id]|default(0) }}"
                                 data-qe-full="{{ ea_url().setController('App\\Controller\\Admin\\LeagueCrudController').setAction('edit').setEntityId(id).generateUrl() }}">
                             <i data-lucide="pencil" width="16" height="16"></i>
@@ -435,6 +442,10 @@
             $('#qe-tvpool').value = b.dataset.qeTvpool || '';
             $('#qe-slots').value = b.dataset.qeSlots || '';
             $('#qe-taper').value = b.dataset.qeTaper || '';
+            // Pretty-printed so a multi-season schedule is readable in a 3-row textarea.
+            $('#qe-parachute').value = b.dataset.qeParachute
+                ? JSON.stringify(JSON.parse(b.dataset.qeParachute), null, 1)
+                : '';
             $('#qe-sponsors').value = b.dataset.qeSponsors;
 
             // THE SERVER IGNORES A TYPED tvDeal WHILE A POOL IS SET — see

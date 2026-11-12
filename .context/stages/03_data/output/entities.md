@@ -1177,6 +1177,39 @@ Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_prof
 is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
 against this database. Production unverified.
 
+### Parachutes — `League::$parachute` and `GameConfig::$leagueParachute` (2026-11-12)
+
+Two nullable json columns from `Version20261112200000`, resolved **`league ?? gameConfig`**
+whole-value at every publish site. Both ship null, so every league publishes `parachute: null`
+and the migration is a no-op (verified: 120 of 120 leagues).
+
+**SERVED VERBATIM — a schema-agnostic passthrough**, exactly like `League::$trophy`,
+`Player::$appearance` and `NpcClub::$identity`. The backend stores it, picks which one applies,
+and publishes it without reading inside.
+
+**That is the decision worth knowing before touching it**, because the obvious improvement is
+wrong: the backend cannot pay a club anything (no income loop; the device runs the economy), so
+any structure imposed here would be a second opinion about a schedule only the app can execute,
+and the two would drift the first time the app wanted a fourth season or a cliff instead of a
+taper. The accepted cost is that a malformed block is stored and served and only the app
+notices — the same trade `starter_config.setup_tutorial_config` makes, which is why that one has
+a checker command rather than a validator. `tests/Entity/LeagueParachuteTest.php` asserts the
+NEGATIVE property deliberately: an arbitrary nested structure with keys the backend has never
+heard of survives unchanged.
+
+**Whole-value, not merged key by key.** Merging would require understanding the keys, which is
+what the passthrough declines to do, and a half-overridden schedule is a worse answer than
+either whole one. So a league override completely replaces the global — the global's extra keys
+do not leak through.
+
+Both setters coerce `[]` to null. Not validation — a disambiguation: an empty override would
+resolve to "this league pays no parachute" while the global said otherwise, which is not a state
+anybody authors. The visible consequence is that clearing a league's override restores the
+global rather than switching parachutes off for that league.
+
+Money in base-year pence. The agreed shape lives in `docs/api/economy-config.md`, which is the
+right home for a contract the schema does not enforce.
+
 ### `GameConfig::$economyStaffRoleBandsPence` (2026-11-12)
 
 Weekly pence band per staff role, from `Version20261112190000`. These were hardcoded

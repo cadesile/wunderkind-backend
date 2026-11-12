@@ -102,6 +102,43 @@ class League
     private ?int $leaguePositionDecreasePercent = null;
 
     /**
+     * What a club relegated OUT of this league is paid, and for how long.
+     *
+     * SERVED VERBATIM. A SCHEMA-AGNOSTIC PASSTHROUGH, exactly like `$trophy` above,
+     * `Player::$appearance` and `NpcClub::$identity` — the backend stores this, resolves which
+     * one applies, and publishes it. It does not read inside it.
+     *
+     * THAT IS A DECISION, NOT LAZINESS, and it is the one worth defending here. The backend
+     * cannot pay a club anything: there is no income loop, the device runs the economy (see
+     * `.context/stages/01_overview/output/tribal-knowledge.md`). So any structure the backend
+     * imposed on this would be a second opinion about a schedule only the app can execute —
+     * and the two would drift the first time the app wanted a fourth season or a cliff instead
+     * of a taper. A schema the app owns outright cannot drift from itself.
+     *
+     * The cost of that is real and accepted: a malformed block is stored and served, and the
+     * only thing that notices is the app. Same trade `starter_config.setup_tutorial_config`
+     * makes, and the reason that one has a checker command rather than a validator.
+     *
+     * RESOLVED `league ?? gameConfig` AT EVERY PUBLISH SITE, whole-value — not merged key by
+     * key. Merging would need the backend to understand the keys, which is exactly what it
+     * declines to do, and a half-overridden schedule is a worse answer than either whole one.
+     *
+     * NULL IS "NO OVERRIDE", and `[]` is coerced to null by the setter rather than stored. An
+     * empty block is indistinguishable from "authored as nothing" and would resolve to a
+     * league paying no parachute while the config says otherwise — same reasoning as
+     * `CountryProfile::setPrestigeSuffixes()`.
+     *
+     * Base-year pence wherever it carries money. The app applies inflation; nothing on this
+     * backend is ever stored inflated. The shape the app and the operator have agreed on lives
+     * in `docs/api/economy-config.md`, which is the right home for a contract the schema does
+     * not enforce.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $parachute = null;
+
+    /**
      * The trophy this league awards, as the 16-bit trophy sprite's own
      * `TrophyConfig`: {style, finish, ribbons, ribbonPrimary, ribbonSecondary}.
      * Stored and served verbatim — a schema-agnostic passthrough, exactly like
@@ -187,6 +224,23 @@ class League
     public function setLeaguePositionDecreasePercent(?int $v): static
     {
         $this->leaguePositionDecreasePercent = ($v !== null ? max(0, min(100, $v)) : null);
+
+        return $this;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getParachute(): ?array { return $this->parachute; }
+
+    /**
+     * `[]` becomes null, deliberately — see the property's docblock. An empty override would
+     * resolve to "this league pays no parachute" while the global config said otherwise, which
+     * is not a state anybody can author on purpose.
+     *
+     * @param array<string, mixed>|null $v
+     */
+    public function setParachute(?array $v): static
+    {
+        $this->parachute = ($v === null || $v === []) ? null : $v;
 
         return $this;
     }

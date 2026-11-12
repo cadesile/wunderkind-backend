@@ -209,6 +209,57 @@ The reason the size is stored rather than derived is not the arithmetic — it i
 divisor moves whenever somebody clicks Generate**, silently re-pricing a tier's TV money for
 every shipped build as a side effect of an unrelated admin action.
 
+## Parachute payments
+
+`parachute` is published on the same three uncached league payloads as the TV pool, resolved
+**`league ?? gameConfig`** — whole-value, not merged key by key.
+
+**The backend serves this block verbatim and does not read inside it.** It stores it, decides
+which of the two applies, and publishes it. There is no schema, no validation, and no
+normalisation beyond `[]` becoming `null`.
+
+That is a deliberate decision, not a gap. The backend cannot pay a club anything — there is no
+income loop, the device runs the economy — so any structure imposed here would be a second
+opinion about a schedule only the app can execute, and the two would drift the first time the
+app wanted a fourth season or a cliff instead of a taper. **A schema the app owns outright
+cannot drift from itself.** Same treatment as `league.trophy`, `player.appearance` and
+`npc_club.identity`.
+
+The accepted cost: a malformed block is stored and served, and only the app notices. That is the
+same trade `starter_config.setup_tutorial_config` makes, which is why that one has a checker
+command rather than a validator.
+
+### Whole-value resolution
+
+| league | gameConfig | published |
+|---|---|---|
+| `{"seasons":1}` | `{"seasons":3,"x":true}` | `{"seasons":1}` — the global's `x` does **not** leak through |
+| `null` | `{"seasons":3}` | `{"seasons":3}` |
+| `null` | `null` | `null` — the shipped state |
+
+Merging would require the backend to understand the keys, which is precisely what it declines to
+do, and a half-overridden schedule is a worse answer than either whole one.
+
+`null` is what every league publishes today: an old build does not read the key, and a new build
+reads it as "no parachute scheme configured" rather than as an empty one to pay out.
+
+### The agreed shape
+
+Not enforced anywhere — this is the contract, and this document is the only place it lives.
+Money in **base-year pence**; the app applies inflation.
+
+```json
+{
+  "seasons": 3,
+  "perSeasonPence": [550000000, 450000000, 200000000]
+}
+```
+
+`seasons` is how many seasons after relegation the club is paid for; `perSeasonPence[i]` is what
+it gets in season `i+1` after going down. Add keys freely — the backend passes through anything,
+so extending this needs no backend change at all. Clearing an override is a blank field in the
+admin, which stores `null` and restores the global.
+
 ## Per-league overrides
 
 `leaguePositionDecreasePercent` is now a nullable per-league column, resolved

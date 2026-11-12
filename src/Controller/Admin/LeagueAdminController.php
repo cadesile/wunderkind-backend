@@ -61,6 +61,23 @@ class LeagueAdminController extends AbstractController
         $slots = $request->request->get('slots');
         $league->setSlots(($slots !== null && $slots !== '') ? (int) $slots : 0);
 
+        // A JSON TEXTAREA, because the backend has no opinion about this block's shape — see
+        // League::$parachute. Same treatment as the bankruptcyDeductionTiers textarea on the
+        // game-config screen: decoded, is_array-guarded, and a malformed body LEAVES THE
+        // STORED VALUE ALONE rather than clearing it. A blank field is the explicit "no
+        // override" and does clear it, which is the one way an operator removes one.
+        $rawParachute = $request->request->get('parachute');
+        if ($rawParachute !== null) {
+            if (trim((string) $rawParachute) === '') {
+                $league->setParachute(null);
+            } else {
+                $decoded = json_decode((string) $rawParachute, true);
+                if (is_array($decoded)) {
+                    $league->setParachute($decoded);
+                }
+            }
+        }
+
         $taper = $request->request->get('leaguePositionDecreasePercent');
         $league->setLeaguePositionDecreasePercent(
             ($taper !== null && $taper !== '') ? (int) $taper : null
@@ -112,6 +129,7 @@ class LeagueAdminController extends AbstractController
                     'tvPoolPence'      => $league->getTvPoolPence(),
                     'slots'            => $league->getSlots(),
                     'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent(),
+                    'parachute'        => $league->getParachute(),
                     'clubCount'        => $this->leagueSizeResolver->sizeOf($league),
                     'trophy'           => $league->getTrophy(),
                     'sponsorCount'     => $league->getSponsorCount(),
@@ -168,6 +186,7 @@ class LeagueAdminController extends AbstractController
             $league->setTrophy($defaults['trophy']);
             $league->setTvPoolPence($defaults['tvPoolPence']);
             $league->setLeaguePositionDecreasePercent($defaults['leaguePositionDecreasePercent']);
+            $league->setParachute($defaults['parachute']);
 
             // AFTER the tvDeal assignment above, not instead of it. A tier default may carry a
             // per-club tvDeal, a pool, or both; when there is a pool it is the authored figure
@@ -198,6 +217,10 @@ class LeagueAdminController extends AbstractController
             'leaguePositionDecreasePercent' => ($row['leaguePositionDecreasePercent'] ?? '') !== ''
                 ? max(0, min(100, (int) $row['leaguePositionDecreasePercent']))
                 : null,
+            // Decoded but NOT validated — a verbatim passthrough has no schema to validate
+            // against. Anything that is not a JSON object becomes null ("no default"), which
+            // is the only safe reading of a body nothing can interpret.
+            'parachute'         => $this->parseJsonObject($row['parachute'] ?? null),
             'sponsorCount'      => ($row['sponsorCount'] ?? '') !== '' ? max(0, min(20, (int) $row['sponsorCount'])) : 0,
             'trophy'            => $this->trophyFromFields([
                 'style'           => $row['trophyStyle'] ?? null,
@@ -233,6 +256,22 @@ class LeagueAdminController extends AbstractController
         $fields['ribbons'] = $fields['ribbons'] ?? false;
 
         return TrophyConfigFactory::validate($fields);
+    }
+
+    /**
+     * A JSON object as typed, or null. No schema, because there isn't one to check against.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function parseJsonObject(mixed $raw): ?array
+    {
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) && $decoded !== [] ? $decoded : null;
     }
 
     /** Pounds (comma-formatted, from the tier-defaults table's money inputs) -> pence, or null if blank. */

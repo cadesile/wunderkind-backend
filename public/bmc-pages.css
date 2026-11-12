@@ -409,7 +409,11 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 /* Tier defaults: tier · trophy · promoted · three money columns · sponsors · drift. */
 .bmc-tiergrid { display: flex; flex-direction: column; gap: 2px; }
 .bmc-tiergrid__head,
-.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(118px, 1fr)) 84px 84px 132px; gap: 10px; align-items: center; }
+.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(118px, 1fr)) 84px 180px 84px 132px; gap: 10px; align-items: center; }
+/* The parachute cell is a verbatim JSON passthrough, so it gets a textarea rather than a
+   number input — the backend has no schema to build a field set from. */
+.bmc-ta--parachute { display: block; }
+.bmc-ta--parachute textarea { width: 100%; min-height: 44px; font: var(--text-mono, inherit); font-size: 11px; resize: vertical; }
 .bmc-tiergrid__head { padding: 0 2px 4px; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); text-transform: uppercase; }
 .bmc-tiergrid__row { min-height: 64px; padding: 4px 2px; border-bottom: 1px solid var(--wk-stroke); }
 

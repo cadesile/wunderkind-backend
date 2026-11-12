@@ -179,6 +179,49 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         );
     }
 
+    /**
+     * The verbatim block specifically, through a full clear and restore.
+     *
+     * testWorldSurvivesClearAndReimport already compares the whole export against itself, so
+     * this is narrower on purpose: it names the ONE column whose contract is "whatever was
+     * given back, byte for byte". A generic equality pass would still go green if both sides
+     * had been normalised the same way, which is exactly the regression worth catching.
+     */
+    public function testTheParachuteBlockSurvivesAClearAndReimportVerbatim(): void
+    {
+        $this->seed();
+
+        $before = $this->service->export();
+        $sent   = $this->leagueRowIn($before);
+
+        $this->removeFixtures();
+        $result = $this->service->import($before);
+        $this->em->clear();
+
+        self::assertSame([], $result['errors']);
+
+        $after = $this->leagueRowIn($this->service->export());
+
+        self::assertSame($sent['parachute'], $after['parachute'], 'the parachute block was altered in transit');
+        self::assertSame(3, $after['parachute']['seasons']);
+        self::assertSame(['nested' => true], $after['parachute']['appOwnedKey'], 'a key the backend does not know must survive');
+        self::assertSame(9_000_000, $after['tvPoolPence']);
+        self::assertSame(18, $after['slots']);
+        self::assertSame(17, $after['leaguePositionDecreasePercent']);
+    }
+
+    /** @param array<string, mixed> $export */
+    private function leagueRowIn(array $export): array
+    {
+        foreach ($export['leagues'] ?? [] as $row) {
+            if (($row['country'] ?? null) === self::COUNTRY) {
+                return $row;
+            }
+        }
+
+        self::fail('The seeded league is missing from the export.');
+    }
+
     private function seed(): void
     {
         $league = new League(self::COUNTRY, 4, 'Probe Division');
@@ -189,6 +232,22 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         $league->setLeagueReputationTier(ReputationTier::REGIONAL);
         $league->setSponsorCount(6);
         $league->setTrophy(TrophyConfigFactory::validate(['style' => 'loving', 'finish' => 'gold']));
+        // THE NEW COLUMNS, SEEDED NON-DEFAULT ON PURPOSE. testWorldSurvivesClearAndReimport
+        // compares the export against itself after a full clear and restore, so a column left
+        // at its default would round-trip successfully while being dropped entirely — the
+        // failure that guard exists to catch.
+        //
+        // The parachute block is deliberately AWKWARD: nested, mixed types, and a key nothing
+        // on the backend knows. It is served verbatim, so the round trip has to carry a shape
+        // the backend cannot interpret, not a tidy one it might normalise by accident.
+        $league->setTvPoolPence(9_000_000);
+        $league->setSlots(18);
+        $league->setLeaguePositionDecreasePercent(17);
+        $league->setParachute([
+            'seasons'        => 3,
+            'perSeasonPence' => [5_500_000_00, 4_500_000_00, 2_000_000_00],
+            'appOwnedKey'    => ['nested' => true],
+        ]);
         $this->em->persist($league);
 
         $club = new NpcClub(
