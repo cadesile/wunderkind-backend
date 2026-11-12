@@ -1193,6 +1193,15 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that
+was a GAP rather than a choice: decision 4 of the economy brief lists NPC balances among the
+things the backend bakes the country factor into, and the step-5 wage unification threaded
+country and tier through players and staff while leaving the balance table on raw figures. A
+club in a country scaled to 20% was paying **20% wages out of 100% money** — not a cheaper
+country, a different game. The band is scaled BEFORE the city-size skew, so a big-city club
+stays the same multiple of its division's average whatever the country is worth. Found during
+the step-8 threshold survey; see `docs/economy-threshold-review.md`.
+
 **`SeasonInvestmentService` — the owner gifting their own money into a club, once a season.**
 Modelled on `ClubFundingService`: same natural-key idempotency, same "the server debits the
 account and the DEVICE credits the club" split, same exception type.

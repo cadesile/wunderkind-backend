@@ -168,3 +168,14 @@ claiming canonical status)
   parameter** — it is the backend's own `SeasonRecord` count, because `club.currentSeason` is
   device-mirrored and a claimed season would raise the owner's own ceiling. Lists the two new
   client-visible error codes and notes both are unreachable while the base ceiling is 0.
+- **`docs/economy-threshold-review.md`** — the step-8 review of every absolute-pence threshold
+  under a scaled economy. **A report; no live values were changed.** Three findings worth
+  knowing before touching any of them: `bankruptcyDeductionTiers` has **two rows that cannot
+  fire** under the first-match-wins contract its own column documents (and the table only
+  behaves as it looks if the app does NOT follow that contract — one of the two is wrong); the
+  whole five-rung ladder is traversed in **under half a week** of unpaid wages at the top five
+  tiers, which predates the overhaul; and the flat £250 youth scholarship becomes **1.97x an
+  average tier-8 wage** under the turnover model, which is the one blocker that is ours to fix.
+  Proposes expressing deficit thresholds in **weeks of the club's own wage bill** — the one unit
+  both sides can agree on, since the backend does not know a club's roster — and explains why
+  that is proposed rather than published.

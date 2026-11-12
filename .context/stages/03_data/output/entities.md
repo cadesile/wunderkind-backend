@@ -1177,6 +1177,28 @@ Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_prof
 is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
 against this database. Production unverified.
 
+### The absolute-pence thresholds, reviewed 2026-11-12
+
+Full report: `docs/economy-threshold-review.md`. Read it before changing any of these values —
+the headline is that **`bankruptcyDeductionTiers` has two rows that cannot fire**. Rows 3, 4 and
+5 all carry `deficitMax: null`, so under the first-match-wins contract the column's own docblock
+states, any deficit at or above row 3's floor matches row 3 and the 20- and 50-point penalties
+are dead. The table only behaves the way it reads if the app resolves by LAST match or by
+highest penalty — meaning either the app or that docblock is wrong, and the fix that is correct
+under every resolution is to give rows 3 and 4 real `deficitMax` values.
+
+Separately: the whole five-rung ladder is traversed in **under half a week** of unpaid wages at
+the top five tiers (0.01 weeks at tier 1). That predates the overhaul — the legacy model is
+comparable — but the overhaul is what made it measurable.
+
+And `youthScholarshipWagePence` (flat £250/wk) becomes **1.97x an average tier-8 wage** under
+the turnover model, so a thirteen-year-old scholar out-earns an average first-team player. That
+is a backend figure and the one blocker here that is ours to fix.
+
+`app:economy:wage-table` carries all of this as check 5, so it cannot quietly stop being true.
+`npcSolvencyThresholds` (weeks) and `dofWageBillThresholdPct` (a ratio) are already immune and
+are the shape to copy.
+
 ### `GameConfig::$economySeasonInvestmentBasePence` (2026-11-12)
 
 The base owner-investment ceiling, from `Version20261112210000`. **Ships at 0, which is an OFF

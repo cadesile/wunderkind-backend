@@ -206,7 +206,7 @@ class NpcClubGenerationService
             $citySize       = $place['city_size'];
             $standing       = (float) ($place['standing'] ?? 0.5);
             $reputation     = $this->reputationForTier($tier, $citySize, $tierCount, $standing);
-            $balance        = $this->balanceForTier($tier, $citySize, $standing);
+            $balance        = $this->balanceForTier($tier, $citySize, $standing, $country);
             $facilities     = $this->buildFacilities($slugs, $levelBand, $bandIndex);
             $identity       = $this->generateIdentity($name);
             $stadiumName    = $this->generateStadiumName($place['name'], $country);
@@ -645,13 +645,37 @@ class NpcClubGenerationService
      * tier-8 one it used to be stretched onto. Reversing that was deliberate; the reasoning is
      * in GameConfig::getNpcClubBalanceRangeForTier(). Depth still shapes reputation, which
      * interpolates rather than looking a row up.
+     *
+     * COUNTRY-SCALED SINCE 2026-11-12, AND THAT WAS A GAP RATHER THAN A CHOICE. The economy
+     * brief lists NPC balances among the things the backend bakes the country factor into, and
+     * the wage unification missed them — it threaded country and tier through players and staff
+     * and left the balance table on the raw figures. The effect of the omission was that a club
+     * in a country scaled to 20% paid 20% wages out of 100% money, which is not "a cheaper
+     * country", it is a different game.
+     *
+     * Through EconomyScaleResolver::scalePence() like everything else, so the band is scaled
+     * BEFORE the city-size skew and the standing roll — the skew is a proportion of the band,
+     * so scaling first keeps a big-city club the same multiple of its division's average
+     * whatever the country is worth.
+     *
+     * Inert at parity, which is how it ships.
      */
-    private function balanceForTier(int $tier, \App\Enum\CitySize $citySize, float $standing = 0.5): int
-    {
+    private function balanceForTier(
+        int $tier,
+        \App\Enum\CitySize $citySize,
+        float $standing = 0.5,
+        string $country = '',
+    ): int {
         $range = $this->gameConfigRepository->getConfig()->getNpcClubBalanceRangeForTier($tier);
         $min   = max(0, (int) $range['min']);
         $max   = max($min, (int) $range['max']);
-        [$skewMin, $skewMax] = $this->skewRange($min, $max, $citySize);
+
+        if ($country !== '') {
+            $min = $this->economyScaleResolver->scalePence($min, $country, $tier);
+            $max = $this->economyScaleResolver->scalePence($max, $country, $tier);
+        }
+
+        [$skewMin, $skewMax] = $this->skewRange($min, max($min, $max), $citySize);
 
         return $this->rollAtStanding($skewMin, $skewMax, $standing);
     }

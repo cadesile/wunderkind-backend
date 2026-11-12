@@ -37,7 +37,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * ── THE FOUR CHECKS ───────────────────────────────────────────────────────────────────────
  *
  * A table of plausible-looking numbers can still be wrong in ways that are invisible row by
- * row, so the command answers four questions it would be easy not to ask:
+ * row, so the command answers five questions it would be easy not to ask:
  *
  *  1. **Is `S_tier` strictly decreasing?** It has to be, or a lower division pays more per unit
  *     of ability than the one above it.
@@ -50,6 +50,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *  4. **Does the squad bill actually match the configured share?** The arithmetic is checked
  *     against its own definition, so a rounding error in the chain shows up here rather than as
  *     a slowly-drifting wage bill.
+ *  5. **Do the absolute-pence thresholds still mean anything?** `bankruptcyDeductionTiers` is
+ *     flat pence while wages scale, so a country factor or a model flip silently decouples
+ *     them — and overlapping unbounded rows are unreachable under the documented
+ *     first-match-wins contract. See docs/economy-threshold-review.md.
  *
  * Exit code 1 when any check fails, so this can gate a deploy rather than just inform one.
  */
@@ -219,6 +223,7 @@ final class EconomyWageTableCommand extends Command
 
         $problems = [...$problems, ...$this->checkAbilityInversions($country, $bands, $scales, $config)];
         $problems = [...$problems, ...$this->checkTvAgainstTurnover($io, $country, $tierCount, $config)];
+        $problems = [...$problems, ...$this->checkAbsoluteThresholds($io, $country, $tierCount, $config)];
 
         return $problems;
     }
@@ -320,6 +325,104 @@ final class EconomyWageTableCommand extends Command
         if ($rows !== []) {
             $io->text('TV against turnover:');
             $io->table(['T', 'clubs', 'TV per club', 'TV pool', 'turnover', 'TV % turnover'], $rows);
+        }
+
+        return $problems;
+    }
+
+    /**
+     * CHECK 5 — the absolute-pence thresholds against what a tier's squad actually costs.
+     *
+     * THE THRESHOLDS DO NOT SCALE AND THE WAGES DO, which is the whole problem. Every figure in
+     * `bankruptcyDeductionTiers` is a flat pence amount, so the moment a country factor or a
+     * wage-model flip moves a wage bill, the bands stop meaning what they were authored to
+     * mean — and nothing announces it. This prints the relationship rather than leaving it to
+     * be rediscovered.
+     *
+     * Reported as warnings rather than hard failures: the thresholds are a CLIENT-side mechanic
+     * the backend only publishes, and `bankruptcyDeductionsEnabled` may well be off. A flat
+     * refusal would block a wage-model flip on a mechanic that is not running.
+     *
+     * The exception is the youth scholarship, which IS a backend figure and CAN invert — a
+     * scholar paid more than an average first-team player is a defect wherever it happens.
+     *
+     * @return list<string>
+     */
+    private function checkAbsoluteThresholds(SymfonyStyle $io, string $country, int $tierCount, GameConfig $config): array
+    {
+        $problems = [];
+        $bands    = $config->getBankruptcyDeductionTiers();
+        $topBand  = 0;
+
+        foreach ($bands as $band) {
+            $topBand = max($topBand, (int) ($band['deficitMin'] ?? 0));
+        }
+
+        $scholarship = $config->getYouthScholarshipWagePence();
+        $rows        = [];
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $scale = $this->scaleResolver->resolve($country, $tier);
+
+            if (!$scale->isResolvable) {
+                continue;
+            }
+
+            $band    = $this->abilityBand($country, $tier);
+            $squad   = $this->squadSize($tier);
+            $mid     = $this->mid($band);
+            $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
+            $midWage = $this->wageModel->turnoverPlayerPence($mid, $country, $tier, 50, $config) ?? 0;
+
+            $weeksToTop = ($weekly > 0 && $topBand > 0) ? $topBand / $weekly : null;
+
+            $rows[] = [
+                $tier,
+                $this->money($weekly),
+                $this->money($midWage),
+                $weeksToTop === null ? '—' : sprintf('%.2f', $weeksToTop),
+                $midWage > 0 ? sprintf('%.2fx', $scholarship / $midWage) : '—',
+            ];
+
+            // Under a week of unpaid wages reaching the HARSHEST band means the ladder has
+            // collapsed into "any deficit at all = maximum penalty" for this tier.
+            if ($weeksToTop !== null && $weeksToTop < 1.0) {
+                $problems[] = sprintf(
+                    '%s tier %d: the harshest bankruptcy band (%s) is reached in %.2f weeks of unpaid wages (%s/wk) — the ladder has no range left here.',
+                    $country, $tier, $this->money($topBand), $weeksToTop, $this->money($weekly),
+                );
+            }
+
+            // A scholar out-earning an average first-team player is a defect wherever it is.
+            if ($midWage > 0 && $scholarship > $midWage) {
+                $problems[] = sprintf(
+                    '%s tier %d: the youth scholarship (%s/wk) is MORE than an average first-team wage (%s/wk).',
+                    $country, $tier, $this->money($scholarship), $this->money($midWage),
+                );
+            }
+        }
+
+        if ($rows !== []) {
+            $io->text('Absolute-pence thresholds against this country\'s wage bills:');
+            $io->table(
+                ['T', 'squad wages /wk', 'mid wage /wk', 'weeks to harshest band', 'scholarship : mid wage'],
+                $rows,
+            );
+        }
+
+        // Independent of any tier: overlapping unbounded rows make later rows unreachable under
+        // the first-match-wins contract the column documents.
+        $unbounded = 0;
+        foreach ($bands as $i => $band) {
+            if (($band['deficitMax'] ?? null) === null) {
+                $unbounded++;
+                if ($unbounded > 1) {
+                    $problems[] = sprintf(
+                        'bankruptcyDeductionTiers row %d has deficitMax null behind another unbounded row — under first-match-wins it can never be reached.',
+                        $i + 1,
+                    );
+                }
+            }
         }
 
         return $problems;
