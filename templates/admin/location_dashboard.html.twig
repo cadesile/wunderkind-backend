@@ -476,7 +476,14 @@
 (function () {
     var card = document.getElementById('name-pools');
     var btn  = document.getElementById('name-top-up');
-    if (!card || !btn || !window.BMC || !BMC.runJobs) { return; }
+
+    // NOTHING HERE MAY TEST window.BMC. bmc-pages.js is added with ->defer()
+    // (DashboardController), so it executes AFTER every inline body script — at this point
+    // BMC does not exist yet, and a guard naming it returns before the listener is attached.
+    // The button then does nothing at all, with no error to find. BMC is referenced only
+    // inside the click handler below, by which time the deferred script has long since run.
+    // The pool pages are wired the same way for the same reason.
+    if (!card || !btn) { return; }
 
     var status = document.getElementById('name-top-up-status');
 
