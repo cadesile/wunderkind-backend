@@ -29,7 +29,7 @@ use App\Service\Ai\AnthropicJsonClient;
 final class ClaudeTownSuggester implements TownSuggesterInterface
 {
     /** Bumped on ANY change to the prompt text or the schema below. */
-    private const PROMPT_VERSION = 'towns-claude-v1';
+    private const PROMPT_VERSION = 'towns-claude-v2';
 
     /**
      * Roughly 25 tokens per town plus JSON overhead, with headroom.
@@ -237,24 +237,40 @@ final class ClaudeTownSuggester implements TownSuggesterInterface
         $name     = $country->getName();
         $excluded = \array_slice($excludeNames, 0, self::MAX_EXCLUSIONS_IN_PROMPT);
 
-        $alreadyHeld = $excluded === []
-            ? 'We currently hold no towns for this country.'
-            : \sprintf(
-                "We already hold these towns — do NOT return any of them:\n%s",
-                implode(', ', $excluded),
-            );
-
         $andMore = \count($excludeNames) > \count($excluded)
             ? \sprintf("\n(That list is truncated; we hold %d in total.)", \count($excludeNames))
             : '';
 
+        // TWO DIFFERENT ASKS, because "further" is a lie when we hold nothing.
+        //
+        // This used to say "Return up to N FURTHER towns and cities" whatever the state, with
+        // a separate line admitting the catalogue was empty. For a country we already hold
+        // towns for that is exactly right. For a fresh one it asks the model to go BEYOND a
+        // list that does not exist — so instead of starting at Accra and Kumasi it drifts
+        // toward the obscure, which is the opposite of what a new country needs: the biggest
+        // places first, because city_size is a percentile across the set and the whole
+        // catalogue is ranked off population.
+        if ($excluded === []) {
+            $opening = "We hold NO towns for {$name} yet — this is the first list, so start at "
+                . 'the top.';
+            $ask     = "Return up to {$max} REAL towns and cities in {$name}, beginning with the "
+                . 'largest and working down by population. Include the capital and the major '
+                . 'cities; do not skip the obvious ones.';
+        } else {
+            $opening = \sprintf(
+                "We already hold these towns — do NOT return any of them:\n%s",
+                implode(', ', $excluded),
+            );
+            $ask = "Return up to {$max} FURTHER real towns and cities in {$name}, ordered by "
+                . 'population, largest first.';
+        }
+
         return <<<PROMPT
             You are extending the town catalogue for a football management game set in {$name}.
 
-            {$alreadyHeld}{$andMore}
+            {$opening}{$andMore}
 
-            Return up to {$max} further REAL towns and cities in {$name}, ordered by population,
-            largest first.
+            {$ask}
 
             Rules:
             - Real settlements only. A town that does not exist is worse than a short list — it

@@ -60,7 +60,14 @@ class SuggestTownsCommand extends Command
         $max    = (int) $input->getOption('max');
 
         try {
-            $country = $this->seedService->resolveCountry((string) $input->getArgument('country'));
+            // resolveAnyCountry(): see the handler. A country with no curated place list is
+            // the one this command exists for, so refusing it here was backwards.
+            $country = $this->seedService->resolveAnyCountry((string) $input->getArgument('country'));
+
+            // And give it the profile row suggestForCountry() requires, as the admin button
+            // does. Without this the command and the button disagree about which countries
+            // they accept, which is the drift having a CLI twin exists to prevent.
+            $this->seedService->ensureCountryProfile($country);
         } catch (\InvalidArgumentException $e) {
             $io->error($e->getMessage());
 

@@ -51,6 +51,48 @@ class ClaudeTownSuggesterTest extends TestCase
         $this->assertStringContainsString('Argentina', $prompt);
     }
 
+    /**
+     * A country we hold nothing for is asked for the BIGGEST towns, not for further ones.
+     *
+     * The prompt used to say "Return up to N FURTHER towns and cities" whatever the state,
+     * with a separate line admitting the catalogue was empty. For a fresh country that asks
+     * the model to go beyond a list that does not exist, which pushes it past the obvious
+     * places — and the obvious places are exactly what a new country needs first, because
+     * city_size is a percentile across the whole set and everything downstream is ranked off
+     * population.
+     */
+    public function testAFreshCountryIsAskedToStartAtTheTop(): void
+    {
+        $prompt = null;
+        $suggester = $this->suggester(function (string $m, string $u, array $options) use (&$prompt) {
+            $prompt = json_decode($options['body'], true)['messages'][0]['content'];
+
+            return $this->reply([]);
+        });
+
+        $suggester->suggest($this->argentina(), [], 10);
+
+        $this->assertStringContainsString('hold NO towns', $prompt);
+        $this->assertStringContainsString('beginning with the largest', $prompt);
+        $this->assertStringContainsString('capital', $prompt);
+        $this->assertStringNotContainsString('FURTHER', $prompt, 'there is nothing to go further than');
+    }
+
+    public function testACountryWeAlreadyHoldTownsForIsAskedForFurtherOnes(): void
+    {
+        $prompt = null;
+        $suggester = $this->suggester(function (string $m, string $u, array $options) use (&$prompt) {
+            $prompt = json_decode($options['body'], true)['messages'][0]['content'];
+
+            return $this->reply([]);
+        });
+
+        $suggester->suggest($this->argentina(), ['Buenos Aires'], 10);
+
+        $this->assertStringContainsString('FURTHER', $prompt);
+        $this->assertStringContainsString('do NOT return any of them', $prompt);
+    }
+
     public function testAVeryLongExclusionListIsTruncatedAndSaysSo(): void
     {
         // England holds thousands. Sending them all would cost more in input tokens than the
