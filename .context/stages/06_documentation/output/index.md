@@ -179,3 +179,13 @@ claiming canonical status)
   Proposes expressing deficit thresholds in **weeks of the club's own wage bill** — the one unit
   both sides can agree on, since the backend does not know a club's roster — and explains why
   that is proposed rather than published.
+- **`docs/deploy/economy-rollout.md`** — the operator runbook for turning the economy on.
+  **The economy shipped INERT**: eight migrations landed with every factor at parity, the wage
+  model on `legacy`, inflation at 0 and the turnover table unauthored, so nothing it added
+  changes a generated figure. This is the ordered procedure, and the one step that is cheap to
+  skip and expensive to skip is **bumping `WORLD_PACK_VERSION` in the same pass as the wage-model
+  flip** — a pack holds the wages it was built with, so content changes without shape changing
+  and the cache has no TTL. `staleWorldPacks` reaching 0 on the dashboard is the completion
+  signal. Also records the hard gate (per-club TV must be a sane fraction of baseline turnover),
+  the recommendation AGAINST deriving the TV pool automatically and why, and a back-out
+  procedure whose first line is that reverting the setting does not re-price the packs.
