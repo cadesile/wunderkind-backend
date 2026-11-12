@@ -58,6 +58,7 @@ class SyncServiceLeagueTest extends TestCase
         // Inject the npcClubRepository via reflection since constructor is disabled
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $npcRepo);
+        $this->injectSizeResolver($service);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
         $result = $reflection->invoke($service, $userClub, $gameConfig);
@@ -104,6 +105,7 @@ class SyncServiceLeagueTest extends TestCase
 
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $npcRepo);
+        $this->injectSizeResolver($service);
 
         $reflection = new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot');
         $result     = $reflection->invoke($service, $userClub, $gameConfig);
@@ -115,7 +117,71 @@ class SyncServiceLeagueTest extends TestCase
         $this->assertSame(200000,     $result['prizeMoney']);
         $this->assertSame(300000,     $result['leaguePositionPot']);
         $this->assertSame(75000,      $result['sponsorPot']);
+        // RESOLVED `league ?? gameConfig`, and this league sets no override, so the key still
+        // carries the GameConfig value it always has. That is the half of the change that
+        // matters for an old build: same key, same number.
         $this->assertSame(8,          $result['leaguePositionDecreasePercent']);
+
+        // Additive. No pool authored on this fixture, so the pool is null and `tvDeal` above
+        // is untouched — which is the state every league ships in.
+        $this->assertNull($result['tvPoolPence']);
+        self::assertArrayHasKey('clubCount', $result);
+    }
+
+    /** A per-league override must WIN over the GameConfig value, or the column is decorative. */
+    public function testAPerLeagueTaperOverrideBeatsTheGlobalOne(): void
+    {
+        $user     = $this->createStub(User::class);
+        $userClub = new Club('Test FC', $user);
+        $league   = new League('EN', 8, 'League 8');
+        $league->setLeaguePositionDecreasePercent(17);
+        $userClub->setCurrentLeague($league);
+
+        $gameConfig = new GameConfig();
+        $gameConfig->setLeaguePositionDecreasePercent(5);
+
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getStub();
+
+        $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
+        $repoProp->setValue($service, $this->createStub(NpcClubRepository::class));
+        $this->injectSizeResolver($service);
+
+        $result = (new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot'))
+            ->invoke($service, $userClub, $gameConfig);
+
+        self::assertSame(17, $result['leaguePositionDecreasePercent']);
+    }
+
+    /** A pooled league publishes the pool alongside the share released builds read. */
+    public function testAPooledLeaguePublishesBothFigures(): void
+    {
+        $user     = $this->createStub(User::class);
+        $userClub = new Club('Test FC', $user);
+        $league   = new League('EN', 8, 'League 8');
+        $league->setTvPoolPence(9_000_000);
+        $league->setSlots(18);
+        $league->setTvDeal(500_000);
+        $userClub->setCurrentLeague($league);
+
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getStub();
+
+        $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
+        $repoProp->setValue($service, $this->createStub(NpcClubRepository::class));
+        $this->injectSizeResolver($service);
+
+        $result = (new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot'))
+            ->invoke($service, $userClub, new GameConfig());
+
+        self::assertSame(9_000_000, $result['tvPoolPence']);
+        self::assertSame(18, $result['clubCount'], 'authored slots win over a counted size');
+        // The arithmetic a client can check: pool / clubCount === the published share.
+        self::assertSame($result['tvDeal'], intdiv($result['tvPoolPence'], $result['clubCount']));
     }
 
     public function testAutoAssignSetsLowestTierLeagueWhenNoneAssigned(): void
@@ -207,5 +273,23 @@ class SyncServiceLeagueTest extends TestCase
         // The id should be a valid UUID string format
         $id = (string) $userClub->getId();
         $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id);
+    }
+
+    /**
+     * `buildLeagueSnapshot()` now resolves a club count, so the size resolver has to be
+     * present even though these tests construct SyncService with its constructor disabled.
+     *
+     * A REAL resolver over stubbed repositories rather than a double: it is final and cannot be
+     * mocked, and with stubbed repositories it answers 0 NPC clubs — so `clubCount` comes out as
+     * the bottom-tier slot alone, which is a correct answer for a league whose only member in
+     * this fixture is the player's own club.
+     */
+    private function injectSizeResolver(object $service): void
+    {
+        $npcRepo    = $this->createStub(NpcClubRepository::class);
+        $leagueRepo = $this->createStub(LeagueRepository::class);
+
+        $prop = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueSizeResolver');
+        $prop->setValue($service, new \App\Service\Economy\LeagueSizeResolver($npcRepo, $leagueRepo));
     }
 }

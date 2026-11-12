@@ -409,7 +409,7 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 /* Tier defaults: tier · trophy · promoted · three money columns · sponsors · drift. */
 .bmc-tiergrid { display: flex; flex-direction: column; gap: 2px; }
 .bmc-tiergrid__head,
-.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(3, minmax(128px, 1fr)) 84px 132px; gap: 10px; align-items: center; }
+.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(118px, 1fr)) 84px 84px 132px; gap: 10px; align-items: center; }
 .bmc-tiergrid__head { padding: 0 2px 4px; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); text-transform: uppercase; }
 .bmc-tiergrid__row { min-height: 64px; padding: 4px 2px; border-bottom: 1px solid var(--wk-stroke); }
 
@@ -429,7 +429,7 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 .bmc-matrix__cell.is-empty { background: var(--wk-panel); cursor: default; opacity: .35; }
 
 /* One league in a pyramid. */
-.bmc-leaguerow { display: grid; grid-template-columns: 52px 44px minmax(0, 1fr) 96px 72px repeat(3, 110px) 56px 32px; gap: 10px; align-items: center; min-height: 56px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-leaguerow { display: grid; grid-template-columns: 52px 44px minmax(0, 1fr) 96px 72px repeat(4, 104px) 56px 32px; gap: 10px; align-items: center; min-height: 56px; padding: 4px 12px; border-bottom: 1px solid var(--wk-stroke); }
 .bmc-leaguerow:nth-child(even) { background: rgba(0,0,0,.15); }
 
 /* The drift marker, beside a count rather than instead of it. */

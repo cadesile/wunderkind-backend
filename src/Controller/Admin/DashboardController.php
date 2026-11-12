@@ -77,6 +77,7 @@ class DashboardController extends AbstractDashboardController
         private SocialPostTemplateRepository $socialPostTemplateRepository,
         private AdminQueueCounts $adminQueueCounts,
         private \App\Repository\Location\CountryProfileRepository $countryProfileRepository,
+        private \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -1226,6 +1227,19 @@ class DashboardController extends AbstractDashboardController
             // "differs". No extra queries: every League is already loaded above.
             'leagueDiffs'      => LeagueTierDefaultDiff::forLeagues($leagues, $this->gameConfigRepository->getConfig()),
             'clubsByLeague'    => $this->npcClubRepository->getAllGroupedByLeague(),
+            // The TV pool's divisor per league, so the quick-edit modal can show what a pool
+            // will be divided by BEFORE the operator saves. Through the resolver rather than
+            // counting $clubsByLeague, because an authored `slots` overrides the count and the
+            // screen must show the figure the server will actually use.
+            'leagueSizes'      => array_reduce(
+                $leagues,
+                function (array $carry, \App\Entity\League $l): array {
+                    $carry[(string) $l->getId()] = $this->leagueSizeResolver->sizeOf($l);
+
+                    return $carry;
+                },
+                [],
+            ),
             'countryLabels'    => Country::labelMap(),
             'allLeagues'       => $leagues,
             'tierDefaults'     => $this->gameConfigRepository->getConfig()->getLeagueTierDefaults(),

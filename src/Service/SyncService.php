@@ -56,6 +56,7 @@ class SyncService
         private readonly UserLedgerService               $userLedgerService,
         private readonly ActivePeriodService             $activePeriodService,
         private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
+        private readonly \App\Service\Economy\LeagueSizeResolver      $leagueSizeResolver,
     ) {}
 
     /**
@@ -817,7 +818,18 @@ class SyncService
             'sponsorPot'                    => (int) $sponsorPot,
             'prizeMoney'                    => $league->getPrizeMoney() !== null ? (int) $league->getPrizeMoney() : null,
             'leaguePositionPot'             => $league->getLeaguePositionPot() !== null ? (int) $league->getLeaguePositionPot() : null,
-            'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+            // RESOLVED `league ?? gameConfig`. Same key, same type, and the same VALUE for
+            // every league that has no override — which is all of them until an operator sets
+            // one, so this is additive in effect as well as in shape.
+            'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent()
+                ?? $gameConfig->getLeaguePositionDecreasePercent(),
+            // ADDITIVE, and ADDED HERE RATHER THAN TO THE WORLD PACK. The pack's league block
+            // is the cached surface gated by WorldInitializationService::WORLD_PACK_VERSION —
+            // a key there forces a bump that invalidates every country. This snapshot is built
+            // per sync, so it costs nothing. Same resolution the NPC-club `locationId` work
+            // reached, per .context/shared/api-backwards-compatibility.md.
+            'tvPoolPence'                   => $league->getTvPoolPence(),
+            'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
             'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),
                 'name'           => $c->getName(),

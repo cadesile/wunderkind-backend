@@ -1193,6 +1193,24 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`LeagueSizeResolver` — the TV pool's divisor, and the one place a league's size is
+answered.** Read its docblock before writing anything that asks "how many clubs are in this
+league", because the obvious query is wrong: **a `League` row is a template shared by every
+save** in its country and tier, and England tier 8 had 147 real player clubs pointing at one row
+on 2026-11-12. The table a player sees is assembled on their device.
+
+`league.slots` is therefore authored with **0 meaning "derive"**, and the derivation (NPC rows
+plus one for the country's bottom division) is the fallback. The reason the size is stored is not
+the arithmetic — it is that a derived divisor would move whenever an operator clicked Generate,
+silently re-pricing a tier's TV money for every shipped build.
+
+`derivedTvDealPence()` returns **null** for a league with no pool (every league, until somebody
+authors one) and also for a pooled league with no resolvable size — rather than dividing by a
+clamped 1 and publishing a whole pool as one club's share. `syncTvDeal()` is the only write path
+onto `tvDeal` when a pool exists, so the two columns cannot disagree about arithmetic. Memoised
+per country per request, with `forget()` for the bootstrap case that creates leagues, fills them,
+and only then has a real size.
+
 **`EconomyConfigPublisher` — the economy blocks the client reads, built once for three
 surfaces.** The economy reaches the app through the sync `gameConfig` block, `GET
 /api/game-config` and (for the country-agnostic half) the public `GET /api/starter-config`. The

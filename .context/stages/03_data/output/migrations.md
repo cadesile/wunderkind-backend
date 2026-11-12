@@ -74,6 +74,21 @@ the same inert state the defaults give.
 `...160100` adds the nine `game_config` economy columns.
 `...160200` creates `inflation_rate_history`, empty.
 
+`Version20261112180000` (same day, step 4) adds `league.tv_pool_pence`, `league.slots` and
+`league.league_position_decrease_percent`. **Its backfill is what makes the deploy provably
+inert**: `tv_pool_pence = tv_deal * sizeOf(league)` means dividing the pool back by the same
+size reproduces `tv_deal` exactly, by construction — so every league publishes the figure it
+published before, whatever the divisor turns out to be, which is what let the size question be
+settled on its merits rather than under deploy pressure. Verified on a full clone of the dev
+dataset: **0 of 120 leagues** had `pool / slots <> tv_deal`, and no league with a NULL `tv_deal`
+got a non-null pool ("no TV money" and "a TV deal of nothing" are different configurations that
+`LeagueTierDefaultDiff` compares strictly).
+
+`postUp()` authors `slots` from the **MAXIMUM** NPC count across each country's tiers rather
+than the per-tier count: a properly-bootstrapped country's bottom tier is one short because that
+slot belongs to the player's club, so the maximum is the playing size and using it makes `slots`
+uniform per country (EN/DE/IT 18, six countries 16, five 8, SC 3).
+
 `Version20261112170000` (same day, step 3) adds the four published-only constants —
 `matchday_food_uptake_percent`, `npc_solvency_thresholds`, `dof_wage_bill_threshold_pct`,
 `sponsor_weekly_pence` — and uses the same add-with-default-then-DROP-DEFAULT pattern for its

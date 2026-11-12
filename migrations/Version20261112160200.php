@@ -55,16 +55,22 @@ final class Version20261112160200 extends AbstractMigration
             )
         SQL);
         $this->addSql('CREATE INDEX idx_inflation_rate_history_recorded ON inflation_rate_history (recorded_at)');
-        $this->addSql('CREATE INDEX IDX_INFLATION_RATE_HISTORY_ADMIN ON inflation_rate_history (changed_by_admin_id)');
+        // DOCTRINE'S OWN GENERATED NAMES FOR THE FK AND ITS INDEX, not readable ones. The
+        // mapping does not name them, so `doctrine:schema:create` — which is how the test
+        // database is built — produces exactly these hashes. A hand-picked name here would make
+        // a migrated database and a schema-created one differ by an index name, and
+        // `migrations:diff` would then churn on it forever. That is the drift
+        // Version20261011134810 had to clean up, in a different guise.
+        $this->addSql('CREATE INDEX IDX_D6AF922CF02AD8BA ON inflation_rate_history (changed_by_admin_id)');
         $this->addSql(
-            'ALTER TABLE inflation_rate_history ADD CONSTRAINT FK_INFLATION_RATE_HISTORY_ADMIN '
+            'ALTER TABLE inflation_rate_history ADD CONSTRAINT FK_D6AF922CF02AD8BA '
             . 'FOREIGN KEY (changed_by_admin_id) REFERENCES admin (id) ON DELETE SET NULL NOT DEFERRABLE',
         );
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE inflation_rate_history DROP CONSTRAINT FK_INFLATION_RATE_HISTORY_ADMIN');
+        $this->addSql('ALTER TABLE inflation_rate_history DROP CONSTRAINT FK_D6AF922CF02AD8BA');
         $this->addSql('DROP TABLE inflation_rate_history');
     }
 }

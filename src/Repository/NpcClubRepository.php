@@ -42,6 +42,40 @@ class NpcClubRepository extends ServiceEntityRepository
         return $result;
     }
 
+    /**
+     * NPC club counts for one country, keyed by LEAGUE id.
+     *
+     * KEYED ON THE RELATION, NOT ON `country` + `tier`. An NpcClub carries its own `country`
+     * and `tier` columns alongside the `league` FK, and getCountsByCountryAndTier() above
+     * groups by the columns. They agree today (checked across all 15 bootstrapped countries on
+     * 2026-11-12: zero mismatches, zero null league_ids), but the builders enumerate membership
+     * with findByLeague(), so a divisor for a TV pool has to count the same thing they list or
+     * the published share and the published count can disagree.
+     *
+     * One query for a whole country, because LeagueSizeResolver walks all eight tiers and a
+     * count-per-league would be eight.
+     *
+     * @return array<string, int> league id (RFC4122) => club count
+     */
+    public function countsByLeagueForCountry(string $country): array
+    {
+        $rows = $this->createQueryBuilder('c')
+            ->select('IDENTITY(c.league) AS leagueId, COUNT(c.id) AS cnt')
+            ->andWhere('c.league IS NOT NULL')
+            ->andWhere('c.country = :country')
+            ->setParameter('country', $country)
+            ->groupBy('c.league')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['leagueId']] = (int) $row['cnt'];
+        }
+
+        return $out;
+    }
+
     public function deleteByCountryAndTier(string $country, int $tier): int
     {
         return (int) $this->createQueryBuilder('c')

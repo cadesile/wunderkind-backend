@@ -172,7 +172,7 @@ class InitializeController extends AbstractController
      * Requires starter to be initialized first.
      */
     #[Route('/leagues', name: 'api_initialize_leagues', methods: ['GET'])]
-    public function leagues(): JsonResponse
+    public function leagues(\App\Service\Economy\LeagueSizeResolver $leagueSizeResolver): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
@@ -201,6 +201,10 @@ class InitializeController extends AbstractController
             'tvDeal'            => $league->getTvDeal(),
             'prizeMoney'        => $league->getPrizeMoney(),
             'leaguePositionPot' => $league->getLeaguePositionPot(),
+            // ADDITIVE. This endpoint is uncached, so unlike the world pack it can carry the
+            // two new keys without a WORLD_PACK_VERSION bump.
+            'tvPoolPence'       => $league->getTvPoolPence(),
+            'clubCount'         => $leagueSizeResolver->sizeOf($league),
             'trophy'            => $league->getTrophy(),
         ], $leagues);
 

@@ -32,6 +32,7 @@ class LeagueService
         private readonly LeaderboardCalculationService $leaderboardCalculationService,
         private readonly SeasonRecordRepository   $seasonRecordRepository,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
+        private readonly \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
     ) {}
 
     /** The deepest pyramid the per-tier config tables describe. */
@@ -71,6 +72,14 @@ class LeagueService
             $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $league->setSponsorCount($defaults['sponsorCount']);
             $league->setTrophy($defaults['trophy']);
+            $league->setTvPoolPence($defaults['tvPoolPence']);
+            $league->setLeaguePositionDecreasePercent($defaults['leaguePositionDecreasePercent']);
+            // NO syncTvDeal() HERE, DELIBERATELY. This runs BEFORE any NPC club exists — the
+            // bootstrap creates leagues first and fills them afterwards — so a league's size is
+            // 0 (or 1, for the bottom tier) at this moment and a derived share would be the
+            // whole pool. The tier default's own tvDeal stands, which is exactly what this
+            // method has always written; the share starts being derived once the clubs are
+            // there and an operator applies the defaults or sets `slots`.
             $this->em->persist($league);
             $created[] = $league;
         }
@@ -280,7 +289,17 @@ class LeagueService
                 'sponsorPot'                    => $sponsorPot,
                 'prizeMoney'                    => $league->getPrizeMoney(),
                 'leaguePositionPot'             => $league->getLeaguePositionPot(),
-                'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+                // RESOLVED `league ?? gameConfig`. The key keeps its name, its type and — for
+                // every league with no override, which is all of them until an operator sets
+                // one — its exact value.
+                'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent()
+                    ?? $gameConfig->getLeaguePositionDecreasePercent(),
+                // ADDITIVE. The pool is the authored figure and `clubCount` is what it was
+                // divided by, so a client can check the arithmetic rather than trusting it —
+                // and can pay NPC clubs their share, which the backend cannot do (no income
+                // loop here; the device runs the economy).
+                'tvPoolPence'                   => $league->getTvPoolPence(),
+                'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
                 'clubs'                         => $clubs,
                 'fixtures'                      => $fixtures,
             ];

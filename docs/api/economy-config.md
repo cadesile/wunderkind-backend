@@ -159,6 +159,65 @@ cache has no TTL, so flipping the model changes pack *content* without changing 
 already-cached country serves pre-flip wages forever. That constant's docblock is a post-mortem
 of exactly that happening twice.
 
+## The TV pool
+
+A league's TV money is a **pool** split equally across its clubs, NPC clubs included. The
+backend cannot pay a club anything — there is no income loop here, the device runs the economy —
+so what it publishes is the pool and the club count, and the app does the paying.
+
+| Key | Meaning |
+|---|---|
+| `tvDeal` | **The PER-CLUB share, in pence.** Unchanged in name and meaning since the first release. |
+| `tvPoolPence` | The league's whole TV money for a season, in pence. The authored value. |
+| `clubCount` | What the pool was divided by. |
+
+`tvDeal` was deliberately **not** re-interpreted as the pool: shipped builds read that key and
+treat it as one club's money, so changing what it means would be a changed value under an
+unchanged key. It is maintained from the pool instead — `tvDeal = intdiv(tvPoolPence, clubCount)`
+— and `clubCount` is published so a client can check the arithmetic rather than trust it.
+
+**`tvPoolPence` is null on a league nobody has authored a pool for**, which is every league until
+an operator sets one. A null pool derives nothing and `tvDeal` keeps exactly the figure it always
+had. That is what makes shipping the column a provable no-op.
+
+Base-year pence, like everything else here.
+
+### Where the keys appear — and where they deliberately do not
+
+Added to the three **uncached** league payloads: the sync response's league snapshot,
+`GET /api/initialize/leagues`, and the season pyramid returned by `POST /api/league/conclude-season`.
+
+**Not** added to the cached world-pack league block. That surface is gated by
+`WorldInitializationService::WORLD_PACK_VERSION`, so a key there forces a bump that invalidates
+every country's cache and makes the next request per country/tier pay a ~2-4s rebuild. Nothing
+needs the figure in a pack — the pack is squad and fixture data — so the shape stays put. Same
+resolution the NPC-club `locationId` work reached.
+
+### Where `clubCount` comes from, and why it is not counted
+
+A `League` row is a **template shared by every save** in its country and tier: on 2026-11-12
+England tier 8 had 147 real player clubs pointing at one row. The eighteen-club table a player
+sees is assembled on their device from the world pack. So nothing countable on the server means
+what a divisor needs to mean, and counting player clubs would give England tier 8 a divisor of
+148.
+
+`league.slots` is therefore authored, with **0 meaning "work it out"** from NPC rows plus one for
+the country's bottom division (where new clubs are placed). The derivation is kept as the
+fallback, so an operator who prefers it simply never sets `slots`.
+
+The reason the size is stored rather than derived is not the arithmetic — it is that **a derived
+divisor moves whenever somebody clicks Generate**, silently re-pricing a tier's TV money for
+every shipped build as a side effect of an unrelated admin action.
+
+## Per-league overrides
+
+`leaguePositionDecreasePercent` is now a nullable per-league column, resolved
+`league ?? gameConfig` at every publish site. The key keeps its name, its type and — for every
+league with no override, which is all of them until an operator sets one — its exact value.
+
+Nullable rather than defaulting to 0, because "not overridden" has to be expressible and a taper
+of **zero is a legitimate setting**: it means every finishing position pays the same.
+
 ## Backwards compatibility
 
 Nothing was removed, renamed or retyped. `?country=` on `GET /api/game-config` is optional and
@@ -166,6 +225,11 @@ omitting it is byte-identical to the previous behaviour plus the new keys.
 
 `seasonTicketHolderPercent` was **not** duplicated into the economy block — it is already live on
 both `/api/game-config` and the sync `gameConfig` block.
+
+`tvPoolPence`, `clubCount` and the resolved `leaguePositionDecreasePercent` are additions to
+three uncached payloads; `tvDeal` is byte-identical on every league, guaranteed by the
+migration's backfill (`tv_pool_pence = tv_deal x slots`), which was verified exact across all
+120 leagues on the dev dataset.
 
 Both branches of `SyncService`'s `gameConfig` ternary carry an identical key set, in the same
 order, built from one place (`EconomyConfigPublisher`).

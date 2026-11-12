@@ -1696,25 +1696,25 @@ class GameConfig
      * to be LeagueService::LEAGUE_TIER_DEFAULTS, a hardcoded const that only ever fed
      * newly-generated leagues and couldn't be edited without a code change.
      *
-     * @var array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
+     * @var array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}>
      */
     #[ORM\Column(type: 'json')]
     private array $leagueTierDefaults = [
-        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null],
+        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
+        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null],
     ];
 
     /**
      * Every row is normalised on the way out (see normaliseTierRow), so the admin
      * bulk-edit screen never has to know the retired trophy keys existed.
      *
-     * @return array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
+     * @return array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}>
      */
     public function getLeagueTierDefaults(): array
     {
@@ -1728,7 +1728,7 @@ class GameConfig
      * Normalised on write too, so a saved config converges on the new shape and
      * the legacy fold becomes dead weight rather than a permanent read-time cost.
      *
-     * @param array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}> $v
+     * @param array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}> $v
      */
     public function setLeagueTierDefaults(array $v): static
     {
@@ -1741,7 +1741,7 @@ class GameConfig
     }
 
     /**
-     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}
      */
     public function getLeagueTierDefaultsForTier(int $tier): array
     {
@@ -1752,9 +1752,15 @@ class GameConfig
             return self::normaliseTierRow($row);
         }
 
+        // EVERY KEY normaliseTierRow() CAN RETURN HAS TO BE HERE. This branch answers for a
+        // tier that was never saved, and its consumers read keys off the result directly
+        // (LeagueService::generateLeaguesForCountry(), LeagueAdminController's bulk apply,
+        // LeagueTierDefaultDiff) — a missing key is an undefined-index warning that surfaces
+        // as a league created with no TV money rather than as an error.
         return [
-            'promotionSpots' => 2, 'tvDeal' => null, 'prizeMoney' => null,
-            'leaguePositionPot' => null, 'sponsorCount' => 0, 'trophy' => null,
+            'promotionSpots' => 2, 'tvDeal' => null, 'tvPoolPence' => null, 'prizeMoney' => null,
+            'leaguePositionPot' => null, 'leaguePositionDecreasePercent' => null,
+            'sponsorCount' => 0, 'trophy' => null,
         ];
     }
 
@@ -1769,7 +1775,7 @@ class GameConfig
      * rather than only in the migration means neither quietly loses its trophy.
      *
      * @param array<string, mixed> $row
-     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array}
      */
     private static function normaliseTierRow(array $row): array
     {
@@ -1784,6 +1790,13 @@ class GameConfig
 
         unset($row['trophyImage'], $row['trophyColour']);
         $row['trophy'] = $trophy;
+
+        // DEFAULTED RATHER THAN ASSUMED PRESENT. This column is plain stored JSON, so a row
+        // saved before the TV pool existed — or any config export taken back then, which
+        // admins are told is safe to re-import — carries neither key. Filling them here is
+        // what keeps the returned shape total for every caller that reads keys off it.
+        $row['tvPoolPence'] ??= null;
+        $row['leaguePositionDecreasePercent'] ??= null;
 
         return $row;
     }

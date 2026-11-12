@@ -1129,6 +1129,54 @@ model be switched on against numbers nobody authored.
 `scaleTierToEight()` was **removed** in the same pass — see
 `GameConfig::getNpcClubBalanceRangeForTier()`.
 
+### `League` gained a TV pool, an authored size and a taper override (2026-11-12)
+
+From `Version20261112180000`.
+
+- **`tvPoolPence`** (bigint, nullable) — the league's whole TV money for a season. The
+  AUTHORED value; `tvDeal` is derived from it as `intdiv(pool, size)`.
+- **`tvDeal` keeps its old meaning**, the PER-CLUB share. Re-interpreting it as the pool would
+  be a changed value under an unchanged key, which the BC doc counts as a break — shipped builds
+  read it as one club's money.
+- **`slots`** (smallint, default 0) — clubs in this league's table, the pool's divisor.
+  **0 means "work it out"**, not "no clubs" (the `club_funding_minimum_pence` idiom).
+- **`leaguePositionDecreasePercent`** (smallint, nullable) — per-league override of the
+  position-pot taper, resolved `league ?? gameConfig`. Nullable rather than 0-defaulted because
+  a taper of zero is a legitimate setting (every position pays the same), so `0` cannot also
+  mean "not overridden".
+
+**A NULL POOL DERIVES NOTHING, and that is the mechanism that makes this shippable.** Every
+league starts with a null pool, so `tvDeal` keeps exactly the figure it was authored with.
+Deriving unconditionally could not have been inert: `LeagueService::generateLeaguesForCountry()`
+creates league rows BEFORE any club exists, so a fresh country would divide by zero or publish
+its whole pool as one club's share.
+
+**Why `slots` is authored and not counted.** A `League` row is a TEMPLATE shared by every save
+in its country and tier — on 2026-11-12 England tier 8 had **147 real, non-spoof player clubs**
+with `current_league_id` pointing at one row (tier 7: 9, tier 6: 5). The eighteen-club table a
+player sees is assembled on their device from the world pack and exists nowhere on the server.
+So nothing countable here means what a divisor needs to mean.
+
+The derivation that is kept as the fallback — NPC rows plus one for the bottom tier — is right
+for 9 of the 15 bootstrapped countries and wrong for 6. Measured on dev:
+
+| countries | NPC rows by tier | the rule gives |
+|---|---|---|
+| EN, DE, IT | 18 x7, 17 | a clean 18 |
+| AR, BR, ES, FR, NL, PT | 16 x7, 15 | a clean 16 |
+| CA, JP, NG, PL, US | 8 x8 | 9 at the bottom, 8 elsewhere |
+| SC | 3 x8 | 4 at the bottom, 3 elsewhere |
+
+The bottom tier being one short in the first two groups IS the player's slot, which is what the
+rule is built on; the uniform-count countries are ones nobody finished bootstrapping at a real
+size. But the decisive objection is not the off-by-one: **a derived divisor moves whenever
+somebody clicks Generate**, silently re-pricing a tier's TV money for every shipped build as a
+side effect of an unrelated admin action. See `LeagueSizeResolver`.
+
+Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_profile.league_tier_count`
+is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
+against this database. Production unverified.
+
 ### Four published-only gameplay constants on `GameConfig` (2026-11-12)
 
 From `Version20261112170000`. **None is consumed server-side**, which is the normal shape for
