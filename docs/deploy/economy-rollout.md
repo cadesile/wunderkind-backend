@@ -93,6 +93,29 @@ bands have changed** — those are the inputs, and the preview reads them live.
 Leave the other knobs at their shipped values for the first pass (ratio 60%, staff share 25%,
 k 2.5, reputation spread 0, 46 weeks). Change one at a time, with a preview run between.
 
+### Then the youth scholarship, which is two more figures
+
+**World → Economy → `SCHOLARSHIP AT TIER 1` and `SCHOLARSHIP FLOOR`.** Both ship at **0**, which
+means "use the flat Game Config figure and its cap" — the shipped behaviour. You author them in
+the same pass as the turnover table, because the ladder is derived from it.
+
+| field | suggested | what it means |
+|---|---|---|
+| `SCHOLARSHIP AT TIER 1` | `150000` (£1,500/wk) | what a scholar costs at the top. Every lower tier is the same *proportion* of its own average first-team wage |
+| `SCHOLARSHIP FLOOR` | `2500` (£25/wk) | the least a scholar can cost. **Not optional** — a pure proportion reaches £1.43 by tier 8 |
+| `SCHOLARSHIP CAP (bp)` | `5000` (50%) | leave it. The invariant: never more than half an average professional at the tier |
+
+Why one figure and not eight: the per-tier shape is already the turnover ladder's, so authoring
+it twice invites the two to disagree. The resulting ladder, against the table above:
+
+| tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| scholarship | £1,500.00 | £554.73 | £187.14 | £110.39 | £45.11 | £25.00 | £25.00 | £25.00 |
+| % of an average pro | 1.1% | 1.1% | 1.1% | 1.1% | 1.1% | 1.5% | 5.6% | 19.7% |
+
+**If you want a different anchor, change only the £1,500** and re-run the gate — the whole ladder
+moves with it proportionally, and the floor and cap keep the bottom sane without further tuning.
+
 ---
 
 ## 3. Run the gate until it exits 0
@@ -122,10 +145,16 @@ raw row indexing, which is the part most likely to look wrong.
 **`TV alone is N% of baseline turnover`** — a hard gate. See step 4.
 
 **`the youth scholarship is MORE than an average first-team wage`** — **should no longer
-appear.** Fixed 2026-11-12: `economyYouthScholarshipCapBp` (World → Economy → Wage model, default
-50%) caps a scholarship at a share of the tier's worst first-team wage, taking England tier 8
-from 1.97× an average wage to 0.05× while leaving tiers 1-6 untouched. If you do see it, the cap
-has been set to 0 ("no cap") or raised above 100%.
+appear.** `economyYouthScholarshipCapBp` (World → Economy, default 50%) caps a scholarship at a
+share of the tier's **average** first-team wage, and the cap is applied last so it always wins.
+If you do see it, the cap has been set to 0 ("no cap").
+
+> **This check used to be unclearable, and the fix is worth knowing about if you are following an
+> older copy of this runbook.** Until `dcd935b` the gate priced its whole table through the
+> turnover model but asked for the scholarship under the *live* model — so with the model still
+> `legacy` it compared a flat £250 against turnover wages and reported two problems that no
+> authoring action could clear. If your gate output shows £250 in that message, you are on an
+> older build.
 
 **`the harshest bankruptcy band is reached in N weeks`** and **`row N can never be reached`** —
 **not backend blockers.** That mechanic is client-side and gated by

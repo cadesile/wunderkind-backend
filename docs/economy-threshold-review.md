@@ -79,11 +79,18 @@ figure from the brief, confirmed.
 
 ## 2. The youth scholarship — FIXED 2026-11-12
 
-> **Resolved after this review was written.** `GameConfig::$economyYouthScholarshipCapBp` caps a
-> scholarship at a share of the tier's **worst** first-team wage (default 50%). Tier 8 went from
-> **1.97x an average wage to 0.05x**, tier 7 from 0.56x to 0.15x, and **tiers 1-6 are
-> byte-identical** — which is the point of a cap rather than a replacement. The original finding
-> is kept below because the reasoning is what justifies the shape of the fix.
+> **Resolved in two passes, and the second one matters.** The first fixed the end that inverted:
+> `economyYouthScholarshipCapBp` capped a scholarship at 50% of the tier's **worst** first-team
+> wage, taking tier 8 from 1.97x an average wage to 0.05x with tiers 1-6 byte-identical.
+>
+> **That left the other end quietly wrong, and running the gate on real data found it.** £250 is
+> **0.19% of an average tier-1 first-team wage** — a rounding error, not a cheap academy. A flat
+> figure cannot be right at both ends of a ladder spanning 1,047x, so the cap had fixed the half
+> that threw an error and declared the rest fine. The scholarship is now **anchored at tier 1
+> and scaled down the wage ladder**, with a floor under it and the cap still on top. See
+> "The second pass" below.
+>
+> The original finding is kept because the reasoning is what justifies the shape of the fix.
 
 ### The original finding: The youth scholarship is now MORE than an average tier-8 wage
 
@@ -126,6 +133,8 @@ scholarship = min(youthScholarshipWagePence, worstFirstTeamWageAtTier x capBp)
 defect is about: a scholar must cost less than the *cheapest* professional at the club.
 Anchoring to the average would still let one out-earn the bottom of the squad.
 
+> ⚠️ **This anchor was changed in the second pass.** It did not survive measurement — see below.
+
 **`youthScholarshipWagePence` is untouched** — same name, same type, same meaning, still
 published. The resolved per-tier figure arrives as a new key in
 `economyTierBaseline.tiers[].youthScholarshipPence`, so an older build keeps reading the flat
@@ -141,6 +150,110 @@ still means "no cap".
 That model gate is not cosmetic: the first implementation checked only whether a tier was
 *resolvable*, so it capped under `legacy` with a turnover table authored — where tier-8 wages
 average ~£480 and £250 is already sensible. `YouthScholarshipCapTest` caught it.
+
+### The second pass: anchor at tier 1 and scale down
+
+**What the first pass missed.** It only ever asked "is the scholarship too high?" — so it never
+looked at tier 1, where £250 against an average first-team wage of £132,892 is **0.19%**. The
+docblock's claim that "the flat figure is right at tiers 1-6" was about the figure being a
+*plausible absolute wage*, not about it being a sensible *proportion*, and nobody checked the
+second reading until the gate was run against a real authored table.
+
+**One knob, at the top.** An operator authors `economyYouthScholarshipTier1Pence` — what a
+scholar costs at tier 1 — and every lower tier is the same proportion of its own average wage:
+
+```
+scholarship(tier) = anchor x averageWage(tier) / averageWage(1)
+```
+
+Not an eight-row table: the per-tier shape is already expressed by the turnover ladder, and
+authoring it twice invites the two to disagree. Same reasoning as sponsorship taking the country
+factor but not the tier factor.
+
+**Two candidate scalings were modelled first, and one of them is a trap.** Scaling by `S_tier`
+is the obvious-looking choice and it is catastrophic — `S_tier` carries almost none of the
+ladder's spread:
+
+| scaled by | top-to-bottom spread | tier-8 scholarship, anchored at £1,500 | vs an average tier-8 pro (£127) |
+|---|---|---|---|
+| `S_tier` | **1.72×** | £873.11 | **6.9× — far worse than the original defect** |
+| worst first-team wage | 3,075× | £0.49 | effectively free |
+| average first-team wage | 1,047× | £1.43 | effectively free |
+
+**So it needs a floor, and that is why the pair exists.** A pure proportion is as broken at the
+bottom as a flat figure is at the top. `economyYouthScholarshipFloorPence` holds the bottom up;
+the cap is applied **last** so the invariant always wins over the preference. An absurd floor is
+clamped down to the tier's cap rather than breaking the one promise the mechanism makes.
+
+With the anchor at **£1,500** and the floor at **£25**, against the authored England table:
+
+| tier | scholarship | % of an average professional at that tier | |
+|---|---|---|---|
+| 1 | £1,500.00 | 1.1% | |
+| 2 | £554.73 | 1.1% | |
+| 3 | £187.14 | 1.1% | |
+| 4 | £110.39 | 1.1% | |
+| 5 | £45.11 | 1.1% | |
+| 6 | £25.00 | 1.5% | floored |
+| 7 | £25.00 | 5.6% | floored |
+| 8 | £25.00 | 19.7% | floored |
+
+Tiers 1–5 ride the proportion; 6–8 sit on the floor, which is what stops the scholarship decaying
+into nothing where the wage ladder does.
+
+### The cap's anchor moved to the average, deliberately
+
+The rule above — 50% of the tier's **worst** first-team wage — did not survive measurement.
+England tier 8's cheapest professional earns **£12.84/week**, so half of it is £6.42: the rule
+did not deliver "cheaper than a professional" at the bottom, it delivered *free*, which the
+resolver then had to floor at 1p to keep meaningful.
+
+So `economyYouthScholarshipCapBp` is now a share of the tier's **average** first-team wage —
+which is also the comparison this document and the gate command were measuring all along. The
+invariant becomes sayable in one line: **a scholar never earns more than `capBp` of an average
+professional at their tier.** At tier 8 that is £63.47 rather than £6.42.
+
+Safe to redefine rather than add a second column: the cap is gated on `economyWageModel =
+turnover`, which is `legacy` on every deployed box, so it has never applied to a published figure.
+
+**The accepted cost, stated rather than buried:** where a band is as wide as tier 8's, a
+scholarship can exceed the single cheapest professional's wage (£25 against £12.84). That is
+accepted, because £12.84/week is an artefact rather than a wage anybody authored — see the new
+finding below.
+
+---
+
+## 2b. NEW FINDING: tier 8's cheapest professional earns £12.84/week
+
+Surfaced by the scholarship work rather than looked for. Against the authored England ladder,
+tier 8's band is **2–7** and the curve exponent is 2.5, so the within-band spread is `7^2.5 /
+2^2.5` ≈ **23×** — the cheapest professional at the tier earns £12.84/week (£590/season) while
+the best earns £294.39.
+
+| tier | band | cheapest /wk | average /wk | best /wk | within-band spread |
+|---|---|---|---|---|---|
+| 1 | 40–90 | £39,478.91 | £132,891.93 | £299,793.00 | 7.6× |
+| 7 | 5–10 | £138.16 | £447.39 | £781.57 | 5.7× |
+| 8 | **2–7** | **£12.84** | £126.94 | £294.39 | **22.9×** |
+
+**Why it is a finding and not a bug.** Nothing is wrong with the arithmetic; the inputs are
+`leaguePlayerAbilityRanges` (which authors tier 8 as 2–7) and the exponent. The problem is that
+a band starting at **2** sits where `ability^2.5` is near zero, so the bottom of that band prices
+at a nominal figure. Every other tier's band starts far enough up the curve for this not to bite.
+
+**Why it matters beyond the scholarship.** Any rule phrased as a share of "the cheapest
+professional at the tier" is anchored to that artefact — which is exactly what the first
+scholarship cap did. Candidate fixes, none implemented:
+
+1. **Raise tier 8's band floor** (2–7 → 4–7, say). Changes generated player abilities, so it is
+   a `WORLD_PACK_VERSION` bump and re-prices tier 8 wholesale.
+2. **Floor the per-player wage** the way the scholarship is now floored. Cheap, local, and keeps
+   the band as authored.
+3. **Leave it** and only ever anchor rules to the tier *average*, which is what has now been
+   done everywhere that mattered.
+
+Recommendation: **(3) for now, (2) if a tier-8 wage ever reaches a player.** (1) is the real fix
+and the most expensive; it should be a deliberate calibration decision, not a side effect.
 
 ---
 

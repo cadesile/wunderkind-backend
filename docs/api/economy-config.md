@@ -319,17 +319,47 @@ a shared cache in front of it would serve one country's prices to another.
 Each row of `economyTierBaseline.tiers[]` carries a `youthScholarshipPence`. **Prefer it over the
 top-level `youthScholarshipWagePence`**, and keep that key as the fallback.
 
-Why both exist: the flat key is a single figure for every tier, and the turnover model makes an
-average England tier-8 first-team wage about £127 — so a flat £250 scholarship had a
-thirteen-year-old out-earning an average professional by nearly 2×. The per-tier figure is
-`min(flat, capBp × the tier's worst first-team wage)`, so it is the flat value at the upper
-tiers and lower only where the flat value was implausible.
+Why both exist: the flat key is a single figure for every tier, and a single figure cannot be
+right across a wage ladder that spans **1,047×** top to bottom. At England tier 8 an average
+first-team wage is about **£127**, so a flat £250 scholarship had a thirteen-year-old
+out-earning an average professional by nearly 2×. At tier 1 an average wage is **£132,892**, so
+the same £250 is **0.19%** of it — a rounding error. Both ends were wrong, in opposite
+directions.
+
+So the per-tier figure is, in order:
+
+1. **Anchored** — an operator authors what a scholar costs at tier 1, and every lower tier is the
+   same proportion of its own average first-team wage.
+2. **Floored** — a pure proportion reaches £1.43 by tier 8, and free is a different mechanic from
+   cheap.
+3. **Capped** — never more than `capBp` (default 50%) of an average professional at that tier.
+   Applied last, so it always wins.
+
+**You do not need to reproduce any of that.** Read
+`economyTierBaseline.tiers[].youthScholarshipPence` for the tier the club is in and charge it.
+None of the three inputs is published, deliberately — they are authoring knobs, and the resolved
+figure is the answer.
+
+A worked ladder, anchored at £1,500 with a £25 floor against England's authored table:
+
+| tier | `youthScholarshipPence` | % of an average professional at that tier |
+|---|---|---|
+| 1 | `150000` | 1.1% |
+| 2 | `55473` | 1.1% |
+| 3 | `18714` | 1.1% |
+| 4 | `11039` | 1.1% |
+| 5 | `4511` | 1.1% |
+| 6 | `2500` | 1.5% |
+| 7 | `2500` | 5.6% |
+| 8 | `2500` | 19.7% |
 
 `youthScholarshipWagePence` is unchanged in name, type and meaning, so a build that does not
 know about the per-tier key behaves exactly as before.
 
-The cap applies only under the `turnover` model. Under `legacy` every tier publishes the flat
-figure.
+All of it applies only under the `turnover` model. **Under `legacy` — which is every deployed
+box today — every tier publishes the flat figure**, so the per-tier key is currently just £250
+eight times over. It starts differing the day the model is flipped, which is the day to be
+reading it rather than the flat one.
 
 ## `sponsorBandsPence` — prefer the per-country bands
 

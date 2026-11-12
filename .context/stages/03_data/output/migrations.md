@@ -107,6 +107,20 @@ two json columns. The mechanic was verified directly rather than assumed: an exi
 the backfilled value after `DROP DEFAULT`, and a subsequent bare INSERT then fails, which is
 what proves the mapping owns the default afterwards.
 
+`Version20261112220000` (same day, step 8) adds `game_config.economy_youth_scholarship_cap_bp`
+(default 5000). **Its docblock states a rule that no longer holds** — it capped against the
+tier's WORST first-team wage — and carries a supersession note saying so. Left unedited
+otherwise, because the SQL in it is what ran on the boxes.
+
+`Version20261112230000` (the day after the first nine deployed) adds
+`game_config.economy_youth_scholarship_tier1_pence` and `…_floor_pence`, **both default 0 =
+off**, and redefines the cap above as a share of the tier's AVERAGE wage. The scholarship becomes
+an anchored ladder rather than a flat figure with a ceiling: see `entities.md` for the shape and
+`docs/economy-threshold-review.md` §2 for why the first pass was only half a fix. Redefining the
+cap's anchor rather than adding a second column is safe **only because the cap is gated on
+`economyWageModel = turnover`, which is `legacy` on every deployed box**, so it has never applied
+to a published figure. **This one is NOT yet deployed** as of the first nine's rollout.
+
 
 
 Most recent migrations (chronological):

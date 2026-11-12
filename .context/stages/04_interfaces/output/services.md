@@ -1286,6 +1286,23 @@ the tier's reference complement (the counts in `npcSquadConfig`) costs the confi
 share. Reusing the band is what avoids asking an operator to re-tune five hand-tuned roles
 against a knob that did not exist.
 
+**`averageFirstTeamWagePence()` is the single definition three things must agree on**: the youth
+scholarship ladder, the scholarship cap, and the gate command's inversion check. They disagreed
+once — the gate priced its table through `turnover` but asked for the scholarship under the LIVE
+model, so with the model on `legacy` it compared a flat £250 against turnover wages and raised
+two problems **no authoring action could clear** (16 under `legacy`, 14 under `turnover`, the diff
+being exactly those two lines). A gate that cannot reach zero blocks the flip forever.
+`youthScholarshipPenceUnder()` takes the model as an argument for that reason, with
+`youthScholarshipPence()` delegating so the cap keeps one implementation. Found by RUNNING the
+gate against real data, not by reading it.
+
+**The scholarship itself is an anchored ladder, not a flat figure.** `clamp(anchor x
+averageWage(tier) / averageWage(1), floor, capBp x averageWage(tier))`, where only tier 1 is
+authored and both new columns default to 0 (= off, the old flat-plus-cap behaviour). Scaling by
+`S_tier` instead was modelled and rejected: it carries 1.72x of spread against the wage ladder's
+1,047x, so a £1,500 anchor would put a tier-8 scholar on £873 against an average professional's
+£127. Floor before cap, because the floor is a preference and the cap is the invariant.
+
 **`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
 exits non-zero on four checks (S_tier monotonic; no cross-tier ability inversion; TV a sane
 fraction of turnover; the squad bill matching its own definition). Check 4 earned its place

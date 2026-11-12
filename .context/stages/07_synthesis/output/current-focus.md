@@ -31,12 +31,22 @@ What exists now:
 - `GET/POST /api/club/season-investment`, World → Economy admin screen, and the verbatim
   parachute passthrough.
 
-**Fixed 2026-11-12:** the youth-scholarship inversion. The flat £250 was 1.97x an average
-tier-8 wage under the turnover model; `economyYouthScholarshipCapBp` caps it at a share of the
-tier's WORST first-team wage, taking tier 8 to 0.05x while leaving tiers 1-6 byte-identical. A
-cap rather than a replacement, because the flat figure was right at six of the eight tiers. It
-ships ON at 50% — the one switch in this series that does — and is still a provable no-op,
-because it applies only under the `turnover` model.
+**Fixed 2026-11-12, then fixed properly 2026-11-13:** the youth scholarship was wrong at BOTH
+ends of the turnover ladder. The flat £250 was 1.97x an average tier-8 wage *and* 0.19% of an
+average tier-1 wage — a single absolute figure cannot be right across a 1,047x spread.
+
+Pass 1 (`economyYouthScholarshipCapBp`, ships ON at 50% — the one switch in this series that
+does) capped the end that inverted and therefore never looked at tier 1. Pass 2
+(`economyYouthScholarshipTier1Pence` + `…FloorPence`, both default 0 = off) makes it an anchored
+ladder: author what a scholar costs at tier 1, every lower tier is the same proportion of its own
+average wage, floored so it does not decay to £1.43, capped last so the invariant always wins.
+The cap's anchor moved from the tier's WORST wage to its AVERAGE, because tier 8's cheapest
+professional earns £12.84/wk and half of that is a free scholar, not a cheap one. Still a
+provable no-op: everything applies only under `turnover`.
+
+**Found by running the gate, not by reading it** — which also turned up a defect in the gate
+itself, reporting a scholarship problem that no authoring action could clear. See
+`docs/economy-threshold-review.md` §2 and §2b.
 
 **Also fixed 2026-11-12:** the sponsor bands scale by country, so a cheap country is cheap on
 both sides of the ledger rather than earning full English sponsorship on a fifth of the wages.
