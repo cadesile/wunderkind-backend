@@ -98,6 +98,64 @@ class SuggestTownsBatchMessageHandlerTest extends KernelTestCase
         self::assertSame([], $this->bus->dispatched, 'a batch that worked must not re-queue itself');
     }
 
+    /**
+     * A country the curated registry has never heard of gets its batches RUN, not just queued.
+     *
+     * THIS IS THE BUG THIS CASE EXISTS FOR. The planning side was taught to accept any country
+     * and the handler was not, so a pull for Ghana queued twelve batches happily and then
+     * failed every one of them three times over with "'GH' has no entry in
+     * CountryContentRegistry::PLACE_NAMES_BY_COUNTRY, so there is nothing to seed" — an error
+     * about SEEDING, raised by the one feature whose entire purpose is to serve a country that
+     * cannot be seeded.
+     *
+     * Planning and running have to agree about which countries they accept. Asserting on the
+     * planning side alone is what let them drift.
+     */
+    public function testABatchRunsForACountryWithNoCuratedPlaceList(): void
+    {
+        $country = \App\Enum\Country::GH;
+
+        self::assertNull(
+            \App\Service\CountryContent\CountryContentRegistry::places($country),
+            'fixture check: this country must have no curated place list',
+        );
+
+        $this->purgeCountry($country->value);
+        $this->seedService->ensureCountryProfile($country);
+
+        $plan    = $this->service()->planRun($country, TownSuggestionService::BATCH_SIZE);
+        $batchId = (string) $plan['batches'][0]->getId();
+
+        $this->suggester->queueNames(['Accra', 'Kumasi']);
+        $this->handle($batchId);
+
+        $batch = $this->freshBatch($batchId);
+        self::assertSame(
+            TownSuggestionBatchStatus::COMPLETED,
+            $batch->getStatus(),
+            (string) $batch->getErrorMessage(),
+        );
+        self::assertSame(2, $batch->getImported());
+
+        $this->purgeCountry($country->value);
+    }
+
+    private function purgeCountry(string $code): void
+    {
+        $this->connection->executeStatement(
+            "DELETE FROM town_suggestion_batch WHERE country_code = :c",
+            ['c' => $code],
+        );
+        $this->connection->executeStatement(
+            "DELETE FROM location_enrichment_run WHERE country_code = :c",
+            ['c' => $code],
+        );
+        $this->connection->executeStatement('DELETE FROM land_plot WHERE location_id IN (SELECT id FROM location WHERE country_code = :c)', ['c' => $code]);
+        $this->connection->executeStatement('DELETE FROM location WHERE country_code = :c', ['c' => $code]);
+        $this->connection->executeStatement('DELETE FROM country_profile WHERE code = :c', ['c' => $code]);
+        $this->em->clear();
+    }
+
     public function testAFirstFailureRetriesItselfAndIsNotYetCountedAgainstTheRun(): void
     {
         // Counting it now would close a run that is still going to do the work, and the screen

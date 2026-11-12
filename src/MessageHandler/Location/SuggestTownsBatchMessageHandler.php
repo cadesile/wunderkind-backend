@@ -89,7 +89,12 @@ final class SuggestTownsBatchMessageHandler
         $this->batchRepository->markRunning($batchId, $attempt);
 
         try {
-            $country = $this->seedService->resolveCountry($countryCode);
+            // resolveAnyCountry(), NOT resolveCountry(). The latter refuses a country the
+            // registry has no curated place list for, which is right for seeding and fatal
+            // here: pulling town names is how a country with no list gets one. The planning
+            // side was fixed and this was not, so a pull for such a country queued its
+            // batches happily and then failed every one of them with "nothing to seed".
+            $country = $this->seedService->resolveAnyCountry($countryCode);
             $summary = $this->suggestionService->runBatch($runId, $batchId, $country, $requested);
         } catch (TownSuggestionTruncatedException $e) {
             // TERMINAL ON THE FIRST ATTEMPT, no retry. The reply ran past the token ceiling,
