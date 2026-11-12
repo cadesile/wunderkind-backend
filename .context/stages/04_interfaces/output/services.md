@@ -1193,6 +1193,52 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`WageModelResolver` — what a generated player or staff member costs, and the only place that
+answers it.** Replaced FOUR copies of the same arithmetic:
+`WorldPackClubGenerationService::playerWageMultiplier()`,
+`MarketPoolService::getWageMultiplier()`, `StaffGenerationService::getWageMultiplier()` and —
+worst — `GenerateMarketDataCommand`, which had neither and used its own `random_int(10, 40)`,
+ignoring both `contractValueRandMin/Max` (live: 2000/2800) and the tier multipliers entirely. A
+player it created was priced roughly two orders of magnitude below an identical pool player. It
+also left every scout it made on wage 0, which `BackfillScoutWagesCommand`'s zero-sentinel reads
+as "never priced".
+
+**`legacy` is a supported mode, not dead code**, and it must stay byte-identical. The old sites
+did `(int) ($ability * $roll * $multiplier)` — a TRUNCATING cast on a float product — and that
+is reproduced verbatim. The ROLL IS A PARAMETER because `random_int()` is a CSPRNG and cannot be
+seeded: byte-identity can only mean "the same formula on the same draw", which is exactly what
+`WageModelLegacyParityTest` asserts across every ability 0-100 against the pre-unification
+expressions held independently in the test. **Those copies must never be refactored to call the
+resolver** — the whole point is that they hold the old behaviour from outside.
+
+Two oddities survived on purpose: the tier-walk's `<` is STRICT, so ability exactly 15 takes the
+x6 band not x4; and an ability at or above the last `maxAbility` falls out of the loop onto the
+last row via `end()`, because the live table has no null catch-all. Both priced every row in the
+world.
+
+**TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
+all. Per-country rows (world-pack clubs) are generated for a known country and tier, so they are
+priced at generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION`
+bump. Shared-pool rows are ONE row served to every country at every tier, so they are stored
+legacy and priced at serve time — in `PlayerBrowseSerializer` (re-priced from the ability curve)
+and `MarketDataService` (country x tier factor only, since a scout's pay comes from bands the
+model has no opinion about). **The pricing is deliberately NOT in `PlayerSnapshotSerializer`**,
+which `WorldPackSnapshotBuilder` also delegates to: re-pricing there would change cached pack
+content on every read with no version bump.
+
+Staff pay under `turnover` reuses `GameConfig::$economyStaffRoleBandsPence` for BOTH jobs — the
+midpoint is the role's weight, the spread is how ability moves pay within the role — scaled so
+the tier's reference complement (the counts in `npcSquadConfig`) costs the configured staff
+share. Reusing the band is what avoids asking an operator to re-tune five hand-tuned roles
+against a knob that did not exist.
+
+**`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
+exits non-zero on four checks (S_tier monotonic; no cross-tier ability inversion; TV a sane
+fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
+immediately by catching the reference squad being summed over continuous abilities when
+`Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
+wide one.
+
 **`LeagueSizeResolver` — the TV pool's divisor, and the one place a league's size is
 answered.** Read its docblock before writing anything that asks "how many clubs are in this
 league", because the obvious query is wrong: **a `League` row is a template shared by every

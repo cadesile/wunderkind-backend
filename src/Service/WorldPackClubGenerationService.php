@@ -13,7 +13,6 @@ use App\Entity\Staff;
 use App\Enum\PlayerPosition;
 use App\Enum\RecruitmentSource;
 use App\Enum\StaffRole;
-use App\Repository\GameConfigRepository;
 
 /**
  * Generates every entity one NPC club needs for a world-pack tier build — fresh,
@@ -31,7 +30,7 @@ class WorldPackClubGenerationService
         private readonly ScoutGenerationService $scoutGen,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly NameGeneratorService $nameGenerator,
-        private readonly GameConfigRepository $gameConfigRepo,
+        private readonly \App\Service\Economy\WageModelResolver $wageModel,
     ) {}
 
     /**
@@ -41,8 +40,16 @@ class WorldPackClubGenerationService
      *                        club in the tier, so an agent can represent multiple clubs)
      * @return Player[]
      */
-    public function generatePlayers(array $tierConf, array $abilityRange, string $nationality, PoolConfig $poolConfig, array $agents): array
-    {
+    public function generatePlayers(
+        array $tierConf,
+        array $abilityRange,
+        string $nationality,
+        PoolConfig $poolConfig,
+        array $agents,
+        string $country = '',
+        int $tier = 0,
+        int $clubReputation = 50,
+    ): array {
         $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
         $foreignPct   = (int) $tierConf['foreignPercent'];
         $posCounts    = $this->snapshotBuilder->distributeByPosition($totalPlayers, $poolConfig);
@@ -61,10 +68,10 @@ class WorldPackClubGenerationService
             $domesticCount = $posTotal - $foreignCount;
 
             for ($i = 0; $i < $domesticCount; $i++) {
-                $players[] = $this->buildPlayer($position, $nationality, $abilityRange, $ageRange);
+                $players[] = $this->buildPlayer($position, $nationality, $abilityRange, $ageRange, $country, $tier, $clubReputation);
             }
             for ($i = 0; $i < $foreignCount; $i++) {
-                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange, $ageRange);
+                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange, $ageRange, $country, $tier, $clubReputation);
             }
         }
 
@@ -81,24 +88,24 @@ class WorldPackClubGenerationService
      * @param array<string, mixed> $tierConf
      * @return Staff[]
      */
-    public function generateStaff(array $tierConf, string $nationality): array
+    public function generateStaff(array $tierConf, string $nationality, string $country = '', int $tier = 0): array
     {
         $staff = [];
 
         for ($i = 0; $i < (int) $tierConf['managerCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::MANAGER);
+            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['coachCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::COACH);
+            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['chairmanCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN);
+            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier);
         }
         for ($i = 0; $i < (int) ($tierConf['directorOfFootballCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality);
+            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier);
         }
         for ($i = 0; $i < (int) ($tierConf['facilityManagerCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality);
+            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality, $country, $tier);
         }
 
         return $staff;
@@ -139,29 +146,36 @@ class WorldPackClubGenerationService
      * @param array{min: int, max: int}|null $ageRange First-team band; null keeps PoolConfig's
      *                                       pool-wide range (callers that are not squads).
      */
-    private function buildPlayer(PlayerPosition $position, string $nationality, array $abilityRange, ?array $ageRange = null): Player
-    {
+    private function buildPlayer(
+        PlayerPosition $position,
+        string $nationality,
+        array $abilityRange,
+        ?array $ageRange = null,
+        string $country = '',
+        int $tier = 0,
+        int $clubReputation = 50,
+    ): Player {
         $player = $this->playerGen->generate($position, RecruitmentSource::YOUTH_INTAKE, $nationality, $abilityRange, $ageRange);
 
-        $gc          = $this->gameConfigRepo->getConfig();
-        $multiplier  = $this->playerWageMultiplier($player->getCurrentAbility());
-        $baseWage    = $player->getCurrentAbility() * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
-        $player->setContractValue((int) ($baseWage * $multiplier));
+        // THROUGH THE RESOLVER. The expression that was here — `(int) ($ability * roll *
+        // multiplier)`, with its own copy of the tier-walk — now lives in one place shared with
+        // MarketPoolService, StaffGenerationService and GenerateMarketDataCommand. In `legacy`
+        // mode it reproduces this byte for byte, truncating cast included.
+        //
+        // THE COUNTRY AND TIER ARE WHAT MAKE THIS THE PRICED POPULATION. A world-pack club is
+        // generated for a known country and tier, so the turnover model can price it at
+        // generation and the figure is stored in the pack. That is exactly why flipping the
+        // model needs a WORLD_PACK_VERSION bump: packs hold wages.
+        $player->setContractValue(
+            $this->wageModel->playerWeeklyPence(
+                $player->getCurrentAbility(),
+                $country,
+                $tier,
+                $clubReputation,
+            ),
+        );
 
         return $player;
-    }
-
-    private function playerWageMultiplier(int $ability): float
-    {
-        $tiers = $this->gameConfigRepo->getConfig()->getWageMultiplierTiers();
-        foreach ($tiers as $tier) {
-            if ($tier['maxAbility'] === null || $ability < $tier['maxAbility']) {
-                return (float) $tier['playerMultiplier'];
-            }
-        }
-
-        $last = end($tiers);
-        return (float) ($last['playerMultiplier'] ?? 1.0);
     }
 
     /** Picks a random nationality different from $exclude where possible (bounded retries). */

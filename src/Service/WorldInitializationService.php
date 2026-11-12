@@ -66,6 +66,19 @@ class WorldInitializationService
      *     for the country (generation seats new clubs itself), so warm AFTER
      *     seating or the rebuilt packs carry nulls.
      *
+     * ⚠️ **BUMP THIS WHEN `economyWageModel` IS FLIPPED, OR WHEN A COUNTRY FACTOR CHANGES.**
+     * Those change pack CONTENT without changing pack SHAPE, which is the one case this
+     * constant does not catch on its own — a pack holds the wages its players were generated
+     * with, and the cache has no TTL, so every already-cached country would serve pre-flip
+     * wages forever. That is the same failure as versions 1, 3 and 4 above, in the one guise
+     * where nothing about the payload looks different.
+     *
+     * Not bumped by the economy work itself (2026-11-12): it ships with the wage model on
+     * `legacy` and every country factor at parity, so nothing generated changed and
+     * invalidating 120 packs would have bought nothing. The bump belongs to the operator pass
+     * that turns it on — see `docs/deploy/economy-rollout.md` and
+     * `app:economy:wage-table`, which is the gate in front of that decision.
+     *
      * ⚠️ Bumping this makes every cached row a miss, so the next client request per
      * country/tier pays the rebuild (~2s for an 8-club tier, ~3-4s for 18) on its
      * critical path. To pre-empt that, run plain `app:worldpack:warm <CODE>` per
@@ -145,8 +158,14 @@ class WorldInitializationService
         foreach ($npcClubs as $npcClub) {
             $allClubIds[] = (string) $npcClub->getId();
 
-            $players = $this->clubGenerator->generatePlayers($tierConf, $abilityRange, $nationality, $poolConfig, $agents);
-            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality);
+            // COUNTRY, TIER AND THE CLUB'S OWN REPUTATION reach generation now, because the
+            // turnover wage model prices a world-pack player from them. In `legacy` mode they
+            // are ignored and every figure is unchanged.
+            $players = $this->clubGenerator->generatePlayers(
+                $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
+                $country, $tier, $npcClub->getReputation(),
+            );
+            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier);
             $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality);
 
             $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);

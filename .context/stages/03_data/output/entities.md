@@ -1177,6 +1177,22 @@ Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_prof
 is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
 against this database. Production unverified.
 
+### `GameConfig::$economyStaffRoleBandsPence` (2026-11-12)
+
+Weekly pence band per staff role, from `Version20261112190000`. These were hardcoded
+`random_int()` literals in `StaffGenerationService::build()` with a SECOND, DIFFERENT set in
+`GenerateMarketDataCommand` — the two disagreed about a coach (2000-8000 against 4000-10000), so
+the same role cost different money depending on which path created it. Seeded with
+StaffGenerationService's values because that is the path that generates the world.
+
+**The band does two jobs under the turnover model**, which is why it was worth lifting rather
+than replacing: its MIDPOINT is the role's weight (what a chairman costs relative to a facility
+manager) and its SPREAD is how ability moves pay within the role. Both were already hand-tuned.
+
+Setter normalises each band to two non-negative integers in order and drops unknown roles — an
+inverted band would make ability pay LESS the better a staff member is, and monotonicity is the
+property the funding projection leans on.
+
 ### Four published-only gameplay constants on `GameConfig` (2026-11-12)
 
 From `Version20261112170000`. **None is consumed server-side**, which is the normal shape for

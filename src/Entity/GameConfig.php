@@ -1554,6 +1554,68 @@ class GameConfig
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $sponsorWeeklyPence = 0;
 
+    /**
+     * Weekly pence band per staff role: `{role => [min, max]}`.
+     *
+     * MOVED OUT OF CODE, NOT INVENTED. These were hardcoded `random_int()` literals inside
+     * `StaffGenerationService::build()`, with a SECOND, DIFFERENT set in
+     * `GenerateMarketDataCommand` — the two disagreed about a coach (2000-8000 against
+     * 4000-10000), so the same role cost different money depending on which path created it.
+     * The values seeded here are StaffGenerationService's, because that is the path that
+     * generates the world.
+     *
+     * THE BAND DOES TWO JOBS UNDER THE TURNOVER MODEL, which is why it was worth lifting rather
+     * than replacing. Its MIDPOINT is the role's weight — what a chairman costs relative to a
+     * facility manager — and its SPREAD is how ability moves pay within the role. Both were
+     * already tuned by hand; deriving either from a new config knob would have thrown that away
+     * and asked an operator to re-tune five roles from nothing.
+     *
+     * @var array<string, array{int, int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyStaffRoleBandsPence = [
+        'coach'                => [2000, 8000],
+        'manager'              => [10000, 30000],
+        'director_of_football' => [12000, 35000],
+        'facility_manager'     => [3000, 8500],
+        'chairman'             => [20000, 60000],
+    ];
+
+    /** @return array<string, array{int, int}> */
+    public function getEconomyStaffRoleBandsPence(): array { return $this->economyStaffRoleBandsPence; }
+
+    /**
+     * Normalised on write: each band is clamped to two non-negative integers in order.
+     *
+     * A transposed pair is a legitimate state of a hand-edited JSON column, and an inverted
+     * band would make ability pay LESS the better a staff member is — monotonicity is the
+     * property the funding projection leans on, so it is enforced here rather than hoped for.
+     * Unknown roles are dropped: the key is a StaffRole value and a typo must not become a
+     * silent sixth role nothing ever reads.
+     *
+     * @param array<string, array{int, int}> $v
+     */
+    public function setEconomyStaffRoleBandsPence(array $v): static
+    {
+        $valid = array_column(\App\Enum\StaffRole::cases(), 'value');
+        $out   = [];
+
+        foreach ($v as $role => $band) {
+            if (!in_array((string) $role, $valid, true) || !is_array($band)) {
+                continue;
+            }
+
+            $lo = max(0, (int) ($band[0] ?? 0));
+            $hi = max(0, (int) ($band[1] ?? 0));
+
+            $out[(string) $role] = [min($lo, $hi), max($lo, $hi)];
+        }
+
+        $this->economyStaffRoleBandsPence = $out;
+
+        return $this;
+    }
+
     public function getMatchdayFoodUptakePercent(): int { return $this->matchdayFoodUptakePercent; }
     public function setMatchdayFoodUptakePercent(int $v): static { $this->matchdayFoodUptakePercent = max(0, min(100, $v)); return $this; }
 

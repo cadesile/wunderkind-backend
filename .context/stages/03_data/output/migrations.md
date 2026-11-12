@@ -89,6 +89,11 @@ than the per-tier count: a properly-bootstrapped country's bottom tier is one sh
 slot belongs to the player's club, so the maximum is the playing size and using it makes `slots`
 uniform per country (EN/DE/IT 18, six countries 16, five 8, SC 3).
 
+`Version20261112190000` (same day, step 5) lifts the five staff wage bands out of code into
+`game_config`, seeded with StaffGenerationService's literals so `legacy` generation is unchanged.
+It settles a disagreement rather than inventing values: `GenerateMarketDataCommand` held a second
+set that differed for a coach.
+
 `Version20261112170000` (same day, step 3) adds the four published-only constants —
 `matchday_food_uptake_percent`, `npc_solvency_thresholds`, `dof_wage_bill_threshold_pct`,
 `sponsor_weekly_pence` — and uses the same add-with-default-then-DROP-DEFAULT pattern for its

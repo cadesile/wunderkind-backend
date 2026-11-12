@@ -41,11 +41,21 @@ class MarketPoolAssignTest extends TestCase
             $this->createStub(InvestorRepository::class),
             $this->createStub(NameGeneratorService::class),
             $this->createStub(PoolConfigRepository::class),
-            $this->createStub(GameConfigRepository::class),
             $this->createStub(PlayerGenerationService::class),
             $snapshotBuilder,
             $this->createStub(StaffGenerationService::class),
             $this->createStub(ScoutGenerationService::class),
+            // A REAL WageModelResolver over stubbed repositories, because it is final. Nothing
+            // in these tests generates a player, so it is never consulted — it is here because
+            // the constructor requires it.
+            new \App\Service\Economy\WageModelResolver(
+                $this->createStub(GameConfigRepository::class),
+                new \App\Service\Economy\EconomyScaleResolver(
+                    $this->createStub(GameConfigRepository::class),
+                    $this->createStub(\App\Repository\StarterConfigRepository::class),
+                    $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ),
+            ),
         );
     }
 

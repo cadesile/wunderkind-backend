@@ -51,8 +51,28 @@ class WorldPackClubGenerationServiceTest extends TestCase
 
         $personalityLifecycle = new PersonalityLifecycleSubscriber(new PersonalityGeneratorService());
 
+        // A REAL WageModelResolver over stubbed repositories: it is final and cannot be
+        // doubled, and with a default GameConfig the wage model is `legacy`, so every figure
+        // here is what this test file was written against.
+        $wageModel = new \App\Service\Economy\WageModelResolver(
+            $gameConfigRepo,
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
+        );
+
         $playerGen = new PlayerGenerationService($nameGen, $poolConfigRepo, new PersonalityGeneratorService());
-        $staffGen  = new StaffGenerationService($poolConfigRepo, $gameConfigRepo, $nameGen, $personalityLifecycle);
+        // NAMED, so the next constructor change cannot shift a stub into the wrong slot — which
+        // is what removing GameConfigRepository from this service did to every positional
+        // argument after it.
+        $staffGen  = new StaffGenerationService(
+            poolConfigRepo: $poolConfigRepo,
+            nameGenerator: $nameGen,
+            personalityLifecycle: $personalityLifecycle,
+            wageModel: $wageModel,
+        );
         $scoutGen  = new ScoutGenerationService(
             $poolConfigRepo,
             $nameGen,
@@ -66,7 +86,7 @@ class WorldPackClubGenerationServiceTest extends TestCase
             $scoutGen,
             new WorldPackSnapshotBuilder(),
             $nameGen,
-            $gameConfigRepo,
+            $wageModel,
         );
     }
 

@@ -197,10 +197,15 @@ class EconomyScaleResolverTest extends TestCase
 
         self::assertTrue($scale->isResolvable);
 
+        // INTEGER ABILITIES, matching the resolver. `Player::$currentAbility` is an int, so a
+        // reference squad of continuous abilities would calibrate S_tier against players who
+        // cannot exist — the error is invisible on a wide band and 2.5% on England's tier-8
+        // span of 2-7, which is how `app:economy:wage-table`'s self-consistency check caught
+        // it. This reconstruction has to round the same way or it tests nothing.
         $k     = 2.5;
         $sigma = 0.0;
         for ($i = 0; $i < 20; $i++) {
-            $sigma += (40 + 50 * $i / 19) ** $k;
+            $sigma += ((int) round(40 + 50 * $i / 19)) ** $k;
         }
 
         $bill   = (int) round(46 * $sigma * $scale->wageScaleMicroPence / EconomyScaleResolver::WAGE_SCALE_UNIT);

@@ -40,13 +40,35 @@ class MarketController extends AbstractController
 
     #[Route('/data', name: 'api_market_pool_data', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
-    public function data(Request $request, MarketDataService $service): JsonResponse
+    public function data(Request $request, MarketDataService $service, ClubResolver $clubResolver): JsonResponse
     {
         $tierParam = $request->query->get('tier');
         $tier      = $tierParam !== null ? Tier::tryFrom(strtolower($tierParam)) : null;
 
-        $response = $this->json($service->getMarketSnapshot($tier));
-        $response->setMaxAge(300); // 5-minute cache hint for client
+        // THE CLUB'S COUNTRY AND LEAGUE TIER ARE RESOLVED SERVER-SIDE, NOT ACCEPTED AS
+        // PARAMETERS. They set the price of everything in this response, and a client-supplied
+        // tier would be a client-supplied discount. Unlike GET /api/players/foreign — where
+        // `country` is an explicit param because it SELECTS which players to show — nothing
+        // here is being filtered by it.
+        //
+        // A club that cannot be resolved, or has no league yet, yields nulls and the snapshot
+        // comes back unscaled, which is byte-identical to what this endpoint always returned.
+        /** @var \App\Entity\User $user */
+        $user     = $this->getUser();
+        $club     = $clubResolver->resolveFromRequest($user);
+        $country  = $club?->getCountry();
+        $clubTier = $club?->getCurrentLeague()?->getTier();
+
+        $response = $this->json($service->getMarketSnapshot($tier, $country, $clubTier));
+
+        // STILL A PRIVATE HINT, AND NOW IT HAS TO BE. The body varies by the caller's club, so
+        // a shared cache in front of this would serve one country's prices to another. Nothing
+        // caches it today (no ETag here, no proxy_cache in docker/nginx.conf); this is what
+        // keeps that true if a CDN ever lands in front of the API — same reasoning as
+        // GET /api/game-config's Cache-Control: private.
+        $response->setMaxAge(300);
+        $response->setPrivate();
+
         return $response;
     }
 

@@ -218,6 +218,69 @@ league with no override, which is all of them until an operator sets one — its
 Nullable rather than defaulting to 0, because "not overridden" has to be expressible and a taper
 of **zero is a legitimate setting**: it means every finishing position pays the same.
 
+## How a pool row gets priced, and why it is different
+
+Two populations, two treatments. This is the distinction that governs everything about where
+the wage model can be applied:
+
+| Population | Priced | Why |
+|---|---|---|
+| World-pack club players and staff | **At generation**, stored in the pack | Generated for a known country and tier. This is why flipping the model needs a `WORLD_PACK_VERSION` bump — packs hold wages. |
+| Market-pool players, coaches, scouts | **At serve time**, nothing stored changes | One row is served to every country at every tier. There is no country or tier to price it by at generation. |
+
+So a pool row's stored wage is always the **legacy** figure, and flipping the model changes
+nothing about the pool. Flipping back is instant.
+
+At serve time:
+
+- **Pool players** (`GET /api/players/foreign`, `GET /api/scout/search`) are **re-priced** from
+  the ability curve for the browsing club's country and tier, because a player has an ability
+  the model has an opinion about.
+- **Pool coaches and scouts** (`GET /api/market/data`) are **scaled by the country × tier
+  factor only**, not re-priced. Their pay comes from bands the turnover model says nothing
+  about — a scout's wage is PoolConfig's floor and ceiling interpolated by experience — so
+  there is no `S_tier` to re-derive it from. What the model *does* have an opinion about is
+  that money means different things in different countries and divisions.
+
+`ScoutWageCalculator` is deliberately untouched by all of this: it must stay reproducible from
+`(experience, PoolConfig)` alone, because `app:backfill-scout-wages --force` re-derives every
+scout in the world from exactly those two inputs.
+
+### The paying club's country, not the player's nationality
+
+A wage demand is what *this club* has to pay, so it is anchored to the economy the club plays
+in. A Brazilian at an English tier-1 club is paid English tier-1 money. Pricing by nationality
+would make a squad's wage bill depend on where its players were born.
+
+### Tiers are resolved server-side
+
+`GET /api/market/data` and `GET /api/scout/search` resolve the club's country and tier from the
+authenticated request rather than accepting them as parameters — they set the **price**, and a
+client-supplied price anchor would be a client-supplied discount. `GET /api/players/foreign`
+keeps `country` as an explicit parameter because there it **selects** which players to show;
+its tier is still resolved server-side.
+
+`GET /api/market/data` is now `Cache-Control: private`. The body varies by the caller's club, so
+a shared cache in front of it would serve one country's prices to another.
+
+## Before flipping `economyWageModel`
+
+Run `app:economy:wage-table EN SC`. It reads the **live config rows** — squad sizes from
+`npcSquadConfig`, bands from `leagueAbilityRanges`, every knob from `game_config` — and exits
+non-zero if any of four checks fail:
+
+1. `S_tier` is strictly decreasing with tier number.
+2. No ability earns more at a lower tier than the one above (checked over each adjacent band
+   overlap, so a promoted player cannot take a pay cut).
+3. TV per club is a sane fraction of baseline turnover.
+4. The reference squad's bill actually matches the configured share — the chain checked against
+   its own definition.
+
+Check 4 earned its place immediately: it caught the reference squad being summed over
+*continuous* abilities while `Player::$currentAbility` is an integer, which left England's
+tier-8 bill 2.5% over the budget it was calibrated to. Invisible on a wide band, severe on a
+narrow one.
+
 ## Backwards compatibility
 
 Nothing was removed, renamed or retyped. `?country=` on `GET /api/game-config` is optional and

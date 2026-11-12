@@ -272,15 +272,22 @@ final class EconomyScaleResolver
         $size = $this->referenceSquadSize($tier);
         $k    = $config->getEconomyWageCurveExponentBp() / self::BP;
 
+        // INTEGER ABILITIES, NOT CONTINUOUS ONES, and that is a correctness fix rather than a
+        // detail. `Player::$currentAbility` is an int, so a reference squad of continuous
+        // abilities calibrates S_tier against players who cannot exist. The error is invisible
+        // on a wide band and severe on a narrow one: England tier 8 spans 2-7, so 22 players
+        // land on six distinct integers, and summing the continuous spread instead left the
+        // real squad bill 2.5% over the budget it was supposedly calibrated to — caught by
+        // `app:economy:wage-table`'s own self-consistency check rather than by inspection.
         if ($size <= 1) {
-            return (($band['min'] + $band['max']) / 2) ** $k;
+            return ((int) round(($band['min'] + $band['max']) / 2)) ** $k;
         }
 
         $sum  = 0.0;
         $span = $band['max'] - $band['min'];
 
         for ($i = 0; $i < $size; $i++) {
-            $sum += ($band['min'] + $span * $i / ($size - 1)) ** $k;
+            $sum += ((int) round($band['min'] + $span * $i / ($size - 1))) ** $k;
         }
 
         return $sum;
@@ -318,6 +325,23 @@ final class EconomyScaleResolver
     }
 
     /**
+     * The tier's raw npcSquadConfig row, for callers that need its staff counts too.
+     *
+     * EXPOSED RATHER THAN DUPLICATED. WageModelResolver calibrates staff pay against the same
+     * complement the world generator actually staffs clubs with, and a second "how many staff a
+     * tier has" table would be free to drift from this one — with the drift showing up as a
+     * wage bill that does not match the share it was calibrated to.
+     *
+     * @return array<string, mixed>
+     */
+    public function npcSquadRow(int $tier): array
+    {
+        $row = $this->starterConfigRepository->getConfig()->getNpcSquadConfig()[(string) $tier] ?? null;
+
+        return is_array($row) ? $row : [];
+    }
+
+    /**
      * How many players the reference squad has: the midpoint of the tier's configured band.
      *
      * Read from the same npcSquadConfig the world generator sizes real squads from, so the
@@ -325,9 +349,9 @@ final class EconomyScaleResolver
      */
     private function referenceSquadSize(int $tier): int
     {
-        $row = $this->starterConfigRepository->getConfig()->getNpcSquadConfig()[(string) $tier] ?? null;
+        $row = $this->npcSquadRow($tier);
 
-        if (!is_array($row)) {
+        if ($row === []) {
             return 1;
         }
 

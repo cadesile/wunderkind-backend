@@ -134,11 +134,11 @@ class MarketPoolService
         private readonly InvestorRepository     $investorRepo,
         private readonly NameGeneratorService   $nameGenerator,
         private readonly PoolConfigRepository   $poolConfigRepo,
-        private readonly \App\Repository\GameConfigRepository $gameConfigRepo,
         private readonly PlayerGenerationService $playerGen,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly StaffGenerationService $staffGen,
         private readonly ScoutGenerationService $scoutGen,
+        private readonly \App\Service\Economy\WageModelResolver $wageModel,
     ) {}
 
     // ── Generate ─────────────────────────────────────────────────────────────
@@ -156,10 +156,14 @@ class MarketPoolService
 
             $player->setStatus(PlayerStatus::ACTIVE);
 
-            $gc          = $this->gameConfigRepo->getConfig();
-            $multipliers = $this->getWageMultiplier($player->getCurrentAbility());
-            $baseWage    = $player->getCurrentAbility() * random_int($gc->getContractValueRandMin(), $gc->getContractValueRandMax());
-            $player->setContractValue((int) ($baseWage * $multipliers['player']));
+            // THROUGH THE RESOLVER, AND DELIBERATELY WITH NO COUNTRY OR TIER. A pool player is
+            // ONE row served to every country at every tier, so there is nothing to price it
+            // against at generation time — the figure stored here is always the legacy one, and
+            // the turnover model prices a pool player AT SERVE TIME from the requesting club's
+            // country and tier (PlayerBrowseSerializer). Flipping the model therefore changes
+            // nothing stored about the pool, and flipping back is instant. See
+            // WageModelResolver's note on the two populations.
+            $player->setContractValue($this->wageModel->playerWeeklyPence($player->getCurrentAbility()));
 
             $addAgent = false;
 
@@ -618,23 +622,6 @@ class MarketPoolService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /**
-     * @return array{player: float, staff: float}
-     */
-    private function getWageMultiplier(int $ability): array
-    {
-        $tiers = $this->gameConfigRepo->getConfig()->getWageMultiplierTiers();
-        foreach ($tiers as $tier) {
-            if ($tier['maxAbility'] === null || $ability < $tier['maxAbility']) {
-                return ['player' => (float) $tier['playerMultiplier'], 'staff' => (float) $tier['staffMultiplier']];
-            }
-        }
-
-        // Fallback: use last tier (should always have a null maxAbility catch-all)
-        $last = end($tiers);
-        return ['player' => (float) ($last['playerMultiplier'] ?? 1.0), 'staff' => (float) ($last['staffMultiplier'] ?? 1.0)];
-    }
 
     private function pick(array $items): mixed
     {

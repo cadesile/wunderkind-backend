@@ -86,11 +86,17 @@ class WarmWorldPackClubMessageHandler
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_PLAYERS);
         $this->em->flush();
-        $players = $this->clubGenerator->generatePlayers($tierConf, $abilityRange, $nationality, $poolConfig, $agents);
+        // Same country/tier/reputation the synchronous builder passes — the async path must
+        // price a club identically or a pack warmed by the queue would differ from one warmed
+        // on a request.
+        $players = $this->clubGenerator->generatePlayers(
+            $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
+            $tierRun->getCountry(), $tierRun->getTier(), $npcClub->getReputation(),
+        );
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_STAFF);
         $this->em->flush();
-        $staff = $this->clubGenerator->generateStaff($tierConf, $nationality);
+        $staff = $this->clubGenerator->generateStaff($tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier());
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_SCOUTS);
         $this->em->flush();
