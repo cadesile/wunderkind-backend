@@ -23,6 +23,7 @@ class StarterConfigController extends AbstractController
     public function __construct(
         private readonly StarterConfigRepository  $starterConfigRepository,
         private readonly CountryProfileRepository $countryProfileRepository,
+        private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
     ) {}
 
     #[Route('/starter-config', name: 'api_starter_config', methods: ['GET'])]
@@ -102,6 +103,17 @@ class StarterConfigController extends AbstractController
             // An empty array is that state. Copy keys are `ngs.tut.*`.
             // See docs/api/setup-tutorial.md.
             'tutorial'                   => $config->getSetupTutorialConfig(),
+            // ADDITIVE, 2026-11-12. Baseline values and factor tables only — no resolved
+            // per-country figures, because this endpoint is PUBLIC and country-agnostic and
+            // there is no club to resolve against. Same reasoning as the
+            // `userStartingBalanceMin/MaxPence` pair above, which publishes a range rather than
+            // the resolved grant for exactly that reason. A running game reads its own
+            // country's resolved table off the sync response or
+            // GET /api/game-config?country=.
+            //
+            // Every figure here is BASE-YEAR. `inflationRatePerSeasonBp` is the rate and only
+            // the rate; the app compounds it. Nothing on the backend is ever stored inflated.
+            'economy'                    => $this->economyConfigPublisher->publicBlock(),
         ]);
     }
 }

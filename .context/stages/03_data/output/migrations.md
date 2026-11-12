@@ -74,6 +74,13 @@ the same inert state the defaults give.
 `...160100` adds the nine `game_config` economy columns.
 `...160200` creates `inflation_rate_history`, empty.
 
+`Version20261112170000` (same day, step 3) adds the four published-only constants —
+`matchday_food_uptake_percent`, `npc_solvency_thresholds`, `dof_wage_bill_threshold_pct`,
+`sponsor_weekly_pence` — and uses the same add-with-default-then-DROP-DEFAULT pattern for its
+two json columns. The mechanic was verified directly rather than assumed: an existing row keeps
+the backfilled value after `DROP DEFAULT`, and a subsequent bare INSERT then fails, which is
+what proves the mapping owns the default afterwards.
+
 
 
 Most recent migrations (chronological):

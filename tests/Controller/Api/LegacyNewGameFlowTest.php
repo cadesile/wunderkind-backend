@@ -48,6 +48,90 @@ class LegacyNewGameFlowTest extends WebTestCase
         self::assertIsInt($data['startingBalance']);
     }
 
+    /**
+     * The economy block is PURELY ADDITIVE on this public endpoint.
+     *
+     * Asserted as a key-set DIFF rather than by listing what the block contains, because the
+     * claim worth proving is "nothing was lost or changed", not "the new thing is there". A
+     * test that enumerated the new keys would pass while a pre-existing one quietly vanished.
+     */
+    public function testTheEconomyBlockOnlyADDSToStarterConfig(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/starter-config');
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode((string) $client->getResponse()->getContent(), true);
+
+        // Every key this endpoint served before 2026-11-12, verbatim.
+        $before = [
+            'startingBalance', 'userStartingBalanceMinPence', 'userStartingBalanceMaxPence',
+            'maxEnrichmentRequestsPerUser', 'quizBonusMultiplier', 'clubFundingMinimumPence',
+            'clubFundingProjectionWeeks', 'starterPlayerCount', 'starterManagerCount',
+            'starterCoachCount', 'starterScoutCount', 'starterDirectorOfFootballCount',
+            'starterFacilityManagerCount', 'starterChairmanCount', 'starterSponsorTier',
+            'starterClubTier', 'enabledCountries', 'enabledCountryOptions',
+            'leagueAbilityRanges', 'defaultFacilities', 'fanBaseRanges',
+            'fanBasePromotionIncrease', 'fanBaseRelegationDecrease', 'tutorial',
+        ];
+
+        self::assertSame(
+            [],
+            array_diff($before, array_keys($data)),
+            'starter-config lost a key an old build reads',
+        );
+        self::assertSame(
+            ['economy'],
+            array_values(array_diff(array_keys($data), $before)),
+            'the only addition to starter-config should be `economy`',
+        );
+    }
+
+    /**
+     * Economy figures are BASE-YEAR, and the inert defaults say so.
+     *
+     * The one assertion that would catch the worst mistake available here: shipping a non-zero
+     * inflation rate or an authored turnover table by accident, which would change what every
+     * existing save derives without anyone choosing it.
+     */
+    public function testTheEconomyBlockShipsSwitchedOff(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/starter-config');
+
+        self::assertResponseIsSuccessful();
+        $economy = json_decode((string) $client->getResponse()->getContent(), true)['economy'];
+
+        self::assertSame('legacy', $economy['wageModel']);
+        self::assertSame(0, $economy['inflationRatePerSeasonBp']);
+        self::assertSame(array_fill(0, 8, 10000), $economy['tierFactorsBp'], 'every tier factor must be parity');
+        self::assertSame(array_fill(0, 8, 0), $economy['baselineTurnoverPence'], 'the turnover table must be unauthored');
+    }
+
+    /**
+     * An old build calls GET /api/game-config with NO `country=` and must get a usable response.
+     *
+     * The new parameter is optional, and this is the half of that claim that matters: not that
+     * passing it works, but that omitting it — which every shipped build does — still resolves.
+     */
+    public function testGameConfigStillWorksWithNoCountryParameter(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/game-config');
+
+        self::assertResponseIsSuccessful();
+        $data = json_decode((string) $client->getResponse()->getContent(), true);
+
+        // A few keys an old build reads, to prove the response is intact and not just 200.
+        foreach (['cliqueRelationshipThreshold', 'playerFeeMultiplier', 'wageMultiplierTiers',
+                  'contractValueRandMin', 'bankruptcyDeductionTiers', 'npcSquadConfig'] as $key) {
+            self::assertArrayHasKey($key, $data, "game-config lost $key");
+        }
+
+        self::assertNull($data['economyTierBaseline']['country'], 'no country parameter means parity');
+        self::assertCount(8, $data['economyTierBaseline']['tiers']);
+    }
+
     public function testNameOptionsStillReturnsCitiesSuffixesAndTakenNames(): void
     {
         $client = static::createClient();

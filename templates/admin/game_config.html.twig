@@ -472,6 +472,30 @@
                                 <code>deficitMax: null</code> means no upper bound. All values in <strong>pence</strong>.
                             </div>
                         </div>
+                        <div class="bmc-field-col">
+                            <label for="npcSolvencyThresholds">NPC Solvency Thresholds (JSON)</label>
+                            <textarea id="npcSolvencyThresholds" name="npcSolvencyThresholds"
+                                      rows="3"
+                                      placeholder='[4,12,26]' data-kind="text" data-blank="ok">{{ config.npcSolvencyThresholds|json_encode }}</textarea>
+                            <div class="bmc-data">
+                                <strong>Weeks in deficit</strong>, not money, at which an insolvent NPC club escalates:
+                                <code>[warn, crisis, folded]</code>. Sorted ascending on save — the app walks it as a ladder,
+                                so an out-of-order row would make a harsher rung unreachable. Read by the app; nothing
+                                server-side consumes it. Default <code>[4,12,26]</code>.
+                            </div>
+                        </div>
+                        <div class="bmc-field-col">
+                            <label for="dofWageBillThresholdPct">DoF Wage-Bill Thresholds (JSON)</label>
+                            <textarea id="dofWageBillThresholdPct" name="dofWageBillThresholdPct"
+                                      rows="3"
+                                      placeholder='[0.4,0.5,0.6,0.7]' data-kind="text" data-blank="ok">{{ config.dofWageBillThresholdPct|json_encode }}</textarea>
+                            <div class="bmc-data">
+                                Wage-bill-to-turnover ratios at which a Director of Football starts objecting, as
+                                <strong>fractions</strong> (<code>0.40</code> = 40%) — not basis points, because nothing
+                                multiplies these into money; the app compares a ratio against them. Sorted ascending on save.
+                                Default <code>[0.4,0.5,0.6,0.7]</code>.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -656,6 +680,8 @@
                     <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">CAPACITY CALCULATION</span><span class="bmc-setting__help">Multiplier used to calculate stadium capacity from fan base. Default: 100</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="capacityCalculation" value="{{ config.capacityCalculation }}" data-saved="{{ config.capacityCalculation }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="capacity calculation"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SEASON TICKET HOLDERS %</span><span class="bmc-setting__help">Percentage of matchday attendance made up of season-ticket holders (0–100). Default: 60</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="seasonTicketHolderPercent" value="{{ config.seasonTicketHolderPercent }}" data-saved="{{ config.seasonTicketHolderPercent }}" data-kind="int" data-min="0" data-max="100" inputmode="numeric" aria-label="season ticket holders %"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">MATCHDAY FOOD UPTAKE %</span><span class="bmc-setting__help">Share of a matchday crowd that buys food (0–100). Read by the app; the server has no matchday. Default: 35</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="matchdayFoodUptakePercent" value="{{ config.matchdayFoodUptakePercent }}" data-saved="{{ config.matchdayFoodUptakePercent }}" data-kind="int" data-min="0" data-max="100" inputmode="numeric" aria-label="matchday food uptake %"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SPONSOR WEEKLY (£)</span><span class="bmc-setting__help">A sponsor’s WEEKLY payment. The six sponsor bands below are PER SEASON — different deals, not convertible by dividing. 0 = no weekly sponsor income. Default: 0</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="sponsorWeeklyPence" value="{{ (config.sponsorWeeklyPence / 100)|round }}" data-saved="{{ (config.sponsorWeeklyPence / 100)|round }}" data-kind="int" data-min="0" inputmode="numeric" aria-label="sponsor weekly pounds"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                     </div>
                 </div>
             </div>

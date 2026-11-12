@@ -1129,6 +1129,31 @@ model be switched on against numbers nobody authored.
 `scaleTierToEight()` was **removed** in the same pass — see
 `GameConfig::getNpcClubBalanceRangeForTier()`.
 
+### Four published-only gameplay constants on `GameConfig` (2026-11-12)
+
+From `Version20261112170000`. **None is consumed server-side**, which is the normal shape for
+this table rather than an oversight: the device is the game engine, so matchday income, NPC
+insolvency and a Director of Football's opinion all happen there. They live here so an operator
+can retune them without an app release.
+
+- `matchdayFoodUptakePercent` (smallint, 35) — whole percent, clamped 0-100.
+- `npcSolvencyThresholds` (json, `[4,12,26]`) — **weeks in deficit, not money**:
+  `[warn, crisis, folded]`. Being weeks is what insulates it from the scaling problem the
+  absolute-pence `bankruptcyDeductionTiers` has.
+- `dofWageBillThresholdPct` (json, `[0.40,0.50,0.60,0.70]`) — wage-bill-to-turnover ratios as
+  **fractions, not basis points**, and that inconsistency with the economy block above is
+  deliberate: basis points exist there because those figures are links in an integer chain
+  ending in pence, while these are only ever compared against a ratio. Converting twice would
+  be the error-prone choice. `missionGemRollThresholds` is a float list for the same reason.
+- `sponsorWeeklyPence` (bigint, 0) — ⚠️ **WEEKLY, where the six existing sponsor band columns
+  are PER SEASON.** They are not convertible by dividing by a season length: a band is a league
+  sponsor's season total rolled at pack-build time and summed into `sponsorPot`, this is a
+  per-week payout on the weekly tick. 0 = no weekly sponsor income, which is the inert default.
+
+**Both json setters sort ascending on write.** The app walks each as a ladder, so an
+out-of-order row would make a later, harsher rung unreachable — the same failure mode an
+unordered `bankruptcyDeductionTiers` has, since that is first-match-wins over hand-ordered rows.
+
 ### `CountryProfile` gained an economy scale (2026-11-12)
 
 `isEconomyBaseline:bool` (default false) and `economyFactorBp:int` (default

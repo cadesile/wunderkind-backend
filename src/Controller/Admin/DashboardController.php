@@ -394,6 +394,33 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
         $config->setNonMatchFacilityIncomePercent((int) $request->request->get('nonMatchFacilityIncomePercent', 0));
         $config->setSeasonTicketHolderPercent((int) $request->request->get('seasonTicketHolderPercent', 60));
+        $config->setMatchdayFoodUptakePercent((int) $request->request->get('matchdayFoodUptakePercent', 35));
+
+        // POUNDS IN, PENCE STORED — the same * 100 the sponsor bands below do. Guarded for a
+        // BLANK field the way the contract-value pair is: this is money nothing on the screen
+        // shows the consequences of, and a cleared field casting to 0 would silently switch
+        // weekly sponsor income off for every club. A blank means "leave the stored value
+        // alone"; typing 0 is still how an operator turns it off deliberately.
+        $rawSponsorWeekly = $request->request->get('sponsorWeeklyPence');
+        if ($rawSponsorWeekly !== null && $rawSponsorWeekly !== '') {
+            $config->setSponsorWeeklyPence((int) $rawSponsorWeekly * 100);
+        }
+
+        // THE TWO LADDERS. Both are sorted ascending by their setters, so the order typed into
+        // the textarea does not have to be right. A malformed body leaves the stored list
+        // alone rather than emptying it — an empty ladder is not a configuration the app can
+        // walk, and `[]` is indistinguishable from "I meant to clear this", so the safe
+        // reading is to keep what was there. Same shape as the bankruptcyDeductionTiers block
+        // below, which is_array-guards for the same reason.
+        $solvency = json_decode((string) $request->request->get('npcSolvencyThresholds', ''), true);
+        if (is_array($solvency) && $solvency !== []) {
+            $config->setNpcSolvencyThresholds($solvency);
+        }
+
+        $dofThresholds = json_decode((string) $request->request->get('dofWageBillThresholdPct', ''), true);
+        if (is_array($dofThresholds) && $dofThresholds !== []) {
+            $config->setDofWageBillThresholdPct($dofThresholds);
+        }
 
         // Facility construction
         $config->setConstructionTimeMultiplier((float) $request->request->get('constructionTimeMultiplier', 1.0));

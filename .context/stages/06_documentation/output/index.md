@@ -151,3 +151,14 @@ claiming canonical status)
   prices are real-world so most plots are deliberately unaffordable for a long time.
 - **`docs/api/user-ledger.md`** — amended with the six new entry types, the signed-amount
   convention, and the now-nullable `club`.
+
+## Added 2026-11-12
+
+- **`docs/api/economy-config.md`** — what the economy overhaul publishes and what the app
+  does with it. Leads with the rule that governs the whole thing: **every money figure the
+  backend publishes is BASE-YEAR and the app applies inflation** — the backend holds a
+  *rate*, never an index, and never an inflated stored value, because the pack cache is
+  keyed `(country, tier)` with no season dimension. Also documents the trap worth knowing
+  before touching sponsor money: `sponsorWeeklyPence` is **weekly** while the six existing
+  sponsor band columns are **per season**, and the two are not convertible by dividing by a
+  season length — they describe different deals.

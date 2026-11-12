@@ -1193,6 +1193,39 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`EconomyConfigPublisher` — the economy blocks the client reads, built once for three
+surfaces.** The economy reaches the app through the sync `gameConfig` block, `GET
+/api/game-config` and (for the country-agnostic half) the public `GET /api/starter-config`. The
+sync block is a **ternary with two hand-written branches**, and the hard rule is that both carry
+an identical key set.
+
+Three hand-maintained copies of a six-key block is a drift machine, and the drift is silent in
+the worst direction: a key on one branch and not the other only shows up in the no-config case,
+which is unreachable in practice (`getConfig()` creates the row) and therefore never exercised.
+So the block is built here and spread into all three with `...`.
+
+**The fallback is `new GameConfig()`, not restated literals.** `clientBlock()` takes a nullable
+config and falls back to a fresh entity, so the defaults ARE the column defaults by
+construction. That is the `youthScholarshipWagePence` lesson commented in `SyncService`: the
+client guards with `?? fallback` rather than falsiness, so a restated `0` sails past it and
+silently becomes the live value.
+
+**What the app gets and what it deliberately does not.** `economyTierBaseline` carries resolved
+absolutes for one country — turnover and wage scale per tier — and **no country factor**.
+Publishing one would invite the client to apply it a second time to an already-scaled figure.
+`resolvable: false` distinguishes "the operator has not authored this tier" from "this tier is
+worth nothing", which a bare `0` cannot express, and the first is the shipped state.
+
+`?country=` on `/api/game-config` is **optional and absent means parity** — that endpoint is
+`PUBLIC_ACCESS`, so unlike sync there is no club to resolve a country from. An empty code
+resolves at parity without a second code path, because `findByCode('')` finds nothing.
+
+Guarded by `tests/Service/SyncServiceGameConfigParityTest.php`, which parses `SyncService`'s own
+source to compare the two branches (asserting **order** as well as membership, since same-members
+different-order is the signature of somebody patching one branch to match the other) and proves
+neither restates a key the builder spreads in. Verified to fail on injected drift.
+See `docs/api/economy-config.md`.
+
 ## Location & land economy (`App\Service\Location`, added 2026-11-03)
 
 - **`Haversine`** — great-circle distance in PHP *and* as a SQL fragment, in one file so

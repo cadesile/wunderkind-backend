@@ -1495,6 +1495,107 @@ class GameConfig
     public function getEconomyReputationSpreadBp(): int { return $this->economyReputationSpreadBp; }
     public function setEconomyReputationSpreadBp(int $v): static { $this->economyReputationSpreadBp = max(0, $v); return $this; }
 
+    /**
+     * What share of a matchday crowd buys food, as a whole percent.
+     *
+     * PUBLISHED, NOT CONSUMED HERE. The backend has no matchday — the device simulates the
+     * game and takes the income — so this is a constant the app reads, in the same family as
+     * `capacityCalculation` and `seasonTicketHolderPercent`. It lives on the backend so an
+     * operator can retune matchday revenue without an app release, which is the whole point
+     * of `/api/game-config`.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 35])]
+    private int $matchdayFoodUptakePercent = 35;
+
+    /**
+     * The three week-counts at which an insolvent NPC club escalates: `[warn, crisis, folded]`.
+     *
+     * A LIST, NOT THREE COLUMNS, because the app walks it as an ordered ladder and a fourth
+     * rung is a config change rather than a migration. Weeks in deficit, not money — which is
+     * what keeps it insulated from the scaling problem the absolute-pence thresholds have
+     * (see `bankruptcyDeductionTiers`, reviewed in step 8 of this work).
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcSolvencyThresholds = [4, 12, 26];
+
+    /**
+     * Wage-bill-to-turnover ratios at which a Director of Football starts objecting, as
+     * FRACTIONS (0.40 = 40%).
+     *
+     * FRACTIONS RATHER THAN BASIS POINTS, AND THAT IS DELIBERATE INCONSISTENCY WITH THE
+     * ECONOMY BLOCK ABOVE. Basis points exist there because those figures are links in an
+     * integer chain that ends in pence and must not round mid-way. These are thresholds the
+     * app compares a ratio against — nothing multiplies them into money — so they are stored
+     * in the units the client already compares in, and converting them twice would be the
+     * error-prone choice. Matches `missionGemRollThresholds`, which is a float list for the
+     * same reason.
+     *
+     * @var list<float>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $dofWageBillThresholdPct = [0.40, 0.50, 0.60, 0.70];
+
+    /**
+     * A sponsor's WEEKLY payment in pence.
+     *
+     * ⚠️ WEEKLY, WHERE `smallSponsorMin`/`Max` AND THE OTHER FOUR SPONSOR BANDS ARE PER
+     * SEASON. Two sponsor money figures in the same config in different time units is a trap,
+     * so the unit is in the column name, in this docblock, and in `docs/api/economy-config.md`.
+     * The bands are a season's total income for a league sponsor rolled at pack-build time;
+     * this is a per-week figure the app pays out on the weekly tick. They are not convertible
+     * into each other by dividing by a season length — they describe different deals.
+     *
+     * Defaults to 0, which means "no weekly sponsor income" and is the inert state: an old
+     * build does not read this key at all, and a new one reading 0 behaves as though the
+     * mechanic is off.
+     */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $sponsorWeeklyPence = 0;
+
+    public function getMatchdayFoodUptakePercent(): int { return $this->matchdayFoodUptakePercent; }
+    public function setMatchdayFoodUptakePercent(int $v): static { $this->matchdayFoodUptakePercent = max(0, min(100, $v)); return $this; }
+
+    /** @return list<int> */
+    public function getNpcSolvencyThresholds(): array { return $this->npcSolvencyThresholds; }
+
+    /**
+     * Sorted ascending on write. The app walks it as a ladder, so an out-of-order row would
+     * make a later, harsher rung unreachable — the same failure mode as an unordered
+     * `bankruptcyDeductionTiers`, which is first-match-wins over hand-ordered rows.
+     *
+     * @param list<int> $v
+     */
+    public function setNpcSolvencyThresholds(array $v): static
+    {
+        $weeks = array_values(array_map(static fn ($w) => max(0, (int) $w), array_filter($v, 'is_numeric')));
+        sort($weeks);
+        $this->npcSolvencyThresholds = $weeks;
+
+        return $this;
+    }
+
+    /** @return list<float> */
+    public function getDofWageBillThresholdPct(): array { return $this->dofWageBillThresholdPct; }
+
+    /**
+     * Sorted ascending, same ladder reasoning as npcSolvencyThresholds.
+     *
+     * @param list<float> $v
+     */
+    public function setDofWageBillThresholdPct(array $v): static
+    {
+        $pcts = array_values(array_map(static fn ($p) => max(0.0, (float) $p), array_filter($v, 'is_numeric')));
+        sort($pcts);
+        $this->dofWageBillThresholdPct = $pcts;
+
+        return $this;
+    }
+
+    public function getSponsorWeeklyPence(): int { return $this->sponsorWeeklyPence; }
+    public function setSponsorWeeklyPence(int $v): static { $this->sponsorWeeklyPence = max(0, $v); return $this; }
+
     public function getInflationRatePerSeasonBp(): int { return $this->inflationRatePerSeasonBp; }
 
     /**

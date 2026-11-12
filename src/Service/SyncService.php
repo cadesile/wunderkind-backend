@@ -55,6 +55,7 @@ class SyncService
         private readonly FacilityImageResolver           $facilityImageResolver,
         private readonly UserLedgerService               $userLedgerService,
         private readonly ActivePeriodService             $activePeriodService,
+        private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
     ) {}
 
     /**
@@ -360,6 +361,18 @@ class SyncService
             'managerDividendPercent'        => $gameConfig->getManagerDividendPercent(),
             'transferBudgetPercent'         => $gameConfig->getTransferBudgetPercent(),
             'seasonTicketHolderPercent'     => $gameConfig->getSeasonTicketHolderPercent(),
+            // ── Economy (2026-11-12) ──────────────────────────────────────────────────────
+            //
+            // SPREAD FROM ONE BUILDER INTO BOTH BRANCHES OF THIS TERNARY, deliberately, and
+            // the fallback below spreads the SAME call with a null config. Six keys written
+            // out twice is how the two branches drift, and the drift is silent in the worst
+            // direction: a key missing from the fallback only shows up in the no-config case,
+            // which is the case nobody exercises by hand. SyncServiceGameConfigParityTest
+            // asserts the two key sets are identical and in the same order.
+            //
+            // `seasonTicketHolderPercent` above is NOT duplicated in that block — it is
+            // already live on this surface and on /api/game-config.
+            ...$this->economyConfigPublisher->clientBlock($gameConfig, $club->getCountry()),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -436,6 +449,11 @@ class SyncService
             'managerDividendPercent'        => 5.0,
             'transferBudgetPercent'         => 20.0,
             'seasonTicketHolderPercent'     => 60,
+            // The same builder, with no config — it falls back to a fresh GameConfig, so these
+            // defaults are the column defaults by construction rather than literals restated
+            // here. That is the `youthScholarshipWagePence` lesson a few lines up: the client
+            // guards with `?? fallback`, not falsiness, so a restated 0 would sail past it.
+            ...$this->economyConfigPublisher->clientBlock(null, $club->getCountry()),
         ];
 
         $facilityTemplates = array_map(
