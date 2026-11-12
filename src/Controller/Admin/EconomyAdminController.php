@@ -132,6 +132,8 @@ class EconomyAdminController extends AbstractController
         $this->setIfPresent($request, 'economyReputationSpreadBp', fn (int $v) => $config->setEconomyReputationSpreadBp($v));
         $this->setIfPresent($request, 'economyWeeksPerSeason', fn (int $v) => $config->setEconomyWeeksPerSeason($v));
         $this->setIfPresent($request, 'economyYouthScholarshipCapBp', fn (int $v) => $config->setEconomyYouthScholarshipCapBp($v));
+        $this->setIfPresent($request, 'economyYouthScholarshipTier1Pence', fn (int $v) => $config->setEconomyYouthScholarshipTier1Pence($v));
+        $this->setIfPresent($request, 'economyYouthScholarshipFloorPence', fn (int $v) => $config->setEconomyYouthScholarshipFloorPence($v));
 
         // READ BY INDEX, NOT array_values(). These inputs are named `[0]`..`[7]` and the index
         // IS the tier, so collapsing a sparse post with array_values() would silently move

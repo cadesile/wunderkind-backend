@@ -208,32 +208,192 @@ class YouthScholarshipCapTest extends TestCase
 
     // ── It fixes the inversion ───────────────────────────────────────────
 
-    public function testAScholarNeverOutEarnsTheWorstProfessionalAtAnyTier(): void
+    public function testAScholarNeverOutEarnsAnAverageProfessionalAtAnyTier(): void
     {
-        // THE PROPERTY THE WHOLE FIX EXISTS FOR, asserted across every tier rather than only
-        // the two that were broken — a fix that only works where the bug was noticed is not a
+        // THE ONE INVARIANT THE MECHANISM PROMISES, asserted across every tier rather than only
+        // the ones that were broken — a fix that only works where the bug was noticed is not a
         // fix.
+        //
+        // AGAINST THE AVERAGE, NOT THE CHEAPEST, and this test was rewritten to say so. The
+        // original asserted "never more than the WORST first-team wage", which sounds stricter
+        // and is actually unachievable: England tier 8's cheapest professional earns £12.84/wk,
+        // because ability 2 at the bottom of a 2-7 band through a 2.5 exponent is a rounding
+        // error. Half of £12.84 is £6.42, so the old rule did not deliver a cheap scholar, it
+        // delivered a free one — which `youthScholarshipPence()` then had to floor at 1p.
         $config   = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
         $resolver = $this->resolver($config);
 
         foreach (range(1, 8) as $tier) {
-            $worst  = $resolver->turnoverPlayerPence(self::BANDS[(string) $tier]['min'], 'EN', $tier, 50, $config);
+            $average = $resolver->averageFirstTeamWagePence('EN', $tier, 50, $config);
             $scholar = $resolver->youthScholarshipPence('EN', $tier, $config);
 
-            self::assertNotNull($worst);
+            self::assertNotNull($average);
             self::assertLessThanOrEqual(
-                $worst,
+                $average,
                 $scholar,
-                sprintf('tier %d: scholar %d must not exceed the worst first-team wage %d', $tier, $scholar, $worst),
+                sprintf('tier %d: scholar %d must not exceed the average first-team wage %d', $tier, $scholar, $average),
             );
         }
     }
 
+    public function testTheInvariantHoldsWithAnAnchorAndFloorAuthored(): void
+    {
+        // The same promise, in the configuration an operator will actually run: the anchored
+        // ladder with a floor under it. The floor is the thing most likely to break this, since
+        // it pushes figures UP at exactly the tiers where wages are smallest.
+        $config = $this->config(
+            turnover: self::TURNOVER,
+            model: EconomyWageModel::TURNOVER,
+        );
+        $config->setEconomyYouthScholarshipTier1Pence(150000);   // £1,500
+        $config->setEconomyYouthScholarshipFloorPence(2500);     // £25
+
+        $resolver = $this->resolver($config);
+
+        foreach (range(1, 8) as $tier) {
+            $average = $resolver->averageFirstTeamWagePence('EN', $tier, 50, $config);
+            $scholar = $resolver->youthScholarshipPence('EN', $tier, $config);
+
+            self::assertNotNull($average);
+            self::assertLessThanOrEqual(
+                $average,
+                $scholar,
+                sprintf('tier %d: scholar %d vs average %d', $tier, $scholar, $average),
+            );
+            self::assertGreaterThanOrEqual(1, $scholar, "tier {$tier} must never be free");
+        }
+    }
+
+    public function testAFloorAboveATiersCapIsClampedDownToIt(): void
+    {
+        // THE ORDERING THAT MAKES THE FLOOR SAFE. The floor is a preference and the cap is the
+        // invariant, so the cap is applied LAST. An operator who sets an absurd floor gets a
+        // capped figure, not a scholar out-earning the squad.
+        $config = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $config->setEconomyYouthScholarshipTier1Pence(150000);
+        $config->setEconomyYouthScholarshipFloorPence(99_999_999);
+
+        $resolver = $this->resolver($config);
+        $average  = $resolver->averageFirstTeamWagePence('EN', 8, 50, $config);
+
+        self::assertNotNull($average);
+        self::assertSame(
+            intdiv($average * 5000, 10000),
+            $resolver->youthScholarshipPence('EN', 8, $config),
+            'the cap, not the absurd floor',
+        );
+    }
+
+    public function testTheAnchoredLadderIsTheSameProportionAtEveryUnflooredTier(): void
+    {
+        // THE DEFINING PROPERTY of "anchor at the top and scale down": where the floor is not
+        // binding, every tier costs the same SHARE of its own average wage. That is what makes
+        // one authored figure enough, and it is the thing a future "improvement" to the formula
+        // would most likely break.
+        $config = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $config->setEconomyYouthScholarshipTier1Pence(150000);
+        $config->setEconomyYouthScholarshipFloorPence(0);        // no floor, so pure proportion
+
+        $resolver = $this->resolver($config);
+        $shares   = [];
+
+        foreach (range(1, 8) as $tier) {
+            $average = $resolver->averageFirstTeamWagePence('EN', $tier, 50, $config);
+            self::assertNotNull($average);
+
+            // Basis points of the tier's average, which is the share being held constant.
+            $shares[$tier] = intdiv($resolver->youthScholarshipPence('EN', $tier, $config) * 10000, $average);
+        }
+
+        // Integer division at the bottom of the ladder costs a basis point or two; the claim is
+        // that the share is CONSTANT, not that it is bit-identical.
+        foreach (range(2, 8) as $tier) {
+            self::assertEqualsWithDelta(
+                $shares[1],
+                $shares[$tier],
+                20,
+                sprintf('tier %d is %d bp of its average against tier 1\'s %d bp', $tier, $shares[$tier], $shares[1]),
+            );
+        }
+    }
+
+    public function testTheAnchorSetsTierOneExactly(): void
+    {
+        // What the operator typed is what tier 1 costs — no rounding, no reinterpretation.
+        $config = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $config->setEconomyYouthScholarshipTier1Pence(150000);
+
+        self::assertSame(150000, $this->resolver($config)->youthScholarshipPence('EN', 1, $config));
+    }
+
+    public function testTheFloorHoldsTheBottomOfTheLadderUp(): void
+    {
+        // The reason the floor exists, asserted as the difference it makes rather than as a
+        // configuration detail: without it the bottom tiers decay into pennies.
+        $base = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $base->setEconomyYouthScholarshipTier1Pence(150000);
+
+        $withFloor = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $withFloor->setEconomyYouthScholarshipTier1Pence(150000);
+        $withFloor->setEconomyYouthScholarshipFloorPence(2500);
+
+        $unfloored = $this->resolver($base)->youthScholarshipPence('EN', 8, $base);
+        $floored   = $this->resolver($withFloor)->youthScholarshipPence('EN', 8, $withFloor);
+
+        self::assertLessThan(1000, $unfloored, 'a pure proportion really does collapse here');
+        self::assertSame(2500, $floored);
+    }
+
+    public function testAnAnchorWithNoTurnoverAtTierOneFallsBackRatherThanGuessing(): void
+    {
+        // Tier 1 unauthored while a lower tier is not — a half-filled table, which is a real
+        // state. There is nothing to anchor against, so the flat figure and its cap stand
+        // instead of a ladder extrapolated from one rung.
+        $config = $this->config(
+            turnover: [0, 0, 0, 0, 0, 0, 97_642_916, 27_219_507],
+            model: EconomyWageModel::TURNOVER,
+        );
+        $config->setEconomyYouthScholarshipTier1Pence(150000);
+
+        $resolver = $this->resolver($config);
+        $average  = $resolver->averageFirstTeamWagePence('EN', 8, 50, $config);
+
+        self::assertNotNull($average, 'tier 8 must be priceable, or this test proves nothing');
+        self::assertSame(
+            min(25000, intdiv($average * 5000, 10000)),
+            $resolver->youthScholarshipPence('EN', 8, $config),
+        );
+    }
+
+    public function testAZeroAnchorIsTheOldBehaviourExactly(): void
+    {
+        // The shipped default. Zero-means-off has to mean the flat figure and its cap, or the
+        // migration is not the no-op it claims to be.
+        $config = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+        $config->setEconomyYouthScholarshipTier1Pence(0);
+        $config->setEconomyYouthScholarshipFloorPence(2500);   // ignored without an anchor
+
+        $resolver = $this->resolver($config);
+        $average  = $resolver->averageFirstTeamWagePence('EN', 8, 50, $config);
+
+        self::assertNotNull($average);
+        self::assertSame(
+            min(25000, intdiv($average * 5000, 10000)),
+            $resolver->youthScholarshipPence('EN', 8, $config),
+            'no anchor means the flat figure capped, and the floor must not sneak in',
+        );
+    }
+
     public function testTheBottomTiersAreTheOnesThatChange(): void
     {
-        // The flat figure is right at the top and wrong at the bottom, which is exactly why
-        // this is a CAP and not a replacement: re-pricing every tier to fix two would have
-        // thrown away a hand-authored number that works.
+        // The behaviour with NO anchor authored, which is the shipped default: the cap touches
+        // only the tiers where the flat figure is implausible.
+        //
+        // NOTE THE CLAIM THIS TEST NO LONGER MAKES. It used to be headed "the flat figure is
+        // right at the top and wrong at the bottom". The first half was wrong: £250 is 0.19% of
+        // an average tier-1 wage, a rounding error rather than a cheap academy. The cap fixed
+        // the end that inverted; the tier-1 anchor fixes the end that was quietly negligible.
+        // What survives is only that the cap alone changes nothing above tier 6.
         $config   = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
         $resolver = $this->resolver($config);
 
@@ -254,14 +414,15 @@ class YouthScholarshipCapTest extends TestCase
         }
     }
 
-    public function testTheCapIsTheConfiguredShareOfTheWorstWage(): void
+    public function testTheCapIsTheConfiguredShareOfTheAverageWage(): void
     {
         $config   = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
         $resolver = $this->resolver($config);
 
-        $worst = $resolver->turnoverPlayerPence(2, 'EN', 8, 50, $config);
+        $average = $resolver->averageFirstTeamWagePence('EN', 8, 50, $config);
 
-        self::assertSame(intdiv($worst * 5000, 10000), $resolver->youthScholarshipPence('EN', 8, $config));
+        self::assertNotNull($average);
+        self::assertSame(intdiv($average * 5000, 10000), $resolver->youthScholarshipPence('EN', 8, $config));
     }
 
     public function testAHarsherCapBitesHarder(): void

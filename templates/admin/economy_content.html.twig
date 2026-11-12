@@ -92,8 +92,12 @@
                  h: 'How far a club\'s reputation moves a wage either side of its tier. 0 = flat. A non-zero spread REDISTRIBUTES a tier\'s bill between its clubs rather than inflating it — the calibration is anchored at reputation 50.'},
                 {n: 'economyWeeksPerSeason', l: 'WEEKS PER SEASON', v: config.economyWeeksPerSeason,
                  h: '46 — what the APP charges wages for. Deliberately not the backend\'s own 52-week financial year, so six of its weeks are unpriced by this model.'},
+                {n: 'economyYouthScholarshipTier1Pence', l: 'SCHOLARSHIP AT TIER 1 (pence/wk)', v: config.economyYouthScholarshipTier1Pence,
+                 h: 'What a youth scholar costs at the TOP tier, per week, in pence. 150000 = £1,500. Every lower tier is the same <em>proportion</em> of its own average first-team wage, so one figure sets the whole ladder and it follows the turnover table rather than being authored twice. <strong>0 = off</strong>, and the flat Game Config figure plus its cap stands. Inert under the legacy model.'},
+                {n: 'economyYouthScholarshipFloorPence', l: 'SCHOLARSHIP FLOOR (pence/wk)', v: config.economyYouthScholarshipFloorPence,
+                 h: 'The least a scholar can cost per week, in pence. 2500 = £25. <strong>Needed, not optional:</strong> a pure proportion reaches £5.05 at tier 7 and £1.43 at tier 8, and free is a different mechanic from cheap. Only reachable when a tier-1 anchor is set. The cap below is still applied last, so a floor above a tier\'s cap is clamped down rather than breaking the invariant.'},
                 {n: 'economyYouthScholarshipCapBp', l: 'SCHOLARSHIP CAP (bp)', v: config.economyYouthScholarshipCapBp,
-                 h: 'A youth scholarship may not exceed this share of the tier\'s WORST first-team wage. 5000 = 50%. Caps the flat Game Config figure rather than replacing it, so the upper tiers keep the authored number and only the tiers where it is implausible change. <strong>0 = no cap.</strong> Inert under the legacy model — there is no band wage to cap against.'},
+                 h: 'A youth scholarship may not exceed this share of the tier\'s <strong>AVERAGE</strong> first-team wage. 5000 = 50%. This is the one invariant the mechanism promises — a scholar never out-earns an average professional at their tier — so it is applied last and always wins. <strong>0 = no cap.</strong> Inert under the legacy model: there is no band wage to cap against. (Anchored to the average, not the cheapest professional: England tier 8\'s cheapest earns £12.84/wk, so half of that is £6.42 and the old rule produced a free scholar rather than a cheap one.)'},
             ] %}
 
             {% for k in knobs %}

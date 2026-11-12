@@ -10,6 +10,14 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Stop a youth scholar out-earning an average first-team player.
  *
+ * ⚠ **THE RULE DESCRIBED BELOW WAS SUPERSEDED BY `Version20261112230000`.** The cap survives,
+ * but it is now a share of the tier's AVERAGE first-team wage rather than its WORST, and the
+ * flat figure it caps can now be replaced by a tier-1 anchor that scales down the ladder. The
+ * reasoning below for anchoring to the worst wage did not survive measurement: England tier 8's
+ * cheapest professional earns £12.84/week, so half of it is £6.42 and the rule produced a free
+ * scholar rather than a cheap one. Left here unedited because the SQL it ran is what is on the
+ * boxes; read `Version20261112230000` for the rule in force.
+ *
  * THE DEFECT, found by the step-8 threshold review: `youthScholarshipWagePence` is a FLAT
  * £250/week, and the turnover model makes an average England tier-8 first-team wage about £127.
  * So a thirteen-year-old scholar was set to earn nearly twice an average professional, and at

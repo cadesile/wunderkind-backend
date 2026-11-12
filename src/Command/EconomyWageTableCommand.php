@@ -366,9 +366,10 @@ final class EconomyWageTableCommand extends Command
 
             $band    = $this->scaleResolver->abilityBand($country, $tier);
             $squad   = $this->squadSize($tier);
-            $mid     = $this->mid($band);
             $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
-            $midWage = $this->wageModel->turnoverPlayerPence($mid, $country, $tier, 50, $config) ?? 0;
+            // Through the resolver's own definition, so the check and the thing it checks
+            // cannot drift apart — which is exactly how the scholarship bug got in.
+            $midWage = $this->wageModel->averageFirstTeamWagePence($country, $tier, 50, $config) ?? 0;
 
             $weeksToTop = ($weekly > 0 && $topBand > 0) ? $topBand / $weekly : null;
 
