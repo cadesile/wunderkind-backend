@@ -77,6 +77,39 @@ class CountryProfileRepository extends ServiceEntityRepository
      *
      * @return array<string, string>
      */
+    /**
+     * Every country's name-pool override, in ONE projected query.
+     *
+     * PROJECTED, NOT HYDRATED, and that is the point. NamePoolProvider fills its whole memo
+     * from this once per process; hydrating 71 CountryProfile entities to read two columns
+     * would put them in the identity map, where MarketPoolService's clear() every fifty
+     * players throws them away again. Arrays survive that.
+     *
+     * Null columns are returned as null, so the caller can tell "no override" from "an
+     * override that happens to be empty" — though the entity setters make the latter
+     * impossible to store.
+     *
+     * @return array<string, array{firstNames: ?list<string>, lastNames: ?list<string>}> keyed by code
+     */
+    public function namePoolOverrides(): array
+    {
+        $rows = $this->createQueryBuilder('c')
+            ->select('c.code AS code', 'c.firstNames AS firstNames', 'c.lastNames AS lastNames')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $out[(string) $row['code']] = [
+                'firstNames' => $row['firstNames'] ?? null,
+                'lastNames'  => $row['lastNames'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+
     public function nameMap(): array
     {
         $rows = $this->createQueryBuilder('c')

@@ -6,6 +6,7 @@ namespace App\Tests\Service\CountryContent;
 
 use App\Enum\Country;
 use App\Service\CountryContent\CountryContentRegistry;
+use App\Service\CountryContent\NamePoolRegistry;
 use App\Service\NameGeneratorService;
 use PHPUnit\Framework\TestCase;
 
@@ -126,6 +127,6 @@ class PolandContentTest extends TestCase
 
     public function testPolishNamePoolExistsForGeneratedPlayers(): void
     {
-        $this->assertTrue(NameGeneratorService::hasNamePool('Polish'));
+        $this->assertTrue(NamePoolRegistry::has('Polish'));
     }
 }

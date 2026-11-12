@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Enum;
 
 use App\Enum\Country;
+use App\Service\CountryContent\NamePoolRegistry;
 use App\Service\NameGeneratorService;
 use PHPUnit\Framework\TestCase;
 
@@ -58,6 +59,6 @@ class CountryPolandTest extends TestCase
 
     public function testPolishStillHasItsNamePool(): void
     {
-        $this->assertTrue(NameGeneratorService::hasNamePool('Polish'));
+        $this->assertTrue(NamePoolRegistry::has('Polish'));
     }
 }

@@ -121,6 +121,35 @@ class CountryProfile
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $stadiumFormats = null;
 
+    /**
+     * Operator-set PERSON-name pools, overriding NamePoolRegistry's PHP consts.
+     *
+     * Same tri-state and the same reasoning as $prestigeSuffixes above, one level along: NULL
+     * is no override and the shipped pool answers, a non-empty list wins outright, and `[]` is
+     * never stored.
+     *
+     * TWO COLUMNS, because an operator can reasonably want one and not the other — a country
+     * whose shipped surnames are fine but whose thirty first names repeat. Overriding either
+     * leaves the other on the const.
+     *
+     * READ THEM THROUGH NamePoolProvider, never directly, and note it MEMOISES where
+     * CountryNamingContentProvider deliberately does not: these are read on the hottest loop
+     * in the application, roughly 116,000 times during a full pool warm, and
+     * MarketPoolService clears the identity map every fifty players, so Doctrine's own cache
+     * is not standing behind it.
+     *
+     * THE OVERRIDE REPLACES, IT DOES NOT MERGE. A union would mean an operator could never
+     * remove a bad shipped name.
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $firstNames = null;
+
+    /** @var list<string>|null See $firstNames. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $lastNames = null;
+
     /** Lower bound for a plausible per-plot land valuation in this country, pence. */
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $landPenceMin = null;
@@ -260,6 +289,24 @@ class CountryProfile
 
     /** @return list<string>|null */
     public function getStadiumFormats(): ?array { return $this->stadiumFormats; }
+
+    /** @return list<string>|null */
+    public function getFirstNames(): ?array { return $this->firstNames; }
+
+    /** @return list<string>|null */
+    public function getLastNames(): ?array { return $this->lastNames; }
+
+    /** @param list<string>|null $values */
+    public function setFirstNames(?array $values): void
+    {
+        $this->firstNames = self::listOrNull($values);
+    }
+
+    /** @param list<string>|null $values */
+    public function setLastNames(?array $values): void
+    {
+        $this->lastNames = self::listOrNull($values);
+    }
 
     /**
      * The setters coerce [] to null, and that is load-bearing rather than tidy.

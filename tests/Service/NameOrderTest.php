@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Service;
 
+use App\Repository\Location\CountryProfileRepository;
+use App\Service\CountryContent\NamePoolProvider;
+use App\Service\CountryContent\NamePoolRegistry;
 use App\Service\NameGeneratorService;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -60,7 +63,7 @@ class NameOrderTest extends TestCase
     /** The composed string generateName() hands to staff, scouts and agents must obey the rule. */
     public function testGeneratedKoreanStaffNamesAreSurnameFirst(): void
     {
-        $service  = new NameGeneratorService();
+        $service  = $this->shippedPoolService();
         $surnames = self::koreanSurnames();
 
         for ($i = 0; $i < 50; $i++) {
@@ -74,11 +77,39 @@ class NameOrderTest extends TestCase
         }
     }
 
-    /** @return list<string> */
+
+    /**
+     * The service over the SHIPPED pools.
+     *
+     * A stubbed repository returns null from findByCode() and an empty override set, so the
+     * provider resolves to NamePoolRegistry — which is what these tests mean by "the pool".
+     * Keeping it a plain TestCase matters: a fact about what ships must be assertable without
+     * a kernel or a database.
+     */
+    private function shippedPoolService(): NameGeneratorService
+    {
+        $repo = $this->createStub(CountryProfileRepository::class);
+        $repo->method('findByCode')->willReturn(null);
+        $repo->method('namePoolOverrides')->willReturn([]);
+
+        return new NameGeneratorService(new NamePoolProvider($repo));
+    }
+
+    /**
+     * The SHIPPED Korean surnames, deliberately — not whatever a database holds.
+     *
+     * This used to reach in with ReflectionMethod on a private method, which coupled the
+     * fixture to that method's name and to the whole-array shape; a rename failed it with an
+     * array-key notice rather than anything useful. It asks the registry now.
+     *
+     * It must stay the registry rather than the resolved view: an operator overriding Korean
+     * surnames would otherwise fail an assertion that is about NAME ORDER and has nothing to
+     * do with which names are in the pool.
+     *
+     * @return list<string>
+     */
     private static function koreanSurnames(): array
     {
-        $method = new \ReflectionMethod(NameGeneratorService::class, 'getNamePools');
-
-        return $method->invoke(null)['South Korean']['lastNames'];
+        return NamePoolRegistry::lastNames('South Korean');
     }
 }

@@ -12,9 +12,9 @@ use App\Repository\NpcClubRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\CountryContent\CountryNamingContentProvider;
+use App\Service\CountryContent\NamePoolProvider;
 use App\Service\Location\CountryReadinessService;
 use App\Service\Location\LocationCatalogueService;
-use App\Service\NameGeneratorService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -41,6 +41,7 @@ class CheckCountryContentCommand extends Command
         private readonly LocationCatalogueService         $locationCatalogue,
         private readonly CountryReadinessService          $readinessService,
         private readonly CountryNamingContentProvider     $namingContent,
+        private readonly NamePoolProvider                 $namePools,
     ) {
         parent::__construct();
     }
@@ -129,7 +130,7 @@ class CheckCountryContentCommand extends Command
         $io->table(['Category', 'Status'], $rows);
 
         $io->section('Name pool');
-        $hasPool = NameGeneratorService::hasNamePool($country->nationality());
+        $hasPool = $this->namePools->has($country->nationality());
         $io->text($hasPool
             ? "Name pool present for '{$country->nationality()}'."
             : "MISSING — generated players/staff will silently fall back to 'English' names.");
