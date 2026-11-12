@@ -75,20 +75,55 @@ A starting ladder that hits the agreed targets for England — about £300,000/w
 tier-1 earner and about £100/week for an average tier-8 player — against the **live** squad
 sizes and ability bands:
 
-| tier | baseline turnover |
-|---|---|
-| 1 | £492,578,230 |
-| 2 | £162,251,456 |
-| 3 | £51,057,810 |
-| 4 | £28,780,384 |
-| 5 | £11,116,147 |
-| 6 | £4,068,954 |
-| 7 | £976,429 |
-| 8 | £272,195 |
+| tier | baseline turnover | pence |
+|---|---|---|
+| 1 | £388,661,540 | `38866153952` |
+| 2 | £120,049,757 | `12004975671` |
+| 3 | £35,576,602 | `3557660225` |
+| 4 | £19,909,009 | `1990900941` |
+| 5 | £7,071,796 | `707179580` |
+| 6 | £2,339,899 | `233989880` |
+| 7 | £582,785 | `58278460` |
+| 8 | £164,852 | `16485154` |
 
-Derived, not guessed: anchored at both ends and geometric between, so `S_tier` comes out
-strictly decreasing by construction. **Re-derive rather than copy if squad sizes or ability
-bands have changed** — those are the inputs, and the preview reads them live.
+Those are the figures **authored on dev as of 2026-11-13**, derived against that box's live
+squad sizes and ability bands. They put the best tier-1 player on exactly £300,000/week and an
+average tier-8 player on exactly £100/week.
+
+### ⚠️ How to re-derive — and the method this doc had wrong
+
+**Re-derive rather than copy whenever squad sizes or ability bands differ.** They are the inputs,
+the preview reads them live, and they DO differ between environments: dev's tier-1 squad is 26
+against a development clone's 33, which alone pushed the top earner 27% over target.
+
+This doc used to say *"anchored at both ends and geometric between, so `S_tier` comes out
+strictly decreasing by construction"*, meaning a geometric **turnover** ladder. **That is wrong
+and it fails the gate.** Against dev's bands it produces an `S_tier` that rises again at tiers 7
+and 8 plus four ability inversions — checks 1 and 2 both failing — because the ability bands are
+not geometrically spaced, so σ (the reference squad's `Σ ability^k`) collapses faster at the
+bottom than turnover does.
+
+**Make `S_tier` the geometric sequence instead, and derive turnover from it.** `S_tier` is the
+right primitive for two reasons: check 1 *is* "`S_tier` strictly decreasing", and because a
+shared ability earns more wherever `S` is higher, **a decreasing `S` satisfies check 2
+automatically**. Both checks become structural rather than lucky.
+
+The procedure, with `k = 2.5`, `weeks = 46`, and a player share of 45% (60% wage:turnover × 75%
+after the 25% staff share):
+
+1. **σ(t)** `= Σ over the reference squad of round(ability)^k`, where the squad is `N` evenly
+   spaced integer abilities across the tier's band and `N` is the midpoint of that tier's
+   `playerMin`/`playerMax`. Integer abilities — `Player::$currentAbility` is an int, and the
+   continuous version is 2.5% out on a narrow band.
+2. **Anchor the top:** `S_1 = targetTopWage × 10^6 / bandMax(1)^k`
+3. **Anchor the bottom:** `S_8 = targetMidWage × 10^6 / midAbility(8)^k`
+4. **Interpolate:** `S_t = S_1 × r^(t-1)` where `r = (S_8/S_1)^(1/7)`
+5. **Invert to turnover:** `turnover(t) = S_t × weeks × σ(t) / (10^6 × 0.45)`
+6. Pin tiers 1 and 8 to the exact integers that hit the targets under the integer chain, since
+   steps 2–5 are float arithmetic and the live chain is not.
+
+Expect `S_tier` to move much less than wages do — on dev it spans only **2.18×** top to bottom
+while wages span 3,000×. The ability bands carry the rest, by design.
 
 Leave the other knobs at their shipped values for the first pass (ratio 60%, staff share 25%,
 k 2.5, reputation spread 0, 46 weeks). Change one at a time, with a preview run between.
@@ -144,6 +179,10 @@ raw row indexing, which is the part most likely to look wrong.
 
 **`TV alone is N% of baseline turnover`** — a hard gate. See step 4.
 
+**`TV is X per club but <C>'s economy factor is N% of <BASE>`** — check 6, also a hard gate. That
+country's TV table was never scaled after its factor was set; the message carries the figure to
+author. See the warning at the end of step 4.
+
 **`the youth scholarship is MORE than an average first-team wage`** — **should no longer
 appear.** `economyYouthScholarshipCapBp` (World → Economy, default 50%) caps a scholarship at a
 share of the tier's **average** first-team wage, and the cap is applied last so it always wins.
@@ -183,6 +222,61 @@ percentage per tier.
 TV is authored per league, on **World → League overview**: set **TV POOL** (the league's whole TV
 money) and leave **TV DEAL** to be derived — it is the per-club share, and the screen disables the
 field while a pool is set. The divisor is **SLOTS**, blank meaning "work it out from NPC rows".
+
+### The table authored on dev, 2026-11-13
+
+Shares chosen to track real football: TV is a major revenue line at the top and trivial at the
+bottom. They sit against the turnover ladder in step 2.
+
+| tier | share of turnover | TV per club | `tv_deal` (pence) |
+|---|---|---|---|
+| 1 | 35% | £136,000,000 | `13600000000` |
+| 2 | 28% | £33,600,000 | `3360000000` |
+| 3 | 20% | £7,120,000 | `712000000` |
+| 4 | 15% | £2,990,000 | `299000000` |
+| 5 | 11% | £778,000 | `77800000` |
+| 6 | 8% | £187,000 | `18700000` |
+| 7 | 5% | £29,100 | `2910000` |
+| 8 | 3% | £4,950 | `495000` |
+
+Rounded to three significant figures so they read as authored numbers rather than derived ones.
+
+**Set the POOL, not the deal, and let `slots` divide it** — `tv_pool_pence = tv_deal × slots`, and
+`slots` varies by country (10 in KR, 14 in BE, 18 in EN, 20 in FR). Authoring a pool computed with
+the wrong divisor breaks the round-trip identity `tv_pool_pence / slots == tv_deal`, which is the
+check that proves no published `tvDeal` moved.
+
+### ⚠️ Re-authoring TV invalidates the world packs, and the version gate will NOT catch it
+
+`league.tv_deal` is baked into every cached pack payload. Changing the column leaves packs
+serving the old figure with nothing flagging them stale, because `WORLD_PACK_VERSION` only
+changes when code does.
+
+This had already happened before anyone noticed: on 2026-11-13 the dev packs carried
+`"tvDeal":2000000000` (£20m) at EN tier 1 against a column reading £500m — **25× apart**, from an
+earlier re-authoring that never invalidated the cache. Of 200 packs, 140 were already below the
+current version and so self-healing; **60 were on the current version and silently stale.**
+
+So after re-authoring TV, do one of:
+
+- **Bump `WORLD_PACK_VERSION`** (code change + deploy). Flags every pack stale, and each rebuilds
+  atomically per tier with no window where a country has none. Preferred, and you need it for the
+  model flip in step 5 anyway — so do it once, after both.
+- **`app:worldpack:warm <COUNTRY> --force`.** Note its own warning: in all-tiers mode it deletes
+  the country's entries up front, so that country has no packs until the run finishes. `--tier N`
+  avoids that window.
+
+### ⚠️ TV does not scale with the country factor — check 6 is your only warning
+
+`league.tv_deal` is a **stored absolute**. It is the one money figure in this economy that the
+country factor never reaches, and it cannot be fixed by scaling in code: the server cannot tell a
+deliberately generous TV deal from an unscaled one.
+
+So the first time you set a `country_profile.economy_factor_bp`, that country's turnover, wages
+and sponsorship all drop together and **its TV money does not** — clubs paying a fifth of the
+wages while banking full baseline TV. Check 6 of the gate compares each factored country's TV
+against the baseline's times its factor and tells you the figure to author. It is silent at
+parity, which is every country today.
 
 ### Should the pool be derived from turnover automatically?
 

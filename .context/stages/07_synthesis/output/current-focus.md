@@ -48,6 +48,23 @@ provable no-op: everything applies only under `turnover`.
 itself, reporting a scholarship problem that no authoring action could clear. See
 `docs/economy-threshold-review.md` §2 and §2b.
 
+**Calibrated on dev 2026-11-13, model still OFF.** The turnover ladder and the scholarship anchor
+are authored (both gated on `economyWageModel`, so no price moved — verified by byte-identical
+checksums on player, staff, scout, npc_club and all 200 pack payloads). The TV table was
+re-authored across all 196 leagues, and **that one DID move a published value**: `league.tv_deal`
+is a stored absolute with no model gate, and the old figures were 102%-3,674% of a club's season
+turnover. Tested on a real device against the shipped app afterwards: the economics are
+noticeably more stable, which is direct evidence the old TV figures were breaking client finances
+rather than merely failing a gate.
+
+Two things came out of it. **`league.tv_deal` is the one money figure the country factor never
+reaches** — now guarded by the gate's check 6 (`c6fba41`), because check 3's 100%-of-turnover
+bound cannot see a country at twice its intended share. And **cached packs bake `tvDeal` while the
+version gate only moves when code does**, so 60 of 200 packs are silently stale; a rebuild is with
+the operator. The rollout doc's own derivation method was also wrong — it specified a geometric
+turnover ladder, which fails checks 1 and 2 against real bands; `S_tier` is the right primitive
+and makes both checks structural.
+
 **Also fixed 2026-11-12:** the sponsor bands scale by country, so a cheap country is cheap on
 both sides of the ledger rather than earning full English sponsorship on a fifth of the wages.
 Country factor ONLY, not country x tier — a league's tier variation is already expressed by its
