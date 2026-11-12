@@ -56,6 +56,7 @@ final class EconomyConfigPublisher
         private readonly GameConfigRepository $gameConfigRepository,
         private readonly EconomyScaleResolver $resolver,
         private readonly WageModelResolver    $wageModel,
+        private readonly SponsorBandResolver  $sponsorBands,
     ) {}
 
     /**
@@ -153,6 +154,13 @@ final class EconomyConfigPublisher
         return [
             'country'             => $code,
             'tierCount'           => $tierCount,
+            // COUNTRY-LEVEL, NOT PER-TIER, and deliberately narrower than the wage chain: a
+            // league's tier variation is already expressed by how many sponsors it has and
+            // which size bands they draw from, so applying the tier factor here too would
+            // re-tier an already-tiered mechanic. Resolved so a client rolling its own sponsor
+            // offers agrees with the `sponsorPot` the server rolled — the six flat
+            // `smallSponsorMin`-style keys are untouched and remain the fallback.
+            'sponsorBandsPence'   => $this->sponsorBands->bandsFor((string) $code, $config),
             'wageModel'           => $config->getEconomyWageModel()->value,
             'weeksPerSeason'      => $config->getEconomyWeeksPerSeason(),
             'wageCurveExponentBp' => $config->getEconomyWageCurveExponentBp(),

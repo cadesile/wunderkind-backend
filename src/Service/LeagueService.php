@@ -11,7 +11,6 @@ use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Entity\SeasonRecord;
 use App\Entity\SeasonSnapshot;
-use App\Enum\CompanySize;
 use App\Enum\LeaderboardCategory;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
@@ -33,6 +32,7 @@ class LeagueService
         private readonly SeasonRecordRepository   $seasonRecordRepository,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
         private readonly \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
+        private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
     ) {}
 
     /** The deepest pyramid the per-tier config tables describe. */
@@ -181,18 +181,13 @@ class LeagueService
      */
     public function rollLeagueSponsors(League $league, GameConfig $config): int
     {
-        $total = 0;
-        foreach ($league->getLeagueSponsors() as $ls) {
-            [$min, $max] = match ($ls->getSponsor()->getSize()) {
-                CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
-                CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
-                CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
-            };
-            $value = $max > $min ? random_int($min, $max) : $min;
-            $ls->setRolledValue($value);
-            $total += $value;
-        }
-        return $total;
+        // DELEGATED SINCE 2026-11-12. This loop existed byte-identically in both
+        // LeagueService and WorldInitializationService; SponsorBandResolver is now the one
+        // implementation, and it scales the band by the league's COUNTRY — which the flat
+        // columns never did, so a club in a country factored to 20% used to earn full English
+        // sponsorship while paying 20% wages. Kept as a public method because external callers
+        // type-hint it.
+        return $this->sponsorBandResolver->rollLeagueSponsors($league, $config);
     }
 
     /**

@@ -331,6 +331,34 @@ know about the per-tier key behaves exactly as before.
 The cap applies only under the `turnover` model. Under `legacy` every tier publishes the flat
 figure.
 
+## `sponsorBandsPence` — prefer the per-country bands
+
+`economyTierBaseline.sponsorBandsPence` carries the three company-size bands resolved for the
+block's country:
+
+```json
+{
+  "small":  { "min": 5600000,  "max": 8200000  },
+  "medium": { "min": 8200000,  "max": 13400000 },
+  "large":  { "min": 25000000, "max": 80000000 }
+}
+```
+
+**Prefer these over the six flat `smallSponsorMin`/`Max`-style keys**, which are unchanged and
+remain the fallback. The flat ones are country-agnostic, so a client rolling its own sponsor
+offers from them would disagree with the `sponsorPot` the server rolled for the same league —
+a club in a country factored to 20% would earn full English sponsorship while paying a fifth of
+the wages.
+
+Still **per season**, like the flat keys, and still not convertible with `sponsorWeeklyPence`.
+
+**Country factor only — these are not tier-scaled.** A league's tier variation is already
+expressed by how many sponsors it has and which size bands they draw from, so the per-tier rows
+deliberately do not carry their own sponsor bands.
+
+Unlike the wage model this is **not gated on `wageModel`**: it applies as soon as a country
+factor is set.
+
 ## Before flipping `economyWageModel`
 
 Run `app:economy:wage-table EN SC`. It reads the **live config rows** — squad sizes from

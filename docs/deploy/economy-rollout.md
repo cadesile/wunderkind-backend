@@ -309,10 +309,11 @@ row served to every country at every tier, so they are stored at the legacy figu
 **serve time** from the requesting club's country and tier. Flipping the model changes nothing
 stored about the pool, and flipping back is instant. `app:worldpack:warm` does not touch it.
 
-**The sponsor bands are still unscaled by country** — a club in a country factored to 20% earns
-full English sponsorship while paying 20% wages. Flagged in
-`docs/economy-threshold-review.md`; worth doing in the same pass as the second country, and not
-a blocker for the first.
+**The sponsor bands now scale by country** (fixed 2026-11-12), by the **country factor only** —
+a league's tier variation is already expressed by its `sponsorCount` and size mix. Worth knowing
+for sequencing: this is **not** gated on the wage model, so it applies the moment you set a
+factor in step 7, which is one of the reasons that step also needs a `WORLD_PACK_VERSION` bump.
+`sponsorPot` is part of the cached league block.
 
 ---
 

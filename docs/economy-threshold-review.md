@@ -144,7 +144,14 @@ average ~£480 and £250 is already sensible. `YouthScholarshipCapTest` caught i
 
 ---
 
-## 3. Sponsor bands are per-season and unscaled by country
+## 3. Sponsor bands — FIXED 2026-11-12
+
+> **Resolved after this review was written.** `SponsorBandResolver` scales every band by the
+> **country factor**, so a country factored to 20% now earns a fifth of the sponsorship while
+> paying a fifth of the wages. Byte-identical at parity, which is the shipped state. The
+> original finding is kept below.
+
+### The original finding: sponsor bands are per-season and unscaled by country
 
 `smallSponsorMin/Max`, `mediumSponsorMin/Max`, `largeSponsorMin/Max` — live at roughly £56k–82k,
 £82k–134k and £250k–800k **per season** — are flat pence rolled at pack-build time into
@@ -154,10 +161,28 @@ They are **not** scaled by country, so a club in a country factored to 20% earns
 sponsorship as an English club while paying 20% wages. That is not "a cheaper country", it is a
 different game: sponsorship becomes five times more valuable relative to the wage bill.
 
-These are rolled server-side in `WorldInitializationService::rollLeagueSponsors()` and
-`LeagueService`, both of which already know the country — so scaling them is a small, inert
-change in the same shape as the NPC-balance fix below. **Not done here** because it changes
-generated figures and belongs in a deliberate pass, not a report.
+### What was done
+
+Both roll sites held **byte-identical** copies of the same loop. `SponsorBandResolver` is now
+the one implementation and both still-public methods delegate to it — that is the **fifth**
+duplication this overhaul has collapsed, after three copies of the wage tier-walk and three of
+the ability-band lookup.
+
+**Country factor only, not country × tier**, and that is the decision worth defending. A
+league's tier variation is *already* expressed in this mechanic by two things the tier factor
+would double-count: `League::$sponsorCount` (authored per tier) and which `CompanySize` bands
+its sponsors draw from. Applying the tier factor on top would re-tier an already-tiered mechanic
+and quietly make a tier-1 pot enormous. So the fix is exactly as wide as the defect was.
+
+The six flat `smallSponsorMin`-style keys are **untouched and still published**. The resolved
+per-country bands arrive as a new `sponsorBandsPence` key inside `economyTierBaseline`, so a
+client rolling its own sponsor offers agrees with the `sponsorPot` the server rolled, and an
+older build keeps reading the flat ones.
+
+**Not gated on `economyWageModel`** — a sponsor band has nothing to do with how a player is
+priced — so it starts applying the moment a country factor is set. That is why the runbook
+requires a `WORLD_PACK_VERSION` bump on a **factor change**, not only on a model flip:
+`sponsorPot` is part of the cached league block.
 
 Note also the unit trap documented in `docs/api/economy-config.md`: these six are **per season**
 while the new `sponsorWeeklyPence` is **per week**, and the two are not convertible by dividing
@@ -251,5 +276,5 @@ Before flipping the wage model for a country, `app:economy:wage-table` will repo
 - **Needs an app-side decision:** the bankruptcy ladder's unreachable rows and its collapsed
   range. Not a backend blocker — `bankruptcyDeductionsEnabled` gates the whole mechanic — but it
   should not be discovered by a player.
-- **Worth doing in the same pass:** scaling the sponsor bands by country, so a cheap country is
-  cheap on both sides of the ledger.
+- **Done 2026-11-12:** the sponsor bands scale by country, so a cheap country is now cheap on
+  both sides of the ledger.

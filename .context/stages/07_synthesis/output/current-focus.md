@@ -38,11 +38,15 @@ cap rather than a replacement, because the flat figure was right at six of the e
 ships ON at 50% — the one switch in this series that does — and is still a provable no-op,
 because it applies only under the `turnover` model.
 
-**Still open, and recorded rather than quietly carried:** `bankruptcyDeductionTiers` has two rows
-that cannot fire under the resolution its own docblock documents, and its ladder is traversed in
-under half a week at the top five tiers (a client-side mechanic, gated by its own flag, and it
-predates this work); and the sponsor bands are still unscaled by country. Both in
-**`docs/economy-threshold-review.md`**.
+**Also fixed 2026-11-12:** the sponsor bands scale by country, so a cheap country is cheap on
+both sides of the ledger rather than earning full English sponsorship on a fifth of the wages.
+Country factor ONLY, not country x tier — a league's tier variation is already expressed by its
+`sponsorCount` and size mix. It collapsed a FIFTH byte-identical duplication on the way.
+
+**Still open:** `bankruptcyDeductionTiers` has two rows that cannot fire under the resolution its
+own docblock documents, and its ladder is traversed in under half a week at the top five tiers.
+That is a client-side mechanic gated by its own flag, and it predates this work — see
+**`docs/economy-threshold-review.md`** for the analysis and the weeks-of-wages proposal.
 
 
 ## In flight, 2026-11-11 → 2026-11-12 — taking world content off the deploy path

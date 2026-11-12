@@ -7,7 +7,6 @@ namespace App\Service;
 use App\Entity\Club;
 use App\Entity\GameConfig;
 use App\Entity\League;
-use App\Enum\CompanySize;
 use App\Entity\Agent;
 use App\Repository\AgentRepository;
 use App\Repository\GameConfigRepository;
@@ -112,6 +111,7 @@ class WorldInitializationService
         private readonly FixtureGenerationService $fixtureGenerationService,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly WorldPackClubGenerationService $clubGenerator,
+        private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
     ) {}
 
     /**
@@ -205,18 +205,13 @@ class WorldInitializationService
     /** Public: also called by WorldPackTierAssemblyService when folding per-club async generation results into the final payload. */
     public function rollLeagueSponsors(League $league, GameConfig $config): int
     {
-        $total = 0;
-        foreach ($league->getLeagueSponsors() as $ls) {
-            [$min, $max] = match ($ls->getSponsor()->getSize()) {
-                CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
-                CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
-                CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
-            };
-            $value = $max > $min ? random_int($min, $max) : $min;
-            $ls->setRolledValue($value);
-            $total += $value;
-        }
-        return $total;
+        // DELEGATED SINCE 2026-11-12. This loop existed byte-identically in both
+        // LeagueService and WorldInitializationService; SponsorBandResolver is now the one
+        // implementation, and it scales the band by the league's COUNTRY — which the flat
+        // columns never did, so a club in a country factored to 20% used to earn full English
+        // sponsorship while paying 20% wages. Kept as a public method because external callers
+        // type-hint it.
+        return $this->sponsorBandResolver->rollLeagueSponsors($league, $config);
     }
 
     /**

@@ -234,6 +234,7 @@ class SyncServiceGameConfigParityTest extends TestCase
             // A REAL WageModelResolver over the same stubs, because it is final. The publisher
             // needs it for the per-tier youth-scholarship figure.
             new \App\Service\Economy\WageModelResolver($gameConfigRepo, $scaleResolver),
+            new \App\Service\Economy\SponsorBandResolver($gameConfigRepo, $scaleResolver),
         );
     }
 }

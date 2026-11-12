@@ -1193,6 +1193,27 @@ fields, and a resolver returning a single integer would be impossible to
 sanity-check before turning scaling on for a country. `isResolvable` is false
 when the turnover row is unauthored — the shipped state.
 
+**`SponsorBandResolver` — what a league sponsor pays, scaled by country.** Replaced
+**byte-identical** copies of the roll loop in `LeagueService::rollLeagueSponsors()` and
+`WorldInitializationService::rollLeagueSponsors()`; both are still public (one is called by
+`WorldPackTierAssemblyService`) and both now delegate.
+
+That is the **fifth** duplication this overhaul collapsed, after three copies of the wage
+tier-walk and three of the ability-band lookup. The pattern is consistent enough to name: money
+arithmetic here gets copied to the second caller rather than extracted, and every copy is a
+place the two can disagree about a figure that then gets stored in a cached pack.
+
+**COUNTRY FACTOR ONLY, NOT COUNTRY x TIER**, and that is the decision most likely to be
+"corrected" later. A league's tier variation is already expressed by `League::$sponsorCount`
+(authored per tier) and the size mix its sponsors draw from, so applying the tier factor too
+would double-count it and quietly make a tier-1 pot enormous. `SponsorBandResolverTest` asserts
+two tiers of one country agree even with a 5x tier-1 factor set.
+
+**Not gated on `economyWageModel`** — a sponsor band has nothing to do with how a player is
+priced — so it applies the moment a country factor is set. That is why the runbook requires a
+`WORLD_PACK_VERSION` bump on a factor change and not only on a model flip: `sponsorPot` is part
+of the cached league block.
+
 **`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that
 was a GAP rather than a choice: decision 4 of the economy brief lists NPC balances among the
 things the backend bakes the country factor into, and the step-5 wage unification threaded

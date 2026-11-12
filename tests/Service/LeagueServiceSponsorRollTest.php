@@ -53,6 +53,18 @@ class LeagueServiceSponsorRollTest extends TestCase
                 $this->createStub(\App\Repository\NpcClubRepository::class),
                 $repo,
             ),
+            // A REAL SponsorBandResolver over the stubbed config repo, because it is final.
+            // With no country profile rows every country resolves at parity, so a rolled
+            // sponsor value is byte-identical to what these tests asserted before the bands
+            // became country-scaled.
+            new \App\Service\Economy\SponsorBandResolver(
+                $configRepo,
+                new \App\Service\Economy\EconomyScaleResolver(
+                    $configRepo,
+                    $this->createStub(\App\Repository\StarterConfigRepository::class),
+                    $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ),
+            ),
         );
     }
 
