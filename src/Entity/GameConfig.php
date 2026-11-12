@@ -1531,12 +1531,29 @@ class GameConfig
      *
      *     scholarship = min(youthScholarshipWagePence, bottomOfBandWage x capBp)
      *
-     * ── WHY THE BOTTOM OF THE BAND ────────────────────────────────────────────────────────
+     * ── ANCHORED TO THE TIER AVERAGE, AND THIS WAS CHANGED ────────────────────────────────
      *
-     * Anchored to the WORST first-team wage at the tier, not the average, because that is the
-     * comparison the defect is about: a scholar must cost less than the cheapest professional
-     * at the club. Anchoring to the average would still let a scholar out-earn the bottom of
-     * the squad.
+     * It was first written against the WORST first-team wage, on the reasoning that a scholar
+     * must cost less than the cheapest professional at the club. Measuring the real ladder
+     * killed that: England tier 8's cheapest professional earns **£12.84/week**, because
+     * ability 2 at the bottom of a 2-7 band through a 2.5 exponent is a rounding error. Half
+     * of that is £6.42, so the rule did not produce "cheaper than a professional" at the
+     * bottom — it produced a scholar who is free, which `youthScholarshipPence()` then had to
+     * floor at 1p to keep meaningful.
+     *
+     * So the anchor is the tier's AVERAGE first-team wage, which is also the comparison the
+     * gate command actually reports ("MORE than an average first-team wage"). The invariant is
+     * now sayable in one line: **a scholar never earns more than `capBp` of an average
+     * professional at their tier.** At tier 8 that is £63.47 rather than £6.42.
+     *
+     * The cost of the change, stated rather than buried: at a tier whose band is as wide as
+     * tier 8's, a scholarship can exceed the single cheapest professional's wage. That is
+     * accepted, because £12.84/week is an artefact of the ability curve rather than a wage
+     * anybody authored — and it is logged as its own finding in
+     * `docs/economy-threshold-review.md`, not papered over here.
+     *
+     * Safe to redefine rather than add a second column: the cap is gated on `turnover`, which
+     * is off on every deployed box, so it has never applied to a published figure.
      *
      * ── WHY A NON-ZERO DEFAULT IS STILL INERT ─────────────────────────────────────────────
      *
@@ -1559,6 +1576,90 @@ class GameConfig
     public function setEconomyYouthScholarshipCapBp(int $v): static
     {
         $this->economyYouthScholarshipCapBp = max(0, min(10000, $v));
+
+        return $this;
+    }
+
+    /**
+     * What a youth scholar costs at TIER 1, in pence per week. 0 = off (the flat figure stands).
+     *
+     * ── WHY A FLAT SCHOLARSHIP IS WRONG IN BOTH DIRECTIONS ────────────────────────────────
+     *
+     * The cap above fixed the end that was visibly broken — a tier-8 scholar out-earning a
+     * professional — and left the other end alone, on the docblock's claim that "the flat
+     * figure is right at tiers 1-6". Measuring it showed that claim was about plausibility,
+     * not proportion. Against the authored England ladder, £250/week is **0.19% of an average
+     * tier-1 first-team wage**: not a cheap academy, a rounding error. A single absolute
+     * figure cannot be right at both ends of a ladder that spans 1,047x.
+     *
+     * ── ONE KNOB, NOT A TABLE ─────────────────────────────────────────────────────────────
+     *
+     * An operator authors what a scholar costs at the TOP, and every lower tier follows the
+     * wage ladder in the same proportion:
+     *
+     *     scholarship(tier) = anchor x averageWage(tier) / averageWage(1)
+     *
+     * Not an eight-row table, because the per-tier shape is already expressed by the turnover
+     * ladder and authoring it twice invites the two to disagree — the same reason sponsorship
+     * takes the country factor but not the tier factor. And not scaled by `S_tier`, which
+     * carries almost none of the spread (1.72x against the wage ladder's 1,047x) and would put
+     * a tier-8 scholar on £873 against an average professional's £127 — 6.9x worse than the
+     * defect being fixed. Measured, not reasoned about.
+     *
+     * ── IT NEEDS A FLOOR, WHICH IS THE WHOLE REASON THE PAIR EXISTS ───────────────────────
+     *
+     * A pure proportion is as broken at the bottom as a flat figure is at the top: anchored at
+     * £1,500, tier 7 comes out at £5.05 and tier 8 at £1.43. Free is a different mechanic from
+     * cheap, so `economyYouthScholarshipFloorPence` holds the bottom up and the cap above
+     * still bounds the top. See that column for the resulting ladder.
+     *
+     * Zero-means-off, so this ships inert and an operator opts in — unlike the cap, which is
+     * a safety rail and therefore defaults on.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $economyYouthScholarshipTier1Pence = 0;
+
+    public function getEconomyYouthScholarshipTier1Pence(): int { return $this->economyYouthScholarshipTier1Pence; }
+
+    /** Floored at 0, which means "off" — fall back to the flat figure and its cap. */
+    public function setEconomyYouthScholarshipTier1Pence(int $v): static
+    {
+        $this->economyYouthScholarshipTier1Pence = max(0, $v);
+
+        return $this;
+    }
+
+    /**
+     * The least a youth scholar can cost per week, in pence. 0 = no floor.
+     *
+     * Only reachable through the anchored ladder above, and the reason that ladder is usable at
+     * all. Measured against the authored England table, with the anchor at £1,500 and this at
+     * £25:
+     *
+     *     tier   scholarship   % of an average professional at that tier
+     *     1      £1,500.00     1.1%
+     *     2      £554.79       1.1%
+     *     3      £187.14       1.1%
+     *     4      £110.41       1.1%
+     *     5      £45.12        1.1%
+     *     6      £25.00        1.5%   <- floored
+     *     7      £25.00        5.6%   <- floored
+     *     8      £25.00        19.7%  <- floored
+     *
+     * Tiers 1-5 ride the proportion; 6-8 sit on the floor, which is what stops a scholarship
+     * decaying into nothing where the wage ladder does. The cap is still the outer bound, so
+     * raising this cannot produce a scholar who out-earns an average professional — it is
+     * clamped, not merely defaulted.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $economyYouthScholarshipFloorPence = 0;
+
+    public function getEconomyYouthScholarshipFloorPence(): int { return $this->economyYouthScholarshipFloorPence; }
+
+    /** Floored at 0, which means "no floor". */
+    public function setEconomyYouthScholarshipFloorPence(int $v): static
+    {
+        $this->economyYouthScholarshipFloorPence = max(0, $v);
 
         return $this;
     }

@@ -1191,17 +1191,45 @@ Separately: the whole five-rung ladder is traversed in **under half a week** of 
 the top five tiers (0.01 weeks at tier 1). That predates the overhaul — the legacy model is
 comparable — but the overhaul is what made it measurable.
 
-`youthScholarshipWagePence` (flat £250/wk) became **1.97x an average tier-8 wage** under the
-turnover model — a thirteen-year-old scholar out-earning an average first-team player. **Fixed
-by `economyYouthScholarshipCapBp`** (`Version20261112220000`), which caps a scholarship at a
-share of the tier's WORST first-team wage: tier 8 to 0.05x, tiers 1-6 byte-identical. A CAP
-rather than a replacement, because the flat figure was right at six of the eight tiers and
-re-pricing all of them to fix two would have discarded a hand-authored number that works.
-Anchored to the worst rather than the average wage, because that is the comparison the defect is
-about. The flat key is untouched; the resolved per-tier figure is a new key in
-`economyTierBaseline.tiers[]`.
+`youthScholarshipWagePence` (flat £250/wk) is wrong at **both** ends of the turnover ladder, and
+it took two passes to see it. Under the turnover model it became **1.97x an average tier-8
+wage** — a thirteen-year-old out-earning an average first-team player — and it is **0.19% of an
+average tier-1 wage**, a rounding error. A single absolute figure cannot be right across a ladder
+spanning 1,047x.
 
-It is the ONE switch in this series that ships ON (50%), and still a provable no-op: the cap
+**Pass 1, `Version20261112220000`:** `economyYouthScholarshipCapBp` (default 5000 = 50%) caps the
+scholarship, taking tier 8 to 0.05x with tiers 1-6 byte-identical. Only ever asked "is it too
+high?", so it never looked at tier 1.
+
+**Pass 2, `Version20261112230000`:** `economyYouthScholarshipTier1Pence` + `…FloorPence`, both
+defaulting to 0 (= off, the flat figure and its cap). The scholarship becomes
+`clamp(anchor x averageWage(tier) / averageWage(1), floor, capBp x averageWage(tier))`:
+
+- **One knob, not a table.** The per-tier shape is already the turnover ladder's; authoring it
+  twice invites the two to disagree. Same rule as sponsorship taking the country factor but not
+  the tier factor.
+- **Not scaled by `S_tier`**, which looks right and is catastrophic: it carries 1.72x of spread
+  against the wage ladder's 1,047x, so a £1,500 anchor puts a tier-8 scholar on £873 against an
+  average professional's £127 — 6.9x worse than the defect. Modelled before anything was written.
+- **The floor is load-bearing**, not a nicety: a pure proportion reaches £1.43 by tier 8, and
+  free is a different mechanic from cheap.
+- **Floor then cap, in that order.** The floor is a preference, the cap is the invariant, so the
+  cap is applied last and an absurd floor is clamped down rather than breaking the promise.
+
+**The cap's anchor moved from the tier's WORST wage to its AVERAGE** in pass 2. England tier 8's
+cheapest professional earns £12.84/wk (ability 2 at the bottom of a 2-7 band through a 2.5
+exponent), so half of it is £6.42 — the old rule produced a free scholar, not a cheap one. Safe
+to redefine rather than replace: the cap is gated on `turnover`, so it has never applied to a
+published figure on any box. Accepted cost: at a band as wide as tier 8's a scholarship can
+exceed the single cheapest professional's wage. `£12.84/wk` is logged as its own finding in
+`docs/economy-threshold-review.md` §2b.
+
+The flat key is untouched throughout; the resolved per-tier figure is `economyTierBaseline
+.tiers[].youthScholarshipPence`. `WageModelResolver::averageFirstTeamWagePence()` is the single
+definition the ladder, the cap and the gate's check all share — they disagreed once and the cost
+was a gate that could not be cleared.
+
+The cap is the ONE switch in this series that ships ON (50%), and still a provable no-op: it
 applies only under the `turnover` model, so the flat figure survives both the shipped state and
 the half-configured period while a turnover table is being filled in. The first implementation
 gated on resolvability instead of the model and capped under `legacy`, where £250 is already

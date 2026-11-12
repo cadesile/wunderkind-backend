@@ -306,28 +306,123 @@ final class WageModelResolver
     public function youthScholarshipPence(string $country, int $tier, ?GameConfig $config = null): int
     {
         $config = $config ?? $this->gameConfigRepository->getConfig();
+
+        return $this->youthScholarshipPenceUnder($this->model($config), $country, $tier, $config);
+    }
+
+    /**
+     * The same figure, but under a model the caller NAMES rather than the live one.
+     *
+     * EXISTS FOR THE PREVIEW, AND THE PREVIEW IS A GATE, so this is not a convenience.
+     * `app:economy:wage-table` prices a whole table through `turnoverPlayerPence()` while the
+     * live model is still `legacy` — that is its entire purpose, since the runbook says to get
+     * the gate to exit 0 BEFORE flipping the switch. Asking `youthScholarshipPence()` for the
+     * scholarship in that state returns the flat £250, which the command then compared against
+     * turnover wages and reported as an inversion: £250 against an England tier-8 average of
+     * £126.94.
+     *
+     * That report was wrong in the way that matters most for a gate — **it could not be
+     * cleared by any authoring action.** Flipping the model makes the cap bite (tier 8's worst
+     * wage is £12.84, so the cap resolves to £6.42) and the problem vanishes, which means the
+     * gate was blocking the flip on a problem that only existed until the flip happened. An
+     * operator following the runbook would have been stuck on it forever.
+     *
+     * So a preview must resolve every figure on ONE basis. Measured on the dev-DB clone
+     * 2026-11-12: 16 problems under `legacy`, 14 under `turnover`, and the diff was exactly
+     * these two lines.
+     */
+    public function youthScholarshipPenceUnder(
+        EconomyWageModel $model,
+        string $country,
+        int $tier,
+        ?GameConfig $config = null,
+    ): int {
+        $config = $config ?? $this->gameConfigRepository->getConfig();
         $flat   = $config->getYouthScholarshipWagePence();
-        $capBp  = $config->getEconomyYouthScholarshipCapBp();
 
         // GATED ON THE MODEL, NOT JUST ON RESOLVABILITY, and the distinction is load-bearing.
         // A turnover table can be authored while the model is still `legacy` — it is the
         // half-configured state every operator passes through — and legacy tier-8 wages average
-        // around £480, where the flat £250 is already sensible. Capping against a band wage the
+        // around £480, where the flat £250 is already sensible. Pricing against a band wage the
         // world is not being priced by would make scholars absurdly cheap relative to what
         // their teammates actually earn. Caught by a test, not by inspection.
-        if ($capBp <= 0 || $country === '' || $tier < 1 || $this->model($config) !== EconomyWageModel::TURNOVER) {
+        if ($country === '' || $tier < 1 || $model !== EconomyWageModel::TURNOVER) {
             return $flat;
         }
 
+        // The tier's AVERAGE first-team wage: the one comparison both the cap and the gate's
+        // check are about. Null for an unauthored tier, where there is nothing to scale from.
+        $average = $this->averageFirstTeamWagePence($country, $tier, 50, $config);
+
+        if ($average === null) {
+            return $flat;
+        }
+
+        $capBp   = $config->getEconomyYouthScholarshipCapBp();
+        $ceiling = $capBp > 0 ? max(1, intdiv($average * $capBp, self::BP)) : null;
+        $anchor  = $config->getEconomyYouthScholarshipTier1Pence();
+
+        // ── The flat figure plus its cap: the behaviour when no anchor is authored ──────────
+        if ($anchor <= 0) {
+            return $ceiling === null ? $flat : min($flat, $ceiling);
+        }
+
+        // ── The anchored ladder ────────────────────────────────────────────────────────────
+        //
+        // Tier 1 is what the operator authored; every other tier is the same PROPORTION of its
+        // own average wage. Scaling from tier 1's average rather than from a stored per-tier
+        // table is what keeps the two from drifting apart when the turnover table is re-authored.
+        $topAverage = $this->averageFirstTeamWagePence($country, 1, 50, $config);
+
+        if ($topAverage === null || $topAverage <= 0) {
+            // Tier 1 unauthored while a lower tier is not. Nothing to anchor against, so the
+            // flat figure and its cap stand rather than guessing a ladder from one rung.
+            return $ceiling === null ? $flat : min($flat, $ceiling);
+        }
+
+        $scaled = intdiv($anchor * $average, $topAverage);
+
+        // FLOOR THEN CEILING, AND THE ORDER IS THE POINT. The floor is a preference — it stops
+        // a scholarship decaying to pennies where the wage ladder does — while the cap is the
+        // invariant, so the cap is applied last and always wins. A floor authored above a
+        // tier's cap is therefore clamped down to it rather than breaking the one promise this
+        // whole mechanism exists to make.
+        $value = max($config->getEconomyYouthScholarshipFloorPence(), $scaled);
+
+        if ($ceiling !== null) {
+            $value = min($value, $ceiling);
+        }
+
+        // Never free: see the note above on why a 0 sails through the client's `?? fallback`.
+        return max(1, $value);
+    }
+
+    /**
+     * What an AVERAGE first-team player earns per week at this (country, tier), in pence.
+     *
+     * The mid of the tier's ability band, priced through the turnover model. Null when the tier
+     * has no authored turnover — "cannot be priced", which callers must distinguish from "is
+     * worth nothing", the same distinction `EconomyScale::$isResolvable` carries.
+     *
+     * ONE DEFINITION, because three things now depend on agreeing about it: the scholarship
+     * ladder, the scholarship cap, and the gate command's inversion check. They disagreed once
+     * already — the command compared a legacy flat figure against a turnover wage — and the
+     * cost was a gate that could not be cleared.
+     *
+     * Priced at reputation 50, the calibration anchor where the modifier is exactly 1.0, since
+     * this is a per-tier published figure with no club in hand.
+     */
+    public function averageFirstTeamWagePence(
+        string $country,
+        int $tier,
+        int $reputation = 50,
+        ?GameConfig $config = null,
+    ): ?int {
+        $config = $config ?? $this->gameConfigRepository->getConfig();
         $band   = $this->scaleResolver->abilityBand($country, $tier);
-        $worst  = $this->turnoverPlayerPence($band['min'], $country, $tier, 50, $config);
+        $mid    = (int) round(((int) $band['min'] + (int) $band['max']) / 2);
 
-        // Null under `legacy` or for an unauthored tier — the flat figure is the answer there.
-        if ($worst === null) {
-            return $flat;
-        }
-
-        return min($flat, max(1, intdiv($worst * $capBp, self::BP)));
+        return $this->turnoverPlayerPence($mid, $country, $tier, $reputation, $config);
     }
 
     /**

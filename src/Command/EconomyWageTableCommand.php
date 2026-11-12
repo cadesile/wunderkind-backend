@@ -366,16 +366,27 @@ final class EconomyWageTableCommand extends Command
 
             $band    = $this->scaleResolver->abilityBand($country, $tier);
             $squad   = $this->squadSize($tier);
-            $mid     = $this->mid($band);
             $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
-            $midWage = $this->wageModel->turnoverPlayerPence($mid, $country, $tier, 50, $config) ?? 0;
+            // Through the resolver's own definition, so the check and the thing it checks
+            // cannot drift apart — which is exactly how the scholarship bug got in.
+            $midWage = $this->wageModel->averageFirstTeamWagePence($country, $tier, 50, $config) ?? 0;
 
             $weeksToTop = ($weekly > 0 && $topBand > 0) ? $topBand / $weekly : null;
 
-            // THE RESOLVED figure, not the flat one. Reading `youthScholarshipWagePence`
-            // directly here would keep reporting an inversion the cap has already fixed, which
-            // is worse than not checking — a gate that cries wolf gets ignored.
-            $scholarship = $this->wageModel->youthScholarshipPence($country, $tier, $config);
+            // THE RESOLVED figure, not the flat one, AND resolved under the model this table
+            // is previewing rather than the live one. Reading `youthScholarshipWagePence`
+            // directly would keep reporting an inversion the cap has already fixed; asking
+            // for the LIVE figure while the model is still `legacy` — which is the state this
+            // command exists to run in — did the same thing by a longer route, comparing a
+            // flat £250 against turnover wages and raising a problem that no authoring action
+            // could clear. Every figure in this table is what `turnover` WOULD pay, so this
+            // one has to be too.
+            $scholarship = $this->wageModel->youthScholarshipPenceUnder(
+                EconomyWageModel::TURNOVER,
+                $country,
+                $tier,
+                $config,
+            );
 
             $rows[] = [
                 $tier,

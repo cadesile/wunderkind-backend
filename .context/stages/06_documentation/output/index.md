@@ -174,8 +174,10 @@ claiming canonical status)
   fire** under the first-match-wins contract its own column documents (and the table only
   behaves as it looks if the app does NOT follow that contract — one of the two is wrong); the
   whole five-rung ladder is traversed in **under half a week** of unpaid wages at the top five
-  tiers, which predates the overhaul; and the flat £250 youth scholarship becomes **1.97x an
-  average tier-8 wage** under the turnover model, which is the one blocker that is ours to fix.
+  tiers, which predates the overhaul; the flat £250 youth scholarship is wrong at **both** ends
+  (1.97x an average tier-8 wage, and 0.19% of an average tier-1 one), now an anchored ladder —
+  §2; and **tier 8's cheapest professional earns £12.84/wk**, an artefact of a 2-7 band through a
+  2.5 exponent, which is why no rule should be anchored to "the cheapest professional" — §2b.
   Proposes expressing deficit thresholds in **weeks of the club's own wage bill** — the one unit
   both sides can agree on, since the backend does not know a club's roster — and explains why
   that is proposed rather than published.
