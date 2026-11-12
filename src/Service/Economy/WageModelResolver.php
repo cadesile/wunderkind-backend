@@ -282,6 +282,55 @@ final class WageModelResolver
     }
 
     /**
+     * What a youth scholar costs per week at this tier, in pence.
+     *
+     * `min(flat figure, capBp x the tier's WORST first-team wage)`, or the flat figure
+     * untouched when the turnover model cannot price the tier.
+     *
+     * THE DEFECT: the flat `youthScholarshipWagePence` is £250/week and the turnover model
+     * makes an average England tier-8 first-team wage about £127, so a thirteen-year-old was
+     * set to out-earn an average professional by nearly 2x. See
+     * `GameConfig::$economyYouthScholarshipCapBp` for why this is a cap rather than a
+     * replacement, and why it is anchored to the bottom of the band rather than the average.
+     *
+     * PROVABLY INERT UNTIL THE MODEL IS FLIPPED. The cap applies only under `turnover` — not
+     * merely when a turnover table happens to be authored — so the flat figure stands through
+     * the whole half-configured period an operator passes through while filling the table in.
+     * That is the shipped state, so this method cannot move a published figure on its own.
+     *
+     * NEVER ZERO FROM THE CAP. A tier whose worst wage rounds to nothing would otherwise make
+     * scholars free, and free is a different mechanic from cheap — `SyncService`'s own comment
+     * on this figure makes the point that the client guards with `?? fallback` rather than
+     * falsiness, so a 0 sails straight through. Floored at 1p.
+     */
+    public function youthScholarshipPence(string $country, int $tier, ?GameConfig $config = null): int
+    {
+        $config = $config ?? $this->gameConfigRepository->getConfig();
+        $flat   = $config->getYouthScholarshipWagePence();
+        $capBp  = $config->getEconomyYouthScholarshipCapBp();
+
+        // GATED ON THE MODEL, NOT JUST ON RESOLVABILITY, and the distinction is load-bearing.
+        // A turnover table can be authored while the model is still `legacy` — it is the
+        // half-configured state every operator passes through — and legacy tier-8 wages average
+        // around £480, where the flat £250 is already sensible. Capping against a band wage the
+        // world is not being priced by would make scholars absurdly cheap relative to what
+        // their teammates actually earn. Caught by a test, not by inspection.
+        if ($capBp <= 0 || $country === '' || $tier < 1 || $this->model($config) !== EconomyWageModel::TURNOVER) {
+            return $flat;
+        }
+
+        $band   = $this->scaleResolver->abilityBand($country, $tier);
+        $worst  = $this->turnoverPlayerPence($band['min'], $country, $tier, 50, $config);
+
+        // Null under `legacy` or for an unauthored tier — the flat figure is the answer there.
+        if ($worst === null) {
+            return $flat;
+        }
+
+        return min($flat, max(1, intdiv($worst * $capBp, self::BP)));
+    }
+
+    /**
      * A shared-pool wage scaled for the club reading it. The serve-time path.
      *
      * COUNTRY AND TIER FACTOR ONLY — NOT a re-price from the ability curve, and the difference

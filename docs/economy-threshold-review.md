@@ -77,7 +77,15 @@ figure from the brief, confirmed.
 
 ---
 
-## 2. The youth scholarship is now MORE than an average tier-8 wage
+## 2. The youth scholarship — FIXED 2026-11-12
+
+> **Resolved after this review was written.** `GameConfig::$economyYouthScholarshipCapBp` caps a
+> scholarship at a share of the tier's **worst** first-team wage (default 50%). Tier 8 went from
+> **1.97x an average wage to 0.05x**, tier 7 from 0.56x to 0.15x, and **tiers 1-6 are
+> byte-identical** — which is the point of a cap rather than a replacement. The original finding
+> is kept below because the reasoning is what justifies the shape of the fix.
+
+### The original finding: The youth scholarship is now MORE than an average tier-8 wage
 
 `youthScholarshipWagePence` is a flat **£250/week** for a player signed below first-team age.
 Against the turnover model's average first-team wage:
@@ -94,19 +102,45 @@ earns**, and at tier 7 more than half. That is a new consequence of the turnover
 legacy model pays tier 8 an average of £480/week, so the scholarship sits at 0.52× there and
 never inverts.
 
-This one is a **backend** figure (`GameConfig`, published and used by the app for a wage the
-backend itself sets on signing), so unlike the bankruptcy bands it is ours to fix. It is the
-clearest single blocker to flipping the model for a country with a narrow bottom-tier band.
+This one is a **backend-authored** figure, so unlike the bankruptcy bands it is ours to fix. It
+was the clearest single blocker to flipping the model for a country with a narrow bottom-tier
+band.
 
-Options, in order of preference:
+Worth being precise about what "ours" means here: the backend **only publishes** this figure —
+`grep` confirms it is never written onto a `Player`, so the app applies it. That does not make it
+the app's problem, because the backend is the one that decides the number; but it does mean the
+fix had to be a published figure rather than a changed write path, which is why it lands as a new
+key rather than as a different wage on a row.
 
-1. **Express it as a fraction of the tier's wage scale** rather than a flat figure — a scholar
-   costs some share of what a bottom-of-the-band first-team player costs. Scale-free, survives
-   every factor and a model flip.
-2. **Scale the existing figure** through `EconomyScaleResolver` at the point it is applied. One
-   line, but it only fixes the *country* dimension, not the tier one — and tier is where the
-   inversion is.
-3. Lower the flat figure. Fixes England and breaks the next country.
+### What was done, and why a cap rather than a replacement
+
+The flat figure is **right at tiers 1-6 and wrong at 7-8**. Expressing the whole scholarship as a
+share of the band would have re-priced every tier to fix two of them, throwing away a
+hand-authored number that works. So:
+
+```
+scholarship = min(youthScholarshipWagePence, worstFirstTeamWageAtTier x capBp)
+```
+
+**Anchored to the worst first-team wage, not the average**, because that is the comparison the
+defect is about: a scholar must cost less than the *cheapest* professional at the club.
+Anchoring to the average would still let one out-earn the bottom of the squad.
+
+**`youthScholarshipWagePence` is untouched** — same name, same type, same meaning, still
+published. The resolved per-tier figure arrives as a new key in
+`economyTierBaseline.tiers[].youthScholarshipPence`, so an older build keeps reading the flat
+one, which is the correct fallback for a client that does not know tiers have their own.
+
+**The cap ships ON at 50%, breaking this series' own "every switch arrives inert" rule — and it
+is still a provable no-op.** It applies only under the `turnover` model, so the flat figure
+stands through the whole shipped state *and* through the half-configured period while an
+operator fills the turnover table in. Shipping it off would have meant a cap that has to be
+remembered at flip time, and the entire point is that the inversion cannot reach a player. `0`
+still means "no cap".
+
+That model gate is not cosmetic: the first implementation checked only whether a tier was
+*resolvable*, so it capped under `legacy` with a turnover table authored — where tier-8 wages
+average ~£480 and £250 is already sensible. `YouthScholarshipCapTest` caught it.
 
 ---
 
@@ -212,7 +246,8 @@ the problems above, so none of this can quietly stop being true.
 
 Before flipping the wage model for a country, `app:economy:wage-table` will report:
 
-- **Blocking (ours to fix):** the youth scholarship inverting against a narrow bottom-tier band.
+- **Blocking (ours to fix):** ~~the youth scholarship inverting against a narrow bottom-tier
+  band~~ — **fixed 2026-11-12** by the cap above. The gate no longer reports it.
 - **Needs an app-side decision:** the bankruptcy ladder's unreachable rows and its collapsed
   range. Not a backend blocker — `bankruptcyDeductionsEnabled` gates the whole mechanic — but it
   should not be discovered by a player.

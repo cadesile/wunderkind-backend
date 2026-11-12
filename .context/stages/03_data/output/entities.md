@@ -1191,9 +1191,21 @@ Separately: the whole five-rung ladder is traversed in **under half a week** of 
 the top five tiers (0.01 weeks at tier 1). That predates the overhaul — the legacy model is
 comparable — but the overhaul is what made it measurable.
 
-And `youthScholarshipWagePence` (flat £250/wk) becomes **1.97x an average tier-8 wage** under
-the turnover model, so a thirteen-year-old scholar out-earns an average first-team player. That
-is a backend figure and the one blocker here that is ours to fix.
+`youthScholarshipWagePence` (flat £250/wk) became **1.97x an average tier-8 wage** under the
+turnover model — a thirteen-year-old scholar out-earning an average first-team player. **Fixed
+by `economyYouthScholarshipCapBp`** (`Version20261112220000`), which caps a scholarship at a
+share of the tier's WORST first-team wage: tier 8 to 0.05x, tiers 1-6 byte-identical. A CAP
+rather than a replacement, because the flat figure was right at six of the eight tiers and
+re-pricing all of them to fix two would have discarded a hand-authored number that works.
+Anchored to the worst rather than the average wage, because that is the comparison the defect is
+about. The flat key is untouched; the resolved per-tier figure is a new key in
+`economyTierBaseline.tiers[]`.
+
+It is the ONE switch in this series that ships ON (50%), and still a provable no-op: the cap
+applies only under the `turnover` model, so the flat figure survives both the shipped state and
+the half-configured period while a turnover table is being filled in. The first implementation
+gated on resolvability instead of the model and capped under `legacy`, where £250 is already
+sensible — `YouthScholarshipCapTest` caught it.
 
 `app:economy:wage-table` carries all of this as check 5, so it cannot quietly stop being true.
 `npcSolvencyThresholds` (weeks) and `dofWageBillThresholdPct` (a ratio) are already immune and

@@ -12,7 +12,6 @@ use App\Repository\GameConfigRepository;
 use App\Repository\InflationRateHistoryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
-use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\LeagueSizeResolver;
 use App\Service\Economy\WageModelResolver;
@@ -60,7 +59,6 @@ class EconomyAdminController extends AbstractController
         private readonly EntityManagerInterface         $em,
         private readonly Connection                     $connection,
         private readonly GameConfigRepository           $gameConfigRepository,
-        private readonly StarterConfigRepository        $starterConfigRepository,
         private readonly CountryProfileRepository       $countryProfileRepository,
         private readonly InflationRateHistoryRepository $inflationHistoryRepository,
         private readonly LeagueRepository               $leagueRepository,
@@ -133,6 +131,7 @@ class EconomyAdminController extends AbstractController
         $this->setIfPresent($request, 'economyWageCurveExponentBp', fn (int $v) => $config->setEconomyWageCurveExponentBp($v));
         $this->setIfPresent($request, 'economyReputationSpreadBp', fn (int $v) => $config->setEconomyReputationSpreadBp($v));
         $this->setIfPresent($request, 'economyWeeksPerSeason', fn (int $v) => $config->setEconomyWeeksPerSeason($v));
+        $this->setIfPresent($request, 'economyYouthScholarshipCapBp', fn (int $v) => $config->setEconomyYouthScholarshipCapBp($v));
 
         // READ BY INDEX, NOT array_values(). These inputs are named `[0]`..`[7]` and the index
         // IS the tier, so collapsing a sparse post with array_values() would silently move
@@ -353,7 +352,7 @@ class EconomyAdminController extends AbstractController
 
         for ($tier = 1; $tier <= $tierCount; $tier++) {
             $scale  = $this->scaleResolver->resolve($country, $tier);
-            $band   = $this->abilityBand($country, $tier);
+            $band   = $this->scaleResolver->abilityBand($country, $tier);
             $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
             $mid    = (int) round(($band['min'] + $band['max']) / 2);
 
@@ -411,23 +410,6 @@ class EconomyAdminController extends AbstractController
         ];
     }
 
-    /** @return array{min:int,max:int} */
-    private function abilityBand(string $country, int $tier): array
-    {
-        $ranges = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
-        $row    = $ranges[$country][(string) $tier] ?? null;
-
-        if (is_array($row) && (int) ($row['min'] ?? 0) > 0) {
-            $min = (int) $row['min'];
-            $max = (int) $row['max'];
-
-            return ['min' => min($min, $max), 'max' => max($min, $max)];
-        }
-
-        $fallback = WorldInitializationService::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
-
-        return ['min' => (int) $fallback['min'], 'max' => (int) $fallback['max']];
-    }
 
     private function squadSize(int $tier): int
     {

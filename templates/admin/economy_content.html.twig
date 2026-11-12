@@ -92,6 +92,8 @@
                  h: 'How far a club\'s reputation moves a wage either side of its tier. 0 = flat. A non-zero spread REDISTRIBUTES a tier\'s bill between its clubs rather than inflating it — the calibration is anchored at reputation 50.'},
                 {n: 'economyWeeksPerSeason', l: 'WEEKS PER SEASON', v: config.economyWeeksPerSeason,
                  h: '46 — what the APP charges wages for. Deliberately not the backend\'s own 52-week financial year, so six of its weeks are unpriced by this model.'},
+                {n: 'economyYouthScholarshipCapBp', l: 'SCHOLARSHIP CAP (bp)', v: config.economyYouthScholarshipCapBp,
+                 h: 'A youth scholarship may not exceed this share of the tier\'s WORST first-team wage. 5000 = 50%. Caps the flat Game Config figure rather than replacing it, so the upper tiers keep the authored number and only the tiers where it is implausible change. <strong>0 = no cap.</strong> Inert under the legacy model — there is no band wage to cap against.'},
             ] %}
 
             {% for k in knobs %}

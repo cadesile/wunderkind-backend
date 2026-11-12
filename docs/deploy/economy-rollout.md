@@ -121,10 +121,11 @@ raw row indexing, which is the part most likely to look wrong.
 
 **`TV alone is N% of baseline turnover`** — a hard gate. See step 4.
 
-**`the youth scholarship is MORE than an average first-team wage`** — a real blocker and
-**ours to fix**. The flat £250/week becomes 1.97× an average tier-8 wage under the turnover
-model. Options are in `docs/economy-threshold-review.md`; the honest short-term move is to lower
-the flat figure for the first country and accept it will need the proper fix before the second.
+**`the youth scholarship is MORE than an average first-team wage`** — **should no longer
+appear.** Fixed 2026-11-12: `economyYouthScholarshipCapBp` (World → Economy → Wage model, default
+50%) caps a scholarship at a share of the tier's worst first-team wage, taking England tier 8
+from 1.97× an average wage to 0.05× while leaving tiers 1-6 untouched. If you do see it, the cap
+has been set to 0 ("no cap") or raised above 100%.
 
 **`the harshest bankruptcy band is reached in N weeks`** and **`row N can never be reached`** —
 **not backend blockers.** That mechanic is client-side and gated by

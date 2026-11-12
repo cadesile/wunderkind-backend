@@ -330,9 +330,14 @@ final class EconomyScaleResolver
      * third table in the codebase, `gameConfig.leaguePlayerAbilityRanges`, is published to the
      * app and has no server-side generator consumer; it is deliberately not read here.
      *
+     * PUBLIC SINCE 2026-11-12 because it had been copied three times — here,
+     * EconomyWageTableCommand and EconomyAdminController — and three copies of "which abilities
+     * exist at this tier" is three chances for the preview, the gate and the generator to
+     * disagree about the thing they are all supposed to be checking.
+     *
      * @return array{min:int,max:int}
      */
-    private function abilityBand(string $country, int $tier): array
+    public function abilityBand(string $country, int $tier): array
     {
         $ranges     = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
         $configured = $ranges[$country][(string) $tier] ?? null;

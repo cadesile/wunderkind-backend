@@ -31,10 +31,17 @@ What exists now:
 - `GET/POST /api/club/season-investment`, World → Economy admin screen, and the verbatim
   parachute passthrough.
 
-**Open, and recorded rather than quietly carried:** the flat £250 youth scholarship becomes
-1.97x an average tier-8 wage under the turnover model (ours to fix, and the one blocker to the
-first flip); `bankruptcyDeductionTiers` has two rows that cannot fire under the resolution its
-own docblock documents; and the sponsor bands are still unscaled by country. All three in
+**Fixed 2026-11-12:** the youth-scholarship inversion. The flat £250 was 1.97x an average
+tier-8 wage under the turnover model; `economyYouthScholarshipCapBp` caps it at a share of the
+tier's WORST first-team wage, taking tier 8 to 0.05x while leaving tiers 1-6 byte-identical. A
+cap rather than a replacement, because the flat figure was right at six of the eight tiers. It
+ships ON at 50% — the one switch in this series that does — and is still a provable no-op,
+because it applies only under the `turnover` model.
+
+**Still open, and recorded rather than quietly carried:** `bankruptcyDeductionTiers` has two rows
+that cannot fire under the resolution its own docblock documents, and its ladder is traversed in
+under half a week at the top five tiers (a client-side mechanic, gated by its own flag, and it
+predates this work); and the sponsor bands are still unscaled by country. Both in
 **`docs/economy-threshold-review.md`**.
 
 

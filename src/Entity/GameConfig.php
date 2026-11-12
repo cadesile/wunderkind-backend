@@ -1511,6 +1511,58 @@ class GameConfig
     #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $economySeasonInvestmentBasePence = 0;
 
+    /**
+     * Ceiling on a youth scholarship, as a share of the tier's WORST first-team wage. 5000 = 50%.
+     *
+     * ── THE DEFECT THIS FIXES ─────────────────────────────────────────────────────────────
+     *
+     * `youthScholarshipWagePence` is a FLAT £250/week, and the turnover model makes an average
+     * England tier-8 first-team wage about £127/week. So a thirteen-year-old scholar was set to
+     * out-earn an average first-team player by nearly 2x, and at tier 7 by half. The legacy
+     * model never inverts (tier 8 averages ~£480 there), so this is a consequence of the
+     * overhaul rather than a pre-existing bug — found by the step-8 threshold review.
+     *
+     * ── WHY A CAP AND NOT A REPLACEMENT ───────────────────────────────────────────────────
+     *
+     * The flat figure is right at tiers 1-6 and wrong at 7-8. Expressing the whole scholarship
+     * as a share of the band would have re-priced every tier to fix two of them, and thrown
+     * away a hand-authored number that works. A cap changes only the tiers where the flat
+     * figure is implausible and leaves an operator's intent intact everywhere else:
+     *
+     *     scholarship = min(youthScholarshipWagePence, bottomOfBandWage x capBp)
+     *
+     * ── WHY THE BOTTOM OF THE BAND ────────────────────────────────────────────────────────
+     *
+     * Anchored to the WORST first-team wage at the tier, not the average, because that is the
+     * comparison the defect is about: a scholar must cost less than the cheapest professional
+     * at the club. Anchoring to the average would still let a scholar out-earn the bottom of
+     * the squad.
+     *
+     * ── WHY A NON-ZERO DEFAULT IS STILL INERT ─────────────────────────────────────────────
+     *
+     * 50% rather than the usual zero-means-off, and it is still a provable no-op today: the cap
+     * is computed from the TURNOVER model's band wage, and under `legacy` — or with the
+     * turnover table unauthored, which is the shipped state — there is no band wage to cap
+     * against, so the flat figure stands untouched.
+     *
+     * That is better than shipping it off: a cap that has to be remembered at flip time is a
+     * cap that gets forgotten, and the whole point is that the inversion cannot reach a player.
+     * Zero here still means "no cap", for an operator who wants the flat figure whatever
+     * happens.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 5000])]
+    private int $economyYouthScholarshipCapBp = 5000;
+
+    public function getEconomyYouthScholarshipCapBp(): int { return $this->economyYouthScholarshipCapBp; }
+
+    /** Floored at 0 ("no cap") and capped at 10000: a scholar paid MORE than a professional is the defect. */
+    public function setEconomyYouthScholarshipCapBp(int $v): static
+    {
+        $this->economyYouthScholarshipCapBp = max(0, min(10000, $v));
+
+        return $this;
+    }
+
     public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
     public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
 

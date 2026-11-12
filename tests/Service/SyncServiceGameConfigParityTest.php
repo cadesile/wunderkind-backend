@@ -122,6 +122,24 @@ class SyncServiceGameConfigParityTest extends TestCase
         self::assertCount(8, $block['tiers']);
     }
 
+    public function testEveryTierCarriesAResolvedScholarshipFigure(): void
+    {
+        // ADDITIVE, and the per-tier figure is the fix for the flat `youthScholarshipWagePence`
+        // being larger than an average bottom-tier wage under the turnover model. The flat key
+        // stays at the top level untouched, which is the correct fallback for an older build
+        // that does not know tiers have their own.
+        $block = $this->publisher()->clientBlock(new GameConfig(), 'EN')['economyTierBaseline'];
+
+        foreach ($block['tiers'] as $row) {
+            self::assertArrayHasKey('youthScholarshipPence', $row, "tier {$row['tier']}");
+            self::assertSame(
+                GameConfig::DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE,
+                $row['youthScholarshipPence'],
+                'the shipped state must publish the flat figure unchanged',
+            );
+        }
+    }
+
     public function testTheShippedDefaultsPublishAnUnresolvableTable(): void
     {
         // Inert: the turnover table is unauthored, so every tier reports resolvable false and a
@@ -208,9 +226,14 @@ class SyncServiceGameConfigParityTest extends TestCase
         // No profile rows: every country resolves at parity, which is the shipped state.
         $profiles = $this->createStub(CountryProfileRepository::class);
 
+        $scaleResolver = new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profiles);
+
         return new EconomyConfigPublisher(
             $gameConfigRepo,
-            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profiles),
+            $scaleResolver,
+            // A REAL WageModelResolver over the same stubs, because it is final. The publisher
+            // needs it for the per-tier youth-scholarship figure.
+            new \App\Service\Economy\WageModelResolver($gameConfigRepo, $scaleResolver),
         );
     }
 }

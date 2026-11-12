@@ -55,6 +55,7 @@ final class EconomyConfigPublisher
     public function __construct(
         private readonly GameConfigRepository $gameConfigRepository,
         private readonly EconomyScaleResolver $resolver,
+        private readonly WageModelResolver    $wageModel,
     ) {}
 
     /**
@@ -139,6 +140,13 @@ final class EconomyConfigPublisher
                 // So a client can tell "the operator has not authored this tier yet" from
                 // "this tier is genuinely worth nothing", which a bare 0 cannot express.
                 'resolvable'          => $scale->isResolvable,
+                // THE PER-TIER SCHOLARSHIP, and the reason it is here rather than only at the
+                // top level: the flat `youthScholarshipWagePence` is right at the upper tiers
+                // and absurd at the lower ones, where the turnover model makes an average
+                // first-team wage smaller than it. A client should prefer this figure and keep
+                // the flat key as its fallback — which is exactly what an older build already
+                // does by not knowing about this one.
+                'youthScholarshipPence' => $this->wageModel->youthScholarshipPence((string) $code, $tier, $config),
             ];
         }
 

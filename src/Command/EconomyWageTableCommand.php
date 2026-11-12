@@ -8,11 +8,9 @@ use App\Entity\GameConfig;
 use App\Enum\EconomyWageModel;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
-use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\LeagueSizeResolver;
 use App\Service\Economy\WageModelResolver;
-use App\Service\WorldInitializationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -68,7 +66,6 @@ final class EconomyWageTableCommand extends Command
 
     public function __construct(
         private readonly GameConfigRepository    $gameConfigRepository,
-        private readonly StarterConfigRepository $starterConfigRepository,
         private readonly EconomyScaleResolver    $scaleResolver,
         private readonly WageModelResolver       $wageModel,
         private readonly LeagueRepository        $leagueRepository,
@@ -166,7 +163,7 @@ final class EconomyWageTableCommand extends Command
 
         for ($tier = 1; $tier <= $tierCount; $tier++) {
             $scale = $this->scaleResolver->resolve($country, $tier);
-            $band  = $this->abilityBand($country, $tier);
+            $band  = $this->scaleResolver->abilityBand($country, $tier);
             $squad = $this->squadSize($tier);
 
             $bands[$tier]  = $band;
@@ -358,8 +355,7 @@ final class EconomyWageTableCommand extends Command
             $topBand = max($topBand, (int) ($band['deficitMin'] ?? 0));
         }
 
-        $scholarship = $config->getYouthScholarshipWagePence();
-        $rows        = [];
+        $rows = [];
 
         for ($tier = 1; $tier <= $tierCount; $tier++) {
             $scale = $this->scaleResolver->resolve($country, $tier);
@@ -368,13 +364,18 @@ final class EconomyWageTableCommand extends Command
                 continue;
             }
 
-            $band    = $this->abilityBand($country, $tier);
+            $band    = $this->scaleResolver->abilityBand($country, $tier);
             $squad   = $this->squadSize($tier);
             $mid     = $this->mid($band);
             $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
             $midWage = $this->wageModel->turnoverPlayerPence($mid, $country, $tier, 50, $config) ?? 0;
 
             $weeksToTop = ($weekly > 0 && $topBand > 0) ? $topBand / $weekly : null;
+
+            // THE RESOLVED figure, not the flat one. Reading `youthScholarshipWagePence`
+            // directly here would keep reporting an inversion the cap has already fixed, which
+            // is worse than not checking — a gate that cries wolf gets ignored.
+            $scholarship = $this->wageModel->youthScholarshipPence($country, $tier, $config);
 
             $rows[] = [
                 $tier,
@@ -466,23 +467,6 @@ final class EconomyWageTableCommand extends Command
         return intdiv($wages * (10000 - $config->getEconomyStaffWageShareBp()), 10000);
     }
 
-    /** @return array{min:int,max:int} */
-    private function abilityBand(string $country, int $tier): array
-    {
-        $ranges = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
-        $row    = $ranges[$country][(string) $tier] ?? null;
-
-        if (is_array($row) && (int) ($row['min'] ?? 0) > 0) {
-            $min = (int) $row['min'];
-            $max = (int) $row['max'];
-
-            return ['min' => min($min, $max), 'max' => max($min, $max)];
-        }
-
-        $fallback = WorldInitializationService::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35];
-
-        return ['min' => (int) $fallback['min'], 'max' => (int) $fallback['max']];
-    }
 
     private function squadSize(int $tier): int
     {

@@ -314,6 +314,23 @@ its tier is still resolved server-side.
 `GET /api/market/data` is now `Cache-Control: private`. The body varies by the caller's club, so
 a shared cache in front of it would serve one country's prices to another.
 
+## `youthScholarshipPence` — prefer the per-tier figure
+
+Each row of `economyTierBaseline.tiers[]` carries a `youthScholarshipPence`. **Prefer it over the
+top-level `youthScholarshipWagePence`**, and keep that key as the fallback.
+
+Why both exist: the flat key is a single figure for every tier, and the turnover model makes an
+average England tier-8 first-team wage about £127 — so a flat £250 scholarship had a
+thirteen-year-old out-earning an average professional by nearly 2×. The per-tier figure is
+`min(flat, capBp × the tier's worst first-team wage)`, so it is the flat value at the upper
+tiers and lower only where the flat value was implausible.
+
+`youthScholarshipWagePence` is unchanged in name, type and meaning, so a build that does not
+know about the per-tier key behaves exactly as before.
+
+The cap applies only under the `turnover` model. Under `legacy` every tier publishes the flat
+figure.
+
 ## Before flipping `economyWageModel`
 
 Run `app:economy:wage-table EN SC`. It reads the **live config rows** — squad sizes from
