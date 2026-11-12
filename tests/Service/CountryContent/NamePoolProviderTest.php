@@ -42,7 +42,9 @@ class NamePoolProviderTest extends TestCase
 
         self::assertTrue($provider->has(self::POOLLESS));
         self::assertSame(['Arben', 'Besnik'], $provider->firstNames(self::POOLLESS));
-        self::assertSame(NamePoolProvider::SOURCE_OVERRIDE, $provider->describe(self::POOLLESS)['source']);
+        self::assertSame(NamePoolProvider::SOURCE_OVERRIDE, $provider->sourceFor(self::POOLLESS, 'firstNames'));
+        self::assertSame(NamePoolProvider::SOURCE_OVERRIDE, $provider->sourceFor(self::POOLLESS, 'lastNames'));
+        self::assertTrue($provider->hasOverride(self::POOLLESS));
     }
 
     public function testAnOverrideReplacesTheShippedListRatherThanMergingIt(): void
@@ -73,16 +75,44 @@ class NamePoolProviderTest extends TestCase
             NamePoolRegistry::firstNames(self::AUTHORED),
             $this->provider(null)->firstNames(self::AUTHORED),
         );
-        self::assertSame(NamePoolProvider::SOURCE_REGISTRY, $this->provider(null)->describe(self::AUTHORED)['source']);
+        self::assertSame(NamePoolProvider::SOURCE_REGISTRY, $this->provider(null)->sourceFor(self::AUTHORED, 'firstNames'));
+        self::assertFalse($this->provider(null)->hasOverride(self::AUTHORED));
     }
 
     /** Spoof payloads and pool callers can pass anything; it must fall through, never throw. */
     public function testADemonymNoCountryCarriesFallsThroughInsteadOfThrowing(): void
     {
-        $describe = $this->provider(null)->describe('Atlantean');
+        $provider = $this->provider(null);
 
-        self::assertSame([], $describe['firstNames']);
-        self::assertSame(NamePoolProvider::SOURCE_NONE, $describe['source']);
+        self::assertSame([], $provider->firstNames('Atlantean'));
+        self::assertSame(NamePoolProvider::SOURCE_NONE, $provider->sourceFor('Atlantean', 'firstNames'));
+        self::assertSame(NamePoolProvider::SOURCE_NONE, $provider->sourceFor('Atlantean', 'lastNames'));
+    }
+
+    /**
+     * The two lists carry their own source, and the admin badges depend on it.
+     *
+     * A single per-country source would have to pick one of two true answers, and the screen
+     * would then tell the operator their shipped surnames were theirs to edit.
+     */
+    public function testEachListReportsItsOwnSource(): void
+    {
+        $provider = $this->provider($this->profileWith('EN', ['Solo'], null));
+
+        self::assertSame(NamePoolProvider::SOURCE_OVERRIDE, $provider->sourceFor(self::AUTHORED, 'firstNames'));
+        self::assertSame(NamePoolProvider::SOURCE_REGISTRY, $provider->sourceFor(self::AUTHORED, 'lastNames'));
+        self::assertTrue($provider->hasOverride(self::AUTHORED), 'either list being the operator\'s makes the country overridden');
+    }
+
+    /** describe() is what the admin screen renders, so its keys are a contract. */
+    public function testDescribeCarriesBothListsAndBothSources(): void
+    {
+        $described = $this->provider($this->profileWith('AL', ['Arben', 'Besnik'], null))->describe(self::POOLLESS);
+
+        self::assertSame(['Arben', 'Besnik'], $described['firstNames']);
+        self::assertSame([], $described['lastNames']);
+        self::assertSame(NamePoolProvider::SOURCE_OVERRIDE, $described['firstNamesSource']);
+        self::assertSame(NamePoolProvider::SOURCE_NONE, $described['lastNamesSource']);
     }
 
     /** A pool with surnames and no first names cannot name anybody, so it does not count. */

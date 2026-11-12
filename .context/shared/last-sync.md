@@ -5,6 +5,44 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-12), on top of commit `3ecbc31`** (uncommitted).
+  **Stages touched:** 02_architecture (`structure.md`), 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`routes.md`, `services.md`), shared (this file).
+  **Code:** player and staff name pools move from a 2,515-line PHP constant to two
+  `country_profile` json columns, authored and AI-topped-up from the locations dashboard.
+  Also catches up the 2026-11-11 club-naming pass, which wrote three stages in `864a775`
+  without recording an entry here.
+
+  Four things worth carrying beyond the feature:
+
+  - **Lift the giant constant out FIRST, as its own no-behaviour-change commit.** Moving
+    2,415 lines into `NamePoolRegistry` with `getNamePools()` left as a one-line delegate
+    touched no tests and changed nothing, which decoupled the unreviewable diff from every
+    design decision after it. The commit that then changed `NameGeneratorService`'s shape
+    broke exactly two test files and zero src files — the predicted blast radius, and the
+    measure of whether the design held.
+  - **"The identity map already caches this" was a false precedent, and copying it would have
+    been a performance incident.** `CountryNamingContentProvider` deliberately has no memo on
+    that reasoning. Inside the name path it does not hold: `MarketPoolService` calls
+    `$em->clear()` every fifty players — ORM 3's `clear()` is `clear(): void`, so the
+    `Player::class` argument is silently discarded and it is a FULL identity-map clear — and
+    a 71-country warm reads the pools ~116,000 times. Naive, that is ~116,000 SELECTs.
+    `NamePoolProviderTest` pins it to ≤71 with `expects($this->once())`, so the decision is a
+    contract rather than a comment. *(The discarded `clear()` argument is a separate latent
+    bug from the ORM 3 upgrade, still unticketed.)*
+  - **Do not normalise people's names.** The plan said to dedupe through
+    `ClubNameNormalizer::normalize()`; it runs `NFD; [:Nonspacing Mark:] Remove; NFC`, so it
+    would have collided `Güneş`/`Gunes`, `Müller`/`Muller` and `Łukasz`/`Lukasz`.
+    Accent-insensitive collision is correct for club names and silently destructive here. The
+    dedupe is `mb_strtolower(trim())` and the validator is deliberately separate from
+    `NamingContentValidator` rather than a relaxed version of it.
+  - **A duplicate array key costs no syntax error and no test failure.** `'South Korean'` was
+    declared twice in the pool literal; PHP keeps the last, so an 88-line block was
+    unreachable and anyone editing it changed nothing. Nothing going through PHP can
+    resurrect it — only a text-parsing extractor could, so any export must be built from
+    `NamePoolRegistry::all()`. The coverage test now pins the key count and asserts every key
+    is a demonym some `Country` case carries.
+
 - **New pass (2026-11-02), on top of commit `fde3c60`** (uncommitted).
   **Stages touched:** 03_data (`entities.md`), 04_interfaces (`routes.md`),
   06_documentation (`index.md`), shared (this file).

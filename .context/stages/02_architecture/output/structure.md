@@ -206,20 +206,24 @@ Plus `src/Command/` gains `SeedLocationsCommand`, `EnrichLocationsCommand`,
 `src/Controller/Admin/` gains three CRUD controllers, `LocationEnrichmentController` and
 `LocationDashboardController`.
 
-**THREE AI SUB-NAMESPACES NOW, ALL THE SAME SEVEN-FILE SHAPE** (interface, Claude
-implementation, `Unconfigured*`, factory, validator, result, service), added 2026-11-11:
+**FIVE AI FEATURES NOW, ALL THE SAME SEVEN-FILE SHAPE** (interface, Claude
+implementation, `Unconfigured*`, factory, validator, result, service), added 2026-11-11
+and 2026-11-12:
 
 ```
 src/Service/Location/Enrichment/        one town   — coordinates, population, land value
 src/Service/Location/Suggestion/        town names — more towns for a country
 src/Service/Location/CountryEnrichment/ the COUNTRY row — bbox, land band, reference codes
 src/Service/CountryContent/Suggestion/  club-naming content — suffixes, stadium formats
+                                        AND person names — first names, surnames
 ```
 
-The repetition is the point: a fourth AI feature is a directory of small classes against
-the shared `App\Service\Ai\AnthropicJsonClient`, not a new way of doing things. All four
+The repetition is the point: a fifth AI feature is a directory of small classes against
+the shared `App\Service\Ai\AnthropicJsonClient`, not a new way of doing things. All five
 read the SAME `LOCATION_ENRICHER_PROVIDER` / `_MODEL` / `_API_KEY` trio — one provider, one
-key — and all four fall back to a loud refusal rather than to silence.
+key — and all five fall back to a loud refusal rather than to silence. **Every one is wired
+by a FACTORY, never an alias**: `alias: '%env(...)%'` does not compile, which is the mistake
+to not make a sixth time.
 
 **But they do not all queue, and that distinction is the useful one.** Town enrichment and
 the town pull are queued because 865 messages and a 12,000-token generation respectively
@@ -235,6 +239,15 @@ DB override layer over `CountryContentRegistry`'s PHP consts **without replacing
 registry's statics are still called from enum methods that have no container. And
 `src/Service/` gained `StarterAbilityRangeService`, lifted out of `app:country:bootstrap`
 so an admin button and the command cannot drift.
+
+**The same directory then gained the person-name equivalent, 2026-11-12**:
+`NamePoolRegistry` (2,492 lines — the pool constant lifted verbatim out of
+`NameGeneratorService`, which went from 2,706 lines to 214), `NamePoolProvider`,
+`NamePoolValidator`, `NamePoolService`, `ValidatedNamePool` and six files under
+`Suggestion/`. **Extracting the constant first, as a no-behaviour-change move, is what made
+the rest small**: it relocated 2,415 lines with zero test edits, which decoupled the giant
+diff from every design decision after it. `NamePoolProvider` is the one memoised provider in
+the codebase and its docblock says why — see the services stage.
 
 **Messenger now has SIX transports.** `enrichment` was added alongside `async`,
 `worldpack`, `pool`, `competition` and `registration`, with the same justification each

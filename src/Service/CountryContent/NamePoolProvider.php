@@ -60,7 +60,10 @@ final class NamePoolProvider
     public const SOURCE_REGISTRY = 'registry';
     public const SOURCE_NONE     = 'none';
 
-    /** @var array<string, array{firstNames: list<string>, lastNames: list<string>, source: string}> */
+    /**
+     * @var array<string, array{firstNames: list<string>, lastNames: list<string>,
+     *     firstNamesSource: string, lastNamesSource: string}>
+     */
     private array $resolved = [];
 
     /** @var list<string>|null */
@@ -144,15 +147,34 @@ final class NamePoolProvider
         return $out;
     }
 
-    /** @return array{firstNames: list<string>, lastNames: list<string>, source: string} */
+    /**
+     * Both lists with their values and, PER LIST, where they came from.
+     *
+     * Per list because the two columns are independent: a country can hold its own surnames
+     * and still take first names from the shipped pool, and the form has to say which is
+     * which.
+     *
+     * @return array{firstNames: list<string>, lastNames: list<string>,
+     *     firstNamesSource: string, lastNamesSource: string}
+     */
     public function describe(string $nationality): array
     {
         return $this->resolve($nationality);
     }
 
+    /** @param 'firstNames'|'lastNames' $list */
+    public function sourceFor(string $nationality, string $list): string
+    {
+        return $this->resolve($nationality)[$list . 'Source'];
+    }
+
+    /** Whether EITHER list is the operator's rather than the shipped one. */
     public function hasOverride(string $nationality): bool
     {
-        return $this->resolve($nationality)['source'] === self::SOURCE_OVERRIDE;
+        $resolved = $this->resolve($nationality);
+
+        return $resolved['firstNamesSource'] === self::SOURCE_OVERRIDE
+            || $resolved['lastNamesSource'] === self::SOURCE_OVERRIDE;
     }
 
     /**
@@ -173,7 +195,10 @@ final class NamePoolProvider
         $this->pooled = null;
     }
 
-    /** @return array{firstNames: list<string>, lastNames: list<string>, source: string} */
+    /**
+     * @return array{firstNames: list<string>, lastNames: list<string>,
+     *     firstNamesSource: string, lastNamesSource: string}
+     */
     private function resolve(string $nationality): array
     {
         if (isset($this->resolved[$nationality])) {
@@ -188,17 +213,44 @@ final class NamePoolProvider
         // The override REPLACES per list, it does not merge: a union would mean an operator
         // could never remove a bad shipped name. Each list falls back independently, so
         // overriding surnames alone leaves first names on the const.
-        $resolved = [
-            'firstNames' => $first ?? NamePoolRegistry::firstNames($nationality),
-            'lastNames'  => $last ?? NamePoolRegistry::lastNames($nationality),
-            'source'     => match (true) {
-                $first !== null || $last !== null              => self::SOURCE_OVERRIDE,
-                NamePoolRegistry::has($nationality)            => self::SOURCE_REGISTRY,
-                default                                        => self::SOURCE_NONE,
-            },
-        ];
+        return $this->resolved[$nationality] = self::compose($nationality, $first, $last);
+    }
 
-        return $this->resolved[$nationality] = $resolved;
+    /**
+     * One resolved entry, from whatever the override held.
+     *
+     * Shared by the single-country and whole-set paths so the two cannot disagree about what
+     * an override means — the single place the override-else-shipped rule is written down.
+     *
+     * @param  list<string>|null $first
+     * @param  list<string>|null $last
+     * @return array{firstNames: list<string>, lastNames: list<string>,
+     *     firstNamesSource: string, lastNamesSource: string}
+     */
+    private static function compose(string $nationality, ?array $first, ?array $last): array
+    {
+        $shippedFirst = NamePoolRegistry::firstNames($nationality);
+        $shippedLast  = NamePoolRegistry::lastNames($nationality);
+
+        return [
+            'firstNames'       => $first ?? $shippedFirst,
+            'lastNames'        => $last ?? $shippedLast,
+            'firstNamesSource' => self::sourceOf($first, $shippedFirst),
+            'lastNamesSource'  => self::sourceOf($last, $shippedLast),
+        ];
+    }
+
+    /**
+     * @param list<string>|null $override
+     * @param list<string>      $shipped
+     */
+    private static function sourceOf(?array $override, array $shipped): string
+    {
+        return match (true) {
+            $override !== null => self::SOURCE_OVERRIDE,
+            $shipped !== []    => self::SOURCE_REGISTRY,
+            default            => self::SOURCE_NONE,
+        };
     }
 
     /** @return array{firstNames: ?list<string>, lastNames: ?list<string>}|null */
@@ -245,15 +297,7 @@ final class NamePoolProvider
             $first = $overrides[$code]['firstNames'] ?? null;
             $last  = $overrides[$code]['lastNames'] ?? null;
 
-            $this->resolved[$nationality] = [
-                'firstNames' => $first ?? NamePoolRegistry::firstNames($nationality),
-                'lastNames'  => $last ?? NamePoolRegistry::lastNames($nationality),
-                'source'     => match (true) {
-                    $first !== null || $last !== null   => self::SOURCE_OVERRIDE,
-                    NamePoolRegistry::has($nationality) => self::SOURCE_REGISTRY,
-                    default                             => self::SOURCE_NONE,
-                },
-            ];
+            $this->resolved[$nationality] = self::compose($nationality, $first, $last);
         }
     }
 }

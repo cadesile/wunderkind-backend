@@ -176,21 +176,4 @@ final class NamingContentService
             default            => throw new \InvalidArgumentException(sprintf('Unknown naming category %s.', $category)),
         };
     }
-
-    /**
-     * Split a textarea into tokens.
-     *
-     * ONE PER LINE, never comma-separated. The authored data contains '1. FC', 'Città di',
-     * 'Os Belenenses' and 'Estadio Municipal de %s' — a separator that can appear inside a
-     * token is a trap waiting on the first country that uses one. A line is also how an
-     * operator reads a list.
-     *
-     * @return list<string>
-     */
-    public static function splitLines(string $raw): array
-    {
-        $lines = preg_split('/\R/u', $raw, -1, PREG_SPLIT_NO_EMPTY);
-
-        return $lines === false ? [] : array_values($lines);
-    }
 }

@@ -295,6 +295,120 @@
                 </div>
             </section>
 
+            {# ── person name pools ──────────────────────────────── #}
+            {#
+              Names for the PEOPLE generated in this country — players, staff, scouts, agents
+              and guardians — as opposed to the club-naming content above.
+
+              THIRTY-NINE OF THE SEVENTY-ONE COUNTRIES SHIP WITH NONE, which is every country
+              added in the 2026-10-25 UEFA batch. Until this card existed, giving one of them
+              a pool meant a deploy; a country without one has its people named in English.
+
+              TOP UP ASKS ONLY FOR THE SHORTFALL, one list per request so each is a single
+              short provider call. A country already at target costs nothing.
+            #}
+            <section class="bmc-card" data-domain="people" id="name-pools"
+                     data-url="{{ path('admin', {routeName: 'admin_locations_top_up_names'}) }}"
+                     data-token="{{ csrf_token('locations_top_up_names_' ~ selected) }}"
+                     data-country="{{ selected }}">
+                <form method="post" data-bmc-form action="{{ path('admin', {routeName: 'admin_locations_save_names'}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('locations_names_' ~ selected) }}">
+                    <input type="hidden" name="country" value="{{ selected }}">
+
+                    <div class="bmc-card__head">
+                        <i data-lucide="users"></i>
+                        <span class="bmc-card__title">PLAYER &amp; STAFF NAMES</span>
+                        <span class="bmc-card__meta">one per line · target {{ namePoolTarget }} each</span>
+                    </div>
+
+                    <div class="bmc-card__body">
+                        <p class="bmc-bodytext">
+                            Every player, coach, scout, agent and guardian generated for
+                            {{ profile ? profile.name : selected }} is named from these two lists.
+                            A country with no pool has its people named in English.
+                            <strong>People already generated keep the names they have</strong> — these
+                            change who is created from now on, so after editing you will want to
+                            clear and re-warm that country's pool to see the difference.
+                        </p>
+                    </div>
+
+                    {% if namePools is empty %}
+                        <div class="bmc-card__body"><span class="bmc-empty-note">NOT AN APP\ENUM\COUNTRY CASE — NAMES CANNOT BE KEYED TO IT</span></div>
+                    {% else %}
+                        {% set nameLabels = {
+                            'firstNames': ['FIRST NAMES', 'Given names, as locally written. Diacritics are kept — Güneş and Gunes are two different names.'],
+                            'lastNames':  ['SURNAMES', 'Family names. ' ~ namePoolTarget ~ ' of each gives about ' ~ (namePoolTarget * namePoolTarget)|number_format ~ ' distinct full names.'],
+                        } %}
+
+                        {% for list, state in namePools %}
+                            {% set text = state.values|join("\n") %}
+                            <div class="bmc-setting">
+                                <span class="bmc-setting__text">
+                                    <span class="bmc-setting__label">
+                                        {{ nameLabels[list][0] }}
+                                        {% if state.source == 'override' %}
+                                            <span class="bmc-badge bmc-badge--positive">YOURS</span>
+                                        {% elseif state.source == 'registry' %}
+                                            <span class="bmc-badge bmc-badge--subtle">BUILT IN</span>
+                                        {% else %}
+                                            <span class="bmc-badge bmc-badge--danger">MISSING</span>
+                                        {% endif %}
+                                        <span class="bmc-data{{ state.count < namePoolMin ? ' ink-warning' : '' }}">{{ state.count }}</span>
+                                        {% if state.count > 0 and state.count < namePoolTarget %}
+                                            <span class="bmc-data">of {{ namePoolTarget }}</span>
+                                        {% endif %}
+                                    </span>
+                                    <span class="bmc-setting__help">{{ nameLabels[list][1] }}</span>
+                                    <span class="bmc-setting__hint" data-name-hint="{{ list }}"></span>
+                                </span>
+                                <span class="bmc-setting__ctl" style="flex:1 1 320px">
+                                    <textarea class="bmc-textarea" name="{{ list }}" rows="7"
+                                              data-saved="{{ text }}" data-kind="text" data-blank="ok"
+                                              aria-label="{{ nameLabels[list][0] }}">{{ text }}</textarea>
+                                </span>
+                            </div>
+                        {% endfor %}
+
+                        <div class="bmc-savebar bmc-savebar--inline" data-bmc-savebar
+                             data-idle="A list identical to the built-in one is stored as built in, not as a copy — so saving an unchanged form changes nothing.">
+                            <span class="bmc-savebar__title">ALL SAVED</span>
+                            <span class="bmc-savebar__sub"></span>
+                            <button type="submit" class="bmc-btn bmc-btn--green" data-bmc-save><span>SAVE NAMES</span></button>
+                        </div>
+                    {% endif %}
+                </form>
+
+                {% if namePools is not empty %}
+                    <div class="bmc-card__band" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        {# CONFIRMS IN JS, NOT VIA data-bmc-dialog-*, and that is deliberate.
+                           The declarative handler calls preventDefault() but not
+                           stopPropagation(), so a click listener on the button still fires
+                           immediately — and then again when the confirmed click is replayed.
+                           A paid call would be made twice, once without being agreed to. The
+                           pool pages drive runJobs the same way for the same reason. #}
+                        <button type="button" class="bmc-btn bmc-btn--orange" id="name-top-up"
+                                {{ namePoolAiReady ? '' : 'disabled' }}
+                                title="{{ namePoolAiReady ? 'One billed API call per list that is short' : 'Set LOCATION_ENRICHER_PROVIDER, _MODEL and _API_KEY first' }}"><span>TOP UP WITH AI</span></button>
+                        <span class="bmc-data" id="name-top-up-status">
+                            Asks for the shortfall only. A list already at {{ namePoolTarget }} costs nothing.
+                        </span>
+                    </div>
+
+                    <div class="bmc-card__band">
+                        <form method="post" action="{{ path('admin', {routeName: 'admin_locations_clear_names'}) }}"
+                              style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                            <input type="hidden" name="_token" value="{{ csrf_token('locations_clear_names_' ~ selected) }}">
+                            <input type="hidden" name="country" value="{{ selected }}">
+                            <button type="submit" class="bmc-btn"
+                                    data-bmc-dialog-title="BACK TO THE BUILT-IN NAMES?"
+                                    data-bmc-dialog-message="Discards the name lists you authored for this country. The built-in pools take over again — which for most countries means none, and people will be named in English."
+                                    data-bmc-dialog-confirm="REVERT"><span>REVERT TO BUILT IN</span></button>
+                            <span class="bmc-data">Discards what you typed. People already generated keep their names.</span>
+                        </form>
+                    </div>
+                {% endif %}
+            </section>
+
             {# ── biggest towns ──────────────────────────────────── #}
             <section class="bmc-card" data-domain="club">
                 <div class="bmc-card__head">
@@ -344,4 +458,88 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block body_javascript %}
+{{ parent() }}
+<script>
+// Tops the two name lists up, one request each, through the shared sequential runner.
+//
+// ONE LIST PER REQUEST because each is a single provider call of ~150 short strings. That is
+// well inside what a proxy will wait for, which is why this does not need the Messenger queue
+// the town pull uses — that one queued because a single call for 300 town OBJECTS ran past
+// sixty seconds. If the target ever goes much past 300 per list, revisit it.
+//
+// The page reloads afterwards rather than patching the textareas: the server decides what was
+// actually stored (an identical list is stored as "built in", not as a copy), and rebuilding
+// that state in JS would be a second opinion that could drift from it.
+(function () {
+    var card = document.getElementById('name-pools');
+    var btn  = document.getElementById('name-top-up');
+    if (!card || !btn || !window.BMC || !BMC.runJobs) { return; }
+
+    var status = document.getElementById('name-top-up-status');
+
+    btn.addEventListener('click', function () {
+        BMC.confirm({
+            title: 'TOP UP ' + card.dataset.country + ' NAMES?',
+            confirm: 'TOP UP',
+            variant: 'yellow',
+            message: 'Asks only for the shortfall against the target, one billed call per list '
+                + 'that is short. Names you already hold are kept and sent as exclusions, and a '
+                + 'list already at target costs nothing.'
+        }).then(function (yes) {
+            if (!yes) { return; }
+            run();
+        });
+    });
+
+    function run() {
+        btn.disabled = true;
+
+        var jobs = [
+            { label: 'First names', fields: { list: 'firstNames', country: card.dataset.country } },
+            { label: 'Surnames',    fields: { list: 'lastNames',  country: card.dataset.country } }
+        ];
+
+        BMC.runJobs({
+            url: card.dataset.url,
+            token: card.dataset.token,
+            jobs: jobs,
+            onUpdate: function (js) {
+                if (!status) { return; }
+                status.textContent = js.map(function (j) {
+                    return j.label + ': ' + (j.message || j.status);
+                }).join(' · ');
+            }
+        }).then(function (done) {
+            var failed = done.filter(function (j) { return j.status === 'failed'; });
+
+            // A FAILURE MUST NOT BE RELOADED AWAY. This endpoint answers JSON, so it sets no
+            // flash — reloading unconditionally would replace the only account of what went
+            // wrong with a page that looks like nothing was clicked.
+            if (failed.length) {
+                btn.disabled = false;
+                if (status) {
+                    status.textContent = failed.map(function (j) {
+                        return j.label + ': ' + (j.message || 'failed');
+                    }).join(' · ');
+                }
+                return;
+            }
+
+            // Nothing stored, nothing to re-render — keep the "already at target" message.
+            if (!done.some(function (j) { return j.count > 0; })) {
+                btn.disabled = false;
+
+                return;
+            }
+
+            // Reload so the counts, the source badges and the textareas all come from the
+            // server rather than from an optimistic guess here.
+            window.location.reload();
+        });
+    }
+})();
+</script>
 {% endblock %}

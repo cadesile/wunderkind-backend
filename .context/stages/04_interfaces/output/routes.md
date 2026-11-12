@@ -475,7 +475,7 @@ Recorded as one complete `location_enrichment_run` under the new
 `EnrichmentTrigger::ADMIN_COUNTRY_PROFILE`; **no attempt row**, so its tokens do not reach the
 screen's 30-day usage figure — the same gap the two town-suggestion triggers have.
 
-**The locations dashboard gained four POST actions, all per-country CSRF** (`..._{CODE}`, the
+**The locations dashboard gained seven POST actions, all per-country CSRF** (`..._{CODE}`, the
 `admin_locations_go_live` precedent):
 
 | Route | What it does |
@@ -484,6 +484,9 @@ screen's 30-day usage figure — the same gap the two town-suggestion triggers h
 | `admin_locations_save_content` | Stores operator-authored `prestigeSuffixes` / `genericSuffixes` / `stadiumFormats` on `country_profile`. One token per line. |
 | `admin_locations_suggest_content` | One billed call asking the model for all three. Validated, then written; will not replace a list the operator authored unless `overwrite` is set. |
 | `admin_locations_clear_content` | Back to the built-in PHP lists. |
+| `admin_locations_save_names` | Stores operator-authored `firstNames` / `lastNames` on `country_profile`. One name per line; a list identical to `NamePoolRegistry`'s is stored as NULL, not as a copy. |
+| `admin_locations_top_up_names` | **Returns JSON, not a redirect** — one list per request, driven by `BMC.runJobs` as two sequential jobs. One billed call asking only for the shortfall against 150, with the names already held sent as exclusions; a list at target returns `skipped` and costs nothing. |
+| `admin_locations_clear_names` | Back to the shipped name pools. |
 
 Both blockers they clear used to name something the operator could not reach — a console
 command and a 2,364-line PHP file — and the readiness panel's rows now carry the action in

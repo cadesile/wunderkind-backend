@@ -135,6 +135,17 @@ services:
             $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
             $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
 
+    # Person-name pools, topped up per country from the locations dashboard. Same three
+    # variables again — one provider, one key, for all five AI features here.
+    App\Service\CountryContent\Suggestion\NamePoolSuggesterInterface:
+        factory: ['@App\Service\CountryContent\Suggestion\NamePoolSuggesterFactory', 'create']
+
+    App\Service\CountryContent\Suggestion\NamePoolSuggesterFactory:
+        arguments:
+            $provider: '%env(string:LOCATION_ENRICHER_PROVIDER)%'
+            $apiKey: '%env(string:LOCATION_ENRICHER_API_KEY)%'
+            $model: '%env(string:LOCATION_ENRICHER_MODEL)%'
+
     App\Controller\Admin\SocialAuthController:
         arguments:
             $facebookAppId: '%env(FACEBOOK_APP_ID)%'

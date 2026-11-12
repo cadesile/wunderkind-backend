@@ -923,6 +923,17 @@ action, not a deploy — see `docs/world-generation/adding-a-country.md`.
   `array_rand([])` throws. Read them through `CountryNamingContentProvider`, never directly.
   **Deliberately absent from `CountryProfileCrudController`** — raw-JSON textareas would
   bypass `NamingContentValidator`, and one of these lists is fed to `sprintf()`.
+  **Two more nullable json columns carry the person-name pools** — `first_names`,
+  `last_names`, added 2026-11-12 (`Version20261112010000`), same shape and same reasoning:
+  NULL means "follows the shipped pool", `NamePoolRegistry` is the fallback, nothing was
+  migrated, and the setters coerce `[]` to null because an empty pool reaches `array_rand([])`
+  too. **A column per list, not one blob**, because an operator may override surnames and
+  leave first names on the shipped pool — the source badge is per list. **Not a child table**:
+  a name carries nothing (no provenance, status or approval), where a `location` does, so 300
+  strings ≈ 2 KB per country at target is a bag, not an entity. Read them through
+  `NamePoolProvider`, never directly — it is the only memoised provider here, and the reason
+  is in its docblock: `MarketPoolService` clears the identity map every fifty players, so
+  Doctrine is not caching behind it, and a full `app:pool:warm` reads these ~116,000 times.
 
   **`bbox` and the land band exist for `EnrichmentValidator`** — they are what catches
   an AI coordinate in the wrong country (there is a Birmingham in Alabama) and a

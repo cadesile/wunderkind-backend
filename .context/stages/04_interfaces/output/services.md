@@ -734,7 +734,16 @@ filename alone.
   persisted by `CompetitionResultsService` into `CompetitionResult` (with
   a guaranteed engine-agnostic `computationAuditJson` envelope even if a
   custom engine omits `computationAudit`).
-- **`NameGeneratorService`** — generates names (players/staff/clubs).
+- **`NameGeneratorService`** — generates names (players/staff/clubs). **214 lines, from
+  2,706**: the 2,500-line pool constant moved verbatim to
+  `CountryContent\NamePoolRegistry`, and the service now takes a `NamePoolProvider` so a
+  country's pool can come from the database. `nationalities()` and `formatFullName()` stay
+  **static** (pure enum data and a pure string rule, called without a container);
+  `hasNamePool()` became an instance method. The five copies of the English-fallback rule
+  collapsed into one `resolveNationality()` — which is how `generateName()` had been left
+  **throwing** `Unknown nationality` where the other four fell back silently, turning a full
+  `app:pool:warm` red on the 39 poolless countries. It now falls back too, and
+  `WarmPoolCommand` warns once per country instead.
 - **`NarrativeImportExportService`** — imports/exports narrative content
   (events, playing styles, facility/tactical/archetype templates,
   excursions), plus a `translations` section (non-default-language values
@@ -1198,6 +1207,25 @@ No `src/EventListener/` directory exists.
   fatal inside club generation a long way from the form. Four rules guard it, the last of which
   simply runs the template. `NpcClubGenerationService::generateStadiumName()` wraps its
   `sprintf` as a second line of defence.
+- **`CountryContent\NamePoolRegistry`** / **`NamePoolProvider`** / **`NamePoolValidator`** /
+  **`NamePoolService`** / **`CountryContent\Suggestion\*NamePool*`** — the same
+  override-else-registry shape for the two **person**-name lists, with three differences that
+  matter. **(1) It memoises, and the sibling provider's reasoning for not doing so is false
+  here**: `MarketPoolService` calls `$em->clear()` every fifty players (ORM 3's `clear()` is
+  `clear(): void`, so the `Player::class` argument is discarded — a full identity-map clear),
+  so Doctrine serves nothing, and a 71-country warm reads these ~116,000 times. The memo is a
+  **process-scoped instance field** (not `static`, which would leak between tests; not PSR-6,
+  which buys nothing once 116,000 reads collapse to ≤71 and turns a one-second staleness
+  window into an indefinite one). `forget()` exists for one caller: the admin handler that
+  saves and re-renders in the same request. **(2) The validator is separate from
+  `NamingContentValidator` and must stay so** — target 150, floor 10, ceiling 400, and the
+  dedupe is `mb_strtolower(trim())` and **never** `ClubNameNormalizer::normalize()`, which
+  strips diacritics and would collide `Güneş`/`Gunes` and `Łukasz`/`Lukasz`. Accent-insensitive
+  collision is right for club names and silently destructive for people's. **(3) The AI asks
+  one list per call and only for the shortfall**, names already held sent as exclusions, driven
+  by `BMC.runJobs` rather than Messenger — a list of bare strings is an order of magnitude
+  smaller than the town pull's 300 objects, which is the only reason that one needed a queue.
+  Revisit if the target passes ~300 per list. CLI twin: `app:names:top-up`.
 - **`StarterAbilityRangeService`** — `app:country:bootstrap` step 3, lifted out so the admin
   button and the command cannot drift. It also forced a fix on the Starter config screen: that
   form's grid is built from countries that already have `League` rows, and its save wrote the

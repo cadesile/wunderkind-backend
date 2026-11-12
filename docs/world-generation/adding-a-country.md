@@ -92,14 +92,51 @@ Any category you skip degrades gracefully to a generic fallback (bland placehold
 nothing errors, but the result looks obviously generic. `app:country:check` (step 5) tells you
 exactly what's missing.
 
-### Name pool (only if the nationality has none yet)
+## 2b. Author the player and staff name pools
 
-Check `NameGeneratorService::getNamePools()` for the country's `nationality()` string. Most
-existing countries already have one (it's the oldest, most complete per-country data in the
-codebase). If not, add a `'Nationality' => ['firstNames' => [...], 'lastNames' => [...]]` block
-there directly — this file is intentionally not part of the registry above (too large/
-sensitive to move wholesale), but it's still keyed off `Country::nationality()` via
-`NameGeneratorService::nationalities()`, not a separate hand-maintained list.
+**This is no longer a PHP step either.** Every player, coach, scout, agent and guardian
+generated for a country is named from two lists — first names and surnames — and they can be
+authored from **Locations & land → Dashboard → PLAYER & STAFF NAMES**, stored per country on
+`country_profile.first_names` / `.last_names`, with `NamePoolRegistry` as the fallback.
+
+**Thirty-two of the seventy-one cases ship with a pool; thirty-nine do not** — including every
+country added in the 2026-10-25 UEFA batch. A country without one has its people named in
+English, which `app:country:check` reports and `app:pool:warm` warns about once per country.
+It is not a go-live blocker, but a Norwegian league full of Alfies and Fitzroys reads like a
+translation.
+
+- **One name per line.** The pools contain `Van der Berg` and `O'Neill`, so a separator that
+  can appear inside a name is the same trap as above.
+- **Target 150 of each**, which is what English and Spanish hold — about 22,500 distinct full
+  names against the 500 players a warm generates. The floor is 10; below that the form refuses
+  the list rather than storing a pool that repeats absurdly.
+- **Diacritics are kept, and must be.** `Güneş` and `Gunes` are two different names here; the
+  dedupe folds case only. An anglicised pool is the pool the game already ships.
+- **TOP UP WITH AI** asks the configured provider for *the shortfall only*, one billed call per
+  list, with the names already held sent as exclusions. A country at target costs nothing, so
+  clicking it twice is free. Authored names are never replaced — only extended.
+- **A list identical to the shipped one is stored as "built in", not as a copy**, so a later
+  PR adding names still reaches the country.
+- **CLI twin:** `app:names:top-up <CODE> [--list firstNames|lastNames] [--dry-run]`. Use
+  `--dry-run` to see the shortfall without spending, and read the names it prints — they are
+  culture, not fact, and the model is better at some countries than others.
+
+**Nobody already generated is renamed, and this will read as a bug.** Names are persisted
+columns. Author 150 Albanian names, look at the pool page, and you still see 500
+English-named "Albanian" players — the save worked; those rows are simply older than it. To
+see the difference you have to clear the pool and warm it again: **Player pool config → CLEAR
+PLAYER POOL** (a global clear — there is no per-country one), then `app:pool:warm <CODE>
+--force`. NPC squads additionally live in `country_world_pack_cache.payload` and are served
+to clients until that country's pack is rebuilt (`app:worldpack:warm <CODE>`) — and when it
+is, **every NPC squad in the country is renamed at once**, including clubs a player has
+already seen in a league table or scouted. Persisted `player` rows are immutable; cached NPCs
+are not. Rebuild deliberately, not as a reflex after editing a pool.
+
+To add a pool to the shipped fallback instead (a PR, not a deploy-free change), add a
+`'Nationality' => ['firstNames' => [...], 'lastNames' => [...]]` block to
+`NamePoolRegistry::POOLS`. It is keyed off `Country::nationality()`, and
+`NameGeneratorNationalityCoverageTest` pins the count so a duplicate array key cannot silently
+swallow one.
 
 ### Flag asset (every case, not just generation-capable ones)
 
