@@ -1304,7 +1304,13 @@ authored and both new columns default to 0 (= off, the old flat-plus-cap behavio
 £127. Floor before cap, because the floor is a preference and the cap is the invariant.
 
 **`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
-exits non-zero on four checks (S_tier monotonic; no cross-tier ability inversion; TV a sane
+exits non-zero on SIX checks. Check 6 is the newest and the only guard on **`league.tv_deal`,
+the one money figure the country factor never reaches** — it is a stored absolute an operator
+types in, so a factored country would pay a fifth of the wages and bank full baseline TV. Check 3
+cannot see it (TV at 5x its intended share still passes a 100%-of-turnover bound), so check 6
+compares against the BASELINE country's own figure times the factor and reports what to author.
+Needed `EconomyScaleResolver::baselineCountryCode()`, since comparing against the base year needs
+the code rather than just the factor. The other five are (S_tier monotonic; no cross-tier ability inversion; TV a sane
 fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
 immediately by catching the reference squad being summed over continuous abilities when
 `Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
