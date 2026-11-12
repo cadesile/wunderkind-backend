@@ -306,6 +306,38 @@ final class WageModelResolver
     public function youthScholarshipPence(string $country, int $tier, ?GameConfig $config = null): int
     {
         $config = $config ?? $this->gameConfigRepository->getConfig();
+
+        return $this->youthScholarshipPenceUnder($this->model($config), $country, $tier, $config);
+    }
+
+    /**
+     * The same figure, but under a model the caller NAMES rather than the live one.
+     *
+     * EXISTS FOR THE PREVIEW, AND THE PREVIEW IS A GATE, so this is not a convenience.
+     * `app:economy:wage-table` prices a whole table through `turnoverPlayerPence()` while the
+     * live model is still `legacy` — that is its entire purpose, since the runbook says to get
+     * the gate to exit 0 BEFORE flipping the switch. Asking `youthScholarshipPence()` for the
+     * scholarship in that state returns the flat £250, which the command then compared against
+     * turnover wages and reported as an inversion: £250 against an England tier-8 average of
+     * £126.94.
+     *
+     * That report was wrong in the way that matters most for a gate — **it could not be
+     * cleared by any authoring action.** Flipping the model makes the cap bite (tier 8's worst
+     * wage is £12.84, so the cap resolves to £6.42) and the problem vanishes, which means the
+     * gate was blocking the flip on a problem that only existed until the flip happened. An
+     * operator following the runbook would have been stuck on it forever.
+     *
+     * So a preview must resolve every figure on ONE basis. Measured on the dev-DB clone
+     * 2026-11-12: 16 problems under `legacy`, 14 under `turnover`, and the diff was exactly
+     * these two lines.
+     */
+    public function youthScholarshipPenceUnder(
+        EconomyWageModel $model,
+        string $country,
+        int $tier,
+        ?GameConfig $config = null,
+    ): int {
+        $config = $config ?? $this->gameConfigRepository->getConfig();
         $flat   = $config->getYouthScholarshipWagePence();
         $capBp  = $config->getEconomyYouthScholarshipCapBp();
 
@@ -315,14 +347,16 @@ final class WageModelResolver
         // around £480, where the flat £250 is already sensible. Capping against a band wage the
         // world is not being priced by would make scholars absurdly cheap relative to what
         // their teammates actually earn. Caught by a test, not by inspection.
-        if ($capBp <= 0 || $country === '' || $tier < 1 || $this->model($config) !== EconomyWageModel::TURNOVER) {
+        if ($capBp <= 0 || $country === '' || $tier < 1 || $model !== EconomyWageModel::TURNOVER) {
             return $flat;
         }
 
         $band   = $this->scaleResolver->abilityBand($country, $tier);
         $worst  = $this->turnoverPlayerPence($band['min'], $country, $tier, 50, $config);
 
-        // Null under `legacy` or for an unauthored tier — the flat figure is the answer there.
+        // Null for an unauthored tier — the flat figure is the answer there. Note this is NOT
+        // gated on the live model: `turnoverPlayerPence()` prices from the table alone, which
+        // is what lets the preview above work at all.
         if ($worst === null) {
             return $flat;
         }

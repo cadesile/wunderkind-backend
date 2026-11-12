@@ -95,6 +95,92 @@ class YouthScholarshipCapTest extends TestCase
         );
     }
 
+    // ── The preview asks under the model it is previewing ────────────────
+
+    public function testThePreviewSeesTheCapWhileTheLiveModelIsStillLegacy(): void
+    {
+        // THE DEFECT THIS PINS, found by running the real gate against the dev-DB clone rather
+        // than by reading the code. `app:economy:wage-table` prices an entire table through
+        // the turnover model while the live setting is still `legacy` — that IS its job, since
+        // the runbook says get the gate to exit 0 BEFORE flipping the switch. It asked for the
+        // scholarship with youthScholarshipPence(), got the flat £250 because the live model
+        // was legacy, compared it against a turnover wage of £126.94, and reported an
+        // inversion.
+        //
+        // WHY THAT IS WORSE THAN A COSMETIC BUG: the problem could not be cleared by any
+        // authoring action. Flipping the model makes the cap bite and the complaint disappear
+        // — so the gate was blocking the flip on a problem that only existed until the flip
+        // happened, and an operator following the runbook would never get to zero. Measured on
+        // the clone: 16 problems under `legacy`, 14 under `turnover`, the diff being exactly
+        // the two scholarship lines.
+        $config = $this->config(turnover: self::TURNOVER);   // table authored, model LEGACY
+
+        $resolver = $this->resolver($config);
+
+        // The live answer is unchanged — that is the inertness guarantee, still intact.
+        self::assertSame(
+            25000,
+            $resolver->youthScholarshipPence('EN', 8, $config),
+            'the live figure must still be the flat one',
+        );
+
+        // The preview's answer is the capped one, because that is what turnover would pay.
+        $previewed = $resolver->youthScholarshipPenceUnder(
+            EconomyWageModel::TURNOVER,
+            'EN',
+            8,
+            $config,
+        );
+
+        self::assertLessThan(25000, $previewed, 'the preview must see the cap bite');
+        self::assertGreaterThanOrEqual(1, $previewed, 'and never reach zero');
+    }
+
+    public function testThePreviewedFigureIsBelowAnAverageFirstTeamWage(): void
+    {
+        // The property the gate's check is actually asserting, stated directly so it cannot
+        // regress through the command. A scholar must not out-earn an average professional in
+        // the state being previewed.
+        $config   = $this->config(turnover: self::TURNOVER);   // model still LEGACY
+        $resolver = $this->resolver($config);
+
+        $previewed = $resolver->youthScholarshipPenceUnder(EconomyWageModel::TURNOVER, 'EN', 8, $config);
+        $midWage   = $resolver->turnoverPlayerPence(4, 'EN', 8, 50, $config);   // band 2-7, mid 4
+
+        self::assertNotNull($midWage, 'the tier must be priceable, or this test proves nothing');
+        self::assertLessThan($midWage, $previewed);
+    }
+
+    public function testAskingUnderLegacyExplicitlyIsTheFlatFigure(): void
+    {
+        // The other direction, so the new method cannot quietly become "always cap".
+        $config = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
+
+        self::assertSame(
+            25000,
+            $this->resolver($config)->youthScholarshipPenceUnder(EconomyWageModel::LEGACY, 'EN', 8, $config),
+            'a caller naming legacy gets legacy, whatever is live',
+        );
+    }
+
+    public function testTheTwoEntryPointsAgreeWhenTheModelMatchesTheLiveOne(): void
+    {
+        // The delegation is the whole reason there is still one implementation; if these ever
+        // diverge, the cap has been reimplemented in one of them.
+        foreach ([EconomyWageModel::LEGACY, EconomyWageModel::TURNOVER] as $model) {
+            $config   = $this->config(turnover: self::TURNOVER, model: $model);
+            $resolver = $this->resolver($config);
+
+            foreach (range(1, 8) as $tier) {
+                self::assertSame(
+                    $resolver->youthScholarshipPence('EN', $tier, $config),
+                    $resolver->youthScholarshipPenceUnder($model, 'EN', $tier, $config),
+                    "{$model->value} tier {$tier}",
+                );
+            }
+        }
+    }
+
     public function testAnUnauthoredTierStillGetsTheFlatFigure(): void
     {
         // The model on, the table only half filled. A tier with no turnover cannot be priced,
