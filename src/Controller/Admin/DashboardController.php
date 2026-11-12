@@ -433,10 +433,27 @@ class DashboardController extends AbstractDashboardController
         if (!empty($tiers)) {
             $config->setWageMultiplierTiers($tiers);
         }
-        $randMin = (int) $request->request->get('contractValueRandMin', 10);
-        $randMax = (int) $request->request->get('contractValueRandMax', 40);
-        $config->setContractValueRandMin(min($randMin, $randMax));
-        $config->setContractValueRandMax(max($randMin, $randMax));
+        // GUARDED LIKE THE wageMultiplierTiers BLOCK ABOVE, AND FOR A WORSE FAILURE. These two
+        // multiply every generated wage (WorldPackClubGenerationService::buildPlayer(),
+        // MarketPoolService::generatePlayers()), and the pair that was here read straight
+        // through a bare (int): a field the operator CLEARED posts '', which casts to 0, and
+        // the setters floor at 1. Live values of 2000/2800 therefore collapsed to 1/1 and
+        // every player generated afterwards was priced at about a 2,400th of what it should
+        // be — silently, with the form reporting a successful save.
+        //
+        // The old GET fallbacks of 10/40 could not help: this screen is ONE form that posts
+        // every field (templates/admin/game_config.html.twig), so an ABSENT key is not a
+        // state the admin can produce, while a BLANK one is a keystroke away. A blank field
+        // now means "leave the stored value alone", which is the only reading that cannot
+        // destroy a figure nothing on the screen displays the consequences of.
+        $rawRandMin = $request->request->get('contractValueRandMin');
+        $rawRandMax = $request->request->get('contractValueRandMax');
+        if ($rawRandMin !== null && $rawRandMin !== '' && $rawRandMax !== null && $rawRandMax !== '') {
+            $randMin = (int) $rawRandMin;
+            $randMax = (int) $rawRandMax;
+            $config->setContractValueRandMin(min($randMin, $randMax));
+            $config->setContractValueRandMax(max($randMin, $randMax));
+        }
 
         // Cards & Discipline
         $config->setYellowCardBaseChance((float) $request->request->get('yellowCardBaseChance', 0.08));
