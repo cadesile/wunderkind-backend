@@ -308,7 +308,12 @@
 
     // ── the recalculation queue ─────────────────────────────────────
     var runBtn = $('#reclassifyRun'), planEl = $('#reclassifyPlanData');
-    if (!runBtn || !planEl || !window.BMC) return;
+
+    // window.BMC IS DELIBERATELY NOT TESTED HERE — it cannot be. bmc-pages.js is deferred,
+    // so it runs after this script and BMC is undefined at this point; the old guard returned
+    // every time and the RUN button silently did nothing. BMC is used inside the handlers
+    // below, which fire long after the deferred script has loaded.
+    if (!runBtn || !planEl) return;
 
     var plan = JSON.parse(planEl.textContent);
     var panel = $('#reclassifyPanel'), bar = $('#reclassifyBar'),
