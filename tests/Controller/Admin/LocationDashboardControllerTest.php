@@ -363,8 +363,12 @@ class LocationDashboardControllerTest extends WebTestCase
             'location' => $id,
         ]);
 
+        // Anchored on the plots form's own hidden field, not the words on the button. The
+        // name pool card now carries a TOP UP WITH AI button of its own, so the label alone
+        // no longer identifies which card answered. The town id appears nowhere else on the
+        // row — the CSRF field renders a token value, not the token's id.
         self::assertStringNotContainsString(
-            'TOP UP',
+            'name="location" value="' . $id . '"',
             $this->dashboardHtml(),
             'a town at its target must not be offered a button that would do nothing',
         );
@@ -395,7 +399,7 @@ class LocationDashboardControllerTest extends WebTestCase
         $this->setSmallTownPlotTarget(6);
 
         self::assertStringContainsString(
-            'TOP UP',
+            'name="location" value="' . $id . '"',
             $this->dashboardHtml(),
             'a town below a target of 6 must be offered the button even though it has 5 plots',
         );

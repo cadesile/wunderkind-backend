@@ -1,5 +1,33 @@
 # Current Focus
 
+## In flight, 2026-11-11 → 2026-11-12 — taking world content off the deploy path
+
+One theme across both days: **everything a new country needs, authored from the admin instead
+of from a PR.** Adding Ghana was the forcing case — it exposed that a country the place
+registry has never heard of could not be seeded at all.
+
+- **Club-naming content** (`864a775` and after) — `prestige_suffixes`, `generic_suffixes`,
+  `stadium_formats` on `country_profile`, with an AI suggest. Clears the CONTENT readiness
+  blocker, which used to name a 2,364-line PHP file.
+- **Ability ranges** — `StarterAbilityRangeService` behind a dashboard button. Fixing this
+  surfaced a live bug: the Starter config save wrote the whole `league_ability_ranges` column
+  from a grid built only of countries that already have `League` rows, **deleting every
+  unrendered country's band on any save**. It merges now.
+- **Country profile enrichment** — the `country_profile` row's own fields (bbox, land band,
+  reference codes), not just its towns.
+- **Town pull for a country with no registry entry** — `resolveCountry()` →
+  `resolveAnyCountry()` + `ensureCountryProfile()`, and a prompt that asks for the biggest
+  places first when nothing is held rather than for "further" towns beyond an empty list.
+- **Player and staff name pools** (2026-11-12) — two json columns, an authoring card and an
+  AI top-up, plus the crash they exposed: `generateName()` threw `Unknown nationality` where
+  the four sibling generators fell back, so a full `app:pool:warm` reported 39 failures on a
+  run that had generated 500 players per country successfully.
+
+**What is left of the PHP-only world data:** places, world region, suffix order and business
+cluster in `CountryContentRegistry`. The name pools and the three naming lists have both moved
+to a DB-override-over-const layer; nothing was migrated, and the consts remain the fallback so
+a fresh database can still name people and clubs.
+
 ## Deployed 2026-11-02 — the bracket gap is CLOSED
 
 The two commits this section recorded as waiting are **live on `dev` and `master`**, pushed

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Entity\Location\Location;
+use App\Enum\Country;
 use App\Repository\Location\CountryProfileRepository;
 use App\Repository\Location\LocationConfigRepository;
 use App\Repository\Location\LocationRepository;
@@ -14,7 +15,11 @@ use App\Service\Location\LandPlotProvisioner;
 use App\Service\Location\LocationCapacityService;
 use App\Service\Location\LocationDashboardService;
 use App\Service\CountryContent\CountryNamingContentProvider;
+use App\Service\CountryContent\NamePoolProvider;
+use App\Service\CountryContent\NamePoolService;
+use App\Service\CountryContent\NamePoolValidator;
 use App\Service\CountryContent\NamingContentService;
+use App\Service\CountryContent\Suggestion\NamePoolUnavailableException;
 use App\Service\CountryContent\Suggestion\NamingContentUnavailableException;
 use App\Service\StarterAbilityRangeService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -51,6 +56,8 @@ class LocationDashboardController extends AbstractController
         private readonly StarterAbilityRangeService $abilityRangeService,
         private readonly CountryNamingContentProvider $namingContent,
         private readonly NamingContentService $namingContentService,
+        private readonly NamePoolService $namePools,
+        private readonly NamePoolProvider $namePoolProvider,
         private readonly EntityManagerInterface $em,
     ) {}
 
@@ -81,6 +88,11 @@ class LocationDashboardController extends AbstractController
             // isConfigured(), not a live connection check: this screen makes no provider call
             // today and must not start making one on every page load.
             'namingAiReady' => $this->namingContentService->suggesterIsConfigured(),
+            // The person-name pools for the same country, and their state.
+            'namePools'     => $this->namePoolsFor($selected),
+            'namePoolAiReady' => $this->namePools->suggesterIsConfigured(),
+            'namePoolTarget'  => NamePoolValidator::TARGET_PER_LIST,
+            'namePoolMin'     => NamePoolValidator::MIN_PER_LIST,
             // Whether the LEAGUES readiness row can offer a way forward at all. The generate
             // form's country list is Country::generationCapable(), so for the other 46 cases
             // sending an operator there would be a dead end — the blocker is the enum, which
@@ -259,7 +271,7 @@ class LocationDashboardController extends AbstractController
         $input = [];
 
         foreach (CountryNamingContentProvider::CATEGORIES as $category) {
-            $input[$category] = NamingContentService::splitLines((string) $request->request->get($category, ''));
+            $input[$category] = self::splitLines((string) $request->request->get($category, ''));
         }
 
         $verdict = $this->namingContentService->save($profile, $input);
@@ -356,6 +368,168 @@ class LocationDashboardController extends AbstractController
         }
 
         return $this->backToScreen($code);
+    }
+
+    /**
+     * Author this country's person-name pools.
+     *
+     * The pools name players, staff, scouts, agents and guardians. Thirty-nine of the
+     * seventy-one countries ship with none, and until this screen existed the only way to give
+     * one to a country was a deploy.
+     */
+    #[Route('/admin/locations/dashboard/names', name: 'admin_locations_save_names', methods: ['POST'])]
+    public function saveNames(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_names_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen($code);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        $input = [];
+
+        foreach (NamePoolService::LISTS as $list) {
+            $input[$list] = self::splitLines((string) $request->request->get($list, ''));
+        }
+
+        $verdict = $this->namePools->save($profile, $input);
+
+        if (!$verdict->isEmpty()) {
+            $this->addFlash('success', sprintf(
+                'Saved %s for %s.',
+                implode(', ', array_keys($verdict->accepted)),
+                $profile->getName(),
+            ));
+        } elseif (!$verdict->hasRejections()) {
+            $this->addFlash('info', sprintf('Nothing changed for %s.', $profile->getName()));
+        }
+
+        foreach ($verdict->rejected as $list => $why) {
+            $this->addFlash('warning', sprintf('%s was not saved: %s', $list, $why));
+        }
+
+        foreach ($verdict->flatNotes() as $note) {
+            $this->addFlash('info', $note);
+        }
+
+        return $this->backToScreen($code);
+    }
+
+    /**
+     * Ask the model for the shortfall on one list.
+     *
+     * ONE LIST PER REQUEST, which is what keeps each one a single short provider call well
+     * inside the proxy's patience — the shape the shared BMC.runJobs runner drives, and the
+     * reason this does not need the Messenger queue the town pull does.
+     */
+    #[Route('/admin/locations/dashboard/names/top-up', name: 'admin_locations_top_up_names', methods: ['POST'])]
+    public function topUpNames(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_top_up_names_' . $code, $request->request->get('_token'))) {
+            return $this->json(['success' => false, 'message' => 'Invalid CSRF token.'], 403);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+        $list    = (string) $request->request->get('list', '');
+
+        if ($profile === null || !\in_array($list, NamePoolService::LISTS, true)) {
+            return $this->json(['success' => false, 'message' => 'Unknown country or list.'], 400);
+        }
+
+        try {
+            $result = $this->namePools->topUp($profile, $list, NamePoolValidator::TARGET_PER_LIST);
+        } catch (NamePoolUnavailableException $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        /** @var \App\Service\CountryContent\ValidatedNamePool $verdict */
+        $verdict  = $result['verdict'];
+        $refused  = $verdict->rejected[$list] ?? null;
+        $label    = $list === 'firstNames' ? 'first names' : 'surnames';
+
+        if ($result['added'] === 0 && $refused === null) {
+            return $this->json([
+                'success' => true,
+                'skipped' => true,
+                'count'   => 0,
+                'message' => sprintf('%s already at %d %s.', $profile->getName(), $result['held'], $label),
+            ]);
+        }
+
+        if ($refused !== null) {
+            return $this->json(['success' => false, 'count' => 0, 'message' => $refused], 500);
+        }
+
+        return $this->json([
+            'success' => true,
+            'count'   => $result['added'],
+            'message' => sprintf('+%d %s for %s.', $result['added'], $label, $profile->getName()),
+        ]);
+    }
+
+    /** Put a country back on the shipped name pools. */
+    #[Route('/admin/locations/dashboard/names/clear', name: 'admin_locations_clear_names', methods: ['POST'])]
+    public function clearNames(Request $request): Response
+    {
+        $code = strtoupper(trim((string) $request->request->get('country', '')));
+
+        if (!$this->isCsrfTokenValid('locations_clear_names_' . $code, $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+
+            return $this->backToScreen($code);
+        }
+
+        $profile = $this->countryProfileRepository->findByCode($code);
+
+        if ($profile === null) {
+            $this->addFlash('danger', sprintf('No country profile for %s.', $code ?: '(none given)'));
+
+            return $this->backToScreen(null);
+        }
+
+        $this->namePools->clear($profile);
+        $this->addFlash('success', sprintf('%s is back on the shipped name pools.', $profile->getName()));
+
+        return $this->backToScreen($code);
+    }
+
+    /**
+     * Each name list's effective values and where they came from, for the form.
+     *
+     * @return array<string, array{values: list<string>, source: string, count: int}>
+     */
+    private function namePoolsFor(?string $code): array
+    {
+        $country = $code === null ? null : Country::tryFrom($code);
+
+        if ($country === null) {
+            return [];
+        }
+
+        $described = $this->namePoolProvider->describe($country->nationality());
+        $out       = [];
+
+        foreach (NamePoolService::LISTS as $list) {
+            $out[$list] = [
+                'values' => $described[$list],
+                'source' => $described[$list . 'Source'],
+                'count'  => \count($described[$list]),
+            ];
+        }
+
+        return $out;
     }
 
     /** Put a country back on the built-in PHP lists. */
@@ -474,5 +648,22 @@ class LocationDashboardController extends AbstractController
         }
 
         return $this->redirect($this->generateUrl('admin', $params));
+    }
+
+    /**
+     * Split a textarea into tokens, for both authoring forms on this screen.
+     *
+     * ONE PER LINE, never comma-separated. The data contains '1. FC', 'Città di',
+     * 'Os Belenenses' and 'Estadio Municipal de %s', and the name pools will contain
+     * 'Van der Berg' and "O'Neill" — a separator that can appear inside a token is a trap
+     * waiting on the first country that uses one. A line is also how an operator reads a list.
+     *
+     * @return list<string>
+     */
+    private static function splitLines(string $raw): array
+    {
+        $lines = preg_split('/\R/u', $raw, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $lines === false ? [] : array_values(array_filter(array_map('trim', $lines), static fn (string $l): bool => $l !== ''));
     }
 }
