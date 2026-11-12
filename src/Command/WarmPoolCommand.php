@@ -15,6 +15,7 @@ use App\Service\MarketPoolService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
+use App\Service\CountryContent\NamePoolProvider;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -38,6 +39,7 @@ class WarmPoolCommand extends Command
         private readonly PlayerRepository  $playerRepo,
         private readonly StaffRepository   $staffRepo,
         private readonly ScoutRepository   $scoutRepo,
+        private readonly NamePoolProvider  $namePools,
     ) {
         parent::__construct();
     }
@@ -116,6 +118,16 @@ class WarmPoolCommand extends Command
         bool         $force,
     ): int {
         $io->section("[{$country}] {$nationality}");
+
+        // SAID ONCE PER COUNTRY, which is the whole point of putting it here. generateName()
+        // used to throw for a nationality with no pool — loud, but once per PERSON and only
+        // into a stack trace, and it took the whole command's exit code with it. The caller
+        // that knows it is about to make five hundred of something is the right place to
+        // mention that they will all be named in English.
+        if (!$this->namePools->has($nationality)) {
+            $io->warning("No name pool for '{$nationality}' — generated people will carry English names.");
+        }
+
         $peakStart = memory_get_peak_usage(true);
 
         try {

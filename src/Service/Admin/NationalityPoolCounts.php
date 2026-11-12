@@ -9,7 +9,7 @@ use App\Enum\NationalityGroup;
 use App\Repository\PlayerRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
-use App\Service\NameGeneratorService;
+use App\Service\CountryContent\NamePoolProvider;
 
 /**
  * The rows behind the nationality picker on the player and staff pool screens.
@@ -34,6 +34,7 @@ final class NationalityPoolCounts
         private readonly PlayerRepository $playerRepository,
         private readonly StaffRepository  $staffRepository,
         private readonly ScoutRepository  $scoutRepository,
+        private readonly NamePoolProvider $namePools,
     ) {}
 
     /** @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool}>> */
@@ -106,6 +107,11 @@ final class NationalityPoolCounts
     {
         $out = [];
 
+        // HOISTED, and for the same reason this class's docblock gives for the counts above:
+        // asking per nationality inside the loop is seventy-one queries a page load, which is
+        // the N+1 this file exists to avoid. One query answers all of them.
+        $hasPool = $this->namePools->hasMap();
+
         foreach (Country::nationalityMap() as $code => $nationality) {
             $group = NationalityGroup::forCountry(Country::from($code));
 
@@ -121,7 +127,7 @@ final class NationalityPoolCounts
                 'code'        => $code,
                 'count'       => $counts[$nationality] ?? 0,
                 // False means generation falls back to English names for this nationality.
-                'hasNamePool' => NameGeneratorService::hasNamePool($nationality),
+                'hasNamePool' => $hasPool[$nationality] ?? false,
             ];
         }
 

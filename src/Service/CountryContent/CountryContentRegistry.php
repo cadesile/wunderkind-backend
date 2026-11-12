@@ -18,8 +18,12 @@ use App\Service\ClubNameNormalizer;
  * MarketPoolService::NATIONALITY_MAP (both keyed by demonym string) — three different key
  * spaces for data about the same countries, which had already drifted out of sync at least
  * twice (see Country::class's own docblock). Adding a country's content now means editing
- * this one file; NameGeneratorService's actual name-pool text stays where it is (too large/
- * sensitive to move wholesale) but is keyed off Country too — see its NATIONALITIES const.
+ * this one file.
+ *
+ * PERSON-NAME POOLS ARE NOT HERE. They live in NamePoolRegistry, a sibling in this
+ * namespace, because 2,500 lines of first names and surnames inside this file would make it
+ * twice the size and hide the rest. Both are keyed off Country — this one by code, that one
+ * by demonym — and both are the shipped floor under a database override layer.
  *
  * Every accessor here returns null/[] for a country with no authored entry — callers keep
  * their own generic fallback behavior unchanged (see NpcClubGenerationService's `?? [...]`
