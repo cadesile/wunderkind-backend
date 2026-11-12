@@ -45,7 +45,7 @@ class ScoutSearchController extends AbstractController
 
     #[Route('/search', name: 'api_scout_search', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
-    public function search(Request $request, PlayerRepository $playerRepo, PlayerBrowseSerializer $serializer): JsonResponse
+    public function search(Request $request, PlayerRepository $playerRepo, PlayerBrowseSerializer $serializer, \App\Service\ClubResolver $clubResolver): JsonResponse
     {
         // ── rep ──────────────────────────────────────────────────────────────
         $repParam = strtolower((string) $request->query->get('rep', 'local'));
@@ -148,12 +148,21 @@ class ScoutSearchController extends AbstractController
         $all = array_merge($basePlayers, $abovePlayers);
         shuffle($all);
 
+        /** @var \App\Entity\User $user */
+        $user          = $this->getUser();
+        $searchingClub = $clubResolver->resolveFromRequest($user);
+        $searchCountry = $searchingClub?->getCountry();
+        $searchTier    = $searchingClub?->getCurrentLeague()?->getTier();
+
         return $this->json([
             'rep'           => $tier->value,
             'amount'        => count($all),
             'ability'       => $abilityPct,
             'ignoreCountry' => $excludeNationality !== null ? strtoupper(trim($ignoreCountryParam)) : null,
-            'players'       => array_map($serializer->serialize(...), $all),
+            // PRICED FOR THE SEARCHING CLUB. Both its country and its tier are resolved
+            // server-side here — unlike /api/players/foreign, nothing on this endpoint is
+            // being SELECTED by country, so there is no reason to accept one.
+            'players'       => array_map($serializer->serializerFor($searchCountry, $searchTier), $all),
         ]);
     }
 }

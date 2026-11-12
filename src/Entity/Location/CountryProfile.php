@@ -38,6 +38,15 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: CountryProfileRepository::class)]
 #[ORM\Table(name: 'country_profile')]
 #[ORM\Index(columns: ['status'], name: 'idx_country_profile_status')]
+// PARTIAL, so "exactly one economy baseline" is a database guarantee rather than a service's
+// good intentions — see $isEconomyBaseline. Without the predicate this would refuse a second
+// non-baseline country, which is every other row. The predicate is spelled exactly as
+// pg_get_expr(indpred, indrelid) reports it, per the migration conventions.
+#[ORM\UniqueConstraint(
+    name: 'uq_country_profile_economy_baseline',
+    columns: ['is_economy_baseline'],
+    options: ['where' => '(is_economy_baseline = true)'],
+)]
 #[ORM\HasLifecycleCallbacks]
 class CountryProfile
 {
@@ -174,6 +183,40 @@ class CountryProfile
      */
     #[ORM\Column(type: 'smallint', options: ['default' => 8])]
     private int $leagueTierCount = 8;
+
+    /**
+     * Whether this country is the economy BASELINE every other country's factor is a % of.
+     *
+     * EXACTLY ONE ROW MAY BE TRUE, enforced by the partial unique index declared on this class
+     * rather than by a service. Two baselines is not a degraded state the resolver can pick a
+     * winner for — every country's factor is normalised against the baseline's own, so a
+     * second one makes the whole scaling chain ambiguous, and an ambiguity that only shows up
+     * as slightly wrong wages everywhere is the kind nobody traces back to a flag.
+     *
+     * Partial, because `false` is the normal state for 25 of 26 rows and PostgreSQL would
+     * otherwise refuse the second non-baseline country.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isEconomyBaseline = false;
+
+    /**
+     * This country's economic scale as integer basis points of the baseline. 10000 = parity.
+     *
+     * BASIS POINTS, NOT A FLOAT, and that is the whole point of the column's type. The factor
+     * is one link in a country x tier chain that ends in pence, and floats in that chain is how
+     * two clubs in the same division end up a penny apart for no reason a player can see. The
+     * chain stays integer throughout and divides once, at the end — see EconomyScaleResolver.
+     *
+     * DEFAULTS TO PARITY, so running the migration changes nothing. Every country is worth
+     * exactly what England is worth until an operator says otherwise, which makes the deploy a
+     * provable no-op and turning it on a deliberate, per-country action.
+     *
+     * Normalised on READ against the baseline row's own value, not assumed to be 10000 — an
+     * operator can legitimately set England to 12000 while thinking in absolutes, and the
+     * baseline must still resolve to parity with itself.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 10000])]
+    private int $economyFactorBp = 10000;
 
     /** Stamped when status first reaches LIVE. */
     #[ORM\Column(nullable: true)]
@@ -357,6 +400,19 @@ class CountryProfile
     public function getLeagueTierCount(): int { return $this->leagueTierCount; }
 
     public function setLeagueTierCount(int $count): void { $this->leagueTierCount = max(1, min(8, $count)); }
+
+    public function isEconomyBaseline(): bool { return $this->isEconomyBaseline; }
+    public function setIsEconomyBaseline(bool $isBaseline): void { $this->isEconomyBaseline = $isBaseline; }
+
+    public function getEconomyFactorBp(): int { return $this->economyFactorBp; }
+
+    /**
+     * Floored at 1, never 0. A factor of zero would resolve every wage, balance and ceiling in
+     * the country to nothing — a state with no legitimate meaning that reads as "the economy
+     * is switched off here" rather than as the typo it is. One basis point is the smallest
+     * honest "almost nothing".
+     */
+    public function setEconomyFactorBp(int $bp): void { $this->economyFactorBp = max(1, $bp); }
 
     public function getLocationsLiveAt(): ?\DateTimeImmutable { return $this->locationsLiveAt; }
     public function setLocationsLiveAt(?\DateTimeImmutable $at): void { $this->locationsLiveAt = $at; }

@@ -85,6 +85,20 @@ of one pipeline. Merging into `dev` is not a step on the way to `master` and
 grants nothing — `master` still takes its own merge from `development`. It is
 normal and expected for `dev` to be ahead of `master` indefinitely.
 
+## Operator rollouts that are not deploys
+
+Some work ships **inert** and is turned on afterwards by an operator, so "deployed" and "live"
+are different states and the runbook is the bridge. The economy overhaul (2026-11-12) is the
+current example — eight migrations landed with every factor at parity and the wage model on
+`legacy`, so the deploy itself was a provable no-op.
+
+**`docs/deploy/economy-rollout.md`** is its procedure. The step worth knowing about from here:
+flipping `economyWageModel` changes world-pack CONTENT without changing pack SHAPE, so
+`WorldInitializationService::WORLD_PACK_VERSION` has to be bumped in the same pass — and that
+is a code change shipping through a normal deploy, sequenced between two admin actions. The
+cache has no TTL, so skipping it leaves every already-cached country serving pre-flip wages
+indefinitely. `staleWorldPacks` on the admin dashboard is the completion signal.
+
 ## Rules
 
 1. Do most work directly on `development`, after confirming it's up to date

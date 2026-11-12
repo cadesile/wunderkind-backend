@@ -7,7 +7,6 @@ namespace App\Service;
 use App\Entity\Staff;
 use App\Enum\StaffRole;
 use App\EventSubscriber\PersonalityLifecycleSubscriber;
-use App\Repository\GameConfigRepository;
 use App\Repository\PoolConfigRepository;
 
 /**
@@ -25,12 +24,19 @@ class StaffGenerationService
 
     public function __construct(
         private readonly PoolConfigRepository $poolConfigRepo,
-        private readonly GameConfigRepository $gameConfigRepo,
         private readonly NameGeneratorService $nameGenerator,
         private readonly PersonalityLifecycleSubscriber $personalityLifecycle,
+        private readonly \App\Service\Economy\WageModelResolver $wageModel,
     ) {}
 
-    public function build(StaffRole $role, ?string $nationality = null): Staff
+    /**
+     * `$country` and `$tier` are OPTIONAL AND DEFAULT TO "no context", which is what every
+     * shared-pool caller passes. Only per-club world-pack generation knows a country and tier,
+     * and only the `turnover` wage model uses them — a pool staff member is one row served to
+     * every country at every tier, so it is priced at serve time instead. See
+     * WageModelResolver's note on the two populations.
+     */
+    public function build(StaffRole $role, ?string $nationality = null, string $country = '', int $tier = 0): Staff
     {
         $cfg = $this->poolConfigRepo->getConfig();
 
@@ -55,35 +61,19 @@ class StaffGenerationService
                 : $this->generateSpecialisms()
         );
 
-        $multipliers = $this->getWageMultiplier($ability);
-        $baseSalary  = match ($role) {
-            StaffRole::COACH                => random_int(2000, 8000),
-            StaffRole::MANAGER              => random_int(10000, 30000),
-            StaffRole::DIRECTOR_OF_FOOTBALL => random_int(12000, 35000),
-            StaffRole::FACILITY_MANAGER     => random_int(3000, 8500),
-            StaffRole::CHAIRMAN             => random_int(20000, 60000),
-            default                         => random_int(2000, 8000),
-        };
-        $member->setWeeklySalary((int) ($baseSalary * $multipliers['staff']));
+        // THROUGH THE RESOLVER, WHICH NOW OWNS BOTH HALVES OF THIS. The five role bands were
+        // hardcoded `random_int()` literals here and a SECOND, DIFFERENT set lived in
+        // GenerateMarketDataCommand — the two disagreed about a coach (2000-8000 against
+        // 4000-10000), so the same role cost different money depending on which path made it.
+        // They are config now (GameConfig::$economyStaffRoleBandsPence, seeded with THESE
+        // values), and the tier-walk that used to be copy-pasted into three services is one
+        // method. In `legacy` mode the arithmetic is byte-identical, truncating cast included.
+        $member->setWeeklySalary($this->wageModel->staffWeeklyPence($role, $ability, $country, $tier));
 
         // prePersist won't fire for an entity that's never persisted — roll personality now.
         $this->personalityLifecycle->fill($member);
 
         return $member;
-    }
-
-    /** @return array{player: float, staff: float} */
-    private function getWageMultiplier(int $ability): array
-    {
-        $tiers = $this->gameConfigRepo->getConfig()->getWageMultiplierTiers();
-        foreach ($tiers as $tier) {
-            if ($tier['maxAbility'] === null || $ability < $tier['maxAbility']) {
-                return ['player' => (float) $tier['playerMultiplier'], 'staff' => (float) $tier['staffMultiplier']];
-            }
-        }
-
-        $last = end($tiers);
-        return ['player' => (float) ($last['playerMultiplier'] ?? 1.0), 'staff' => (float) ($last['staffMultiplier'] ?? 1.0)];
     }
 
     private function pick(array $items): mixed

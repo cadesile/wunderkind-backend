@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\EconomyWageModel;
 use App\Enum\StatCategory;
 use App\Enum\StatsPeriod;
 use App\Repository\GameConfigRepository;
@@ -913,6 +914,35 @@ class GameConfig
     public function getLeaguePositionDecreasePercent(): int { return $this->leaguePositionDecreasePercent; }
     public function setLeaguePositionDecreasePercent(int $v): static { $this->leaguePositionDecreasePercent = $v; return $this; }
 
+    /**
+     * The GLOBAL parachute schedule, used by any league with no override of its own.
+     *
+     * The other half of `League::$parachute`'s `league ?? gameConfig` resolution, and served
+     * through exactly the same verbatim passthrough — the backend stores it, picks which one
+     * applies, and publishes it without reading inside. The reasoning is on that property.
+     *
+     * SHIPS AS NULL, WHICH IS THE INERT STATE. A league with no override and no global default
+     * publishes `parachute: null`, so an old build sees a key it does not read and a new build
+     * sees "no parachute scheme configured" — not an empty one it might try to pay out.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $leagueParachute = null;
+
+    /** @return array<string, mixed>|null */
+    public function getLeagueParachute(): ?array { return $this->leagueParachute; }
+
+    /** @param array<string, mixed>|null $v */
+    public function setLeagueParachute(?array $v): static
+    {
+        // `[]` to null, same reasoning as League::setParachute(): an empty schedule and "no
+        // schedule" are indistinguishable, and only one of them is a thing to author.
+        $this->leagueParachute = ($v === null || $v === []) ? null : $v;
+
+        return $this;
+    }
+
     // ── Financial Penalties ───────────────────────────────────────────────────
 
     /**
@@ -1343,6 +1373,426 @@ class GameConfig
     public function getRecaptchaSecretKey(): ?string { return $this->recaptchaSecretKey; }
     public function setRecaptchaSecretKey(?string $v): static { $this->recaptchaSecretKey = $v ?: null; return $this; }
 
+    // ── Economy model ─────────────────────────────────────────────────────
+    //
+    // EVERY DEFAULT IN THIS BLOCK MEANS "BEHAVE EXACTLY AS BEFORE". The wage model is `legacy`,
+    // every tier factor is parity, and the inflation rate is zero, so applying the migration
+    // that adds these columns cannot change a single generated figure. That is the same
+    // compatibility mechanism `starter_config.max_enrichment_requests_per_user` uses
+    // (0 = unlimited), and for the same reason: the backend ships ahead of the app, so a new
+    // knob has to arrive switched off and be turned on deliberately, per country, by an
+    // operator looking at a calibration preview.
+    //
+    // THE EXCEPTION IS `economyBaselineTurnoverPence`, WHICH SHIPS AS ZEROS AND IS NOT A
+    // USABLE CONFIGURATION. Zero turnover makes the turnover model undefined rather than
+    // harmless, so EconomyScaleResolver refuses it instead of dividing by it. That is
+    // deliberate: an unset turnover table must not silently resolve to free players, and the
+    // only way to reach the turnover model is to author the table first.
+
+    /** Which formula prices generated wages. Ships as LEGACY — see the enum. */
+    #[ORM\Column(type: 'string', length: 16, enumType: EconomyWageModel::class, options: ['default' => 'legacy'])]
+    private EconomyWageModel $economyWageModel = EconomyWageModel::LEGACY;
+
+    /**
+     * Per-tier economic scale in basis points, index 0 = tier 1. 10000 = parity.
+     *
+     * The TIER half of the country x tier chain, where `country_profile.economy_factor_bp` is
+     * the country half. Separate from `economyBaselineTurnoverPence` because they answer
+     * different questions: turnover says what a division is worth in money, this says how the
+     * non-wage figures derived from it (the season-investment ceiling, and the fines, floors
+     * and caps Pyramid Investigations will later express the same way) step between tiers.
+     *
+     * RAW ROW INDEXING: tier t reads index t-1, with no stretching for a shallow pyramid. A
+     * 4-tier country uses rows 1-4. See getNpcClubBalanceRangeForTier(), which this convention
+     * was aligned to.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyTierFactorsBp = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000];
+
+    /**
+     * Baseline-year season turnover per tier in PENCE, index 0 = tier 1, for the baseline country.
+     *
+     * A CONFIGURED NUMBER, NOT A MEASUREMENT. It is deliberately not derived from live club
+     * revenue: the backend is a data pool and has no revenue to read (the device owns a club's
+     * money), and a wage anchored to live revenue would drift with every sync. This is the
+     * fixed post the wage scale is nailed to, in base-year terms, and the app applies inflation
+     * to anything it derives from it.
+     *
+     * SHIPS AS ZEROS, which is an unauthored table rather than a free world — see the block
+     * comment above.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyBaselineTurnoverPence = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    /** Share of a tier's baseline turnover that goes on wages, in basis points. 6000 = 60%. */
+    #[ORM\Column(type: 'integer', options: ['default' => 6000])]
+    private int $economyWageToTurnoverRatioBp = 6000;
+
+    /**
+     * Exponent of the ability curve, in basis points. 25000 = 2.5.
+     *
+     * BASIS POINTS FOR AN EXPONENT LOOKS ODD AND IS STILL RIGHT. It keeps the admin form and
+     * the config export dealing in integers like every other figure in this block, and the one
+     * place it becomes a float is the single pow() inside EconomyScaleResolver, which is also
+     * the only place the chain rounds. A float column would put a second rounding step in the
+     * middle of an otherwise exact integer chain.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 25000])]
+    private int $economyWageCurveExponentBp = 25000;
+
+    /** Share of the wage budget taken by staff rather than players, in basis points. 2500 = 25%. */
+    #[ORM\Column(type: 'integer', options: ['default' => 2500])]
+    private int $economyStaffWageShareBp = 2500;
+
+    /**
+     * Weeks a season pays wages for.
+     *
+     * 46, BECAUSE THE APP IS THE PAYER. The reference-squad calibration only means anything if
+     * the number of weeks the server divides by is the number of weeks the device actually
+     * charges for, and the device's paid season is 46 weeks.
+     *
+     * NOT THE SAME AS THE BACKEND'S OWN FINANCIAL YEAR, which is 52 — see
+     * Club::crossedFinancialYearEnd(), which is what triggers
+     * EconomicService::processFinancialYearEnd(). Six weeks of the backend's year are therefore
+     * unpriced by this model. That is a known gap, recorded here rather than papered over,
+     * because the two numbers measure different things and forcing them equal would make one
+     * of them wrong.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 46])]
+    private int $economyWeeksPerSeason = 46;
+
+    /**
+     * How far a club's reputation moves a wage either side of its tier's scale, in basis points.
+     *
+     * SHIPS AT 0, so the modifier is a flat 1.0 and a tier's wage depends on ability alone.
+     * The calibration is derived at modifier 1.0, so a non-zero spread REDISTRIBUTES a tier's
+     * wage bill between its clubs rather than inflating it — worth stating, because the
+     * obvious reading of "reputation raises wages" is that the bill goes up.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $economyReputationSpreadBp = 0;
+
+    /**
+     * Inflation per season in basis points. SHIPS AT 0.
+     *
+     * THE BACKEND HOLDS THE RATE AND NOTHING ELSE. It is never applied to a generated row, a
+     * stored value, or a world pack — the pack cache is keyed (country, tier) with no season
+     * dimension, so baking an index into pack content would make a pack silently wrong for
+     * every save at a different season. Every money figure the backend publishes is base-year,
+     * and the app applies the index.
+     *
+     * The one server-side use is the season-investment ceiling, which has to be checked against
+     * the season the claim is for. See EconomyScaleResolver::inflationIndexBp().
+     *
+     * Every change is also appended to inflation_rate_history, because a rate is the one
+     * economy figure whose PAST values stay meaningful after it is changed.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $inflationRatePerSeasonBp = 0;
+
+    /**
+     * The BASE one-season owner investment ceiling, in pence, before country and tier scaling.
+     *
+     * SHIPS AT 0, WHICH MAKES THE WHOLE FEATURE UNREACHABLE. A ceiling of zero means every
+     * investment is above it, so `POST /api/club/season-investment` refuses with 422 and the
+     * two new error codes are unreachable until an operator authors a figure. That is the same
+     * compatibility mechanism `max_enrichment_requests_per_user` uses in reverse: a new limit
+     * arrives in the position that changes nothing, and turning it on is a form.
+     *
+     * The resolved ceiling is `base x countryFactor x tierFactor x inflationIndex(season)` —
+     * see EconomyScaleResolver::seasonInvestmentCeilingPence(). Base-year pence; the index is
+     * the one place the backend applies inflation itself, because a ceiling has to be checked
+     * against the season being claimed for.
+     */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $economySeasonInvestmentBasePence = 0;
+
+    /**
+     * Ceiling on a youth scholarship, as a share of the tier's WORST first-team wage. 5000 = 50%.
+     *
+     * ── THE DEFECT THIS FIXES ─────────────────────────────────────────────────────────────
+     *
+     * `youthScholarshipWagePence` is a FLAT £250/week, and the turnover model makes an average
+     * England tier-8 first-team wage about £127/week. So a thirteen-year-old scholar was set to
+     * out-earn an average first-team player by nearly 2x, and at tier 7 by half. The legacy
+     * model never inverts (tier 8 averages ~£480 there), so this is a consequence of the
+     * overhaul rather than a pre-existing bug — found by the step-8 threshold review.
+     *
+     * ── WHY A CAP AND NOT A REPLACEMENT ───────────────────────────────────────────────────
+     *
+     * The flat figure is right at tiers 1-6 and wrong at 7-8. Expressing the whole scholarship
+     * as a share of the band would have re-priced every tier to fix two of them, and thrown
+     * away a hand-authored number that works. A cap changes only the tiers where the flat
+     * figure is implausible and leaves an operator's intent intact everywhere else:
+     *
+     *     scholarship = min(youthScholarshipWagePence, bottomOfBandWage x capBp)
+     *
+     * ── WHY THE BOTTOM OF THE BAND ────────────────────────────────────────────────────────
+     *
+     * Anchored to the WORST first-team wage at the tier, not the average, because that is the
+     * comparison the defect is about: a scholar must cost less than the cheapest professional
+     * at the club. Anchoring to the average would still let a scholar out-earn the bottom of
+     * the squad.
+     *
+     * ── WHY A NON-ZERO DEFAULT IS STILL INERT ─────────────────────────────────────────────
+     *
+     * 50% rather than the usual zero-means-off, and it is still a provable no-op today: the cap
+     * is computed from the TURNOVER model's band wage, and under `legacy` — or with the
+     * turnover table unauthored, which is the shipped state — there is no band wage to cap
+     * against, so the flat figure stands untouched.
+     *
+     * That is better than shipping it off: a cap that has to be remembered at flip time is a
+     * cap that gets forgotten, and the whole point is that the inversion cannot reach a player.
+     * Zero here still means "no cap", for an operator who wants the flat figure whatever
+     * happens.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 5000])]
+    private int $economyYouthScholarshipCapBp = 5000;
+
+    public function getEconomyYouthScholarshipCapBp(): int { return $this->economyYouthScholarshipCapBp; }
+
+    /** Floored at 0 ("no cap") and capped at 10000: a scholar paid MORE than a professional is the defect. */
+    public function setEconomyYouthScholarshipCapBp(int $v): static
+    {
+        $this->economyYouthScholarshipCapBp = max(0, min(10000, $v));
+
+        return $this;
+    }
+
+    public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
+    public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
+
+    public function getEconomyWageModel(): EconomyWageModel { return $this->economyWageModel; }
+    public function setEconomyWageModel(EconomyWageModel $v): static { $this->economyWageModel = $v; return $this; }
+
+    /** @return list<int> */
+    public function getEconomyTierFactorsBp(): array { return $this->economyTierFactorsBp; }
+    /** @param list<int> $v */
+    public function setEconomyTierFactorsBp(array $v): static { $this->economyTierFactorsBp = self::normaliseTierBpList($v, 10000); return $this; }
+
+    /** @return list<int> */
+    public function getEconomyBaselineTurnoverPence(): array { return $this->economyBaselineTurnoverPence; }
+    /** @param list<int> $v */
+    public function setEconomyBaselineTurnoverPence(array $v): static { $this->economyBaselineTurnoverPence = self::normaliseTierBpList($v, 0); return $this; }
+
+    public function getEconomyWageToTurnoverRatioBp(): int { return $this->economyWageToTurnoverRatioBp; }
+    public function setEconomyWageToTurnoverRatioBp(int $v): static { $this->economyWageToTurnoverRatioBp = max(0, $v); return $this; }
+
+    public function getEconomyWageCurveExponentBp(): int { return $this->economyWageCurveExponentBp; }
+    /** Floored at 1bp: a zero exponent makes every ability cost the same, which is not a curve. */
+    public function setEconomyWageCurveExponentBp(int $v): static { $this->economyWageCurveExponentBp = max(1, $v); return $this; }
+
+    public function getEconomyStaffWageShareBp(): int { return $this->economyStaffWageShareBp; }
+    /** Capped below 10000: at 100% the player budget is zero and every player is free. */
+    public function setEconomyStaffWageShareBp(int $v): static { $this->economyStaffWageShareBp = max(0, min(9999, $v)); return $this; }
+
+    public function getEconomyWeeksPerSeason(): int { return $this->economyWeeksPerSeason; }
+    public function setEconomyWeeksPerSeason(int $v): static { $this->economyWeeksPerSeason = max(1, min(104, $v)); return $this; }
+
+    public function getEconomyReputationSpreadBp(): int { return $this->economyReputationSpreadBp; }
+    public function setEconomyReputationSpreadBp(int $v): static { $this->economyReputationSpreadBp = max(0, $v); return $this; }
+
+    /**
+     * What share of a matchday crowd buys food, as a whole percent.
+     *
+     * PUBLISHED, NOT CONSUMED HERE. The backend has no matchday — the device simulates the
+     * game and takes the income — so this is a constant the app reads, in the same family as
+     * `capacityCalculation` and `seasonTicketHolderPercent`. It lives on the backend so an
+     * operator can retune matchday revenue without an app release, which is the whole point
+     * of `/api/game-config`.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 35])]
+    private int $matchdayFoodUptakePercent = 35;
+
+    /**
+     * The three week-counts at which an insolvent NPC club escalates: `[warn, crisis, folded]`.
+     *
+     * A LIST, NOT THREE COLUMNS, because the app walks it as an ordered ladder and a fourth
+     * rung is a config change rather than a migration. Weeks in deficit, not money — which is
+     * what keeps it insulated from the scaling problem the absolute-pence thresholds have
+     * (see `bankruptcyDeductionTiers`, reviewed in step 8 of this work).
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $npcSolvencyThresholds = [4, 12, 26];
+
+    /**
+     * Wage-bill-to-turnover ratios at which a Director of Football starts objecting, as
+     * FRACTIONS (0.40 = 40%).
+     *
+     * FRACTIONS RATHER THAN BASIS POINTS, AND THAT IS DELIBERATE INCONSISTENCY WITH THE
+     * ECONOMY BLOCK ABOVE. Basis points exist there because those figures are links in an
+     * integer chain that ends in pence and must not round mid-way. These are thresholds the
+     * app compares a ratio against — nothing multiplies them into money — so they are stored
+     * in the units the client already compares in, and converting them twice would be the
+     * error-prone choice. Matches `missionGemRollThresholds`, which is a float list for the
+     * same reason.
+     *
+     * @var list<float>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $dofWageBillThresholdPct = [0.40, 0.50, 0.60, 0.70];
+
+    /**
+     * A sponsor's WEEKLY payment in pence.
+     *
+     * ⚠️ WEEKLY, WHERE `smallSponsorMin`/`Max` AND THE OTHER FOUR SPONSOR BANDS ARE PER
+     * SEASON. Two sponsor money figures in the same config in different time units is a trap,
+     * so the unit is in the column name, in this docblock, and in `docs/api/economy-config.md`.
+     * The bands are a season's total income for a league sponsor rolled at pack-build time;
+     * this is a per-week figure the app pays out on the weekly tick. They are not convertible
+     * into each other by dividing by a season length — they describe different deals.
+     *
+     * Defaults to 0, which means "no weekly sponsor income" and is the inert state: an old
+     * build does not read this key at all, and a new one reading 0 behaves as though the
+     * mechanic is off.
+     */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
+    private int $sponsorWeeklyPence = 0;
+
+    /**
+     * Weekly pence band per staff role: `{role => [min, max]}`.
+     *
+     * MOVED OUT OF CODE, NOT INVENTED. These were hardcoded `random_int()` literals inside
+     * `StaffGenerationService::build()`, with a SECOND, DIFFERENT set in
+     * `GenerateMarketDataCommand` — the two disagreed about a coach (2000-8000 against
+     * 4000-10000), so the same role cost different money depending on which path created it.
+     * The values seeded here are StaffGenerationService's, because that is the path that
+     * generates the world.
+     *
+     * THE BAND DOES TWO JOBS UNDER THE TURNOVER MODEL, which is why it was worth lifting rather
+     * than replacing. Its MIDPOINT is the role's weight — what a chairman costs relative to a
+     * facility manager — and its SPREAD is how ability moves pay within the role. Both were
+     * already tuned by hand; deriving either from a new config knob would have thrown that away
+     * and asked an operator to re-tune five roles from nothing.
+     *
+     * @var array<string, array{int, int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyStaffRoleBandsPence = [
+        'coach'                => [2000, 8000],
+        'manager'              => [10000, 30000],
+        'director_of_football' => [12000, 35000],
+        'facility_manager'     => [3000, 8500],
+        'chairman'             => [20000, 60000],
+    ];
+
+    /** @return array<string, array{int, int}> */
+    public function getEconomyStaffRoleBandsPence(): array { return $this->economyStaffRoleBandsPence; }
+
+    /**
+     * Normalised on write: each band is clamped to two non-negative integers in order.
+     *
+     * A transposed pair is a legitimate state of a hand-edited JSON column, and an inverted
+     * band would make ability pay LESS the better a staff member is — monotonicity is the
+     * property the funding projection leans on, so it is enforced here rather than hoped for.
+     * Unknown roles are dropped: the key is a StaffRole value and a typo must not become a
+     * silent sixth role nothing ever reads.
+     *
+     * @param array<string, array{int, int}> $v
+     */
+    public function setEconomyStaffRoleBandsPence(array $v): static
+    {
+        $valid = array_column(\App\Enum\StaffRole::cases(), 'value');
+        $out   = [];
+
+        foreach ($v as $role => $band) {
+            if (!in_array((string) $role, $valid, true) || !is_array($band)) {
+                continue;
+            }
+
+            $lo = max(0, (int) ($band[0] ?? 0));
+            $hi = max(0, (int) ($band[1] ?? 0));
+
+            $out[(string) $role] = [min($lo, $hi), max($lo, $hi)];
+        }
+
+        $this->economyStaffRoleBandsPence = $out;
+
+        return $this;
+    }
+
+    public function getMatchdayFoodUptakePercent(): int { return $this->matchdayFoodUptakePercent; }
+    public function setMatchdayFoodUptakePercent(int $v): static { $this->matchdayFoodUptakePercent = max(0, min(100, $v)); return $this; }
+
+    /** @return list<int> */
+    public function getNpcSolvencyThresholds(): array { return $this->npcSolvencyThresholds; }
+
+    /**
+     * Sorted ascending on write. The app walks it as a ladder, so an out-of-order row would
+     * make a later, harsher rung unreachable — the same failure mode as an unordered
+     * `bankruptcyDeductionTiers`, which is first-match-wins over hand-ordered rows.
+     *
+     * @param list<int> $v
+     */
+    public function setNpcSolvencyThresholds(array $v): static
+    {
+        $weeks = array_values(array_map(static fn ($w) => max(0, (int) $w), array_filter($v, 'is_numeric')));
+        sort($weeks);
+        $this->npcSolvencyThresholds = $weeks;
+
+        return $this;
+    }
+
+    /** @return list<float> */
+    public function getDofWageBillThresholdPct(): array { return $this->dofWageBillThresholdPct; }
+
+    /**
+     * Sorted ascending, same ladder reasoning as npcSolvencyThresholds.
+     *
+     * @param list<float> $v
+     */
+    public function setDofWageBillThresholdPct(array $v): static
+    {
+        $pcts = array_values(array_map(static fn ($p) => max(0.0, (float) $p), array_filter($v, 'is_numeric')));
+        sort($pcts);
+        $this->dofWageBillThresholdPct = $pcts;
+
+        return $this;
+    }
+
+    public function getSponsorWeeklyPence(): int { return $this->sponsorWeeklyPence; }
+    public function setSponsorWeeklyPence(int $v): static { $this->sponsorWeeklyPence = max(0, $v); return $this; }
+
+    public function getInflationRatePerSeasonBp(): int { return $this->inflationRatePerSeasonBp; }
+
+    /**
+     * Floored at 0 — DEFLATION IS NOT SUPPORTED, and that is a decision rather than an omission.
+     * The index is compounded over a club's season count and then used as a CEILING multiplier;
+     * a negative rate makes a long-running save's ceiling approach zero, so an owner who has
+     * played longest could invest least. If deflation is ever wanted it needs its own floor on
+     * the index, not just a negative rate here.
+     */
+    public function setInflationRatePerSeasonBp(int $v): static { $this->inflationRatePerSeasonBp = max(0, $v); return $this; }
+
+    /**
+     * Coerces a submitted per-tier list to exactly eight integers.
+     *
+     * EIGHT ALWAYS, whatever arrives. These are read by index and a short list would make a
+     * deep country's lower tiers resolve to null mid-chain — an error that surfaces as a wage
+     * of zero rather than as an exception. A long list is truncated for the same reason the
+     * tier columns are capped at 8 everywhere else: there is no ninth tier to read it.
+     *
+     * @param  array<array-key, mixed> $values
+     * @return list<int>
+     */
+    private static function normaliseTierBpList(array $values, int $pad): array
+    {
+        $out = [];
+        $raw = array_values($values);
+
+        for ($i = 0; $i < 8; $i++) {
+            $out[] = isset($raw[$i]) && is_numeric($raw[$i]) ? max(0, (int) $raw[$i]) : $pad;
+        }
+
+        return $out;
+    }
+
     // ── NPC Club Finances ─────────────────────────────────────────────────
 
     /**
@@ -1370,38 +1820,33 @@ class GameConfig
     public function setNpcClubBalanceRanges(array $ranges): static { $this->npcClubBalanceRanges = $ranges; return $this; }
 
     /**
-     * Returns the {min, max} range for a given tier (1–8).
-     * Falls back to the tier-8 entry if the tier is out of bounds.
+     * Returns the {min, max} range for a given tier (1–8). Tier t reads row t.
+     *
+     * RAW ROW INDEXING SINCE 2026-11-12, AND THIS REVERSED AN EXPLICIT EARLIER DECISION. The
+     * stored ranges used to be treated as eight rungs of a ladder that a shallower pyramid was
+     * STRETCHED across (via a since-removed scaleTierToEight()), so a 4-tier country's bottom
+     * division drew the tier-8-of-8 band rather than the tier-4 one. The argument for that was
+     * real — a bottom division should scrape the floor wherever it sits — but it cannot survive
+     * the economy scaling chain: country x tier factors, baseline turnover and the wage scale
+     * are all raw per-tier tables, and one link stretching while the others do not is how a
+     * Scottish bottom-tier club ends up with a tier-8 budget and tier-4 wages.
+     *
+     * One convention, applied everywhere, chosen over two defensible conventions disagreeing.
+     * Every new game is a fresh start, so re-scaling generated NPC balances for shallow
+     * countries costs nobody a save.
+     *
+     * STILL ASYMMETRIC WITH REPUTATION, deliberately and worth knowing:
+     * NpcClubGenerationService::reputationForTier() interpolates across the country's own depth
+     * and was left alone. It is a continuous interpolation rather than a row lookup, so it has
+     * no row to index raw, and reputation is not part of the money chain.
+     *
      * @return array{min:int,max:int}
      */
-    public function getNpcClubBalanceRangeForTier(int $tier, int $tierCount = 8): array
+    public function getNpcClubBalanceRangeForTier(int $tier): array
     {
-        // The stored ranges are eight rungs of a ladder, so a shallower pyramid has to be
-        // stretched across them rather than take the first N. Without this, the bottom
-        // division of a 3-tier country gets the tier-3-of-8 band — comfortably wealthy —
-        // when it should be scraping the floor like tier 8 does.
-        $idx = self::scaleTierToEight($tier, $tierCount) - 1;
+        $idx = max(1, min(8, $tier)) - 1;
 
         return $this->npcClubBalanceRanges[$idx] ?? ['min' => 31_250_000, 'max' => 46_875_000];
-    }
-
-    /**
-     * Map tier N of M onto the equivalent rung of the canonical 8-tier ladder.
-     *
-     * Tier 1 always maps to 1 and the bottom tier always maps to 8, so the top and bottom
-     * of any pyramid land on the extremes the config tables were written for. A one-tier
-     * country is the degenerate case and maps to 1: its only division is its top one.
-     */
-    public static function scaleTierToEight(int $tier, int $tierCount): int
-    {
-        $tierCount = max(1, min(8, $tierCount));
-        $tier      = max(1, min($tierCount, $tier));
-
-        if ($tierCount === 1) {
-            return 1;
-        }
-
-        return (int) round(1 + (($tier - 1) / ($tierCount - 1)) * 7);
     }
 
     // ── League Tier Defaults ───────────────────────────────────────────────
@@ -1414,25 +1859,25 @@ class GameConfig
      * to be LeagueService::LEAGUE_TIER_DEFAULTS, a hardcoded const that only ever fed
      * newly-generated leagues and couldn't be edited without a code change.
      *
-     * @var array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
+     * @var array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}>
      */
     #[ORM\Column(type: 'json')]
     private array $leagueTierDefaults = [
-        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null],
-        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null],
+        '1' => ['promotionSpots' => null, 'tvDeal' => 1_000_000_000, 'prizeMoney' => 1_000_000_000, 'leaguePositionPot' => 1_000_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '2' => ['promotionSpots' => 2,    'tvDeal' =>   100_000_000, 'prizeMoney' =>   100_000_000, 'leaguePositionPot' =>   100_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '3' => ['promotionSpots' => 2,    'tvDeal' =>    50_000_000, 'prizeMoney' =>    50_000_000, 'leaguePositionPot' =>    50_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '4' => ['promotionSpots' => 2,    'tvDeal' =>    30_000_000, 'prizeMoney' =>    30_000_000, 'leaguePositionPot' =>    30_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '5' => ['promotionSpots' => 2,    'tvDeal' =>    10_000_000, 'prizeMoney' =>    10_000_000, 'leaguePositionPot' =>    10_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '6' => ['promotionSpots' => 2,    'tvDeal' =>     3_000_000, 'prizeMoney' =>     3_000_000, 'leaguePositionPot' =>     3_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '7' => ['promotionSpots' => 2,    'tvDeal' =>     1_000_000, 'prizeMoney' =>     1_000_000, 'leaguePositionPot' =>     1_000_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
+        '8' => ['promotionSpots' => 2,    'tvDeal' =>       500_000, 'prizeMoney' =>       500_000, 'leaguePositionPot' =>       500_000, 'sponsorCount' => 0, 'trophy' => null, 'tvPoolPence' => null, 'leaguePositionDecreasePercent' => null, 'parachute' => null],
     ];
 
     /**
      * Every row is normalised on the way out (see normaliseTierRow), so the admin
      * bulk-edit screen never has to know the retired trophy keys existed.
      *
-     * @return array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}>
+     * @return array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}>
      */
     public function getLeagueTierDefaults(): array
     {
@@ -1446,7 +1891,7 @@ class GameConfig
      * Normalised on write too, so a saved config converges on the new shape and
      * the legacy fold becomes dead weight rather than a permanent read-time cost.
      *
-     * @param array<string, array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}> $v
+     * @param array<string, array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}> $v
      */
     public function setLeagueTierDefaults(array $v): static
     {
@@ -1459,7 +1904,7 @@ class GameConfig
     }
 
     /**
-     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}
      */
     public function getLeagueTierDefaultsForTier(int $tier): array
     {
@@ -1470,9 +1915,15 @@ class GameConfig
             return self::normaliseTierRow($row);
         }
 
+        // EVERY KEY normaliseTierRow() CAN RETURN HAS TO BE HERE. This branch answers for a
+        // tier that was never saved, and its consumers read keys off the result directly
+        // (LeagueService::generateLeaguesForCountry(), LeagueAdminController's bulk apply,
+        // LeagueTierDefaultDiff) — a missing key is an undefined-index warning that surfaces
+        // as a league created with no TV money rather than as an error.
         return [
-            'promotionSpots' => 2, 'tvDeal' => null, 'prizeMoney' => null,
-            'leaguePositionPot' => null, 'sponsorCount' => 0, 'trophy' => null,
+            'promotionSpots' => 2, 'tvDeal' => null, 'tvPoolPence' => null, 'prizeMoney' => null,
+            'leaguePositionPot' => null, 'leaguePositionDecreasePercent' => null,
+            'sponsorCount' => 0, 'trophy' => null, 'parachute' => null,
         ];
     }
 
@@ -1487,7 +1938,7 @@ class GameConfig
      * rather than only in the migration means neither quietly loses its trophy.
      *
      * @param array<string, mixed> $row
-     * @return array{promotionSpots:?int,tvDeal:?int,prizeMoney:?int,leaguePositionPot:?int,sponsorCount:int,trophy:?array}
+     * @return array{promotionSpots:?int,tvDeal:?int,tvPoolPence:?int,prizeMoney:?int,leaguePositionPot:?int,leaguePositionDecreasePercent:?int,sponsorCount:int,trophy:?array,parachute:?array}
      */
     private static function normaliseTierRow(array $row): array
     {
@@ -1502,6 +1953,14 @@ class GameConfig
 
         unset($row['trophyImage'], $row['trophyColour']);
         $row['trophy'] = $trophy;
+
+        // DEFAULTED RATHER THAN ASSUMED PRESENT. This column is plain stored JSON, so a row
+        // saved before the TV pool existed — or any config export taken back then, which
+        // admins are told is safe to re-import — carries neither key. Filling them here is
+        // what keeps the returned shape total for every caller that reads keys off it.
+        $row['tvPoolPence'] ??= null;
+        $row['leaguePositionDecreasePercent'] ??= null;
+        $row['parachute'] ??= null;
 
         return $row;
     }

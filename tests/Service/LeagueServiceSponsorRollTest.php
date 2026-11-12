@@ -45,6 +45,26 @@ class LeagueServiceSponsorRollTest extends TestCase
             $leaderboardCalculationService,
             $this->createStub(\App\Repository\SeasonRecordRepository::class),
             $this->createStub(\App\Repository\SeasonSnapshotRepository::class),
+            // A REAL resolver over stubbed repositories, because it is final and cannot be
+            // doubled. With stubs it reports 0 NPC clubs, so no league here has a resolvable
+            // size — which is correct for fixtures that author no pool and therefore derive
+            // no per-club share.
+            new \App\Service\Economy\LeagueSizeResolver(
+                $this->createStub(\App\Repository\NpcClubRepository::class),
+                $repo,
+            ),
+            // A REAL SponsorBandResolver over the stubbed config repo, because it is final.
+            // With no country profile rows every country resolves at parity, so a rolled
+            // sponsor value is byte-identical to what these tests asserted before the bands
+            // became country-scaled.
+            new \App\Service\Economy\SponsorBandResolver(
+                $configRepo,
+                new \App\Service\Economy\EconomyScaleResolver(
+                    $configRepo,
+                    $this->createStub(\App\Repository\StarterConfigRepository::class),
+                    $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ),
+            ),
         );
     }
 

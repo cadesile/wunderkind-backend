@@ -1124,6 +1124,226 @@ not a description of current output, and must never be edited to match new outpu
 
 No `src/EventListener/` directory exists.
 
+## Economy scaling (`App\Service\Economy`, added 2026-11-12)
+
+**`EconomyScaleResolver` — THE only place country and tier compose into a money
+figure.** Read it before adding any per-country or per-tier money calculation;
+the point of the class is that there is nowhere else to put one.
+
+Why one class rather than a helper per caller: the chain is short, but its
+inputs live in three tables (`country_profile`, `game_config`,
+`starter_config`) and its output gets *baked into generated rows that outlive
+the request*. Two call sites composing the same factors in a different order,
+or rounding at a different step, produce clubs in the same division that
+disagree about what a player costs — and nothing surfaces that except a player
+noticing. This codebase has already made that mistake once, with the three
+copy-pasted wage-multiplier tier-walks in `WorldPackClubGenerationService`,
+`MarketPoolService` and `StaffGenerationService`.
+
+**Integer basis points, one division at the end.** Every factor is an integer
+in basis points and the chain divides exactly once, with `intdiv`, where it
+becomes pence. No float enters it. The single exception is the ability curve,
+which needs `pow()` with a fractional exponent: it is computed in ONE method
+and rounded ONCE, and the result is carried as **pence × 10⁶**
+(`WAGE_SCALE_UNIT`) so the per-player multiply downstream stays integer too.
+That unit is not fussiness — `S_tier` for a bottom division is a fraction of a
+penny per unit of ability^k, so rounding it to pence would quantise every wage
+in the division to a handful of values, and at a small country factor would
+round it to zero and make every player free.
+
+**The reference squad is read from the same config the world generator uses** —
+`starterConfig.npcSquadConfig` for size, `starterConfig.leagueAbilityRanges`
+for the ability band — so the figure the wage scale is calibrated against is
+the figure that actually gets paid. `gameConfig.leaguePlayerAbilityRanges` is
+the third ability table in the codebase; it is published to the app, has no
+server-side generator consumer, and is **deliberately not read here**.
+
+**`tierCountFor()` moved here from `NpcClubGenerationService`**, which was the
+only place in the codebase that read `leagueTierCount`. It belongs with the
+other per-country economy inputs, and the resolver needs it anyway to clamp a
+requested tier to a pyramid that does not have it. `NpcClubGenerationService`
+delegates; `reputationForTier()` still reads it on a hot loop, which is why the
+resolver memoises per request (a world-pack build resolves the same country and
+tier once per club, and without the cache the baseline lookup is one query per
+club).
+
+**Raw row indexing, reversing an earlier convention.** Tier t reads row t; a
+4-tier country uses rows 1-4 and is not stretched across the eight-rung tables.
+`GameConfig::scaleTierToEight()` is gone and
+`getNpcClubBalanceRangeForTier()`'s `$tierCount` parameter with it. The
+reasoning is in that method's docblock: one link of a money chain stretching
+while the others do not is worse than a bottom division that is merely
+generous. **Still asymmetric with two interpolations, deliberately** —
+`NpcClubGenerationService::reputationForTier()` and
+`GameConfig::getNpcClubSizeWeightsForTier()` span the country's own depth,
+because they have no rows to index and a fixed divisor of 7 would strand a
+3-tier country 28% along its own scale. `GameConfigTierScalingTest` pins both
+halves of that line.
+
+`inflationIndexBp()` is computed here and applied **almost nowhere** — never to
+a generated row, a published value, or a world pack. Compounded in integers one
+season at a time rather than with `pow()`, because an operator may have to
+reproduce a ceiling by hand from the audit record and `(1+r)^n` in floating
+point does not reproduce by hand. The season arrives from a device-mirrored
+column so it is bounded (200) rather than trusted.
+
+`EconomyScale` is the returned value object, and **the breakdown is the
+product, not a debugging extra**: the admin preview screen renders exactly its
+fields, and a resolver returning a single integer would be impossible to
+sanity-check before turning scaling on for a country. `isResolvable` is false
+when the turnover row is unauthored — the shipped state.
+
+**`SponsorBandResolver` — what a league sponsor pays, scaled by country.** Replaced
+**byte-identical** copies of the roll loop in `LeagueService::rollLeagueSponsors()` and
+`WorldInitializationService::rollLeagueSponsors()`; both are still public (one is called by
+`WorldPackTierAssemblyService`) and both now delegate.
+
+That is the **fifth** duplication this overhaul collapsed, after three copies of the wage
+tier-walk and three of the ability-band lookup. The pattern is consistent enough to name: money
+arithmetic here gets copied to the second caller rather than extracted, and every copy is a
+place the two can disagree about a figure that then gets stored in a cached pack.
+
+**COUNTRY FACTOR ONLY, NOT COUNTRY x TIER**, and that is the decision most likely to be
+"corrected" later. A league's tier variation is already expressed by `League::$sponsorCount`
+(authored per tier) and the size mix its sponsors draw from, so applying the tier factor too
+would double-count it and quietly make a tier-1 pot enormous. `SponsorBandResolverTest` asserts
+two tiers of one country agree even with a 5x tier-1 factor set.
+
+**Not gated on `economyWageModel`** — a sponsor band has nothing to do with how a player is
+priced — so it applies the moment a country factor is set. That is why the runbook requires a
+`WORLD_PACK_VERSION` bump on a factor change and not only on a model flip: `sponsorPot` is part
+of the cached league block.
+
+**`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that
+was a GAP rather than a choice: decision 4 of the economy brief lists NPC balances among the
+things the backend bakes the country factor into, and the step-5 wage unification threaded
+country and tier through players and staff while leaving the balance table on raw figures. A
+club in a country scaled to 20% was paying **20% wages out of 100% money** — not a cheaper
+country, a different game. The band is scaled BEFORE the city-size skew, so a big-city club
+stays the same multiple of its division's average whatever the country is worth. Found during
+the step-8 threshold survey; see `docs/economy-threshold-review.md`.
+
+**`SeasonInvestmentService` — the owner gifting their own money into a club, once a season.**
+Modelled on `ClubFundingService`: same natural-key idempotency, same "the server debits the
+account and the DEVICE credits the club" split, same exception type.
+
+**THE SEASON COMES FROM `SeasonRecord` ROWS, NOT `club.currentSeason`**, and that is the decision
+worth knowing. That column is device-mirrored — `SyncService::process()` overwrites it from the
+payload — so a client could report season 50 and both raise its own ceiling (the ceiling grows
+with the inflation index) and claim for seasons it never played. `SeasonRecordRepository::countByClub()
++ 1` is backend-owned: those rows are written only by `concludeSeason()`, one per `(club, season)`
+behind `uq_season_record_club_season`, so a device claiming season 50 writes ONE record and moves
+the count from n to n+1. Chosen over a new counter column because it needs no migration, no
+second write path, and reuses a constraint that is already load-bearing.
+
+Residual exposure, stated rather than hidden: a late retro-conclude for a genuinely missed season
+also adds a row, so it opens one extra window — bounded at one per conclude that actually
+archives a season.
+
+**The replay check runs BEFORE the amount and ceiling checks**, deliberately: a retry after a
+dropped response must succeed even if an operator has since lowered the ceiling, or re-tuning the
+economy would turn a harmless retry into a permanent failure for a debit that already happened.
+
+`creditClubPence` is an INSTRUCTION, not a report — the service never writes `club.balance`,
+because the device overwrites it absolutely on every sync.
+
+**`WageModelResolver` — what a generated player or staff member costs, and the only place that
+answers it.** Replaced FOUR copies of the same arithmetic:
+`WorldPackClubGenerationService::playerWageMultiplier()`,
+`MarketPoolService::getWageMultiplier()`, `StaffGenerationService::getWageMultiplier()` and —
+worst — `GenerateMarketDataCommand`, which had neither and used its own `random_int(10, 40)`,
+ignoring both `contractValueRandMin/Max` (live: 2000/2800) and the tier multipliers entirely. A
+player it created was priced roughly two orders of magnitude below an identical pool player. It
+also left every scout it made on wage 0, which `BackfillScoutWagesCommand`'s zero-sentinel reads
+as "never priced".
+
+**`legacy` is a supported mode, not dead code**, and it must stay byte-identical. The old sites
+did `(int) ($ability * $roll * $multiplier)` — a TRUNCATING cast on a float product — and that
+is reproduced verbatim. The ROLL IS A PARAMETER because `random_int()` is a CSPRNG and cannot be
+seeded: byte-identity can only mean "the same formula on the same draw", which is exactly what
+`WageModelLegacyParityTest` asserts across every ability 0-100 against the pre-unification
+expressions held independently in the test. **Those copies must never be refactored to call the
+resolver** — the whole point is that they hold the old behaviour from outside.
+
+Two oddities survived on purpose: the tier-walk's `<` is STRICT, so ability exactly 15 takes the
+x6 band not x4; and an ability at or above the last `maxAbility` falls out of the loop onto the
+last row via `end()`, because the live table has no null catch-all. Both priced every row in the
+world.
+
+**TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
+all. Per-country rows (world-pack clubs) are generated for a known country and tier, so they are
+priced at generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION`
+bump. Shared-pool rows are ONE row served to every country at every tier, so they are stored
+legacy and priced at serve time — in `PlayerBrowseSerializer` (re-priced from the ability curve)
+and `MarketDataService` (country x tier factor only, since a scout's pay comes from bands the
+model has no opinion about). **The pricing is deliberately NOT in `PlayerSnapshotSerializer`**,
+which `WorldPackSnapshotBuilder` also delegates to: re-pricing there would change cached pack
+content on every read with no version bump.
+
+Staff pay under `turnover` reuses `GameConfig::$economyStaffRoleBandsPence` for BOTH jobs — the
+midpoint is the role's weight, the spread is how ability moves pay within the role — scaled so
+the tier's reference complement (the counts in `npcSquadConfig`) costs the configured staff
+share. Reusing the band is what avoids asking an operator to re-tune five hand-tuned roles
+against a knob that did not exist.
+
+**`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
+exits non-zero on four checks (S_tier monotonic; no cross-tier ability inversion; TV a sane
+fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
+immediately by catching the reference squad being summed over continuous abilities when
+`Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
+wide one.
+
+**`LeagueSizeResolver` — the TV pool's divisor, and the one place a league's size is
+answered.** Read its docblock before writing anything that asks "how many clubs are in this
+league", because the obvious query is wrong: **a `League` row is a template shared by every
+save** in its country and tier, and England tier 8 had 147 real player clubs pointing at one row
+on 2026-11-12. The table a player sees is assembled on their device.
+
+`league.slots` is therefore authored with **0 meaning "derive"**, and the derivation (NPC rows
+plus one for the country's bottom division) is the fallback. The reason the size is stored is not
+the arithmetic — it is that a derived divisor would move whenever an operator clicked Generate,
+silently re-pricing a tier's TV money for every shipped build.
+
+`derivedTvDealPence()` returns **null** for a league with no pool (every league, until somebody
+authors one) and also for a pooled league with no resolvable size — rather than dividing by a
+clamped 1 and publishing a whole pool as one club's share. `syncTvDeal()` is the only write path
+onto `tvDeal` when a pool exists, so the two columns cannot disagree about arithmetic. Memoised
+per country per request, with `forget()` for the bootstrap case that creates leagues, fills them,
+and only then has a real size.
+
+**`EconomyConfigPublisher` — the economy blocks the client reads, built once for three
+surfaces.** The economy reaches the app through the sync `gameConfig` block, `GET
+/api/game-config` and (for the country-agnostic half) the public `GET /api/starter-config`. The
+sync block is a **ternary with two hand-written branches**, and the hard rule is that both carry
+an identical key set.
+
+Three hand-maintained copies of a six-key block is a drift machine, and the drift is silent in
+the worst direction: a key on one branch and not the other only shows up in the no-config case,
+which is unreachable in practice (`getConfig()` creates the row) and therefore never exercised.
+So the block is built here and spread into all three with `...`.
+
+**The fallback is `new GameConfig()`, not restated literals.** `clientBlock()` takes a nullable
+config and falls back to a fresh entity, so the defaults ARE the column defaults by
+construction. That is the `youthScholarshipWagePence` lesson commented in `SyncService`: the
+client guards with `?? fallback` rather than falsiness, so a restated `0` sails past it and
+silently becomes the live value.
+
+**What the app gets and what it deliberately does not.** `economyTierBaseline` carries resolved
+absolutes for one country — turnover and wage scale per tier — and **no country factor**.
+Publishing one would invite the client to apply it a second time to an already-scaled figure.
+`resolvable: false` distinguishes "the operator has not authored this tier" from "this tier is
+worth nothing", which a bare `0` cannot express, and the first is the shipped state.
+
+`?country=` on `/api/game-config` is **optional and absent means parity** — that endpoint is
+`PUBLIC_ACCESS`, so unlike sync there is no club to resolve a country from. An empty code
+resolves at parity without a second code path, because `findByCode('')` finds nothing.
+
+Guarded by `tests/Service/SyncServiceGameConfigParityTest.php`, which parses `SyncService`'s own
+source to compare the two branches (asserting **order** as well as membership, since same-members
+different-order is the signature of somebody patching one branch to match the other) and proves
+neither restates a key the builder spreads in. Verified to fail on injected drift.
+See `docs/api/economy-config.md`.
+
 ## Location & land economy (`App\Service\Location`, added 2026-11-03)
 
 - **`Haversine`** — great-circle distance in PHP *and* as a SQL fragment, in one file so

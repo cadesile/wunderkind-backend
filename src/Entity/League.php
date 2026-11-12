@@ -30,8 +30,51 @@ class League
     #[ORM\Column(type: 'smallint', nullable: true)]
     private ?int $promotionSpots = null;
 
+    /**
+     * The PER-CLUB TV share, in pence. Unchanged in name and meaning since the first release.
+     *
+     * KEPT AS THE PER-CLUB FIGURE DELIBERATELY, even though the authored value is now the pool
+     * below. Shipped builds read this key and treat it as one club's money; re-interpreting it
+     * as a pool would be a changed value under an unchanged key, which
+     * `.context/shared/api-backwards-compatibility.md` counts as a break. So the pool is the new
+     * key and this is maintained from it — see `LeagueSizeResolver::syncTvDeal()`.
+     */
     #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $tvDeal = null;
+
+    /**
+     * The league's whole TV money for a season, in pence, split equally across its clubs.
+     *
+     * THE AUTHORED VALUE. `tvDeal` is derived from it; this is what an operator sets. The split
+     * is equal and includes NPC clubs, because the backend cannot pay a club anything — there
+     * is no income loop here, the device runs the economy — so what it publishes is the pool
+     * and the club count, and the app does the paying.
+     *
+     * NULLABLE, AND NULL IS THE INERT STATE THAT MAKES THIS SHIPPABLE. With no pool authored,
+     * `tvDeal` is left exactly as it was and nothing derives anything: deploying the column is
+     * a provable no-op. Deriving unconditionally could not be — `LeagueService::
+     * generateLeaguesForCountry()` creates league rows BEFORE any club exists, so a fresh
+     * country would divide by zero or publish its whole pool as one club's share.
+     *
+     * Base-year pence. The app applies inflation; nothing here is ever stored inflated.
+     */
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $tvPoolPence = null;
+
+    /**
+     * How many clubs this league's table holds. **0 means "work it out"**, not "no clubs".
+     *
+     * AUTHORED RATHER THAN COUNTED, because a `League` row is a template shared by every save
+     * in its country and tier — England tier 8 had 147 player clubs pointing at one row on
+     * 2026-11-12 — so there is nothing to count that means what a divisor needs to mean. The
+     * full reasoning, including why a derived divisor would silently re-price TV money whenever
+     * an operator clicked Generate, is on `LeagueSizeResolver`.
+     *
+     * Zero-means-derive is the same idiom as `starter_config.club_funding_minimum_pence` and
+     * `max_enrichment_requests_per_user`: it is how a column ships without changing behaviour.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    private int $slots = 0;
 
     #[ORM\Column(type: 'string', enumType: ReputationTier::class, nullable: true)]
     private ?ReputationTier $leagueReputationTier = null;
@@ -45,6 +88,55 @@ class League
     /** How many sponsors should be sourced for this league during world cache generation. */
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $sponsorCount = 0;
+
+    /**
+     * Per-league override for the position-pot taper, as a whole percent. NULL = use GameConfig.
+     *
+     * NULLABLE SO THAT "NOT OVERRIDDEN" IS EXPRESSIBLE, which `0` could not be: a taper of zero
+     * means every finishing position pays the same, and that is a legitimate thing for an
+     * operator to want. Resolved `league ?? gameConfig` at every publish site, so the key the
+     * client reads keeps its current meaning and its current value for every league that has no
+     * override — which is all of them until somebody sets one.
+     */
+    #[ORM\Column(type: 'smallint', nullable: true)]
+    private ?int $leaguePositionDecreasePercent = null;
+
+    /**
+     * What a club relegated OUT of this league is paid, and for how long.
+     *
+     * SERVED VERBATIM. A SCHEMA-AGNOSTIC PASSTHROUGH, exactly like `$trophy` above,
+     * `Player::$appearance` and `NpcClub::$identity` — the backend stores this, resolves which
+     * one applies, and publishes it. It does not read inside it.
+     *
+     * THAT IS A DECISION, NOT LAZINESS, and it is the one worth defending here. The backend
+     * cannot pay a club anything: there is no income loop, the device runs the economy (see
+     * `.context/stages/01_overview/output/tribal-knowledge.md`). So any structure the backend
+     * imposed on this would be a second opinion about a schedule only the app can execute —
+     * and the two would drift the first time the app wanted a fourth season or a cliff instead
+     * of a taper. A schema the app owns outright cannot drift from itself.
+     *
+     * The cost of that is real and accepted: a malformed block is stored and served, and the
+     * only thing that notices is the app. Same trade `starter_config.setup_tutorial_config`
+     * makes, and the reason that one has a checker command rather than a validator.
+     *
+     * RESOLVED `league ?? gameConfig` AT EVERY PUBLISH SITE, whole-value — not merged key by
+     * key. Merging would need the backend to understand the keys, which is exactly what it
+     * declines to do, and a half-overridden schedule is a worse answer than either whole one.
+     *
+     * NULL IS "NO OVERRIDE", and `[]` is coerced to null by the setter rather than stored. An
+     * empty block is indistinguishable from "authored as nothing" and would resolve to a
+     * league paying no parachute while the config says otherwise — same reasoning as
+     * `CountryProfile::setPrestigeSuffixes()`.
+     *
+     * Base-year pence wherever it carries money. The app applies inflation; nothing on this
+     * backend is ever stored inflated. The shape the app and the operator have agreed on lives
+     * in `docs/api/economy-config.md`, which is the right home for a contract the schema does
+     * not enforce.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $parachute = null;
 
     /**
      * The trophy this league awards, as the 16-bit trophy sprite's own
@@ -115,6 +207,43 @@ class League
 
     public function getLeaguePositionPot(): ?int { return $this->leaguePositionPot; }
     public function setLeaguePositionPot(?int $v): static { $this->leaguePositionPot = $v; return $this; }
+
+    public function getTvPoolPence(): ?int { return $this->tvPoolPence; }
+    public function setTvPoolPence(?int $v): static { $this->tvPoolPence = ($v !== null ? max(0, $v) : null); return $this; }
+
+    public function getSlots(): int { return $this->slots; }
+
+    /**
+     * Capped at 40. Not arbitrary: the widest real league here is 18 and the divisor is only
+     * meaningful for a plausible table, so a typo of 1800 should not quietly make every club's
+     * TV share a hundredth of what it should be. Floored at 0, which means "derive".
+     */
+    public function setSlots(int $v): static { $this->slots = max(0, min(40, $v)); return $this; }
+
+    public function getLeaguePositionDecreasePercent(): ?int { return $this->leaguePositionDecreasePercent; }
+    public function setLeaguePositionDecreasePercent(?int $v): static
+    {
+        $this->leaguePositionDecreasePercent = ($v !== null ? max(0, min(100, $v)) : null);
+
+        return $this;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getParachute(): ?array { return $this->parachute; }
+
+    /**
+     * `[]` becomes null, deliberately — see the property's docblock. An empty override would
+     * resolve to "this league pays no parachute" while the global config said otherwise, which
+     * is not a state anybody can author on purpose.
+     *
+     * @param array<string, mixed>|null $v
+     */
+    public function setParachute(?array $v): static
+    {
+        $this->parachute = ($v === null || $v === []) ? null : $v;
+
+        return $this;
+    }
 
     public function getSponsorCount(): int { return $this->sponsorCount; }
     public function setSponsorCount(int $v): static { $this->sponsorCount = max(0, $v); return $this; }

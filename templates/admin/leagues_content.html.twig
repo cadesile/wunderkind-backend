@@ -47,11 +47,11 @@
             <span class="bmc-card__meta">Saved every time · applied only to leagues ticked below</span>
         </div>
         <div class="bmc-card__body" style="overflow-x:auto">
-            <div class="bmc-tiergrid" style="min-width:820px">
+            <div class="bmc-tiergrid" style="min-width:1240px">
                 <div class="bmc-tiergrid__head">
                     <span>TIER</span><span>TROPHY</span><span>PROMOTED</span>
-                    <span>TV DEAL</span><span>PRIZE MONEY</span><span>POSITION POT</span>
-                    <span>SPONSORS</span><span>LEAGUES</span>
+                    <span>TV POOL</span><span>TV DEAL</span><span>PRIZE MONEY</span><span>POSITION POT</span>
+                    <span>TAPER %</span><span>PARACHUTE</span><span>SPONSORS</span><span>LEAGUES</span>
                 </div>
                 {% for tier in 1..8 %}
                     {% set row = tierDefaults[tier] ?? {} %}
@@ -88,13 +88,26 @@
                             </label>
                         {% endif %}
 
-                        {% for f in ['tvDeal', 'prizeMoney', 'leaguePositionPot'] %}
+                        {% for f in ['tvPoolPence', 'tvDeal', 'prizeMoney', 'leaguePositionPot'] %}
                             <label class="bmc-num"><span class="bmc-num__unit">£</span>
                                 <input name="tiers[{{ tier }}][{{ f }}]" inputmode="numeric" data-kind="money" data-blank="ok"
                                        value="{{ _self.money(attribute(row, f)|default(null)) }}"
                                        aria-label="tier {{ tier }} {{ f }}">
                             </label>
                         {% endfor %}
+
+                        <label class="bmc-num bmc-num--76">
+                            <input name="tiers[{{ tier }}][leaguePositionDecreasePercent]" inputmode="numeric"
+                                   value="{{ row.leaguePositionDecreasePercent|default('') }}"
+                                   data-min="0" data-max="100" data-blank="ok"
+                                   aria-label="tier {{ tier }} position taper percent">
+                        </label>
+
+                        <label class="bmc-ta bmc-ta--parachute">
+                            <textarea name="tiers[{{ tier }}][parachute]" rows="2"
+                                      placeholder="none"
+                                      aria-label="tier {{ tier }} parachute json">{{ row.parachute is defined and row.parachute is not null ? row.parachute|json_encode : '' }}</textarea>
+                        </label>
 
                         <label class="bmc-num bmc-num--76">
                             <input name="tiers[{{ tier }}][sponsorCount]" inputmode="numeric" value="{{ row.sponsorCount|default(0) }}"
@@ -204,6 +217,7 @@
                         <span class="bmc-celltext">{{ league.name }}</span>
                         <span class="bmc-data">{{ clubsByLeague[id]|default([])|length }} club(s)</span>
                         <span class="bmc-cellnum{{ 'promotionSpots' in d ? ' ink-warning' : '' }}">{{ tier == 1 ? '—' : (league.promotionSpots is null ? '—' : '+' ~ league.promotionSpots) }}</span>
+                        <span class="bmc-cellnum{{ 'tvPoolPence' in d ? ' ink-warning' : '' }}">{{ league.tvPoolPence is null ? '—' : '£' ~ _self.money(league.tvPoolPence) }}</span>
                         <span class="bmc-cellnum{{ 'tvDeal' in d ? ' ink-warning' : '' }}">{{ league.tvDeal is null ? '—' : '£' ~ _self.money(league.tvDeal) }}</span>
                         <span class="bmc-cellnum{{ 'prizeMoney' in d ? ' ink-warning' : '' }}">{{ league.prizeMoney is null ? '—' : '£' ~ _self.money(league.prizeMoney) }}</span>
                         <span class="bmc-cellnum{{ 'leaguePositionPot' in d ? ' ink-warning' : '' }}">{{ league.leaguePositionPot is null ? '—' : '£' ~ _self.money(league.leaguePositionPot) }}</span>
@@ -216,6 +230,11 @@
                                 data-qe-promotion="{{ league.promotionSpots }}"
                                 data-qe-tv="{{ _self.money(league.tvDeal) }}" data-qe-prize="{{ _self.money(league.prizeMoney) }}"
                                 data-qe-pot="{{ _self.money(league.leaguePositionPot) }}" data-qe-sponsors="{{ league.sponsorCount }}"
+                                data-qe-tvpool="{{ _self.money(league.tvPoolPence) }}"
+                                data-qe-slots="{{ league.slots > 0 ? league.slots : '' }}"
+                                data-qe-taper="{{ league.leaguePositionDecreasePercent is null ? '' : league.leaguePositionDecreasePercent }}"
+                                data-qe-parachute="{{ league.parachute is null ? '' : league.parachute|json_encode }}"
+                                data-qe-clubcount="{{ leagueSizes[id]|default(0) }}"
                                 data-qe-full="{{ ea_url().setController('App\\Controller\\Admin\\LeagueCrudController').setAction('edit').setEntityId(id).generateUrl() }}">
                             <i data-lucide="pencil" width="16" height="16"></i>
                         </button>
@@ -420,7 +439,19 @@
             $('#qe-tv').value = b.dataset.qeTv || '';
             $('#qe-prize').value = b.dataset.qePrize || '';
             $('#qe-pot').value = b.dataset.qePot || '';
+            $('#qe-tvpool').value = b.dataset.qeTvpool || '';
+            $('#qe-slots').value = b.dataset.qeSlots || '';
+            $('#qe-taper').value = b.dataset.qeTaper || '';
+            // Pretty-printed so a multi-season schedule is readable in a 3-row textarea.
+            $('#qe-parachute').value = b.dataset.qeParachute
+                ? JSON.stringify(JSON.parse(b.dataset.qeParachute), null, 1)
+                : '';
             $('#qe-sponsors').value = b.dataset.qeSponsors;
+
+            // THE SERVER IGNORES A TYPED tvDeal WHILE A POOL IS SET — see
+            // LeagueAdminController::quickEdit(). Showing that here rather than letting an
+            // operator type into a field whose value will be discarded.
+            syncTvDerived(b.dataset.qeClubcount || '0');
             $('#qe-full').href = b.dataset.qeFull;
             $('#qe-title').textContent = b.dataset.qeName.toUpperCase();
             $('#qe-error').hidden = true;
@@ -430,6 +461,23 @@
             qeScrim.hidden = false;
             $('#qe-name').focus();
         });
+    });
+
+    // Disables the per-club field while a pool is authored, because the server derives it.
+    function syncTvDerived(clubCount) {
+        var pooled = String($('#qe-tvpool').value || '').trim() !== '';
+        var note   = $('[data-qe-tv-derived]');
+
+        $('#qe-tv').disabled = pooled;
+        if (note) {
+            note.hidden = !pooled;
+            var slot = note.querySelector('[data-qe-clubcount]');
+            if (slot) { slot.textContent = String($('#qe-slots').value || '').trim() || clubCount || '—'; }
+        }
+    }
+
+    ['#qe-tvpool', '#qe-slots'].forEach(function (sel) {
+        $(sel).addEventListener('input', function () { syncTvDerived($('#qe-slots').value); });
     });
 
     $('#qe-cancel').addEventListener('click', function () { qeScrim.hidden = true; });
@@ -442,8 +490,11 @@
         // STRIP SEPARATORS BEFORE POSTING. The server strips them too now, but the field is
         // rendered with them and there is no reason to make the endpoint clean up after a
         // form that knows better.
-        ['tvDeal', 'prizeMoney', 'leaguePositionPot'].forEach(function (k) {
-            data.set(k, String(data.get(k) || '').replace(/[^\d]/g, ''));
+        // A DECIMAL POINT SURVIVES NOW. This used to strip to /[^\d]/, which threw away the
+        // pence half of "1,000.50" before it ever reached the server — and the server then
+        // truncated it a second time. Both halves are fixed; this one keeps the dot.
+        ['tvPoolPence', 'tvDeal', 'prizeMoney', 'leaguePositionPot'].forEach(function (k) {
+            data.set(k, String(data.get(k) || '').replace(/[^\d.]/g, ''));
         });
 
         $('#qe-save').disabled = true;

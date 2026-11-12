@@ -46,9 +46,15 @@ class NpcClubGenerationServiceLeagueTest extends TestCase
             $leagueService,
             $gameConfigRepo,
             new \App\Service\Location\LocationCatalogueService($locationRepo),
-            // No profile row: tierCountFor() falls back to 8, the depth this test's
-            // expectations were written against.
-            $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            // A REAL resolver over stubbed repositories, because it is final. It replaced a
+            // direct CountryProfileRepository here when the leagueTierCount lookup moved into
+            // it. Still no profile row: findByCode() on a stub returns null, so tierCountFor()
+            // falls back to 8, the depth this test's expectations were written against.
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled — the same way LocationCatalogueService is built below. Seating is a
             // post-flush SQL pass over rows that exist, so against a stub it does nothing,

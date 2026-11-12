@@ -19,6 +19,7 @@ class LeagueAdminController extends AbstractController
         private EntityManagerInterface $em,
         private GameConfigRepository   $gameConfigRepository,
         private LeagueRepository       $leagueRepository,
+        private \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
     ) {}
 
     #[Route('/admin/leagues/{id}/quick-edit', name: 'admin_league_quick_edit', methods: ['POST'])]
@@ -53,9 +54,47 @@ class LeagueAdminController extends AbstractController
         // £10 instead of £1,000, silently, on a field the admin screen formats WITH thousands
         // separators. The bulk form has always stripped them; this one did not, and the two
         // were the same money in the same units on the same screen.
-        $league->setTvDeal($this->parseMoneyToPence($request->request->get('tvDeal')));
         $league->setPrizeMoney($this->parseMoneyToPence($request->request->get('prizeMoney')));
         $league->setLeaguePositionPot($this->parseMoneyToPence($request->request->get('leaguePositionPot')));
+        $league->setTvPoolPence($this->parseMoneyToPence($request->request->get('tvPoolPence')));
+
+        $slots = $request->request->get('slots');
+        $league->setSlots(($slots !== null && $slots !== '') ? (int) $slots : 0);
+
+        // A JSON TEXTAREA, because the backend has no opinion about this block's shape — see
+        // League::$parachute. Same treatment as the bankruptcyDeductionTiers textarea on the
+        // game-config screen: decoded, is_array-guarded, and a malformed body LEAVES THE
+        // STORED VALUE ALONE rather than clearing it. A blank field is the explicit "no
+        // override" and does clear it, which is the one way an operator removes one.
+        $rawParachute = $request->request->get('parachute');
+        if ($rawParachute !== null) {
+            if (trim((string) $rawParachute) === '') {
+                $league->setParachute(null);
+            } else {
+                $decoded = json_decode((string) $rawParachute, true);
+                if (is_array($decoded)) {
+                    $league->setParachute($decoded);
+                }
+            }
+        }
+
+        $taper = $request->request->get('leaguePositionDecreasePercent');
+        $league->setLeaguePositionDecreasePercent(
+            ($taper !== null && $taper !== '') ? (int) $taper : null
+        );
+
+        // THE POOL WINS WHEN THERE IS ONE, AND THE TYPED tvDeal IS IGNORED. Both fields are on
+        // the form — tvDeal has to stay editable for the leagues that have no pool, which is
+        // all of them until an operator authors one — but they cannot both be authoritative:
+        // tvDeal is the per-club SHARE of the pool, so accepting a typed share alongside a
+        // pool would publish two figures that do not divide into each other. The screen
+        // disables the tvDeal input while a pool is set, and this is the half that makes it
+        // true rather than cosmetic.
+        if ($league->getTvPoolPence() !== null) {
+            $this->leagueSizeResolver->syncTvDeal($league);
+        } else {
+            $league->setTvDeal($this->parseMoneyToPence($request->request->get('tvDeal')));
+        }
 
         $league->setTrophy($this->trophyFromFields([
             'style'           => $request->request->get('trophyStyle'),
@@ -87,6 +126,11 @@ class LeagueAdminController extends AbstractController
                     'tvDeal'           => $league->getTvDeal(),
                     'prizeMoney'       => $league->getPrizeMoney(),
                     'leaguePositionPot'=> $league->getLeaguePositionPot(),
+                    'tvPoolPence'      => $league->getTvPoolPence(),
+                    'slots'            => $league->getSlots(),
+                    'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent(),
+                    'parachute'        => $league->getParachute(),
+                    'clubCount'        => $this->leagueSizeResolver->sizeOf($league),
                     'trophy'           => $league->getTrophy(),
                     'sponsorCount'     => $league->getSponsorCount(),
                 ],
@@ -140,6 +184,16 @@ class LeagueAdminController extends AbstractController
             $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $league->setSponsorCount($defaults['sponsorCount']);
             $league->setTrophy($defaults['trophy']);
+            $league->setTvPoolPence($defaults['tvPoolPence']);
+            $league->setLeaguePositionDecreasePercent($defaults['leaguePositionDecreasePercent']);
+            $league->setParachute($defaults['parachute']);
+
+            // AFTER the tvDeal assignment above, not instead of it. A tier default may carry a
+            // per-club tvDeal, a pool, or both; when there is a pool it is the authored figure
+            // and the share is derived from this league's own size, which the tier default
+            // cannot know. With no pool the tier's tvDeal stands, which is the behaviour this
+            // screen has always had.
+            $this->leagueSizeResolver->syncTvDeal($league);
             $applied++;
         }
         $this->em->flush();
@@ -159,6 +213,14 @@ class LeagueAdminController extends AbstractController
             'tvDeal'            => $this->parseMoneyToPence($row['tvDeal'] ?? ''),
             'prizeMoney'        => $this->parseMoneyToPence($row['prizeMoney'] ?? ''),
             'leaguePositionPot' => $this->parseMoneyToPence($row['leaguePositionPot'] ?? ''),
+            'tvPoolPence'       => $this->parseMoneyToPence($row['tvPoolPence'] ?? ''),
+            'leaguePositionDecreasePercent' => ($row['leaguePositionDecreasePercent'] ?? '') !== ''
+                ? max(0, min(100, (int) $row['leaguePositionDecreasePercent']))
+                : null,
+            // Decoded but NOT validated — a verbatim passthrough has no schema to validate
+            // against. Anything that is not a JSON object becomes null ("no default"), which
+            // is the only safe reading of a body nothing can interpret.
+            'parachute'         => $this->parseJsonObject($row['parachute'] ?? null),
             'sponsorCount'      => ($row['sponsorCount'] ?? '') !== '' ? max(0, min(20, (int) $row['sponsorCount'])) : 0,
             'trophy'            => $this->trophyFromFields([
                 'style'           => $row['trophyStyle'] ?? null,
@@ -196,6 +258,22 @@ class LeagueAdminController extends AbstractController
         return TrophyConfigFactory::validate($fields);
     }
 
+    /**
+     * A JSON object as typed, or null. No schema, because there isn't one to check against.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function parseJsonObject(mixed $raw): ?array
+    {
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) && $decoded !== [] ? $decoded : null;
+    }
+
     /** Pounds (comma-formatted, from the tier-defaults table's money inputs) -> pence, or null if blank. */
     /**
      * Pounds as typed — commas and all — to pence, or null for blank.
@@ -208,6 +286,24 @@ class LeagueAdminController extends AbstractController
     {
         $digits = str_replace(',', '', trim((string) $raw));
 
-        return $digits !== '' ? ((int) $digits) * 100 : null;
+        if ($digits === '') {
+            return null;
+        }
+
+        // DECIMAL POUNDS SURVIVE NOW. The old body was `((int) $digits) * 100`, and PHP's int
+        // cast truncates at the decimal point — so "1000.50" stored £1,000.00 and lost the
+        // fifty pence silently, on a field the screen labels with a currency symbol. Rounding
+        // the float is what makes the pence half arrive; the * 100 happens after, so there is
+        // exactly one rounding step.
+        //
+        // AND GARBAGE IS NULL, NOT ZERO. `(int) 'abc'` is 0, which this used to store as "a TV
+        // deal of nothing" — a real and different configuration from "no TV deal", as
+        // LeagueTierDefaultDiff's strict comparison is careful to preserve. A value that is not
+        // a number is not a figure, so it clears the field instead of inventing one.
+        if (!is_numeric($digits)) {
+            return null;
+        }
+
+        return (int) round((float) $digits * 100);
     }
 }

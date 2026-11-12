@@ -77,6 +77,7 @@ class DashboardController extends AbstractDashboardController
         private SocialPostTemplateRepository $socialPostTemplateRepository,
         private AdminQueueCounts $adminQueueCounts,
         private \App\Repository\Location\CountryProfileRepository $countryProfileRepository,
+        private \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
     ) {}
 
     // ── Dashboard ─────────────────────────────────────────────────────────
@@ -394,6 +395,33 @@ class DashboardController extends AbstractDashboardController
         $config->setGuardianIgnoreSiblingLoyaltyTraitPenalty((int) $request->request->get('guardianIgnoreSiblingLoyaltyTraitPenalty', 2));
         $config->setNonMatchFacilityIncomePercent((int) $request->request->get('nonMatchFacilityIncomePercent', 0));
         $config->setSeasonTicketHolderPercent((int) $request->request->get('seasonTicketHolderPercent', 60));
+        $config->setMatchdayFoodUptakePercent((int) $request->request->get('matchdayFoodUptakePercent', 35));
+
+        // POUNDS IN, PENCE STORED — the same * 100 the sponsor bands below do. Guarded for a
+        // BLANK field the way the contract-value pair is: this is money nothing on the screen
+        // shows the consequences of, and a cleared field casting to 0 would silently switch
+        // weekly sponsor income off for every club. A blank means "leave the stored value
+        // alone"; typing 0 is still how an operator turns it off deliberately.
+        $rawSponsorWeekly = $request->request->get('sponsorWeeklyPence');
+        if ($rawSponsorWeekly !== null && $rawSponsorWeekly !== '') {
+            $config->setSponsorWeeklyPence((int) $rawSponsorWeekly * 100);
+        }
+
+        // THE TWO LADDERS. Both are sorted ascending by their setters, so the order typed into
+        // the textarea does not have to be right. A malformed body leaves the stored list
+        // alone rather than emptying it — an empty ladder is not a configuration the app can
+        // walk, and `[]` is indistinguishable from "I meant to clear this", so the safe
+        // reading is to keep what was there. Same shape as the bankruptcyDeductionTiers block
+        // below, which is_array-guards for the same reason.
+        $solvency = json_decode((string) $request->request->get('npcSolvencyThresholds', ''), true);
+        if (is_array($solvency) && $solvency !== []) {
+            $config->setNpcSolvencyThresholds($solvency);
+        }
+
+        $dofThresholds = json_decode((string) $request->request->get('dofWageBillThresholdPct', ''), true);
+        if (is_array($dofThresholds) && $dofThresholds !== []) {
+            $config->setDofWageBillThresholdPct($dofThresholds);
+        }
 
         // Facility construction
         $config->setConstructionTimeMultiplier((float) $request->request->get('constructionTimeMultiplier', 1.0));
@@ -433,10 +461,27 @@ class DashboardController extends AbstractDashboardController
         if (!empty($tiers)) {
             $config->setWageMultiplierTiers($tiers);
         }
-        $randMin = (int) $request->request->get('contractValueRandMin', 10);
-        $randMax = (int) $request->request->get('contractValueRandMax', 40);
-        $config->setContractValueRandMin(min($randMin, $randMax));
-        $config->setContractValueRandMax(max($randMin, $randMax));
+        // GUARDED LIKE THE wageMultiplierTiers BLOCK ABOVE, AND FOR A WORSE FAILURE. These two
+        // multiply every generated wage (WorldPackClubGenerationService::buildPlayer(),
+        // MarketPoolService::generatePlayers()), and the pair that was here read straight
+        // through a bare (int): a field the operator CLEARED posts '', which casts to 0, and
+        // the setters floor at 1. Live values of 2000/2800 therefore collapsed to 1/1 and
+        // every player generated afterwards was priced at about a 2,400th of what it should
+        // be — silently, with the form reporting a successful save.
+        //
+        // The old GET fallbacks of 10/40 could not help: this screen is ONE form that posts
+        // every field (templates/admin/game_config.html.twig), so an ABSENT key is not a
+        // state the admin can produce, while a BLANK one is a keystroke away. A blank field
+        // now means "leave the stored value alone", which is the only reading that cannot
+        // destroy a figure nothing on the screen displays the consequences of.
+        $rawRandMin = $request->request->get('contractValueRandMin');
+        $rawRandMax = $request->request->get('contractValueRandMax');
+        if ($rawRandMin !== null && $rawRandMin !== '' && $rawRandMax !== null && $rawRandMax !== '') {
+            $randMin = (int) $rawRandMin;
+            $randMax = (int) $rawRandMax;
+            $config->setContractValueRandMin(min($randMin, $randMax));
+            $config->setContractValueRandMax(max($randMin, $randMax));
+        }
 
         // Cards & Discipline
         $config->setYellowCardBaseChance((float) $request->request->get('yellowCardBaseChance', 0.08));
@@ -1182,6 +1227,19 @@ class DashboardController extends AbstractDashboardController
             // "differs". No extra queries: every League is already loaded above.
             'leagueDiffs'      => LeagueTierDefaultDiff::forLeagues($leagues, $this->gameConfigRepository->getConfig()),
             'clubsByLeague'    => $this->npcClubRepository->getAllGroupedByLeague(),
+            // The TV pool's divisor per league, so the quick-edit modal can show what a pool
+            // will be divided by BEFORE the operator saves. Through the resolver rather than
+            // counting $clubsByLeague, because an authored `slots` overrides the count and the
+            // screen must show the figure the server will actually use.
+            'leagueSizes'      => array_reduce(
+                $leagues,
+                function (array $carry, \App\Entity\League $l): array {
+                    $carry[(string) $l->getId()] = $this->leagueSizeResolver->sizeOf($l);
+
+                    return $carry;
+                },
+                [],
+            ),
             'countryLabels'    => Country::labelMap(),
             'allLeagues'       => $leagues,
             'tierDefaults'     => $this->gameConfigRepository->getConfig()->getLeagueTierDefaults(),
@@ -1827,6 +1885,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::subMenu('World', 'globe')->setSubItems([
             MenuItem::linkTo(LeagueCrudController::class, 'Leagues'),
             MenuItem::linkToRoute('League overview', null, 'admin_leagues_overview'),
+            MenuItem::linkToRoute('Economy', null, 'admin_economy'),
             MenuItem::linkTo(NpcClubCrudController::class, 'NPC clubs'),
             MenuItem::linkTo(TacticalAdvantageCrudController::class, 'Tactical matrix'),
             MenuItem::linkToRoute('Generate', null, 'admin_npc_clubs_content'),

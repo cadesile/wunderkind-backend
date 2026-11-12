@@ -136,6 +136,23 @@ scrollbars, and Select2 — a full theming pass, not a one-off tweak.
   will otherwise keep serving the stale copy indefinitely with no visible
   error (the live preview just silently renders blank).
 
+## `templates/admin/economy_content.html.twig` (added 2026-11-12)
+
+World → Economy, on `bmc_page` + `bmc-pages.css`. Three independent forms, plain posts, all
+targeting `path('admin', {routeName: ...})` per `src/Controller/Admin/CLAUDE.md` — a POST action
+reached as its own route has no `ea` Twig context and dies rendering the layout.
+
+Two conventions worth knowing before adding to a bmc screen, both learned here:
+
+- **The card footer class is `bmc-card__band`, not `bmc-card__foot`.** The latter does not
+  exist; a button strip inside a card goes in a `__band`.
+- **`bmc-btn--yellow` lives in `public/bmc-admin.css`, not `bmc-pages.css`.** The button colour
+  modifiers are split across the two files, so grepping only the pages stylesheet makes a real
+  class look missing.
+
+The screen has no JS of its own. The per-tier tables are plain inputs; `data-blank="ok"` marks
+the fields where clearing is a legitimate action, matching the game-config screen's convention.
+
 ## What's just stock/default (not part of the design system)
 
 `templates/admin/login.html.twig`, `templates/admin/dashboard.html.twig`,

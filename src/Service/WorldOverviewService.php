@@ -93,6 +93,10 @@ class WorldOverviewService
                     // printing "£0" would read as a deliberate figure.
                     'prizeMoney'        => self::pence($league->getPrizeMoney()),
                     'tvDeal'            => self::pence($league->getTvDeal()),
+                    // The POOL as well as the per-club share, through the same pence-to-pounds
+                    // helper — a tier showing a share with no pool is a tier nobody has
+                    // authored a pool for yet, which is the state every league ships in.
+                    'tvPoolPence'       => self::pence($league->getTvPoolPence()),
                     'leaguePositionPot' => self::pence($league->getLeaguePositionPot()),
                 ];
             }

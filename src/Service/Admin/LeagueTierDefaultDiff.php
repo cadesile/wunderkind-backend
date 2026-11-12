@@ -35,7 +35,10 @@ final class LeagueTierDefaultDiff
      * ever disagree, applying the defaults would leave a league still showing as differing,
      * which is the one way this can be wrong and look right.
      */
-    private const FIELDS = ['promotionSpots', 'tvDeal', 'prizeMoney', 'leaguePositionPot', 'sponsorCount', 'trophy'];
+    private const FIELDS = [
+        'promotionSpots', 'tvDeal', 'tvPoolPence', 'prizeMoney', 'leaguePositionPot',
+        'leaguePositionDecreasePercent', 'sponsorCount', 'trophy', 'parachute',
+    ];
 
     /**
      * @param  iterable<League> $leagues
@@ -63,8 +66,10 @@ final class LeagueTierDefaultDiff
         $actual = [
             'promotionSpots'    => $league->getPromotionSpots(),
             'tvDeal'            => $league->getTvDeal(),
+            'tvPoolPence'       => $league->getTvPoolPence(),
             'prizeMoney'        => $league->getPrizeMoney(),
             'leaguePositionPot' => $league->getLeaguePositionPot(),
+            'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent(),
             'sponsorCount'      => $league->getSponsorCount(),
             // THROUGH THE SAME VALIDATOR AS THE DEFAULTS. GameConfig::normaliseTierRow() puts
             // its trophy through TrophyConfigFactory::validateNullable() on the way out, so a
@@ -72,6 +77,11 @@ final class LeagueTierDefaultDiff
             // that normalisation existed would read as differing from an identical trophy,
             // forever. Both sides canonical, then compared.
             'trophy'            => TrophyConfigFactory::validateNullable($league->getTrophy()),
+            // RAW, unlike `trophy` above. There is no validator to put both sides through
+            // because the backend has no opinion about this block's shape — see
+            // League::$parachute. `same()` compares arrays loosely, so key ORDER does not
+            // matter, which is the only normalisation a verbatim passthrough can get.
+            'parachute'         => $league->getParachute(),
         ];
 
         $differs = [];
@@ -80,6 +90,17 @@ final class LeagueTierDefaultDiff
             // Nobody is promoted INTO the top tier, so its promotion figure is meaningless and
             // comparing it would mark every tier-1 league as drifted for a field it cannot use.
             if ($field === 'promotionSpots' && $league->getTier() === 1) {
+                continue;
+            }
+
+            // tvDeal IS DERIVED WHEN A POOL IS AUTHORED, so comparing it against the tier
+            // default is meaningless there: the default cannot know this league's size, and a
+            // correctly-derived share will almost never equal the tier's figure. Reporting it
+            // would mark every pooled league as permanently drifted on a field an operator
+            // cannot "fix" — and applying the defaults would not clear the chip, which the
+            // note above makes the one way this class can be wrong and look right. The POOL is
+            // compared instead, which is the value an operator actually authored.
+            if ($field === 'tvDeal' && $league->getTvPoolPence() !== null) {
                 continue;
             }
 

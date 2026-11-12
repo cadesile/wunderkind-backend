@@ -173,6 +173,8 @@ class GenerateMarketDataCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ClubRepository      $clubRepository,
+        private readonly \App\Service\Economy\WageModelResolver $wageModel,
+        private readonly \App\Service\ScoutWageCalculator $scoutWageCalculator,
     ) {
         parent::__construct();
     }
@@ -329,6 +331,11 @@ class GenerateMarketDataCommand extends Command
             $scout->setNationality($this->pick(self::NATIONALITIES));
             $scout->setExperience($experience);
             $scout->setJudgements($this->buildScoutJudgements($experience));
+            // A WAGE AT ALL, FOR THE FIRST TIME. This command left every scout it created on
+            // weeklySalary 0, and BackfillScoutWagesCommand treats 0 as "never priced" — so a
+            // pool generated here reported thousands of free scouts and understated every
+            // club's running costs until somebody happened to run the backfill.
+            $scout->setWeeklySalary($this->scoutWageCalculator->weeklyWageFor($experience));
 
             $this->em->persist($scout);
 
@@ -435,7 +442,11 @@ class GenerateMarketDataCommand extends Command
             $age            = random_int(14, 22);
 
             // Contract value scales loosely with ability (in pence/cents per week)
-            $contractValue = $currentAbility * random_int(10, 40);
+            // THROUGH THE RESOLVER. `random_int(10, 40)` was this command's own, third set of
+            // wage numbers: it ignored contractValueRandMin/Max (live: 2000/2800) AND the tier
+            // multipliers entirely, so a player it created was priced roughly two orders of
+            // magnitude below an identical player drawn from the pool.
+            $contractValue = $this->wageModel->playerWeeklyPence($currentAbility);
 
             $player = new Player(
                 firstName:         $this->pick(self::PLAYER_FIRST_NAMES),
@@ -499,17 +510,8 @@ class GenerateMarketDataCommand extends Command
         $roles = StaffRole::cases();
         $clubCount = count($academies);
 
-        $weeklySalaryRanges = [
-            StaffRole::COACH->value                 => [4000, 10000],
-            StaffRole::MANAGER->value               => [10000, 30000],
-            StaffRole::DIRECTOR_OF_FOOTBALL->value  => [12000, 35000],
-            StaffRole::FACILITY_MANAGER->value      => [3000, 8500],
-            StaffRole::CHAIRMAN->value              => [20000, 60000],
-        ];
-
         for ($i = 0; $i < $count; $i++) {
-            $role          = $roles[array_rand($roles)];
-            $salaryRange   = $weeklySalaryRanges[$role->value];
+            $role            = $roles[array_rand($roles)];
             $coachingAbility = random_int(30, 90);
             $scoutingRange   = random_int(30, 90);
 
@@ -522,7 +524,13 @@ class GenerateMarketDataCommand extends Command
 
             $staff->setCoachingAbility($coachingAbility);
             $staff->setScoutingRange($scoutingRange);
-            $staff->setWeeklySalary(random_int($salaryRange[0], $salaryRange[1]));
+            // THROUGH THE RESOLVER, which also settles a disagreement: the band this command
+            // used for a COACH was 4000-10000 while StaffGenerationService used 2000-8000, so
+            // the same role cost different money depending on which path created it. The
+            // config now holds one band per role, seeded from StaffGenerationService's values
+            // because that is the path that generates the world — so a coach from this
+            // command gets cheaper, which is the correct direction.
+            $staff->setWeeklySalary($this->wageModel->staffWeeklyPence($role, $coachingAbility));
 
             $this->em->persist($staff);
 

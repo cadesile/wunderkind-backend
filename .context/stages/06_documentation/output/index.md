@@ -151,3 +151,41 @@ claiming canonical status)
   prices are real-world so most plots are deliberately unaffordable for a long time.
 - **`docs/api/user-ledger.md`** — amended with the six new entry types, the signed-amount
   convention, and the now-nullable `club`.
+
+## Added 2026-11-12
+
+- **`docs/api/economy-config.md`** — what the economy overhaul publishes and what the app
+  does with it. Leads with the rule that governs the whole thing: **every money figure the
+  backend publishes is BASE-YEAR and the app applies inflation** — the backend holds a
+  *rate*, never an index, and never an inflated stored value, because the pack cache is
+  keyed `(country, tier)` with no season dimension. Also documents the trap worth knowing
+  before touching sponsor money: `sponsorWeeklyPence` is **weekly** while the six existing
+  sponsor band columns are **per season**, and the two are not convertible by dividing by a
+  season length — they describe different deals.
+- **`docs/api/season-investment.md`** — the owner's once-a-season gift into a club. Leads with
+  the two things a client must get right: `creditClubPence` is an **instruction the device
+  applies**, not a report (the server cannot credit `club.balance`), and the **season is not a
+  parameter** — it is the backend's own `SeasonRecord` count, because `club.currentSeason` is
+  device-mirrored and a claimed season would raise the owner's own ceiling. Lists the two new
+  client-visible error codes and notes both are unreachable while the base ceiling is 0.
+- **`docs/economy-threshold-review.md`** — the step-8 review of every absolute-pence threshold
+  under a scaled economy. **A report; no live values were changed.** Three findings worth
+  knowing before touching any of them: `bankruptcyDeductionTiers` has **two rows that cannot
+  fire** under the first-match-wins contract its own column documents (and the table only
+  behaves as it looks if the app does NOT follow that contract — one of the two is wrong); the
+  whole five-rung ladder is traversed in **under half a week** of unpaid wages at the top five
+  tiers, which predates the overhaul; and the flat £250 youth scholarship becomes **1.97x an
+  average tier-8 wage** under the turnover model, which is the one blocker that is ours to fix.
+  Proposes expressing deficit thresholds in **weeks of the club's own wage bill** — the one unit
+  both sides can agree on, since the backend does not know a club's roster — and explains why
+  that is proposed rather than published.
+- **`docs/deploy/economy-rollout.md`** — the operator runbook for turning the economy on.
+  **The economy shipped INERT**: eight migrations landed with every factor at parity, the wage
+  model on `legacy`, inflation at 0 and the turnover table unauthored, so nothing it added
+  changes a generated figure. This is the ordered procedure, and the one step that is cheap to
+  skip and expensive to skip is **bumping `WORLD_PACK_VERSION` in the same pass as the wage-model
+  flip** — a pack holds the wages it was built with, so content changes without shape changing
+  and the cache has no TTL. `staleWorldPacks` reaching 0 on the dashboard is the completion
+  signal. Also records the hard gate (per-club TV must be a sane fraction of baseline turnover),
+  the recommendation AGAINST deriving the TV pool automatically and why, and a back-out
+  procedure whose first line is that reverting the setting does not re-price the packs.

@@ -1086,6 +1086,268 @@ RESTRICT-referenced by `plot_claim`, so a town that re-bands downward keeps what
   Scoped **per location, not per country** — the name IS town plus affix, so two
   "Burnley FC"s only collide at Burnley.
 
+### The economy model block on `GameConfig` (2026-11-12)
+
+Nine columns, **every default meaning "behave exactly as before"**, added by
+`Version20261112160100`. `economyWageModel` is `legacy`, all eight
+`economyTierFactorsBp` are 10000 (parity), `inflationRatePerSeasonBp` is 0 — so
+applying the migration cannot move a generated figure. Same compatibility
+mechanism as `starter_config.max_enrichment_requests_per_user` (0 = unlimited):
+the knob arrives switched off and is turned on per country by an operator.
+
+- `economyWageModel` (`EconomyWageModel` enum: `legacy` | `turnover`).
+  **`legacy` is a supported mode, not dead code** — it must keep producing
+  byte-identical figures to the pre-unification generators.
+- `economyTierFactorsBp`, `economyBaselineTurnoverPence` — json, eight rows,
+  **indexed RAW by tier** (tier t reads row t). Both setters pad/truncate to
+  exactly eight, because these are read by index and a short list resolves a
+  deep country's lower tiers to null mid-chain, which surfaces as a wage of
+  zero rather than an exception.
+- `economyWageToTurnoverRatioBp` (6000), `economyStaffWageShareBp` (2500,
+  capped below 10000 so the player budget cannot be zero),
+  `economyWageCurveExponentBp` (25000 = k 2.5, floored at 1 — a zero exponent
+  prices every ability the same), `economyReputationSpreadBp` (0 = flat 1.0).
+- `economyWeeksPerSeason` — **46, which is NOT the backend's own financial
+  year of 52** (`Club::crossedFinancialYearEnd()`). 46 is what the app charges
+  wages for, and the reference-squad calibration is only meaningful against
+  the payer's number. Six weeks of the backend's year are therefore unpriced
+  by this model; recorded, not reconciled.
+- `inflationRatePerSeasonBp` — **the rate and nothing else.** Never applied to
+  a generated row, a stored value, or a world pack (the pack cache is keyed
+  `(country, tier)` with no season dimension, so an inflated pack would be
+  wrong for every save at a different season). Floored at 0: deflation would
+  make a long save's ceiling approach zero, so the owner who played longest
+  could invest least.
+
+**`economyBaselineTurnoverPence` ships as eight ZEROS, which is not a usable
+configuration and deliberately not a harmless one.** The wage scale divides by
+turnover, so zero makes the turnover model *undefined* rather than cheap —
+`EconomyScaleResolver` reports `isResolvable: false` instead of dividing. A
+plausible-looking default here would be the dangerous choice: it would let the
+model be switched on against numbers nobody authored.
+
+`scaleTierToEight()` was **removed** in the same pass — see
+`GameConfig::getNpcClubBalanceRangeForTier()`.
+
+### `League` gained a TV pool, an authored size and a taper override (2026-11-12)
+
+From `Version20261112180000`.
+
+- **`tvPoolPence`** (bigint, nullable) — the league's whole TV money for a season. The
+  AUTHORED value; `tvDeal` is derived from it as `intdiv(pool, size)`.
+- **`tvDeal` keeps its old meaning**, the PER-CLUB share. Re-interpreting it as the pool would
+  be a changed value under an unchanged key, which the BC doc counts as a break — shipped builds
+  read it as one club's money.
+- **`slots`** (smallint, default 0) — clubs in this league's table, the pool's divisor.
+  **0 means "work it out"**, not "no clubs" (the `club_funding_minimum_pence` idiom).
+- **`leaguePositionDecreasePercent`** (smallint, nullable) — per-league override of the
+  position-pot taper, resolved `league ?? gameConfig`. Nullable rather than 0-defaulted because
+  a taper of zero is a legitimate setting (every position pays the same), so `0` cannot also
+  mean "not overridden".
+
+**A NULL POOL DERIVES NOTHING, and that is the mechanism that makes this shippable.** Every
+league starts with a null pool, so `tvDeal` keeps exactly the figure it was authored with.
+Deriving unconditionally could not have been inert: `LeagueService::generateLeaguesForCountry()`
+creates league rows BEFORE any club exists, so a fresh country would divide by zero or publish
+its whole pool as one club's share.
+
+**Why `slots` is authored and not counted.** A `League` row is a TEMPLATE shared by every save
+in its country and tier — on 2026-11-12 England tier 8 had **147 real, non-spoof player clubs**
+with `current_league_id` pointing at one row (tier 7: 9, tier 6: 5). The eighteen-club table a
+player sees is assembled on their device from the world pack and exists nowhere on the server.
+So nothing countable here means what a divisor needs to mean.
+
+The derivation that is kept as the fallback — NPC rows plus one for the bottom tier — is right
+for 9 of the 15 bootstrapped countries and wrong for 6. Measured on dev:
+
+| countries | NPC rows by tier | the rule gives |
+|---|---|---|
+| EN, DE, IT | 18 x7, 17 | a clean 18 |
+| AR, BR, ES, FR, NL, PT | 16 x7, 15 | a clean 16 |
+| CA, JP, NG, PL, US | 8 x8 | 9 at the bottom, 8 elsewhere |
+| SC | 3 x8 | 4 at the bottom, 3 elsewhere |
+
+The bottom tier being one short in the first two groups IS the player's slot, which is what the
+rule is built on; the uniform-count countries are ones nobody finished bootstrapping at a real
+size. But the decisive objection is not the off-by-one: **a derived divisor moves whenever
+somebody clicks Generate**, silently re-pricing a tier's TV money for every shipped build as a
+side effect of an unrelated admin action. See `LeagueSizeResolver`.
+
+Also note: **Scotland has 8 league rows on dev, not 4**, and every `country_profile.league_tier_count`
+is 8 — so the "Scotland is a 4-tier country" assumption in the economy brief does not hold
+against this database. Production unverified.
+
+### The absolute-pence thresholds, reviewed 2026-11-12
+
+Full report: `docs/economy-threshold-review.md`. Read it before changing any of these values —
+the headline is that **`bankruptcyDeductionTiers` has two rows that cannot fire**. Rows 3, 4 and
+5 all carry `deficitMax: null`, so under the first-match-wins contract the column's own docblock
+states, any deficit at or above row 3's floor matches row 3 and the 20- and 50-point penalties
+are dead. The table only behaves the way it reads if the app resolves by LAST match or by
+highest penalty — meaning either the app or that docblock is wrong, and the fix that is correct
+under every resolution is to give rows 3 and 4 real `deficitMax` values.
+
+Separately: the whole five-rung ladder is traversed in **under half a week** of unpaid wages at
+the top five tiers (0.01 weeks at tier 1). That predates the overhaul — the legacy model is
+comparable — but the overhaul is what made it measurable.
+
+`youthScholarshipWagePence` (flat £250/wk) became **1.97x an average tier-8 wage** under the
+turnover model — a thirteen-year-old scholar out-earning an average first-team player. **Fixed
+by `economyYouthScholarshipCapBp`** (`Version20261112220000`), which caps a scholarship at a
+share of the tier's WORST first-team wage: tier 8 to 0.05x, tiers 1-6 byte-identical. A CAP
+rather than a replacement, because the flat figure was right at six of the eight tiers and
+re-pricing all of them to fix two would have discarded a hand-authored number that works.
+Anchored to the worst rather than the average wage, because that is the comparison the defect is
+about. The flat key is untouched; the resolved per-tier figure is a new key in
+`economyTierBaseline.tiers[]`.
+
+It is the ONE switch in this series that ships ON (50%), and still a provable no-op: the cap
+applies only under the `turnover` model, so the flat figure survives both the shipped state and
+the half-configured period while a turnover table is being filled in. The first implementation
+gated on resolvability instead of the model and capped under `legacy`, where £250 is already
+sensible — `YouthScholarshipCapTest` caught it.
+
+`app:economy:wage-table` carries all of this as check 5, so it cannot quietly stop being true.
+`npcSolvencyThresholds` (weeks) and `dofWageBillThresholdPct` (a ratio) are already immune and
+are the shape to copy.
+
+### `GameConfig::$economySeasonInvestmentBasePence` (2026-11-12)
+
+The base owner-investment ceiling, from `Version20261112210000`. **Ships at 0, which is an OFF
+SWITCH rather than a neutral default**: the resolved ceiling is
+`base x countryFactor x tierFactor x inflationIndex(season)`, so a base of zero makes every
+amount above the ceiling and `POST /api/club/season-investment` refuses everything. That is how
+both of that endpoint's new client-visible error codes ship unreachable by a client that does
+not understand them — the same shape as `429 enrichment_quota_exhausted` arriving behind a cap
+of 0 = unlimited.
+
+`EconomyScaleResolver::seasonInvestmentCeilingPence()` is **the only server-side consumer of the
+inflation index**. Everything else the backend publishes is base-year and the app compounds it,
+but a ceiling has to be checked against the season being claimed for or a long-running save
+would be held to year-one money.
+
+**No ledger migration accompanied it.** `UserLedgerEntryType::SEASON_INVESTMENT` is a new case
+on a `varchar(30)` column whose longest value was already 17 characters, and `season_investment`
+is also 17 — `UserLedgerEntryTypeTest` asserts that bound. Idempotency reuses the existing
+`uq_user_ledger_backend_source` partial unique index.
+
+### Parachutes — `League::$parachute` and `GameConfig::$leagueParachute` (2026-11-12)
+
+Two nullable json columns from `Version20261112200000`, resolved **`league ?? gameConfig`**
+whole-value at every publish site. Both ship null, so every league publishes `parachute: null`
+and the migration is a no-op (verified: 120 of 120 leagues).
+
+**SERVED VERBATIM — a schema-agnostic passthrough**, exactly like `League::$trophy`,
+`Player::$appearance` and `NpcClub::$identity`. The backend stores it, picks which one applies,
+and publishes it without reading inside.
+
+**That is the decision worth knowing before touching it**, because the obvious improvement is
+wrong: the backend cannot pay a club anything (no income loop; the device runs the economy), so
+any structure imposed here would be a second opinion about a schedule only the app can execute,
+and the two would drift the first time the app wanted a fourth season or a cliff instead of a
+taper. The accepted cost is that a malformed block is stored and served and only the app
+notices — the same trade `starter_config.setup_tutorial_config` makes, which is why that one has
+a checker command rather than a validator. `tests/Entity/LeagueParachuteTest.php` asserts the
+NEGATIVE property deliberately: an arbitrary nested structure with keys the backend has never
+heard of survives unchanged.
+
+**Whole-value, not merged key by key.** Merging would require understanding the keys, which is
+what the passthrough declines to do, and a half-overridden schedule is a worse answer than
+either whole one. So a league override completely replaces the global — the global's extra keys
+do not leak through.
+
+Both setters coerce `[]` to null. Not validation — a disambiguation: an empty override would
+resolve to "this league pays no parachute" while the global said otherwise, which is not a state
+anybody authors. The visible consequence is that clearing a league's override restores the
+global rather than switching parachutes off for that league.
+
+Money in base-year pence. The agreed shape lives in `docs/api/economy-config.md`, which is the
+right home for a contract the schema does not enforce.
+
+### `GameConfig::$economyStaffRoleBandsPence` (2026-11-12)
+
+Weekly pence band per staff role, from `Version20261112190000`. These were hardcoded
+`random_int()` literals in `StaffGenerationService::build()` with a SECOND, DIFFERENT set in
+`GenerateMarketDataCommand` — the two disagreed about a coach (2000-8000 against 4000-10000), so
+the same role cost different money depending on which path created it. Seeded with
+StaffGenerationService's values because that is the path that generates the world.
+
+**The band does two jobs under the turnover model**, which is why it was worth lifting rather
+than replacing: its MIDPOINT is the role's weight (what a chairman costs relative to a facility
+manager) and its SPREAD is how ability moves pay within the role. Both were already hand-tuned.
+
+Setter normalises each band to two non-negative integers in order and drops unknown roles — an
+inverted band would make ability pay LESS the better a staff member is, and monotonicity is the
+property the funding projection leans on.
+
+### Four published-only gameplay constants on `GameConfig` (2026-11-12)
+
+From `Version20261112170000`. **None is consumed server-side**, which is the normal shape for
+this table rather than an oversight: the device is the game engine, so matchday income, NPC
+insolvency and a Director of Football's opinion all happen there. They live here so an operator
+can retune them without an app release.
+
+- `matchdayFoodUptakePercent` (smallint, 35) — whole percent, clamped 0-100.
+- `npcSolvencyThresholds` (json, `[4,12,26]`) — **weeks in deficit, not money**:
+  `[warn, crisis, folded]`. Being weeks is what insulates it from the scaling problem the
+  absolute-pence `bankruptcyDeductionTiers` has.
+- `dofWageBillThresholdPct` (json, `[0.40,0.50,0.60,0.70]`) — wage-bill-to-turnover ratios as
+  **fractions, not basis points**, and that inconsistency with the economy block above is
+  deliberate: basis points exist there because those figures are links in an integer chain
+  ending in pence, while these are only ever compared against a ratio. Converting twice would
+  be the error-prone choice. `missionGemRollThresholds` is a float list for the same reason.
+- `sponsorWeeklyPence` (bigint, 0) — ⚠️ **WEEKLY, where the six existing sponsor band columns
+  are PER SEASON.** They are not convertible by dividing by a season length: a band is a league
+  sponsor's season total rolled at pack-build time and summed into `sponsorPot`, this is a
+  per-week payout on the weekly tick. 0 = no weekly sponsor income, which is the inert default.
+
+**Both json setters sort ascending on write.** The app walks each as a ladder, so an
+out-of-order row would make a later, harsher rung unreachable — the same failure mode an
+unordered `bankruptcyDeductionTiers` has, since that is first-match-wins over hand-ordered rows.
+
+### `CountryProfile` gained an economy scale (2026-11-12)
+
+`isEconomyBaseline:bool` (default false) and `economyFactorBp:int` (default
+10000 = parity), from `Version20261112160000`, which flags `EN` in `postUp()`.
+
+- **Exactly one baseline, enforced by a partial unique index**
+  (`uq_country_profile_economy_baseline`, `WHERE (is_economy_baseline = true)`)
+  rather than by a service. Every country's factor is normalised against the
+  baseline row's *own* value, so two baselines make the whole country × tier
+  chain ambiguous — and the only symptom is money that is quietly a bit wrong
+  everywhere, which nobody traces back to a flag. Partial because `false` is
+  the normal state for 25 of 26 rows.
+- **Normalised on read, not assumed to be 10000.** An operator may set England
+  to 12000 thinking in absolutes; the baseline must still resolve to parity
+  with itself or every other country shifts as a side effect.
+- **No baseline flagged at all resolves every country at parity** — the inert
+  state, deliberately not an exception, so a half-configured economy degrades
+  to "no scaling" rather than a 500.
+- `setEconomyFactorBp()` floors at 1, never 0: zero resolves every wage,
+  balance and ceiling in the country to nothing, which reads as "the economy
+  is off here" rather than as the typo it is.
+
+### `InflationRateHistory` — append-only, and nothing computes from it (2026-11-12)
+
+`ratePerSeasonBp`, `previousRatePerSeasonBp` (null only on the first row),
+`changedBy` → `Admin` (nullable, **ON DELETE SET NULL** — an audit row outlives
+the account that wrote it, same reasoning as `UserLedger::$sourceSyncRecord`),
+`note`, `recordedAt`. Created empty by `Version20261112160200`.
+
+**Why the rate gets a history when no other economy figure does:** changing a
+tier factor re-prices what the backend *generates* from then on and the old
+value stops meaning anything. The inflation rate is different in kind — the app
+compounds it over a club's season count, so changing it moves every existing
+save's prices retroactively, and with only the current value stored there is no
+way to answer "why was that club's ceiling that" afterwards.
+
+**The index is always derived from the CURRENT rate in `game_config`, never
+replayed from this table**, and that is worth not quietly improving: a replayed
+history would make a club's ceiling depend on when an operator clicked save.
+`previousRatePerSeasonBp` is *stored* rather than inferred from the preceding
+row, because reconstructing it from a timestamp ordering breaks the first time
+two changes land in the same second.
+
 ## Misc / cache / analytics
 
 - **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory)

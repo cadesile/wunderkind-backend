@@ -32,7 +32,7 @@ class PlayerController extends AbstractController
      */
     #[Route('/foreign', name: 'api_players_foreign', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
-    public function foreign(Request $request, PlayerRepository $playerRepo, PlayerBrowseSerializer $serializer): JsonResponse
+    public function foreign(Request $request, PlayerRepository $playerRepo, PlayerBrowseSerializer $serializer, \App\Service\ClubResolver $clubResolver): JsonResponse
     {
         $countryParam = $request->query->get('country');
         if ($countryParam === null || trim($countryParam) === '') {
@@ -52,10 +52,18 @@ class PlayerController extends AbstractController
 
         $players = $playerRepo->findForeign($country->nationality(), $amount);
 
+        // THE TIER IS RESOLVED SERVER-SIDE even though the country is a parameter, and the
+        // asymmetry is deliberate: `country` SELECTS which players to show (anything but
+        // English), so the client has to say which it means. The tier only PRICES them, and a
+        // client-supplied price anchor would be a client-supplied discount.
+        /** @var \App\Entity\User $user */
+        $user = $this->getUser();
+        $tier = $clubResolver->resolveFromRequest($user)?->getCurrentLeague()?->getTier();
+
         return $this->json([
             'country' => $country->value,
             'amount'  => count($players),
-            'players' => array_map($serializer->serialize(...), $players),
+            'players' => array_map($serializer->serializerFor($country->value, $tier), $players),
         ]);
     }
 

@@ -35,8 +35,27 @@
                         <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="sponsorCount" id="qe-sponsors"></label>
                     </div>
                     <div class="bmc-field-col">
-                        <span class="bmc-lbl">TV DEAL £</span>
+                        <span class="bmc-lbl">TV POOL £</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="tvPoolPence" id="qe-tvpool" placeholder="none"></label>
+                        <span class="bmc-data">The league's WHOLE TV money, split equally across its clubs.</span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">TV DEAL £ (per club)</span>
                         <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="tvDeal" id="qe-tv" placeholder="none"></label>
+                        {# Disabled by the script below whenever a pool is set: the pool is the
+                           authored figure and this is its per-club share, so both cannot be
+                           typed. Released builds read THIS key, which is why it still exists. #}
+                        <span class="bmc-data" data-qe-tv-derived hidden>Derived: pool ÷ <span data-qe-clubcount>—</span> clubs.</span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">SLOTS</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="slots" id="qe-slots" placeholder="derive"></label>
+                        <span class="bmc-data">Clubs in this league's table, the TV pool's divisor. <strong>Blank = work it out</strong> from NPC rows.</span>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">POSITION TAPER %</span>
+                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="leaguePositionDecreasePercent" id="qe-taper" placeholder="default"></label>
+                        <span class="bmc-data">Overrides the global taper for this league only. Blank = use the Game Config value.</span>
                     </div>
                     <div class="bmc-field-col">
                         <span class="bmc-lbl">PRIZE MONEY £</span>
@@ -45,6 +64,16 @@
                     <div class="bmc-field-col">
                         <span class="bmc-lbl">POSITION POT £</span>
                         <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="leaguePositionPot" id="qe-pot" placeholder="none"></label>
+                    </div>
+                    <div class="bmc-field-col">
+                        <span class="bmc-lbl">PARACHUTE (JSON)</span>
+                        <textarea name="parachute" id="qe-parachute" rows="3" placeholder="no override — uses the global default"></textarea>
+                        <span class="bmc-data">
+                            Served <strong>verbatim</strong>: the backend stores and publishes this without reading inside it,
+                            so the app owns the shape. Money in <strong>base-year pence</strong> — the app applies inflation.
+                            Blank clears the override; malformed JSON is ignored and leaves the stored value alone.
+                            Agreed shape: <code>docs/api/economy-config.md</code>.
+                        </span>
                     </div>
                     <div class="bmc-field-col">
                         <span class="bmc-lbl">TROPHY</span>

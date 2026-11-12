@@ -55,6 +55,8 @@ class SyncService
         private readonly FacilityImageResolver           $facilityImageResolver,
         private readonly UserLedgerService               $userLedgerService,
         private readonly ActivePeriodService             $activePeriodService,
+        private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
+        private readonly \App\Service\Economy\LeagueSizeResolver      $leagueSizeResolver,
     ) {}
 
     /**
@@ -360,6 +362,18 @@ class SyncService
             'managerDividendPercent'        => $gameConfig->getManagerDividendPercent(),
             'transferBudgetPercent'         => $gameConfig->getTransferBudgetPercent(),
             'seasonTicketHolderPercent'     => $gameConfig->getSeasonTicketHolderPercent(),
+            // ── Economy (2026-11-12) ──────────────────────────────────────────────────────
+            //
+            // SPREAD FROM ONE BUILDER INTO BOTH BRANCHES OF THIS TERNARY, deliberately, and
+            // the fallback below spreads the SAME call with a null config. Six keys written
+            // out twice is how the two branches drift, and the drift is silent in the worst
+            // direction: a key missing from the fallback only shows up in the no-config case,
+            // which is the case nobody exercises by hand. SyncServiceGameConfigParityTest
+            // asserts the two key sets are identical and in the same order.
+            //
+            // `seasonTicketHolderPercent` above is NOT duplicated in that block — it is
+            // already live on this surface and on /api/game-config.
+            ...$this->economyConfigPublisher->clientBlock($gameConfig, $club->getCountry()),
         ] : [
             'cliqueRelationshipThreshold'                => 20,
             'cliqueSquadCapPercent'                      => 30,
@@ -436,6 +450,11 @@ class SyncService
             'managerDividendPercent'        => 5.0,
             'transferBudgetPercent'         => 20.0,
             'seasonTicketHolderPercent'     => 60,
+            // The same builder, with no config — it falls back to a fresh GameConfig, so these
+            // defaults are the column defaults by construction rather than literals restated
+            // here. That is the `youthScholarshipWagePence` lesson a few lines up: the client
+            // guards with `?? fallback`, not falsiness, so a restated 0 would sail past it.
+            ...$this->economyConfigPublisher->clientBlock(null, $club->getCountry()),
         ];
 
         $facilityTemplates = array_map(
@@ -799,7 +818,22 @@ class SyncService
             'sponsorPot'                    => (int) $sponsorPot,
             'prizeMoney'                    => $league->getPrizeMoney() !== null ? (int) $league->getPrizeMoney() : null,
             'leaguePositionPot'             => $league->getLeaguePositionPot() !== null ? (int) $league->getLeaguePositionPot() : null,
-            'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
+            // RESOLVED `league ?? gameConfig`. Same key, same type, and the same VALUE for
+            // every league that has no override — which is all of them until an operator sets
+            // one, so this is additive in effect as well as in shape.
+            'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent()
+                ?? $gameConfig->getLeaguePositionDecreasePercent(),
+            // ADDITIVE, and ADDED HERE RATHER THAN TO THE WORLD PACK. The pack's league block
+            // is the cached surface gated by WorldInitializationService::WORLD_PACK_VERSION —
+            // a key there forces a bump that invalidates every country. This snapshot is built
+            // per sync, so it costs nothing. Same resolution the NPC-club `locationId` work
+            // reached, per .context/shared/api-backwards-compatibility.md.
+            'tvPoolPence'                   => $league->getTvPoolPence(),
+            'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
+            // Resolved whole-value, `league ?? gameConfig`. Null when neither is authored,
+            // which is the shipped state — a key an old build does not read, and a new build
+            // reads as "no parachute scheme" rather than as an empty one to pay out.
+            'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
             'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),
                 'name'           => $c->getName(),

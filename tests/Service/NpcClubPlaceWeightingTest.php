@@ -78,7 +78,16 @@ class NpcClubPlaceWeightingTest extends TestCase
             $this->createStub(LeagueService::class),
             $gameConfigRepo,
             $this->makeCatalogue($capitalIndex, $withIds, $priced),
-            $this->createStub(CountryProfileRepository::class),
+            // A REAL resolver over stubbed repositories, for the same reason the two services
+            // below are built that way: it is final. It replaced a direct
+            // CountryProfileRepository here when the leagueTierCount lookup moved into it —
+            // findByCode() on a stub returns null, so every country resolves at the full eight
+            // tiers, which is what these expectations were written against.
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(CountryProfileRepository::class),
+            ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.
@@ -128,7 +137,12 @@ class NpcClubPlaceWeightingTest extends TestCase
             $this->createStub(LeagueService::class),
             $gameConfigRepo,
             $this->makeCatalogue(self::CAPITAL_IS_LARGEST, false, true, [$index => $pence]),
-            $this->createStub(CountryProfileRepository::class),
+            // Same real-resolver-over-stubs reasoning as makeService() above.
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(CountryProfileRepository::class),
+            ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
             // stub it does nothing — exactly right for a test with no database.
@@ -352,33 +366,78 @@ class NpcClubPlaceWeightingTest extends TestCase
     }
 
     /**
-     * Over many runs, not one: the windows are half the range wide and still random inside,
-     * so a single comparison between two towns can legitimately go either way.
+     * A better town draws from a HIGHER WINDOW, asserted on the window's edges rather than on
+     * a mean.
      *
-     * EVERY SECOND TOWN, NOT EVERY TOWN, and the reason is arithmetic rather than caution.
-     * Tier 1's BIG envelope is 13 reputation points wide and the band holds eight towns, so
-     * the window's integer offset has roughly six distinct positions to hand out: ADJACENT
-     * towns routinely round onto the SAME window, and two towns drawing from one identical
-     * range differ only by sampling noise. Asserting an order between those would be
-     * asserting noise. Town00, Town02 and Town04 do land on distinct windows, and that
-     * ordering is a real guarantee.
+     * ── THIS TEST USED TO BE FLAKY, AND THE REASON IS WORTH KEEPING ───────────────────────
+     *
+     * It summed 60 reputation rolls per town and asserted `Town00 > Town02 > Town04` on the
+     * totals. Measured over 400 runs, the actual distributions are:
+     *
+     *     Town00  83-90  mean 86.56
+     *     Town01  82-89  mean 85.58
+     *     Town02  81-88  mean 84.49
+     *     Town03  80-87  mean 83.44
+     *     Town04  80-87  mean 83.43   <-- the SAME window as Town03
+     *
+     * So each window is **eight values wide and shifts by about one per town**: adjacent towns
+     * overlap by seven eighths, and the mean gap between Town02 and Town04 is barely one
+     * point. Sixty samples of that is a ~3-sigma test, which fails often enough to be seen —
+     * and the old docblock's claim that "Town00, Town02 and Town04 do land on distinct
+     * windows" was simply wrong about Town04, which shares Town03's window entirely.
+     *
+     * ── WHY EDGES INSTEAD OF MEANS ────────────────────────────────────────────────────────
+     *
+     * `rollAtStanding()` picks uniformly inside a window whose LOWER BOUND is a monotonic
+     * function of the town's standing. The mean is a noisy estimator of that bound; the
+     * observed minimum is a precise one. With 300 samples from an eight-wide uniform window
+     * the chance of never drawing the lowest value is (7/8)^300, about 1 in 10^17 — so
+     * comparing observed edges is effectively deterministic, where comparing means never can
+     * be.
+     *
+     * It also tests the right thing. The guarantee the generator actually makes is "a more
+     * valuable town draws from a higher range", not "a more valuable town has a higher average
+     * over sixty seasons".
+     *
+     * ── TOWN03 AND TOWN04 ARE DELIBERATELY NOT COMPARED ───────────────────────────────────
+     *
+     * They land on one identical window, so ANY ordering asserted between them — strict or
+     * not — is a coin flip. Do not add them back.
      */
-    public function testReputationTrendsDownwardAcrossTheAnchoredTowns(): void
+    public function testABetterTownDrawsFromAHigherReputationWindow(): void
     {
-        $service = $this->makeService();
-        $totals  = ['Town00' => 0, 'Town02' => 0, 'Town04' => 0];
+        $service  = $this->makeService();
+        $observed = [];
 
-        for ($run = 0; $run < 60; $run++) {
+        // 300 runs: enough that each town's observed edges are its true window edges (see the
+        // docblock's arithmetic), and still well under a second.
+        for ($run = 0; $run < 300; $run++) {
             $clubs = $service->generateClubs(5, 1, 'EN');
             foreach (array_combine($this->townsOf($clubs), $clubs) as $town => $club) {
-                if (isset($totals[$town])) {
-                    $totals[$town] += $club->getReputation();
-                }
+                $observed[$town][] = $club->getReputation();
             }
         }
 
-        self::assertGreaterThan($totals['Town02'], $totals['Town00']);
-        self::assertGreaterThan($totals['Town04'], $totals['Town02']);
+        foreach (['Town00', 'Town02', 'Town04'] as $town) {
+            self::assertArrayHasKey($town, $observed, "{$town} never received a club");
+            self::assertGreaterThan(100, count($observed[$town]), "{$town} was sampled too few times to read its edges");
+        }
+
+        // The window SLID UP, at both ends, for each better town. Every-second-town spacing,
+        // because adjacent windows differ by about a single point and often round onto the
+        // same one.
+        self::assertGreaterThan(min($observed['Town02']), min($observed['Town00']), 'Town00 floor');
+        self::assertGreaterThan(min($observed['Town04']), min($observed['Town02']), 'Town02 floor');
+        self::assertGreaterThan(max($observed['Town02']), max($observed['Town00']), 'Town00 ceiling');
+        self::assertGreaterThan(max($observed['Town04']), max($observed['Town02']), 'Town02 ceiling');
+
+        // And the central tendency agrees, across the ENDS only — a 3-point gap there, against
+        // barely one between any adjacent pair.
+        self::assertGreaterThan(
+            array_sum($observed['Town04']) / count($observed['Town04']),
+            array_sum($observed['Town00']) / count($observed['Town00']),
+            'the best town must also average higher than the worst',
+        );
     }
 
     /**

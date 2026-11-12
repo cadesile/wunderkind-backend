@@ -26,6 +26,7 @@ class GameConfigController extends AbstractController
         private readonly StarterConfigRepository     $starterConfigRepository,
         private readonly LanguageRepository          $languageRepository,
         private readonly NarrativeTranslationService $translationService,
+        private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
     ) {}
 
     /**
@@ -292,6 +293,22 @@ class GameConfigController extends AbstractController
             // Sourced from StarterConfig (the live config that actually drives NPC
             // world-pack generation), not GameConfig.
             'npcSquadConfig' => $this->starterConfigRepository->getConfig()->getNpcSquadConfig(),
+
+            // ── Economy (2026-11-12) ──────────────────────────────────────────────────────
+            //
+            // The SAME six keys the sync `gameConfig` block carries, from the same builder, so
+            // a client can read either surface and get the same contract.
+            //
+            // `?country=` IS OPTIONAL AND ABSENT MEANS PARITY. This endpoint is PUBLIC_ACCESS,
+            // so unlike sync there is no club to resolve a country from — the resolved per-tier
+            // table has to be asked for. Omitting it resolves at parity and reports
+            // `country: null`, which is byte-identical to what a single-country world would
+            // publish and is what every shipped build gets, since none of them sends the param.
+            // Same optional-new-field rule as `locationId` on POST /api/club/initialize.
+            ...$this->economyConfigPublisher->clientBlock(
+                $config,
+                $request->query->get('country'),
+            ),
 
             // Facility templates — defines per-level gameplay effects for each facility type.
             // Client applies these during the weekly tick on top of the GameConfig baselines above.

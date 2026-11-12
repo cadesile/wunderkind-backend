@@ -467,9 +467,12 @@ class ClubSetupControllerTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $projection = $this->json()['projection'];
 
-        // weeklyUpkeepBase is 1000 at level 1 on the seeded template.
-        self::assertSame(1000, $projection['facilityUpkeepPerWeekPence']);
-        self::assertSame(1000 * $projection['weeks'], $projection['facilityUpkeepPence']);
+        // weeklyUpkeepBase is 1000 on the seeded template, and upkeep is `base x 1.5^level`
+        // — so a level-1 facility runs at 1500, not 1000. That is 50% more than this test
+        // asserted before 2026-11-12, when the server was aligned to the charge the app
+        // actually makes; see FacilityCostCalculator::weeklyUpkeep().
+        self::assertSame(1500, $projection['facilityUpkeepPerWeekPence']);
+        self::assertSame(1500 * $projection['weeks'], $projection['facilityUpkeepPence']);
         self::assertFalse($projection['wagesIncluded']);
     }
 

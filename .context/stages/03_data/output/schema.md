@@ -100,6 +100,17 @@ Three things to know before touching them:
 > unknown objects. Add new ones the same way — not in raw migration SQL alone —
 > and copy the predicate exactly as PostgreSQL reports it, or the diff churns.
 
+- **`country_profile`** — partial unique index
+  `uq_country_profile_economy_baseline` (`WHERE (is_economy_baseline = true)`),
+  added in `Version20261112160000` — **exactly one country may be the economy
+  baseline**, guaranteed by the database rather than by a service. Partial
+  because `false` is the normal state for every row but one, so an
+  unconditional unique index would refuse the second non-baseline country and
+  make the table unusable. `tests/Entity/CountryProfileEconomyBaselineTest.php`
+  asserts both halves: two baselines are refused (on INSERT *and* on the
+  realistic route, an UPDATE promoting a second one), and many non-baselines
+  are fine.
+
 - **`active_competition`** — partial unique index
   `uq_active_competition_one_open_per_template` (`WHERE status =
   'registering'`), added in `Version20260916112510` — enforces at most

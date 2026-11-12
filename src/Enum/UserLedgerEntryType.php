@@ -71,6 +71,26 @@ enum UserLedgerEntryType: string
     case CLUB_FUNDING = 'club_funding';
 
     /**
+     * The owner gifting money from their own account into one of their clubs. NEGATIVE.
+     *
+     * ONCE PER CLUB PER SEASON, up to a per-tier ceiling. Idempotency is the ledger's
+     * `(sourceKind, sourceRef, type)` unique index with `sourceRef = "{clubId}:{season}"` — the
+     * same natural-key approach CLUB_FUNDING uses, rather than an Idempotency-Key header,
+     * because the thing being protected already has a natural key.
+     *
+     * THE CLUB NEVER RECEIVES THIS SERVER-SIDE, which is the part worth knowing. The debit from
+     * the owner's ledger is real and durable; the credit to `club.balance` is an INSTRUCTION the
+     * response carries and the device applies. `SyncService::process()` overwrites
+     * `club.balance` absolutely from the device on every sync, so a server-side credit there
+     * would survive until the next sync and then vanish — the trap ClubFundingService documents
+     * at length.
+     *
+     * A DEBIT, so `isDebit()` returns true and `append()` refuses a positive amount. Unlike
+     * CUSTOM_INCOME this has one fixed direction: money only ever leaves the account.
+     */
+    case SEASON_INVESTMENT = 'season_investment';
+
+    /**
      * A manual adjustment made by an admin. EITHER SIGN.
      *
      * The only type a human authors directly — a goodwill credit, a compensation, a correction.
@@ -106,6 +126,7 @@ enum UserLedgerEntryType: string
             self::FACILITY_STADIUM  => 'Stadium',
             self::FACILITY_BUILD   => 'Facility build',
             self::CLUB_FUNDING     => 'Club funding',
+            self::SEASON_INVESTMENT => 'Season investment',
             // PLAYER-VISIBLE. Returned as `label` by GET /api/account/ledger, so it is worded
             // for the person reading their own ledger, not for the admin who typed it — and it
             // has to read sensibly whether the amount is a credit or a deduction.
@@ -134,8 +155,9 @@ enum UserLedgerEntryType: string
             self::FACILITY_SCOUTING,
             self::FACILITY_STADIUM,
             self::FACILITY_BUILD,
-            self::CLUB_FUNDING => true,
-            default            => false,
+            self::CLUB_FUNDING,
+            self::SEASON_INVESTMENT => true,
+            default                 => false,
         };
     }
 
@@ -159,7 +181,8 @@ enum UserLedgerEntryType: string
             self::LAND_PURCHASE, self::STADIUM_PURCHASE,
             self::FACILITY_TRAINING, self::FACILITY_MEDICAL,
             self::FACILITY_SCOUTING, self::FACILITY_STADIUM,
-            self::FACILITY_BUILD, self::CLUB_FUNDING         => 'warning',
+            self::FACILITY_BUILD, self::CLUB_FUNDING,
+            self::SEASON_INVESTMENT                         => 'warning',
             // Neutral on purpose: the sign varies per row, so no one colour is honest about
             // direction. The amount column already shows it.
             self::CUSTOM_INCOME                             => 'info',

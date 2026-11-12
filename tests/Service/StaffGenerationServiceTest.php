@@ -24,10 +24,20 @@ class StaffGenerationServiceTest extends TestCase
         return $repo;
     }
 
+    /**
+     * A REAL GameConfig, not a stub of it.
+     *
+     * The entity returns a backed enum now (`getEconomyWageModel()`), and PHPUnit cannot
+     * generate a return value for an enum — stubbing the entity made every test here fail with
+     * "is an enumeration and cannot be doubled". Using the real thing is better anyway: it is a
+     * plain data object, so a stub only ever risked disagreeing with it.
+     */
     private function makeGameConfigRepo(): GameConfigRepository
     {
-        $config = $this->createStub(\App\Entity\GameConfig::class);
-        $config->method('getWageMultiplierTiers')->willReturn([
+        $config = new \App\Entity\GameConfig();
+        // A single catch-all tier at x1.0, so a staff salary is the raw band roll — which is
+        // what these expectations were written against.
+        $config->setWageMultiplierTiers([
             ['maxAbility' => null, 'playerMultiplier' => 1.0, 'staffMultiplier' => 1.0],
         ]);
 
@@ -45,11 +55,35 @@ class StaffGenerationServiceTest extends TestCase
         // Real PersonalityLifecycleSubscriber (pure logic, no Doctrine args needed for fill()).
         $personalityLifecycle = new PersonalityLifecycleSubscriber(new PersonalityGeneratorService());
 
+        // NAMED ARGUMENTS, so a constructor change cannot silently shift a stub into the wrong
+        // slot — which is exactly what happened when GameConfigRepository was removed from this
+        // service: every positional argument after it moved up one and PHP reported it as a
+        // type error in an unrelated parameter.
         return new StaffGenerationService(
-            $this->makePoolConfigRepo(),
-            $this->makeGameConfigRepo(),
-            $nameGen,
-            $personalityLifecycle,
+            poolConfigRepo: $this->makePoolConfigRepo(),
+            nameGenerator: $nameGen,
+            personalityLifecycle: $personalityLifecycle,
+            wageModel: $this->makeWageModel(),
+        );
+    }
+
+    /**
+     * A REAL WageModelResolver over stubbed repositories, because it is final and cannot be
+     * doubled. The stubbed GameConfig has a single catch-all wage tier at x1.0, so a staff
+     * salary comes out as the raw band roll — which is what these expectations were written
+     * against, and what proves the move through the resolver changed nothing.
+     */
+    private function makeWageModel(): \App\Service\Economy\WageModelResolver
+    {
+        $gameConfigRepo = $this->makeGameConfigRepo();
+
+        return new \App\Service\Economy\WageModelResolver(
+            $gameConfigRepo,
+            new \App\Service\Economy\EconomyScaleResolver(
+                $gameConfigRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
         );
     }
 
@@ -96,10 +130,10 @@ class StaffGenerationServiceTest extends TestCase
         $nameGen->method('generateName')->willReturn('Test Coach');
 
         $service = new StaffGenerationService(
-            $poolConfigRepo,
-            $this->makeGameConfigRepo(),
-            $nameGen,
-            new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
+            poolConfigRepo: $poolConfigRepo,
+            nameGenerator: $nameGen,
+            personalityLifecycle: new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
+            wageModel: $this->makeWageModel(),
         );
 
         for ($i = 0; $i < 20; $i++) {

@@ -106,21 +106,24 @@ class FacilityCostCalculatorTest extends TestCase
     }
 
     /**
-     * Upkeep at level 1 is the stored base, not 1.5x it.
+     * Upkeep is `base x 1.5^level`, so level 1 is 1.5x the stored base.
      *
-     * The column is documented as "base weekly upkeep cost in pence AT LEVEL 1", and its own
-     * formula line says "x 1.5^level", which disagrees by one power. Resolved in favour of the
-     * sentence describing the stored value — asserted here so the resolution is deliberate and
-     * cannot be quietly flipped.
+     * THIS ASSERTION WAS THE OTHER WAY ROUND UNTIL 2026-11-12, and the flip is the point: the
+     * column carried two contradictory readings ("cost at level 1" and `1.5^level`) and the
+     * server had picked the one that made its figure 1.5x cheaper than what the app charges.
+     * The app is the game engine and therefore the tie-breaker. Levels 0-5 are pinned here so
+     * the alignment cannot drift back by one power unnoticed.
      */
-    public function testUpkeepAtLevelOneIsTheStoredBase(): void
+    public function testUpkeepCompoundsFromLevelOne(): void
     {
         $template = $this->template(baseCost: 100, maxLevel: 5, upkeep: 1000);
 
-        self::assertSame(0, $this->calculator->weeklyUpkeep($template, 0));
-        self::assertSame(1000, $this->calculator->weeklyUpkeep($template, 1));
-        self::assertSame(1500, $this->calculator->weeklyUpkeep($template, 2));
-        self::assertSame(2250, $this->calculator->weeklyUpkeep($template, 3));
+        self::assertSame(0, $this->calculator->weeklyUpkeep($template, 0), 'an unbuilt facility costs nothing to run');
+        self::assertSame(1500, $this->calculator->weeklyUpkeep($template, 1));
+        self::assertSame(2250, $this->calculator->weeklyUpkeep($template, 2));
+        self::assertSame(3375, $this->calculator->weeklyUpkeep($template, 3));
+        self::assertSame(5063, $this->calculator->weeklyUpkeep($template, 4));
+        self::assertSame(7594, $this->calculator->weeklyUpkeep($template, 5));
     }
 
     public function testFacilityWithNoUpkeepCostsNothingToRun(): void

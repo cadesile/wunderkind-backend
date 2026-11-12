@@ -1,5 +1,54 @@
 # Current Focus
 
+## Shipped inert, 2026-11-12 — the economy overhaul
+
+**Deployed is not live.** Eight migrations landed (`Version20261112160000` through `...210000`)
+with every country factor at parity, the wage model on `legacy`, inflation at 0, the turnover
+table unauthored and the season-investment ceiling at 0. The deploy was a provable no-op —
+verified against a full clone of the dev dataset each step. Turning it on is an operator
+procedure: **`docs/deploy/economy-rollout.md`**.
+
+What exists now:
+
+- **`EconomyScaleResolver`** — the ONLY place country and tier compose into money. Integer basis
+  points, one division at the end, one `pow()` for the ability curve. Raw row indexing: tier *t*
+  reads row *t*, which reversed the old `scaleTierToEight()` stretching (removed).
+- **`WageModelResolver`** — replaced FOUR copies of the wage arithmetic, one of which
+  (`GenerateMarketDataCommand`) ignored both the live config and the tier multipliers and priced
+  players two orders of magnitude low, and left every scout it made on wage 0.
+  `legacy` is a supported mode that must stay byte-identical; `WageModelLegacyParityTest` holds
+  the pre-unification expressions independently and must never be "refactored" to call the
+  resolver.
+- **Two populations, two treatments** — the distinction that governs everything: per-country
+  world-pack rows are priced at generation and stored (hence the `WORLD_PACK_VERSION` bump at
+  flip time), while shared-pool rows are one row served to every country and are priced at
+  **serve time**.
+- **`LeagueSizeResolver`** — the TV pool's divisor, authored rather than counted, because a
+  `League` row is a template shared by every save (England tier 8 had **147 player clubs**
+  pointing at one row).
+- `app:economy:wage-table` — the gate, five checks, exits non-zero. It has already caught two
+  real defects in this work.
+- `GET/POST /api/club/season-investment`, World → Economy admin screen, and the verbatim
+  parachute passthrough.
+
+**Fixed 2026-11-12:** the youth-scholarship inversion. The flat £250 was 1.97x an average
+tier-8 wage under the turnover model; `economyYouthScholarshipCapBp` caps it at a share of the
+tier's WORST first-team wage, taking tier 8 to 0.05x while leaving tiers 1-6 byte-identical. A
+cap rather than a replacement, because the flat figure was right at six of the eight tiers. It
+ships ON at 50% — the one switch in this series that does — and is still a provable no-op,
+because it applies only under the `turnover` model.
+
+**Also fixed 2026-11-12:** the sponsor bands scale by country, so a cheap country is cheap on
+both sides of the ledger rather than earning full English sponsorship on a fifth of the wages.
+Country factor ONLY, not country x tier — a league's tier variation is already expressed by its
+`sponsorCount` and size mix. It collapsed a FIFTH byte-identical duplication on the way.
+
+**Still open:** `bankruptcyDeductionTiers` has two rows that cannot fire under the resolution its
+own docblock documents, and its ladder is traversed in under half a week at the top five tiers.
+That is a client-side mechanic gated by its own flag, and it predates this work — see
+**`docs/economy-threshold-review.md`** for the analysis and the weeks-of-wages proposal.
+
+
 ## In flight, 2026-11-11 → 2026-11-12 — taking world content off the deploy path
 
 One theme across both days: **everything a new country needs, authored from the admin instead

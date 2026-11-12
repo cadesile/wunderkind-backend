@@ -35,7 +35,16 @@ class FacilityTemplate
     #[ORM\Column(type: 'integer', options: ['unsigned' => true])]
     private int $baseCost;
 
-    /** Base weekly upkeep cost in pence at level 1. Frontend formula: baseCost × 1.5^level */
+    /**
+     * Weekly upkeep base in pence. Charge at a given level is `weeklyUpkeepBase × 1.5^level`.
+     *
+     * THE "AT LEVEL 1" THIS USED TO SAY WAS THE HALF THAT WAS WRONG. This comment carried both
+     * readings — "cost at level 1" and `1.5^level`, one power of 1.5 apart — and
+     * FacilityCostCalculator::weeklyUpkeep() picked the first, making the server's projection
+     * 1.5x cheaper than what the app actually charges. Resolved in favour of the formula, which
+     * is what the device does; see that method's docblock. Its stray `baseCost` (a different
+     * column) is corrected here too.
+     */
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $weeklyUpkeepBase = 0;
 

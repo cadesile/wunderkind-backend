@@ -39,11 +39,15 @@ class LeagueImportExportService
                 'name'                 => $l->getName(),
                 'promotionSpots'       => $l->getPromotionSpots(),
                 'tvDeal'               => $l->getTvDeal(),
+                'tvPoolPence'          => $l->getTvPoolPence(),
+                'slots'                => $l->getSlots(),
+                'leaguePositionDecreasePercent' => $l->getLeaguePositionDecreasePercent(),
                 'leagueReputationTier' => $l->getLeagueReputationTier()?->value,
                 'prizeMoney'           => $l->getPrizeMoney(),
                 'leaguePositionPot'    => $l->getLeaguePositionPot(),
                 'sponsorCount'         => $l->getSponsorCount(),
                 'trophy'               => $l->getTrophy(),
+                'parachute'            => $l->getParachute(),
             ];
         }
 
@@ -146,6 +150,26 @@ class LeagueImportExportService
                     $league->setPrizeMoney($row['prizeMoney'] !== null ? (int) $row['prizeMoney'] : null);
                 if (array_key_exists('leaguePositionPot', $row))
                     $league->setLeaguePositionPot($row['leaguePositionPot'] !== null ? (int) $row['leaguePositionPot'] : null);
+                // RESTORED VERBATIM, AND tvDeal IS NOT RE-DERIVED FROM THE POOL HERE. An export
+                // holds both columns, and a clear-then-import round trip has to reproduce the
+                // file exactly — testWorldSurvivesClearAndReimport asserts that. Re-deriving
+                // would also divide by a size taken mid-import, when the NPC clubs that make up
+                // that size may not have been inserted yet.
+                if (array_key_exists('tvPoolPence', $row))
+                    $league->setTvPoolPence($row['tvPoolPence'] !== null ? (int) $row['tvPoolPence'] : null);
+                // VERBATIM BOTH WAYS. No cast, no validation — the backend has no opinion
+                // about this block's shape, so a round trip must return exactly what it was
+                // given or the export stops being a backup.
+                if (array_key_exists('parachute', $row))
+                    $league->setParachute(is_array($row['parachute']) ? $row['parachute'] : null);
+                if (array_key_exists('slots', $row))
+                    $league->setSlots((int) $row['slots']);
+                if (array_key_exists('leaguePositionDecreasePercent', $row))
+                    $league->setLeaguePositionDecreasePercent(
+                        $row['leaguePositionDecreasePercent'] !== null
+                            ? (int) $row['leaguePositionDecreasePercent']
+                            : null
+                    );
                 if (array_key_exists('leagueReputationTier', $row))
                     $league->setLeagueReputationTier(
                         $row['leagueReputationTier'] !== null
