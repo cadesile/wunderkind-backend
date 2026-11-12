@@ -69,19 +69,27 @@ final class FacilityCostCalculator
     }
 
     /**
-     * Weekly upkeep of one facility at a given level.
+     * Weekly upkeep of one facility at a given level: `weeklyUpkeepBase x 1.5^level`.
      *
-     * `FacilityTemplate::$weeklyUpkeepBase` is documented as "base weekly upkeep cost in pence
-     * AT LEVEL 1", with a growth factor of 1.5 per level. Level 1 therefore pays the base
-     * itself, which is why the exponent is `level - 1` and not `level`: the latter would make
-     * level 1 cost 1.5x the figure the column says it is.
+     * ALIGNED TO THE APP, 2026-11-12, AND THIS REVERSES WHAT THIS DOCBLOCK USED TO ARGUE.
+     * The exponent was `level - 1`, resolved that way because `FacilityTemplate`'s own column
+     * comment calls `weeklyUpkeepBase` the cost "at level 1" while its formula line says
+     * `1.5^level` — two readings one power of 1.5 apart, and the "at level 1" sentence looked
+     * like the one describing the stored value.
      *
-     * THE COLUMN'S OWN DOCBLOCK WRITES THE FORMULA AS "baseCost x 1.5^level", WHICH DISAGREES
-     * with its "at level 1" sentence by one power of 1.5. Resolved here in favour of "at level
-     * 1" because that describes the stored value, while the formula line names a column
-     * (`baseCost`) that is not the upkeep column at all and reads as a copy-paste. This only
-     * feeds the funding floor below — it is not a client-visible price — but if the weekly tick
-     * ever starts charging upkeep, the two have to be reconciled deliberately.
+     * THE APP IS THE TIE-BREAKER, NOT THE PROSE. The device is the game engine and it charges
+     * `base x 1.5^level`, so the server's `level - 1` made its own figure 1.5x cheaper than
+     * what the player actually pays. A projection that understates a running cost is worse
+     * than one that is merely differently documented: it is the number POST /api/club/fund
+     * returns for the funding screen to warn with, so being low is being wrong in the
+     * direction that lets a player underfund a club. `weeklyUpkeepBase` is therefore the
+     * cost at level 0 — a hypothetical, since an unbuilt facility is short-circuited below —
+     * and level 1 pays 1.5x it.
+     *
+     * CLIENT-VISIBLE CONSEQUENCE: `projection.facilityUpkeepPerWeekPence` and
+     * `projection.facilityUpkeepPence` on POST /api/club/fund both rise exactly 50%. Same
+     * keys, changed values, which `.context/shared/api-backwards-compatibility.md` counts as a
+     * deliberate break; it is logged there with its consumer check.
      */
     public function weeklyUpkeep(FacilityTemplate $template, int $level): int
     {
@@ -89,6 +97,6 @@ final class FacilityCostCalculator
             return 0;
         }
 
-        return (int) round($template->getWeeklyUpkeepBase() * (1.5 ** ($level - 1)));
+        return (int) round($template->getWeeklyUpkeepBase() * (1.5 ** $level));
     }
 }
