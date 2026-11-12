@@ -32,10 +32,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * deliberately not from arguments. A preview computed from numbers typed on the command line
  * would be a preview of nothing: the whole question is what the STORED configuration produces.
  *
- * ── THE FOUR CHECKS ───────────────────────────────────────────────────────────────────────
+ * ── THE SIX CHECKS ────────────────────────────────────────────────────────────────────────
  *
  * A table of plausible-looking numbers can still be wrong in ways that are invisible row by
- * row, so the command answers five questions it would be easy not to ask:
+ * row, so the command answers six questions it would be easy not to ask:
  *
  *  1. **Is `S_tier` strictly decreasing?** It has to be, or a lower division pays more per unit
  *     of ability than the one above it.
@@ -52,6 +52,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *     flat pence while wages scale, so a country factor or a model flip silently decouples
  *     them — and overlapping unbounded rows are unreachable under the documented
  *     first-match-wins contract. See docs/economy-threshold-review.md.
+ *  6. **Is the TV table scaled by the country factor?** `league.tv_deal` is the one money
+ *     figure the factor chain never touches — it is a stored absolute — so a factored country
+ *     would pay a fifth of the wages and collect full baseline TV money. Check 3 cannot see
+ *     this: TV at five times its intended share still passes a bound of 100% of turnover.
  *
  * Exit code 1 when any check fails, so this can gate a deploy rather than just inform one.
  */
@@ -220,6 +224,7 @@ final class EconomyWageTableCommand extends Command
 
         $problems = [...$problems, ...$this->checkAbilityInversions($country, $bands, $scales, $config)];
         $problems = [...$problems, ...$this->checkTvAgainstTurnover($io, $country, $tierCount, $config)];
+        $problems = [...$problems, ...$this->checkTvIsCountryScaled($io, $country, $tierCount)];
         $problems = [...$problems, ...$this->checkAbsoluteThresholds($io, $country, $tierCount, $config)];
 
         return $problems;
@@ -322,6 +327,108 @@ final class EconomyWageTableCommand extends Command
         if ($rows !== []) {
             $io->text('TV against turnover:');
             $io->table(['T', 'clubs', 'TV per club', 'TV pool', 'turnover', 'TV % turnover'], $rows);
+        }
+
+        return $problems;
+    }
+
+    /**
+     * CHECK 6 — is the TV table scaled by the country factor?
+     *
+     * ── THE GAP THIS CLOSES ───────────────────────────────────────────────────────────────
+     *
+     * Every money figure in this economy reaches a country through `EconomyScaleResolver`,
+     * which multiplies a base-year amount by the country factor — **except TV.**
+     * `league.tv_deal` is a STORED ABSOLUTE on a per-country row, authored by an operator, and
+     * no factor is ever applied to it. So setting `country_profile.economy_factor_bp` to 2000
+     * drops a country's turnover, wages and sponsorship to a fifth and leaves its TV money at
+     * 100%: a club paying a fifth of the wages while collecting full English TV money. Not a
+     * cheaper country — a different game, and the same defect the sponsor bands had before they
+     * were country-scaled, except this one cannot be fixed in code because the figure is
+     * authored rather than derived.
+     *
+     * Nothing warned about it. Check 3 does not: TV at 5x its intended share still passes a
+     * bound of 100% of turnover whenever the factor is above about 0.35.
+     *
+     * ── HOW IT IS DETECTED ────────────────────────────────────────────────────────────────
+     *
+     * Turnover IS country-scaled, so for a correctly-authored TV table
+     *
+     *     TV_country / turnover_country  ===  TV_baseline / turnover_baseline
+     *
+     * at every tier — the share is scale-free, which is what makes it comparable at all. The
+     * check therefore reads the baseline country's own `tv_deal` for the tier and asks whether
+     * this country's is the baseline's times the factor. It reports the figure the operator
+     * should author, not merely that something is wrong.
+     *
+     * A country at parity needs no check and is skipped, which is why this is silent on every
+     * box today. Zero baselines is legal and also skipped: with nothing to compare against
+     * there is no claim to make.
+     *
+     * TOLERANCE IS 2%, because a sensible TV table is rounded to a few significant figures and
+     * the factor is basis points. The check is for an unscaled table, not for a rounding
+     * difference.
+     *
+     * @return list<string>
+     */
+    private function checkTvIsCountryScaled(SymfonyStyle $io, string $country, int $tierCount): array
+    {
+        $baseline = $this->scaleResolver->baselineCountryCode();
+
+        // Nothing flagged, or this IS the baseline: no comparison to make.
+        if ($baseline === null || $baseline === strtoupper(trim($country))) {
+            return [];
+        }
+
+        $factorBp = $this->scaleResolver->countryFactorBp($country);
+
+        // At parity the stored absolute is already correct, which is every country today.
+        if ($factorBp === 10000) {
+            return [];
+        }
+
+        $problems = [];
+        $rows     = [];
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $here = $this->leagueRepository->findByCountryAndTier($country, $tier)?->getTvDeal();
+            $base = $this->leagueRepository->findByCountryAndTier($baseline, $tier)?->getTvDeal();
+
+            if ($here === null || $base === null || $base <= 0) {
+                continue;
+            }
+
+            $expected = intdiv($base * $factorBp, 10000);
+            $driftPct = $expected > 0 ? abs($here - $expected) * 100 / $expected : 0.0;
+
+            $rows[] = [
+                $tier,
+                $this->money($base),
+                sprintf('%.2f', $factorBp / 10000),
+                $this->money($expected),
+                $this->money($here),
+                sprintf('%.0f%%', $driftPct),
+            ];
+
+            if ($driftPct > 2.0) {
+                $problems[] = sprintf(
+                    '%s tier %d: TV is %s per club but %s\'s economy factor is %.0f%% of %s, so it should be about %s. '
+                    . '`league.tv_deal` is a stored absolute and no factor reaches it — re-author %s\'s TV table.',
+                    $country,
+                    $tier,
+                    $this->money($here),
+                    $country,
+                    $factorBp / 100,
+                    $baseline,
+                    $this->money($expected),
+                    $country,
+                );
+            }
+        }
+
+        if ($rows !== []) {
+            $io->text(sprintf('TV against the %s baseline (factor %.2f):', $baseline, $factorBp / 10000));
+            $io->table(['T', "{$baseline} per club", 'factor', 'expected', 'authored', 'drift'], $rows);
         }
 
         return $problems;

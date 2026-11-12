@@ -400,4 +400,22 @@ final class EconomyScaleResolver
         return $this->baselineFactorBp ??= $this->countryProfileRepository
             ->findEconomyBaseline()?->getEconomyFactorBp() ?? 0;
     }
+
+    /**
+     * The flagged baseline country's code, or null when none is flagged.
+     *
+     * Needed by anything that has to compare a country against the base year rather than merely
+     * scale by it — the TV-table guard in `app:economy:wage-table` is the first such caller,
+     * because `league.tv_deal` is a STORED ABSOLUTE that no factor reaches, so the only way to
+     * tell whether it was scaled is to compare it with the baseline country's own figure.
+     *
+     * Zero baselines is a legal state (it resolves everything at parity), so null is an answer
+     * rather than an error.
+     */
+    public function baselineCountryCode(): ?string
+    {
+        $code = $this->countryProfileRepository->findEconomyBaseline()?->getCode();
+
+        return $code !== null && trim($code) !== '' ? strtoupper(trim($code)) : null;
+    }
 }
