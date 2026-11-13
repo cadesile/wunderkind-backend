@@ -193,8 +193,14 @@ class GameConfigController extends AbstractController
             'squadRoleMoraleBoostPerWeek'     => $config->getSquadRoleMoraleBoostPerWeek(),
             'squadRoleAutoAssignThresholds'   => $config->getSquadRoleAutoAssignThresholds(),
 
-            // League player ability ranges per country/tier
-            'leaguePlayerAbilityRanges' => $config->getLeaguePlayerAbilityRanges(),
+            // League player ability ranges per country/tier.
+            //
+            // SERVED FROM starter_config.league_ability_ranges, the table that actually prices
+            // and generates players — NOT from the game_config column of nearly the same name,
+            // which had no server-side consumer and disagreed with it at every England tier.
+            // Same key, same shape, corrected source. See EconomyConfigPublisher for the two
+            // things this changes for a consumer (more countries; Scotland has four tiers).
+            'leaguePlayerAbilityRanges' => $this->economyConfigPublisher->leaguePlayerAbilityRanges(),
 
             // Inbox / Notification frequencies
             'facilityMaintenanceFrequencyWeeks' => $config->getFacilityMaintenanceFrequencyWeeks(),

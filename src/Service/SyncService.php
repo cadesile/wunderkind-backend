@@ -358,7 +358,11 @@ class SyncService
             'maxFacilityManagersPerClub'    => $gameConfig->getMaxFacilityManagersPerClub(),
             'maxChairmensPerClub'           => $gameConfig->getMaxChairmensPerClub(),
             'maxScoutsPerClub'              => $gameConfig->getMaxScoutsPerClub(),
-            'leaguePlayerAbilityRanges'     => $gameConfig->getLeaguePlayerAbilityRanges(),
+            // From starter_config, not the game_config column of nearly the same name — see
+            // EconomyConfigPublisher::leaguePlayerAbilityRanges(). The source is a StarterConfig
+            // read, so it is identical in both branches of this ternary and does not depend on
+            // a GameConfig row existing.
+            'leaguePlayerAbilityRanges'     => $this->economyConfigPublisher->leaguePlayerAbilityRanges(),
             'managerDividendPercent'        => $gameConfig->getManagerDividendPercent(),
             'transferBudgetPercent'         => $gameConfig->getTransferBudgetPercent(),
             'seasonTicketHolderPercent'     => $gameConfig->getSeasonTicketHolderPercent(),
@@ -446,7 +450,11 @@ class SyncService
             'maxFacilityManagersPerClub'    => 1,
             'maxChairmensPerClub'           => 1,
             'maxScoutsPerClub'              => 3,
-            'leaguePlayerAbilityRanges'     => [],
+            // NOT `[]` any more. These bands live on StarterConfig, which exists whether or
+            // not a GameConfig row does, so the no-config branch can and should serve the real
+            // table — an empty list here meant a client with no GameConfig row fell through to
+            // its own defaults while a client with one got eight countries' worth.
+            'leaguePlayerAbilityRanges'     => $this->economyConfigPublisher->leaguePlayerAbilityRanges(),
             'managerDividendPercent'        => 5.0,
             'transferBudgetPercent'         => 20.0,
             'seasonTicketHolderPercent'     => 60,
