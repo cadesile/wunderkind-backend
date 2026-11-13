@@ -473,6 +473,7 @@ final class EconomyWageTableCommand extends Command
 
             $band    = $this->scaleResolver->abilityBand($country, $tier);
             $squad   = $this->squadSize($tier);
+
             $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
             // Through the resolver's own definition, so the check and the thing it checks
             // cannot drift apart — which is exactly how the scholarship bug got in.
@@ -542,6 +543,81 @@ final class EconomyWageTableCommand extends Command
                     );
                 }
             }
+        }
+
+        $problems = [...$problems, ...$this->checkDeductionWeeks($config)];
+
+        return $problems;
+    }
+
+    /**
+     * The WEEKS ladder's own contract: contiguous, ascending, one unbounded row, and it last.
+     *
+     * NOT A DUPLICATE OF THE UNBOUNDED CHECK ABOVE. That one reports a defect in the pence
+     * ladder which `GameConfig` deliberately does not normalise — those rows are stored exactly
+     * as typed, first-match-wins over hand-ordered rows, so the command is the only thing that
+     * can speak. This ladder IS normalised on write, so anything reported here means the stored
+     * value and the authored value differ: the operator typed something the setter had to
+     * repair. Saying so is the point — a silent repair is how an operator ends up believing a
+     * ladder they do not have.
+     *
+     * Null is the shipped state and reports nothing: the app uses its own constant.
+     *
+     * @return list<string>
+     */
+    private function checkDeductionWeeks(GameConfig $config): array
+    {
+        $rows = $config->getBankruptcyDeductionWeeks();
+
+        if ($rows === null || $rows === []) {
+            return [];
+        }
+
+        $problems = [];
+        $previous = null;
+
+        foreach ($rows as $i => $row) {
+            $min = (int) ($row['weeksMin'] ?? 0);
+            $max = $row['weeksMax'] ?? null;
+
+            if ($previous !== null && $previous['weeksMax'] === null) {
+                $problems[] = sprintf(
+                    'bankruptcyDeductionWeeks row %d sits behind an unbounded row — it can never be reached.',
+                    $i + 1,
+                );
+                break;
+            }
+
+            if ($previous !== null && $min !== (int) $previous['weeksMax']) {
+                $problems[] = sprintf(
+                    'bankruptcyDeductionWeeks row %d starts at week %d but row %d ended at week %d — the ladder has a %s and a deficit there falls through it.',
+                    $i + 1,
+                    $min,
+                    $i,
+                    (int) $previous['weeksMax'],
+                    $min > (int) $previous['weeksMax'] ? 'gap' : 'overlap',
+                );
+            }
+
+            if ($max !== null && (int) $max <= $min) {
+                $problems[] = sprintf(
+                    'bankruptcyDeductionWeeks row %d spans week %d to %d — an empty or inverted window.',
+                    $i + 1,
+                    $min,
+                    (int) $max,
+                );
+            }
+
+            $previous = ['weeksMin' => $min, 'weeksMax' => $max === null ? null : (int) $max];
+        }
+
+        // A ladder that never ends leaves the worst case unpunished, which is the opposite of
+        // what the mechanic is for.
+        if ($previous !== null && $previous['weeksMax'] !== null) {
+            $problems[] = sprintf(
+                'bankruptcyDeductionWeeks ends at week %d with no unbounded row — a club further behind than that is deducted nothing.',
+                (int) $previous['weeksMax'],
+            );
         }
 
         return $problems;

@@ -473,6 +473,17 @@
                             </div>
                         </div>
                         <div class="bmc-field-col">
+                            <label for="bankruptcyDeductionWeeks">Deficit Ladder in WEEKS of wages (JSON)</label>
+                            <textarea id="bankruptcyDeductionWeeks" name="bankruptcyDeductionWeeks"
+                                      rows="6"
+                                      placeholder='[{"weeksMin":1,"weeksMax":2,"points":3},{"weeksMin":2,"weeksMax":4,"points":6},{"weeksMin":4,"weeksMax":8,"points":10},{"weeksMin":8,"weeksMax":16,"points":20},{"weeksMin":16,"weeksMax":null,"points":50}]' data-kind="text" data-blank="ok">{{ config.bankruptcyDeductionWeeks is null ? '' : config.bankruptcyDeductionWeeks|json_encode }}</textarea>
+                            <div class="bmc-data">
+                                Array of <code>{ weeksMin, weeksMax, points }</code> measured in <strong>weeks of the club's own wage bill</strong>, not money &mdash; so it survives a country factor, a tier factor, inflation and a wage-model flip without re-authoring. <code>weeksMax: null</code> ends the ladder.
+                                <br><strong>Blank means &ldquo;use the app's built-in ladder&rdquo;</strong>, which is the shipped state &mdash; clearing this field does not switch deductions off, it hands the mechanic back to the app.
+                                <br>Saved rows are sorted and made contiguous (each <code>weeksMin</code> becomes the previous row's <code>weeksMax</code>); malformed rows are dropped rather than rejecting the save, and anything behind an unbounded row is discarded as unreachable. Run <code>app:economy:wage-table</code> to see what it did.
+                            </div>
+                        </div>
+                        <div class="bmc-field-col">
                             <label for="npcSolvencyThresholds">NPC Solvency Thresholds (JSON)</label>
                             <textarea id="npcSolvencyThresholds" name="npcSolvencyThresholds"
                                       rows="3"

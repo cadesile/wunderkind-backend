@@ -364,16 +364,29 @@ re-authoring, because every one of those moves the numerator and the denominator
 
 **Non-overlapping bounds on every row**, so the resolution question in §1 stops mattering.
 
-### Why this is not implemented
+### Implemented 2026-11-13 — `Version20261113120000`
 
-Three reasons, in order:
+The three reasons it was held back have all been answered, in order:
 
-1. **It is a client-side mechanic.** The backend publishes these figures and does not read them.
-   A new key is worth nothing until the app consumes it, and the shape should be agreed with the
-   app team first — publishing a guess would just create a second thing to keep in sync.
-2. `.context/shared/api-backwards-compatibility.md` is explicit that nothing should be added to
-   a published surface speculatively.
-3. The brief for this step says report and propose, not change.
+1. **The shape was agreed with the app team** rather than guessed. The rows above are what both
+   sides implement; the app reads them with a `?? constant` fallback.
+2. **It is not a speculative publish.** The column is nullable and ships `null`, so no box
+   changes behaviour until an operator authors a ladder. `null` means "the app uses its own",
+   which is the state every box is in today.
+3. The owner's review approved building it.
+
+**What was built:** a nullable `game_config.bankruptcy_deduction_weeks`, published through
+`EconomyConfigPublisher::clientBlock()` so it reaches `GET /api/game-config` **and** both sync
+branches with the parity test guarding them; a JSON textarea on the game-config admin screen
+where **a blank field means null**, not an empty ladder; and normalisation in the setter that
+sorts rows, closes gaps and overlaps so the ladder is contiguous, and drops anything behind an
+unbounded row.
+
+**The normalisation is also why `app:economy:wage-table` now reports on this column.** A repair
+made silently on save is how an operator ends up believing in a ladder they do not have, so the
+gate names gaps, overlaps, unreachable rows and a ladder with no unbounded final row.
+`bankruptcyDeductionTiers` is untouched — same name, type, values and verbatim storage — and
+remains the ladder for `legacy`.
 
 What *is* implemented is the measurement: `app:economy:wage-table` now fails check 5 on exactly
 the problems above, so none of this can quietly stop being true.

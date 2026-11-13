@@ -967,6 +967,164 @@ class GameConfig
     #[ORM\Column(type: 'boolean')]
     private bool $bankruptcyDeductionsEnabled = true;
 
+    /**
+     * The deficit ladder expressed in WEEKS OF THE CLUB'S OWN WAGE BILL. Null = app default.
+     *
+     * ── WHY A SECOND LADDER RATHER THAN FIXING THE FIRST ──────────────────────────────────
+     *
+     * `bankruptcyDeductionTiers` below is flat pence. Wages scale by country, by tier, by
+     * inflation and by the wage model; the thresholds do not, so the moment any of those moves
+     * the two decouple and nothing announces it. Measured against the authored England ladder,
+     * the entire five-rung ladder is traversed in **0.01 weeks** of unpaid wages at tier 1 —
+     * the mechanic is not "a graduated penalty", it is "any deficit at all = maximum penalty".
+     *
+     * Weeks survive all four of those moves without re-authoring, because each one moves the
+     * numerator and the denominator together. `npcSolvencyThresholds` already works this way
+     * and is the template.
+     *
+     * ── WHY THE BACKEND CANNOT SIMPLY COMPUTE IT ──────────────────────────────────────────
+     *
+     * It does not know a club's wage bill — the roster lives on the device, which is the same
+     * reason `POST /api/club/fund`'s projection is "half a projection, honestly labelled". The
+     * app knows it exactly. Weeks-of-wages is therefore the one unit **both sides can agree on
+     * without the backend needing data it does not have**, and it is a sentence a player
+     * understands: *"you are three weeks' wages in the red."*
+     *
+     * ── SHIPS AS NULL, AND NULL IS LOAD-BEARING ───────────────────────────────────────────
+     *
+     * The app carries this ladder as a built-in constant. **Null means "use yours"**, so an
+     * unauthored backend changes nothing — and `[]` collapses to null for the same reason
+     * `leagueParachute` does: an empty ladder and "no ladder" are indistinguishable, and only
+     * one of them is a thing somebody authors. A `[]` that survived would switch the mechanic
+     * off entirely while looking like configuration.
+     *
+     * ── THE ROW CONTRACT IS CONTIGUOUS, NOT MERELY NON-OVERLAPPING ────────────────────────
+     *
+     * `weeksMin` of each row equals `weeksMax` of the one before it, so the upper bound reads
+     * as exclusive and every deficit lands in exactly one row. That is stronger than "they do
+     * not overlap" and it is what makes the first-match-wins question on the pence ladder stop
+     * mattering here. `normaliseDeductionWeeks()` enforces it; the gate reports what it cannot.
+     *
+     * @var list<array{weeksMin: int, weeksMax: int|null, points: int}>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $bankruptcyDeductionWeeks = null;
+
+    /** @return list<array{weeksMin: int, weeksMax: int|null, points: int}>|null */
+    public function getBankruptcyDeductionWeeks(): ?array { return $this->bankruptcyDeductionWeeks; }
+
+    /** @param array<array-key, mixed>|null $v */
+    public function setBankruptcyDeductionWeeks(?array $v): static
+    {
+        if ($v === null || $v === []) {
+            $this->bankruptcyDeductionWeeks = null;
+
+            return $this;
+        }
+
+        $rows = self::normaliseDeductionWeeks($v);
+
+        // Everything dropped as malformed is the same answer as nothing authored. Returning []
+        // here would publish an empty ladder, which the app would read as a real one.
+        $this->bankruptcyDeductionWeeks = $rows === [] ? null : $rows;
+
+        return $this;
+    }
+
+    /**
+     * Coerces a submitted weeks ladder into a contiguous, ascending one.
+     *
+     * HAND-EDITED JSON IS THE INPUT, so every step here is a state an operator can actually
+     * produce, not a hypothetical: a transposed pair, a row out of order, a duplicate bound, a
+     * second unbounded row, a string where an int belongs, a key typo.
+     *
+     * DROPS RATHER THAN THROWS, the same trade `setEconomyStaffRoleBandsPence()` makes: a
+     * malformed row must not take the whole ladder — or a season transition — down with it.
+     *
+     * MUST BE IDEMPOTENT. `ConfigImportExportCoverageTest::testDefaultsRoundTripUnchanged`
+     * exports, re-imports and re-exports; a normaliser that kept moving would fail it. Running
+     * this on its own output is a no-op by construction, because the output is already sorted,
+     * contiguous and single-unbounded.
+     *
+     * @param  array<array-key, mixed> $values
+     * @return list<array{weeksMin: int, weeksMax: int|null, points: int}>
+     */
+    private static function normaliseDeductionWeeks(array $values): array
+    {
+        $rows = [];
+
+        foreach ($values as $row) {
+            if (!is_array($row) || !isset($row['weeksMin']) || !is_numeric($row['weeksMin'])) {
+                continue;
+            }
+
+            $min = max(0, (int) $row['weeksMin']);
+            $max = array_key_exists('weeksMax', $row) && is_numeric($row['weeksMax'])
+                ? max(0, (int) $row['weeksMax'])
+                : null;
+
+            // A transposed pair is a legitimate state of a hand-edited column — same reasoning
+            // as the staff role bands. An equal pair is an empty window, so it is dropped.
+            if ($max !== null) {
+                [$min, $max] = [min($min, $max), max($min, $max)];
+
+                if ($min === $max) {
+                    continue;
+                }
+            }
+
+            $rows[] = [
+                'weeksMin' => $min,
+                'weeksMax' => $max,
+                'points'   => isset($row['points']) && is_numeric($row['points']) ? max(0, (int) $row['points']) : 0,
+            ];
+        }
+
+        if ($rows === []) {
+            return [];
+        }
+
+        // Unbounded rows last, then ascending. usort is not stable across equal keys in a way
+        // worth relying on, so the unbounded flag is folded into the comparison rather than
+        // left to a second pass.
+        usort($rows, static function (array $a, array $b): int {
+            if (($a['weeksMax'] === null) !== ($b['weeksMax'] === null)) {
+                return $a['weeksMax'] === null ? 1 : -1;
+            }
+
+            return $a['weeksMin'] <=> $b['weeksMin'];
+        });
+
+        $out      = [];
+        $previous = null;
+
+        foreach ($rows as $row) {
+            // One unbounded row, and it ends the ladder: anything behind it is unreachable
+            // under any resolution rule, which is the defect the pence ladder already has.
+            if ($previous !== null && $previous['weeksMax'] === null) {
+                break;
+            }
+
+            // Contiguity. A row starting before the previous one ended is pulled forward; the
+            // previous row's end is pushed back to meet it. Either way every week belongs to
+            // exactly one row afterwards.
+            if ($previous !== null) {
+                $row['weeksMin'] = max($row['weeksMin'], $previous['weeksMin'] + 1);
+
+                if ($row['weeksMax'] !== null && $row['weeksMax'] <= $row['weeksMin']) {
+                    continue;
+                }
+
+                $out[count($out) - 1]['weeksMax'] = $row['weeksMin'];
+            }
+
+            $out[]    = $row;
+            $previous = $row;
+        }
+
+        return $out;
+    }
+
     /** @return array<array{deficitMin: int, deficitMax: int|null, points: int}> */
     public function getBankruptcyDeductionTiers(): array { return $this->bankruptcyDeductionTiers; }
     /** @param array<array{deficitMin: int, deficitMax: int|null, points: int}> $v */

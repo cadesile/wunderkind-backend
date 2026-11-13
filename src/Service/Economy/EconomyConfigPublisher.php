@@ -81,6 +81,11 @@ final class EconomyConfigPublisher
             'npcSolvencyThresholds'     => $config->getNpcSolvencyThresholds(),
             'dofWageBillThresholdPct'   => $config->getDofWageBillThresholdPct(),
             'sponsorWeeklyPence'        => $config->getSponsorWeeklyPence(),
+            // NULL UNTIL AN OPERATOR AUTHORS ONE, and null is the answer rather than a gap:
+            // the app carries this ladder as a constant, so null means "use yours". A `[]`
+            // cannot reach here — the setter collapses it to null — because an empty ladder
+            // would read as a real one and switch the mechanic off while looking configured.
+            'bankruptcyDeductionWeeks'  => $config->getBankruptcyDeductionWeeks(),
         ];
     }
 

@@ -46,6 +46,18 @@ use App\Service\UserLedgerService;
  * therefore the only running cost computable here; wages are the client's half, summed from
  * GET /api/market/data, where staff and scouts both now carry `weeklySalary`.
  *
+ * AND THE HALF IT DOES COMPUTE IS EXACT IN ONE DIVISION ONLY. `FacilityCostCalculator` prices
+ * upkeep as `weeklyUpkeepBase x 1.5^level` with NO TIER FACTOR — nothing in this service, that
+ * calculator, or anything they call touches `EconomyScaleResolver`. The device applies a tier
+ * factor on top, rising to about 3x at tier 1. So the figures below are right at the bottom of
+ * the pyramid, where that factor is 1.0, and UNDERSTATE by up to 3x everywhere above it.
+ *
+ * Understating is the wrong direction, for the reason `FacilityCostCalculator::weeklyUpkeep()`
+ * already gives about its own 1.5^level fix: a running cost that reads low is what lets a
+ * player underfund a club. It is left as it is because the tier factor is the device's model
+ * and duplicating it here would make the backend a second author of it — the same reasoning
+ * that keeps wages on the device. The honest label is the fix; this is the label.
+ *
  * IDEMPOTENT ON (club), by the ledger's `(sourceKind, sourceRef, type)` guard — the natural key
  * docs/api/setup-flow.md #5 chose over an Idempotency-Key header. A retry of the same amount
  * returns the original debit; a DIFFERENT amount is refused rather than stacked, because a club
