@@ -394,6 +394,63 @@ final class EconomyScaleResolver
         return max(1, intdiv(min($min, $max) + max($min, $max), 2));
     }
 
+    /**
+     * Every authored ability band, keyed country then tier — the whole table `abilityBand()`
+     * answers one cell of.
+     *
+     * EXISTS SO THE PUBLISHED TABLE AND THE PRICING TABLE CANNOT BE DIFFERENT TABLES. They were:
+     * `gameConfig.leaguePlayerAbilityRanges` was published to the app while
+     * `starter_config.league_ability_ranges` priced and generated the players, and the two
+     * disagreed at every England tier (55-95 against 40-90 at tier 1, 5-15 against 2-7 at tier
+     * 8). Squads were generated from one and judged against the other by nine app-side readers
+     * covering recruiting, thinning, culling and contract renewal.
+     *
+     * Normalised through `abilityBand()` rather than returned raw, so a transposed pair is
+     * fixed the same way here as it is on the pricing path — a second normalisation rule would
+     * be a second way for the two to drift.
+     *
+     * ONLY AUTHORED COUNTRIES. A country with no starter-config row is OMITTED rather than
+     * filled from `WorldInitializationService::ABILITY_RANGES`: that const is the pricing
+     * path's last resort, and publishing it would put bands in the response that no generator
+     * uses for that country — recreating the defect being fixed, in a new place. Absent keeps
+     * meaning "not authored", and the consumer's own fallback decides what to do about it.
+     *
+     * @return array<string, array<int, array{min:int, max:int}>>
+     */
+    public function allAbilityBands(): array
+    {
+        $ranges = $this->starterConfigRepository->getConfig()->getLeagueAbilityRanges();
+        $out    = [];
+
+        foreach ($ranges as $country => $tiers) {
+            $code = strtoupper(trim((string) $country));
+
+            if ($code === '' || !is_array($tiers)) {
+                continue;
+            }
+
+            foreach ($tiers as $tier => $band) {
+                $t = (int) $tier;
+
+                // The same guard abilityBand() applies: a row with no usable min is not an
+                // authored band, it is an empty slot, and it must not publish as 0-0.
+                if ($t < 1 || !is_array($band) || (int) ($band['min'] ?? 0) <= 0) {
+                    continue;
+                }
+
+                $out[$code][$t] = $this->abilityBand($code, $t);
+            }
+
+            if (isset($out[$code])) {
+                ksort($out[$code]);
+            }
+        }
+
+        ksort($out);
+
+        return $out;
+    }
+
     /** The flagged baseline country's own stored factor, or 0 when none is flagged. */
     private function baselineFactorBp(): int
     {

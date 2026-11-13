@@ -123,6 +123,57 @@ final class EconomyConfigPublisher
     }
 
     /**
+     * `leaguePlayerAbilityRanges`, served from the table that actually prices players.
+     *
+     * ── WHAT CHANGED AND WHY ──────────────────────────────────────────────────────────────
+     *
+     * This key used to be read straight off `game_config.league_player_ability_ranges`, a
+     * third ability table with **no server-side consumer at all** — no generator, no wage
+     * code, no admin preview. Meanwhile `starter_config.league_ability_ranges` priced and
+     * generated every player. The two disagreed at every England tier, and the app had nine
+     * readers keying off the published one for recruiting, squad thinning, culling and
+     * contract renewal. Squads were generated against one table and judged against the other.
+     *
+     * The key name, type and row shape are unchanged — only the source is. A consumer that was
+     * already reading it keeps reading it, and now gets the figures the players were built
+     * from.
+     *
+     * ── TWO THINGS A CONSUMER MUST BE READY FOR ───────────────────────────────────────────
+     *
+     * **More countries.** The old column held 8; the authored table holds 26. Eighteen
+     * countries that previously appeared nowhere in this key now appear, so a client that fell
+     * through to its own defaults for them will stop doing so.
+     *
+     * **Short countries.** Scotland has **four** tiers, not eight. Every entry this key has
+     * ever carried had eight, so anything indexing tiers 1-8 directly will find nothing at 5-8.
+     * The tier numbers are published explicitly on each row for exactly this reason — read
+     * them, do not assume a count.
+     *
+     * `game_config.league_player_ability_ranges` is left in place and simply stops being read.
+     * Dropping it would be a schema change for no gain, and keeping it costs a column.
+     *
+     * @return list<array{country: string, leagues: list<array{tier: int, min: int, max: int}>}>
+     */
+    public function leaguePlayerAbilityRanges(): array
+    {
+        $out = [];
+
+        foreach ($this->resolver->allAbilityBands() as $country => $tiers) {
+            $leagues = [];
+
+            foreach ($tiers as $tier => $band) {
+                $leagues[] = ['tier' => $tier, 'min' => $band['min'], 'max' => $band['max']];
+            }
+
+            if ($leagues !== []) {
+                $out[] = ['country' => $country, 'leagues' => $leagues];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The resolved per-tier table for one country.
      *
      * @return array<string, mixed>
