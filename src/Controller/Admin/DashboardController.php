@@ -508,6 +508,24 @@ class DashboardController extends AbstractDashboardController
             $config->setBankruptcyDeductionTiers($tiers);
         }
 
+        // THE WEEKS LADDER, AND A BLANK FIELD IS MEANINGFUL HERE unlike the pence one above.
+        // Null means "the app uses its own built-in ladder", so clearing the field has to be
+        // able to REACH null — an is_array-only guard would make the shipped state
+        // unauthorable once somebody had saved anything. A malformed body still leaves the
+        // stored value alone: json_decode returns null for both "" and garbage, so the two are
+        // separated on the raw string before decoding.
+        $weeksRaw = trim((string) $request->request->get('bankruptcyDeductionWeeks', ''));
+
+        if ($weeksRaw === '') {
+            $config->setBankruptcyDeductionWeeks(null);
+        } else {
+            $weeks = json_decode($weeksRaw, true);
+
+            if (is_array($weeks)) {
+                $config->setBankruptcyDeductionWeeks($weeks);
+            }
+        }
+
         // League finances — form submits pounds; multiply by 100 to store pence
         // Pounds in the form, pence in the column — the same * 100 the sponsor bands do. The
         // "field missing from the POST" default is derived from the entity's own constant

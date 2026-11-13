@@ -84,11 +84,11 @@ wage bill between its clubs rather than inflating it — the calibration is deri
 1.0. That is worth stating because the obvious reading of "reputation raises wages" is that the
 bill goes up.
 
-## The four gameplay constants
+## The five gameplay constants
 
-All four are published and **not consumed server-side** — the device is the game engine, so
-matchday income, NPC insolvency and a Director of Football's opinion all happen there. They live
-on the backend so an operator can retune them without an app release.
+All five are published and **not consumed server-side** — the device is the game engine, so
+matchday income, NPC insolvency, points deductions and a Director of Football's opinion all
+happen there. They live on the backend so an operator can retune them without an app release.
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
@@ -96,6 +96,42 @@ on the backend so an operator can retune them without an app release.
 | `npcSolvencyThresholds` | int[] | `[4,12,26]` | **Weeks in deficit**, not money, at which an insolvent NPC club escalates: `[warn, crisis, folded]`. Sorted ascending by the backend. |
 | `dofWageBillThresholdPct` | float[] | `[0.40,0.50,0.60,0.70]` | Wage-bill-to-turnover ratios at which a DoF objects, as **fractions**. Sorted ascending. |
 | `sponsorWeeklyPence` | int | `0` | ⚠️ See below. |
+| `bankruptcyDeductionWeeks` | object[] \| **null** | **`null`** | The deficit ladder in **weeks of the club's own wage bill**. ⚠️ See below — `null` is meaningful. |
+
+### `bankruptcyDeductionWeeks` — null means "use your own ladder"
+
+```json
+"bankruptcyDeductionWeeks": [
+  { "weeksMin": 1,  "weeksMax": 2,    "points": 3 },
+  { "weeksMin": 2,  "weeksMax": 4,    "points": 6 },
+  { "weeksMin": 4,  "weeksMax": 8,    "points": 10 },
+  { "weeksMin": 8,  "weeksMax": 16,   "points": 20 },
+  { "weeksMin": 16, "weeksMax": null, "points": 50 }
+]
+```
+
+**It ships as `null` and is `null` on every box today.** That is not a gap — it means no
+operator has authored a ladder, so **keep using your built-in constant**. Guard with
+`?? yourConstant`, not with a falsiness check, and do not treat an absent key differently from
+a null one.
+
+**`[]` can never reach you.** The setter collapses it to `null`, because an empty ladder would
+read as a real one with no rungs and switch the mechanic off while looking configured.
+
+**The rows are contiguous, not merely non-overlapping.** Each `weeksMin` equals the previous
+row's `weeksMax`, so the upper bound is **exclusive** and every deficit lands in exactly one
+row. The backend sorts rows, closes gaps and overlaps, and drops anything behind an unbounded
+row before storing — so what you receive already satisfies that contract. `weeksMax: null` ends
+the ladder.
+
+**Why weeks and not pence.** `bankruptcyDeductionTiers` (still published, unchanged, still the
+ladder for `legacy`) is flat pence, and wages scale by country, tier, inflation and wage model —
+so the two decouple the moment any of those moves. Against England's authored table the entire
+pence ladder is traversed in **0.01 weeks** of unpaid wages at tier 1. Weeks survive all four,
+because each moves the numerator and the denominator together.
+
+**Both keys are published.** Read whichever your model uses; they are not alternatives the
+backend chooses between.
 
 ### ⚠️ `sponsorWeeklyPence` is WEEKLY. The sponsor bands are PER SEASON.
 
@@ -320,7 +356,7 @@ Each row of `economyTierBaseline.tiers[]` carries a `youthScholarshipPence`. **P
 top-level `youthScholarshipWagePence`**, and keep that key as the fallback.
 
 Why both exist: the flat key is a single figure for every tier, and a single figure cannot be
-right across a wage ladder that spans **1,047×** top to bottom. At England tier 8 an average
+right across a wage ladder that spans **1,330×** top to bottom. At England tier 8 an average
 first-team wage is about **£127**, so a flat £250 scholarship had a thirteen-year-old
 out-earning an average professional by nearly 2×. At tier 1 an average wage is **£132,892**, so
 the same £250 is **0.19%** of it — a rounding error. Both ends were wrong, in opposite
@@ -330,7 +366,7 @@ So the per-tier figure is, in order:
 
 1. **Anchored** — an operator authors what a scholar costs at tier 1, and every lower tier is the
    same proportion of its own average first-team wage.
-2. **Floored** — a pure proportion reaches £1.43 by tier 8, and free is a different mechanic from
+2. **Floored** — a pure proportion reaches £1.13 by tier 8, and free is a different mechanic from
    cheap.
 3. **Capped** — never more than `capBp` (default 50%) of an average professional at that tier.
    Applied last, so it always wins.

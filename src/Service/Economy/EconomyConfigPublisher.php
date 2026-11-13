@@ -81,6 +81,11 @@ final class EconomyConfigPublisher
             'npcSolvencyThresholds'     => $config->getNpcSolvencyThresholds(),
             'dofWageBillThresholdPct'   => $config->getDofWageBillThresholdPct(),
             'sponsorWeeklyPence'        => $config->getSponsorWeeklyPence(),
+            // NULL UNTIL AN OPERATOR AUTHORS ONE, and null is the answer rather than a gap:
+            // the app carries this ladder as a constant, so null means "use yours". A `[]`
+            // cannot reach here — the setter collapses it to null — because an empty ladder
+            // would read as a real one and switch the mechanic off while looking configured.
+            'bankruptcyDeductionWeeks'  => $config->getBankruptcyDeductionWeeks(),
         ];
     }
 
@@ -153,6 +158,24 @@ final class EconomyConfigPublisher
 
         return [
             'country'             => $code,
+            // ── WHY A READ HAS TO SAY WHERE IT CAME FROM ──────────────────────────────────
+            //
+            // `?country=` is optional, and a request without it does NOT return England — it
+            // resolves at the const fallback, because findByCode('') finds no profile and
+            // every factor lands at parity. The two reads look alike and are not: tier-1
+            // `wageScaleMicroPence` comes back as 217,517,151 with no country against
+            // England's 390,404,650.
+            //
+            // That is not hypothetical. The app's release gate was built on the no-country
+            // read, concluded every tier was solvent, and the conclusion had to be withdrawn.
+            // `country` was already published and was already null in that case, but null is
+            // easy to read as "country-agnostic, therefore fine" rather than "these are not
+            // anybody's figures". This says it in a word the consumer can refuse on, and the
+            // app's gate and sync intake do refuse `fallback`.
+            //
+            // Additive and always present, so it cannot be mistaken for a key that appears
+            // only when something is wrong.
+            'source'              => $code === null ? 'fallback' : 'country',
             'tierCount'           => $tierCount,
             // COUNTRY-LEVEL, NOT PER-TIER, and deliberately narrower than the wage chain: a
             // league's tier variation is already expressed by how many sponsors it has and

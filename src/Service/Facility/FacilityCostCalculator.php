@@ -90,6 +90,20 @@ final class FacilityCostCalculator
      * `projection.facilityUpkeepPence` on POST /api/club/fund both rise exactly 50%. Same
      * keys, changed values, which `.context/shared/api-backwards-compatibility.md` counts as a
      * deliberate break; it is logged there with its consumer check.
+     *
+     * ── STILL LOW ABOVE THE BOTTOM TIER, AND DELIBERATELY SO ──────────────────────────────
+     *
+     * Fixing the exponent closed the 1.5x gap; a second one remains. The device multiplies
+     * upkeep by a TIER FACTOR rising to roughly 3x at tier 1, and nothing here does — this
+     * method never sees a tier, and neither `FacilityCostCalculator` nor `ClubFundingService`
+     * injects `EconomyScaleResolver` at all. The published projection is therefore exact only
+     * in the bottom division and understates by up to 3x above it.
+     *
+     * By the same argument made above, that is being wrong in the direction that lets a player
+     * underfund a club. It is accepted rather than fixed because the tier factor is the
+     * device's model: reproducing it here would make the backend a second author of a curve
+     * only the app executes, and the two would drift the first time either moved. The caller's
+     * docblock labels the shortfall instead.
      */
     public function weeklyUpkeep(FacilityTemplate $template, int $level): int
     {

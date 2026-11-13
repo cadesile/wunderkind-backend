@@ -137,7 +137,7 @@ the same pass as the turnover table, because the ladder is derived from it.
 | field | suggested | what it means |
 |---|---|---|
 | `SCHOLARSHIP AT TIER 1` | `150000` (£1,500/wk) | what a scholar costs at the top. Every lower tier is the same *proportion* of its own average first-team wage |
-| `SCHOLARSHIP FLOOR` | `2500` (£25/wk) | the least a scholar can cost. **Not optional** — a pure proportion reaches £1.43 by tier 8 |
+| `SCHOLARSHIP FLOOR` | `2500` (£25/wk) | the least a scholar can cost. **Not optional** — a pure proportion reaches £1.13 by tier 8 |
 | `SCHOLARSHIP CAP (bp)` | `5000` (50%) | leave it. The invariant: never more than half an average professional at the tier |
 
 Why one figure and not eight: the per-tier shape is already the turnover ladder's, so authoring
@@ -145,8 +145,8 @@ it twice invites the two to disagree. The resulting ladder, against the table ab
 
 | tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
-| scholarship | £1,500.00 | £554.73 | £187.14 | £110.39 | £45.11 | £25.00 | £25.00 | £25.00 |
-| % of an average pro | 1.1% | 1.1% | 1.1% | 1.1% | 1.1% | 1.5% | 5.6% | 19.7% |
+| scholarship | £1,500.00 | £535.08 | £173.68 | £98.49 | £38.75 | £25.00 | £25.00 | £25.00 |
+| % of an average pro | 1.1% | 1.1% | 1.1% | 1.1% | 1.1% | 1.8% | 6.9% | 25.0% |
 
 **If you want a different anchor, change only the £1,500** and re-run the gate — the whole ladder
 moves with it proportionally, and the floor and cap keep the bottom sane without further tuning.
@@ -297,6 +297,47 @@ reports drift rather than correcting it.
 **Optional follow-up, not built:** a "suggest from turnover" button on the league screen that
 fills the pool field with `turnover × tvShare` and leaves the write to a human. Worth doing if
 re-authoring 196 leagues by hand becomes the bottleneck.
+
+---
+
+## 4b. Pre-flip checklist — all six before step 5
+
+The flip is the irreversible step. Everything below is cheap and each line exists because
+something went wrong without it.
+
+**1. Run the gate per country, with `?country=`.**
+
+```bash
+php bin/console app:economy:wage-table EN SC      # and every launch country
+```
+
+⚠️ **Never judge the economy from the no-country read of `GET /api/game-config`.** Without
+`?country=` the `economyTierBaseline` block resolves at the **const fallback** (75–95 … 10–25),
+not at any real country's figures — tier-1 `wageScaleMicroPence` comes back as `217,517,151`
+where England's is `390,404,650`. The app's release gate was built on that read and concluded
+every tier was solvent. Pass `?country=` for each launch country and compare per country.
+
+Related, and the same class of mistake: **ability bands for a country come from
+`GET /api/starter-config` → `leagueAbilityRanges`**, which is the table that actually prices
+players. `GET /api/game-config` → `leaguePlayerAbilityRanges` is a *different* table with no
+server-side consumer, and it disagrees at every England tier.
+
+**2. The app's gate exits 0** against the re-issued tables. A non-zero exit on bankruptcy-ladder
+findings alone is expected and is not a backend blocker; anything else is.
+
+**3. Confirm the legacy per-tier figures from a live `GET /api/game-config?country=<c>`** before
+flipping, so you have a before-picture that came from the box rather than from a document.
+
+**4. Bump `WORLD_PACK_VERSION`, warm packs, watch `staleWorldPacks` reach 0.** See step 6 — and
+note that re-authoring TV alone does *not* move the version, so a config-only change leaves
+packs serving stale figures with nothing flagging them.
+
+**5. Flip before the app release, and before any real save exists.** Per-country world-pack rows
+are priced at generation and stored; anything generated under the old model keeps its prices.
+
+**6. Never flip on a live world without a deliberate event.** Existing saves carry legacy prices
+into a turnover-priced world, and the two populations will disagree about what a player is worth
+for as long as those saves live.
 
 ---
 
