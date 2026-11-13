@@ -137,7 +137,7 @@ the same pass as the turnover table, because the ladder is derived from it.
 | field | suggested | what it means |
 |---|---|---|
 | `SCHOLARSHIP AT TIER 1` | `150000` (£1,500/wk) | what a scholar costs at the top. Every lower tier is the same *proportion* of its own average first-team wage |
-| `SCHOLARSHIP FLOOR` | `2500` (£25/wk) | the least a scholar can cost. **Not optional** — a pure proportion reaches £1.43 by tier 8 |
+| `SCHOLARSHIP FLOOR` | `2500` (£25/wk) | the least a scholar can cost. **Not optional** — a pure proportion reaches £1.13 by tier 8 |
 | `SCHOLARSHIP CAP (bp)` | `5000` (50%) | leave it. The invariant: never more than half an average professional at the tier |
 
 Why one figure and not eight: the per-tier shape is already the turnover ladder's, so authoring
@@ -145,8 +145,8 @@ it twice invites the two to disagree. The resulting ladder, against the table ab
 
 | tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
-| scholarship | £1,500.00 | £554.73 | £187.14 | £110.39 | £45.11 | £25.00 | £25.00 | £25.00 |
-| % of an average pro | 1.1% | 1.1% | 1.1% | 1.1% | 1.1% | 1.5% | 5.6% | 19.7% |
+| scholarship | £1,500.00 | £535.08 | £173.68 | £98.49 | £38.75 | £25.00 | £25.00 | £25.00 |
+| % of an average pro | 1.1% | 1.1% | 1.1% | 1.1% | 1.1% | 1.8% | 6.9% | 25.0% |
 
 **If you want a different anchor, change only the £1,500** and re-run the gate — the whole ladder
 moves with it proportionally, and the floor and cap keep the bottom sane without further tuning.

@@ -321,6 +321,11 @@ final class WageModelResolver
      * turnover wages and reported as an inversion: £250 against an England tier-8 average of
      * £126.94.
      *
+     * (Those figures are the dev-DB clone's, as measured on the day — the deployed box's
+     * re-derived ladder puts the same average at £100.00 and the same cheapest wage at £10.11.
+     * Left as they were rather than restated, because this paragraph is the account of a bug
+     * and the numbers are what it was found with.)
+     *
      * That report was wrong in the way that matters most for a gate — **it could not be
      * cleared by any authoring action.** Flipping the model makes the cap bite (tier 8's worst
      * wage is £12.84, so the cap resolves to £6.42) and the problem vanishes, which means the

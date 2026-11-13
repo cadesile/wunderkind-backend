@@ -1761,13 +1761,13 @@ class GameConfig
      * ladder and authoring it twice invites the two to disagree — the same reason sponsorship
      * takes the country factor but not the tier factor. And not scaled by `S_tier`, which
      * carries almost none of the spread (1.72x against the wage ladder's 1,047x) and would put
-     * a tier-8 scholar on £873 against an average professional's £127 — 6.9x worse than the
+     * a tier-8 scholar on £687 against an average professional's £100 — 6.9x worse than the
      * defect being fixed. Measured, not reasoned about.
      *
      * ── IT NEEDS A FLOOR, WHICH IS THE WHOLE REASON THE PAIR EXISTS ───────────────────────
      *
      * A pure proportion is as broken at the bottom as a flat figure is at the top: anchored at
-     * £1,500, tier 7 comes out at £5.05 and tier 8 at £1.43. Free is a different mechanic from
+     * £1,500, tier 7 comes out at £4.08 and tier 8 at £1.13. Free is a different mechanic from
      * cheap, so `economyYouthScholarshipFloorPence` holds the bottom up and the cap above
      * still bounds the top. See that column for the resulting ladder.
      *

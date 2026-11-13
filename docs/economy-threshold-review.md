@@ -7,9 +7,12 @@ compared against is a **flat pence figure**, so the moment a country factor move
 model flips, the two decouple — and nothing announces it. This is the survey of which ones
 break, by how much, and what to do instead.
 
-Every number below is computed from the **live config** (England bands and squad sizes as
-exported 2026-11-12) against the candidate turnover ladder, by
-`app:economy:wage-table`. That command now carries this as **check 5**, so these findings stay
+Every number below comes from **one** `app:economy:wage-table EN SC` run against the live
+`development` configuration on **2026-11-13**, so this document, `docs/deploy/economy-rollout.md`
+and the code all quote the same run. Earlier revisions mixed a development clone's squad sizes
+(tier-1 squad 33) with a turnover table derived against the deployed box's (tier-1 squad 26),
+which put every quoted wage about 27% high relative to the table printed beside it. **Re-issue
+both documents together from a single run** rather than updating either alone. That command now carries this as **check 5**, so these findings stay
 live rather than becoming a stale snapshot.
 
 ---
@@ -56,16 +59,16 @@ Reaching the **harshest band (£40,000)** takes, in weeks of unpaid wages:
 
 | tier | squad wages / wk | weeks to harshest band |
 |---|---|---|
-| 1 | £4,818,700 | **0.01** |
-| 2 | £1,587,242 | **0.03** |
-| 3 | £499,478 | **0.08** |
-| 4 | £281,547 | **0.14** |
-| 5 | £108,745 | **0.37** |
-| 6 | £39,805 | 1.00 |
-| 7 | £9,552 | 4.19 |
-| 8 | £2,663 | 15.02 |
+| 1 | £3,802,124 | **0.01** |
+| 2 | £1,174,400 | **0.03** |
+| 3 | £348,032 | **0.11** |
+| 4 | £194,762 | **0.21** |
+| 5 | £69,181 | **0.58** |
+| 6 | £22,890 | 1.75 |
+| 7 | £5,701 | 7.02 |
+| 8 | £1,613 | 24.80 |
 
-For the top five tiers the entire five-rung ladder is traversed in **under half a week**. The
+For the top five tiers the entire five-rung ladder is traversed in **under a week**. The
 mechanic is not "a graduated penalty for financial trouble", it is "any deficit at all =
 maximum penalty" — and it has been for a while. Under the *legacy* model the figures are
 similar (0.03 weeks at tier 1), so this is **not caused by the overhaul**; the overhaul only
@@ -99,7 +102,7 @@ Against the turnover model's average first-team wage:
 
 | tier | mid wage / wk | scholarship ÷ mid wage |
 |---|---|---|
-| 1 | £132,892 | 0.00× |
+| 1 | £132,984 | 0.00× |
 | 5 | £3,997 | 0.06× |
 | 7 | £447 | 0.56× |
 | 8 | **£127** | **1.97×** |
@@ -176,9 +179,9 @@ ladder's spread:
 
 | scaled by | top-to-bottom spread | tier-8 scholarship, anchored at £1,500 | vs an average tier-8 pro (£127) |
 |---|---|---|---|
-| `S_tier` | **1.72×** | £873.11 | **6.9× — far worse than the original defect** |
-| worst first-team wage | 3,075× | £0.49 | effectively free |
-| average first-team wage | 1,047× | £1.43 | effectively free |
+| `S_tier` | **2.18×** | £687.31 | **6.9× — far worse than the original defect** |
+| worst first-team wage | 3,908× | £0.38 | effectively free |
+| average first-team wage | 1,330× | £1.13 | effectively free |
 
 **So it needs a floor, and that is why the pair exists.** A pure proportion is as broken at the
 bottom as a flat figure is at the top. `economyYouthScholarshipFloorPence` holds the bottom up;
@@ -190,13 +193,13 @@ With the anchor at **£1,500** and the floor at **£25**, against the authored E
 | tier | scholarship | % of an average professional at that tier | |
 |---|---|---|---|
 | 1 | £1,500.00 | 1.1% | |
-| 2 | £554.73 | 1.1% | |
-| 3 | £187.14 | 1.1% | |
-| 4 | £110.39 | 1.1% | |
-| 5 | £45.11 | 1.1% | |
+| 2 | £535.08 | 1.1% | |
+| 3 | £173.68 | 1.1% | |
+| 4 | £98.49 | 1.1% | |
+| 5 | £38.75 | 1.1% | |
 | 6 | £25.00 | 1.5% | floored |
 | 7 | £25.00 | 5.6% | floored |
-| 8 | £25.00 | 19.7% | floored |
+| 8 | £25.00 | 25.0% | floored |
 
 Tiers 1–5 ride the proportion; 6–8 sit on the floor, which is what stops the scholarship decaying
 into nothing where the wage ladder does.
@@ -204,7 +207,7 @@ into nothing where the wage ladder does.
 ### The cap's anchor moved to the average, deliberately
 
 The rule above — 50% of the tier's **worst** first-team wage — did not survive measurement.
-England tier 8's cheapest professional earns **£12.84/week**, so half of it is £6.42: the rule
+England tier 8's cheapest professional earns **£10.11/week**, so half of it is £5.05: the rule
 did not deliver "cheaper than a professional" at the bottom, it delivered *free*, which the
 resolver then had to floor at 1p to keep meaningful.
 
@@ -217,24 +220,24 @@ Safe to redefine rather than add a second column: the cap is gated on `economyWa
 turnover`, which is `legacy` on every deployed box, so it has never applied to a published figure.
 
 **The accepted cost, stated rather than buried:** where a band is as wide as tier 8's, a
-scholarship can exceed the single cheapest professional's wage (£25 against £12.84). That is
-accepted, because £12.84/week is an artefact rather than a wage anybody authored — see the new
+scholarship can exceed the single cheapest professional's wage (£25 against £10.11). That is
+accepted, because £10.11/week is an artefact rather than a wage anybody authored — see the new
 finding below.
 
 ---
 
-## 2b. NEW FINDING: tier 8's cheapest professional earns £12.84/week
+## 2b. NEW FINDING: tier 8's cheapest professional earns £10.11/week
 
 Surfaced by the scholarship work rather than looked for. Against the authored England ladder,
 tier 8's band is **2–7** and the curve exponent is 2.5, so the within-band spread is `7^2.5 /
-2^2.5` ≈ **23×** — the cheapest professional at the tier earns £12.84/week (£590/season) while
-the best earns £294.39.
+2^2.5` ≈ **23×** — the cheapest professional at the tier earns £10.11/week (£465/season) while
+the best earns £231.91.
 
 | tier | band | cheapest /wk | average /wk | best /wk | within-band spread |
 |---|---|---|---|---|---|
-| 1 | 40–90 | £39,478.91 | £132,891.93 | £299,793.00 | 7.6× |
+| 1 | 40–90 | £39,506.17 | £132,983.68 | £300,000.00 | 7.6× |
 | 7 | 5–10 | £138.16 | £447.39 | £781.57 | 5.7× |
-| 8 | **2–7** | **£12.84** | £126.94 | £294.39 | **22.9×** |
+| 8 | **2–7** | **£10.11** | £100.00 | £231.91 | **22.9×** |
 
 **Why it is a finding and not a bug.** Nothing is wrong with the arithmetic; the inputs are
 `leaguePlayerAbilityRanges` (which authors tier 8 as 2–7) and the exponent. The problem is that

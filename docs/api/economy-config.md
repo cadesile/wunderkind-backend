@@ -356,7 +356,7 @@ Each row of `economyTierBaseline.tiers[]` carries a `youthScholarshipPence`. **P
 top-level `youthScholarshipWagePence`**, and keep that key as the fallback.
 
 Why both exist: the flat key is a single figure for every tier, and a single figure cannot be
-right across a wage ladder that spans **1,047×** top to bottom. At England tier 8 an average
+right across a wage ladder that spans **1,330×** top to bottom. At England tier 8 an average
 first-team wage is about **£127**, so a flat £250 scholarship had a thirteen-year-old
 out-earning an average professional by nearly 2×. At tier 1 an average wage is **£132,892**, so
 the same £250 is **0.19%** of it — a rounding error. Both ends were wrong, in opposite
@@ -366,7 +366,7 @@ So the per-tier figure is, in order:
 
 1. **Anchored** — an operator authors what a scholar costs at tier 1, and every lower tier is the
    same proportion of its own average first-team wage.
-2. **Floored** — a pure proportion reaches £1.43 by tier 8, and free is a different mechanic from
+2. **Floored** — a pure proportion reaches £1.13 by tier 8, and free is a different mechanic from
    cheap.
 3. **Capped** — never more than `capBp` (default 50%) of an average professional at that tier.
    Applied last, so it always wins.
