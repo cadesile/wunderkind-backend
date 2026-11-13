@@ -474,6 +474,20 @@ final class EconomyWageTableCommand extends Command
             $band    = $this->scaleResolver->abilityBand($country, $tier);
             $squad   = $this->squadSize($tier);
 
+            // A TIER ABSENT FROM npcSquadConfig IS A SILENT MIS-CALIBRATION, not a missing row.
+            // `EconomyScaleResolver::npcSquadRow()` returns [] and referenceSquadSize() falls to
+            // 1, while the GENERATOR falls back to WorldInitializationService::defaultTierConfig()
+            // and builds ~18 players. So the tier gets priced as a one-player squad and then
+            // filled with eighteen — S_tier comes out roughly eighteen times too high and
+            // nothing else notices.
+            if ($this->scaleResolver->npcSquadRow($tier) === []) {
+                $problems[] = sprintf(
+                    '%s tier %d is absent from starterConfig.npcSquadConfig — the wage scale calibrates against a ONE-player reference squad while the generator builds a full one.',
+                    $country,
+                    $tier,
+                );
+            }
+
             $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
             // Through the resolver's own definition, so the check and the thing it checks
             // cannot drift apart — which is exactly how the scholarship bug got in.
