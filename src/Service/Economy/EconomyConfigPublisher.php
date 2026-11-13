@@ -149,8 +149,10 @@ final class EconomyConfigPublisher
      * The tier numbers are published explicitly on each row for exactly this reason — read
      * them, do not assume a count.
      *
-     * `game_config.league_player_ability_ranges` is left in place and simply stops being read.
-     * Dropping it would be a schema change for no gain, and keeping it costs a column.
+     * `game_config.league_player_ability_ranges` is **gone** (`Version20261113160000`). Leaving
+     * it would have left a second place that looks authoritative — a JSON column exported and
+     * re-imported with every config backup — and the next person to find it would reasonably
+     * assume editing it does something. One table, one place to author a band.
      *
      * @return list<array{country: string, leagues: list<array{tier: int, min: int, max: int}>}>
      */

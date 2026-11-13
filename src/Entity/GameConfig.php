@@ -2398,20 +2398,20 @@ class GameConfig
     /** @param array<string, int> $v */
     public function setSquadRoleAutoAssignThresholds(array $v): static { $this->squadRoleAutoAssignThresholds = $v; return $this; }
 
-    // ── League Player Ability Ranges ──────────────────────────────────────
-
-    /**
-     * Min/max ability ranges for NPC players generated per league tier, grouped by country.
-     * Structure: [{country: string, leagues: [{tier: int, min: int, max: int}]}]
-     * Empty array = use engine tier-based defaults.
-     *
-     * @var array<array{country: string, leagues: array<array{tier: int, min: int, max: int}>}>
-     */
-    #[ORM\Column(type: 'json')]
-    private array $leaguePlayerAbilityRanges = [];
-
-    public function getLeaguePlayerAbilityRanges(): array { return $this->leaguePlayerAbilityRanges; }
-    public function setLeaguePlayerAbilityRanges(array $v): static { $this->leaguePlayerAbilityRanges = $v; return $this; }
+    // ── League Player Ability Ranges — REMOVED 2026-11-13 ─────────────────
+    //
+    // `leaguePlayerAbilityRanges` lived here as a second, independently authored ability table
+    // that NOTHING on the server read: not the generator, not the wage model, not the admin
+    // preview. The table that prices and generates players is
+    // `starter_config.league_ability_ranges`, and the two disagreed at every England tier
+    // (55-95 against 40-90 at tier 1, 5-15 against 2-7 at tier 8). The app had nine readers
+    // keyed off the published copy, so squads were generated from one table and judged against
+    // the other — and its economy gate was built on this one and had to withdraw its verdict.
+    //
+    // The published KEY of the same name is unchanged and still served; it now comes from
+    // `EconomyConfigPublisher::leaguePlayerAbilityRanges()`, which reads the authored table.
+    // Only this column is gone, so there is one place to author a band and no way for the two
+    // to drift again. Dropped by Version20261113160000.
 
     // ── Inbox / Notification Frequencies ─────────────────────────────────
 

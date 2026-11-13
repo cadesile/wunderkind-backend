@@ -317,10 +317,15 @@ not at any real country's figures — tier-1 `wageScaleMicroPence` comes back as
 where England's is `390,404,650`. The app's release gate was built on that read and concluded
 every tier was solvent. Pass `?country=` for each launch country and compare per country.
 
-Related, and the same class of mistake: **ability bands for a country come from
-`GET /api/starter-config` → `leagueAbilityRanges`**, which is the table that actually prices
-players. `GET /api/game-config` → `leaguePlayerAbilityRanges` is a *different* table with no
-server-side consumer, and it disagrees at every England tier.
+Related: **ability bands come from `starter_config.league_ability_ranges`**, the table that
+actually prices players. It is served two ways — whole, on `GET /api/starter-config` as
+`leagueAbilityRanges`, and per country on `GET /api/game-config` as `leaguePlayerAbilityRanges`.
+Both now carry the same figures.
+
+Until 2026-11-13 the second came from a *separate* `game_config` column that nothing on the
+server read and that disagreed at every England tier. That column has been dropped
+(`Version20261113160000`); the published key is unchanged in name and shape. If you are reading
+an older copy of this runbook, that is the difference.
 
 **2. The app's gate exits 0** against the re-issued tables. A non-zero exit on bankruptcy-ladder
 findings alone is expected and is not a backend blocker; anything else is.

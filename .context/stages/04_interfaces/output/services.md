@@ -1154,9 +1154,12 @@ round it to zero and make every player free.
 **The reference squad is read from the same config the world generator uses** —
 `starterConfig.npcSquadConfig` for size, `starterConfig.leagueAbilityRanges`
 for the ability band — so the figure the wage scale is calibrated against is
-the figure that actually gets paid. `gameConfig.leaguePlayerAbilityRanges` is
-the third ability table in the codebase; it is published to the app, has no
-server-side generator consumer, and is **deliberately not read here**.
+the figure that actually gets paid. There used to be a third ability table —
+`gameConfig.leaguePlayerAbilityRanges`, a stored column published to the app
+that no server code read and that disagreed at every England tier. It was
+**dropped** on 2026-11-13 (`Version20261113160000`); the published key of that
+name is now built from `starterConfig.leagueAbilityRanges` by
+`EconomyConfigPublisher`, so one table feeds both pricing and publishing.
 
 **`tierCountFor()` moved here from `NpcClubGenerationService`**, which was the
 only place in the codebase that read `leagueTierCount`. It belongs with the

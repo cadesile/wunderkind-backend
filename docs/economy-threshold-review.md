@@ -240,7 +240,7 @@ the best earns £231.91.
 | 8 | **2–7** | **£10.11** | £100.00 | £231.91 | **22.9×** |
 
 **Why it is a finding and not a bug.** Nothing is wrong with the arithmetic; the inputs are
-`leaguePlayerAbilityRanges` (which authors tier 8 as 2–7) and the exponent. The problem is that
+`starter_config.league_ability_ranges` (which authors tier 8 as 2–7) and the exponent. The problem is that
 a band starting at **2** sits where `ability^2.5` is near zero, so the bottom of that band prices
 at a nominal figure. Every other tier's band starts far enough up the curve for this not to bite.
 
