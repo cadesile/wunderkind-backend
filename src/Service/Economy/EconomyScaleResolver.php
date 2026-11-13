@@ -327,8 +327,9 @@ final class EconomyScaleResolver
      * THE SINGLE SOURCE OF TRUTH FOR ABILITY, matching what the generators read.
      * WorldInitializationService::resolveAbilityRange() reads the same column with the same
      * const fallback, and the wage model must price the players the world actually makes. The
-     * third table in the codebase, `gameConfig.leaguePlayerAbilityRanges`, is published to the
-     * app and has no server-side generator consumer; it is deliberately not read here.
+     * published `leaguePlayerAbilityRanges` key is now BUILT from this same column by
+     * `EconomyConfigPublisher`, so there is no longer a second table to disagree with — the
+     * `game_config` column of that name was dropped in `Version20261113160000`.
      *
      * PUBLIC SINCE 2026-11-12 because it had been copied three times — here,
      * EconomyWageTableCommand and EconomyAdminController — and three copies of "which abilities
@@ -399,10 +400,10 @@ final class EconomyScaleResolver
      * answers one cell of.
      *
      * EXISTS SO THE PUBLISHED TABLE AND THE PRICING TABLE CANNOT BE DIFFERENT TABLES. They were:
-     * `gameConfig.leaguePlayerAbilityRanges` was published to the app while
-     * `starter_config.league_ability_ranges` priced and generated the players, and the two
-     * disagreed at every England tier (55-95 against 40-90 at tier 1, 5-15 against 2-7 at tier
-     * 8). Squads were generated from one and judged against the other by nine app-side readers
+     * `gameConfig.leaguePlayerAbilityRanges` was a separate stored column published to the app
+     * while `starter_config.league_ability_ranges` priced and generated the players, and the
+     * two disagreed at every England tier (55-95 against 40-90 at tier 1, 5-15 against 2-7 at
+     * tier 8). That column is now dropped and the key is built from here. Squads were generated from one and judged against the other by nine app-side readers
      * covering recruiting, thinning, culling and contract renewal.
      *
      * Normalised through `abilityBand()` rather than returned raw, so a transposed pair is

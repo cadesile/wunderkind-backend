@@ -803,7 +803,7 @@ Each is effectively a single global-config row.
   `maxSponsorsByTier`, `maxInvestorsByTier`, `npcClubBalanceRanges`,
   `npcFacilityLevelRanges`, `npcClubSizeWeights`,
   `squadRoleAppearanceExpectations/MoraleDecayPerWeek/
-  MoraleBoostPerWeek/AutoAssignThresholds`, `leaguePlayerAbilityRanges`,
+  MoraleBoostPerWeek/AutoAssignThresholds`,
   `wageMultiplierTiers`, `leagueWinPoints`, `pyramidNewsConfig`,
   `statPostRotation/Schedule/LastRunAt`, `leagueTierDefaults` (new — json,
   keyed `"1"`-`"8"`, each `{promotionSpots, tvDeal, prizeMoney,
