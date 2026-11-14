@@ -68,12 +68,25 @@
         return d.innerHTML;
     }
 
-    // One row of the working. `muted` is for the terms that are informational rather than
-    // additive, so the column of figures still adds up when read top to bottom.
-    function row(label, value, muted, title) {
-        return '<tr' + (title ? ' title="' + esc(title) + '"' : '') + '>'
-            + '<td class="' + (muted ? 'text-muted small' : '') + '">' + esc(label) + '</td>'
-            + '<td class="text-end ' + (muted ? 'text-muted small' : '') + '">' + value + '</td>'
+    // One row of the working.
+    //
+    // THE LABEL IS PLAIN TEXT AND IS ESCAPED HERE, so callers must never pass markup in it —
+    // '<strong>Asset base</strong>' renders as those literal characters, which is exactly what it
+    // did until this was fixed. Emphasis is asked for with opts.strong instead, and callers must
+    // not pre-escape either: esc() twice turns a club name's & into &amp;amp;.
+    //
+    // opts: {strong: bold the row, muted: informational rather than additive — so the column of
+    // figures still adds up when read top to bottom, title: hover text}
+    function row(label, value, opts) {
+        opts = opts || {};
+
+        var cls   = opts.muted ? 'text-muted small' : '';
+        var open  = opts.strong ? '<strong>' : '';
+        var close = opts.strong ? '</strong>' : '';
+
+        return '<tr' + (opts.title ? ' title="' + esc(opts.title) + '"' : '') + '>'
+            + '<td class="' + cls + '">' + open + esc(label) + close + '</td>'
+            + '<td class="text-end ' + cls + '">' + open + value + close + '</td>'
             + '</tr>';
     }
 
@@ -113,17 +126,17 @@
             + '<tbody>'
             + row('Balance (last sync)', money(b.balancePence))
             + row('Facilities (sunk investment)', money(b.facilitiesPence))
-            + row('Land — ' + (BASIS_LABEL[l.basis] || esc(l.basis))
-                    + (l.town ? ' · ' + esc(l.town) : ''), money(b.landPence))
+            + row('Land — ' + (BASIS_LABEL[l.basis] || l.basis)
+                    + (l.town ? ' · ' + l.town : ''), money(b.landPence))
             + row('Stadium (paid)', money(b.stadiumPence))
-            + row('<strong>Asset base</strong>', '<strong>' + money(b.basePence) + '</strong>')
-            + row('Reputation uplift — ' + esc(b.reputation) + ' pts @ '
+            + row('Asset base', money(b.basePence), {strong: true})
+            + row('Reputation uplift — ' + b.reputation + ' pts @ '
                     + (b.reputationFactor * 100).toFixed(1) + '%'
                     + (b.reputationCapped ? ' (capped)' : ''),
                   money(b.reputationUpliftPence))
-            + row('Generosity x' + esc(b.generosityMultiplier), money(b.generosityPence))
-            + row('<strong>Estimate</strong>', '<strong>' + money(b.estimatePence) + '</strong>')
-            + row('model ' + esc(b.modelVersion), '', true)
+            + row('Generosity x' + b.generosityMultiplier, money(b.generosityPence))
+            + row('Estimate', money(b.estimatePence), {strong: true})
+            + row('model ' + b.modelVersion, '', {muted: true})
             + '</tbody></table></div>';
 
         if (l.note) {
