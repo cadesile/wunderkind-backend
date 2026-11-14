@@ -154,6 +154,16 @@
         confirmEl.disabled = false;
     }
 
+    // CAPTURE PHASE (the trailing `true`), AND IT MUST STAY THAT WAY.
+    //
+    // The trigger lives in a cell carrying `onclick="event.stopPropagation()"`, which it must:
+    // the whole <tr> navigates to the club detail page, so anything clickable inside the actions
+    // cell has to opt out of that. But stopPropagation() there also means the click never reaches
+    // `document`, so a bubble-phase delegated listener here — the shape the global delete modal in
+    // layout.html.twig uses, which is why this was written that way — never runs at all. The
+    // anchor then simply follows its href and the operator lands on the raw sale-quote JSON
+    // instead of the overlay. Capture runs before the cell's handler, so preventDefault() here
+    // still stops the navigation while the row-click stays suppressed.
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-club-sale-trigger]');
 
@@ -192,7 +202,7 @@
                     + 'Could not load the valuation (' + esc(err.message) + '). Nothing was sold.</div>';
                 confirmEl.disabled = true;
             });
-    });
+    }, true);
 
     // A second click would POST the same authorisation twice. The unique index and the ledger's
     // own idempotency guard both hold, but neither should be the first line of defence.
