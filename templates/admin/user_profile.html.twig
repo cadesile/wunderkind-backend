@@ -198,6 +198,23 @@
 
 </div>
 
-{# One overlay for the whole table, opened by any [data-club-sale-trigger] above. #}
-{% include 'admin/_club_sale_dialog.html.twig' %}
+{% endblock %}
+
+{#
+  THE OVERLAY IS RENDERED HERE, NOT INSIDE `content`, AND THAT IS NOT A TIDY-UP.
+
+  bmc-admin.css carries `:where(.bmc-shell, .bmc-overlay) button { all: unset }` — the pixel
+  system's button reset. Everything in `content` sits inside .bmc-shell, so a Bootstrap
+  `btn btn-sm btn-danger` rendered there keeps only the colours admin-theme.css sets with
+  !important and loses all of its geometry: the footer buttons came out with zero padding,
+  jammed together against the modal edge.
+
+  `body_javascript` is emitted outside the wrapper, which is where the global delete modal in
+  layout.html.twig lives and why its identically-classed buttons look right. Being a direct
+  child of <body> is also what Bootstrap wants of a modal anyway.
+#}
+{% block body_javascript %}
+    {{ parent() }}
+    {# One overlay for the whole table, opened by any [data-club-sale-trigger] in it. #}
+    {% include 'admin/_club_sale_dialog.html.twig' %}
 {% endblock %}
