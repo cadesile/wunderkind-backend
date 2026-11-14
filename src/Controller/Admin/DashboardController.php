@@ -508,6 +508,22 @@ class DashboardController extends AbstractDashboardController
             $config->setBankruptcyDeductionTiers($tiers);
         }
 
+        // THE TWO PER-TIER TABLES. Both use the sibling guard — a malformed or empty body
+        // leaves the stored table alone rather than wiping it — because for these an empty
+        // value is not a meaningful authoring choice: clearing the sponsor table means "fall
+        // back to the flat fields", which is what an all-zero/absent table already does, and
+        // clearing the ticket table means the same as eight zeros. Neither needs `[]` to be
+        // reachable, so the safe reading of a blank body is "keep what was there".
+        $sponsorPerTier = json_decode((string) $request->request->get('economySponsorBandsPerTierPence', ''), true);
+        if (is_array($sponsorPerTier)) {
+            $config->setEconomySponsorBandsPerTierPence($sponsorPerTier);
+        }
+
+        $ticketPerTier = json_decode((string) $request->request->get('economyTicketPricePerTierPence', ''), true);
+        if (is_array($ticketPerTier) && $ticketPerTier !== []) {
+            $config->setEconomyTicketPricePerTierPence($ticketPerTier);
+        }
+
         // THE WEEKS LADDER, AND A BLANK FIELD IS MEANINGFUL HERE unlike the pence one above.
         // Null means "the app uses its own built-in ladder", so clearing the field has to be
         // able to REACH null — an is_array-only guard would make the shipped state

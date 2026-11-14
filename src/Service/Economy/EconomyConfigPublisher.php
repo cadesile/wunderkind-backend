@@ -206,6 +206,15 @@ final class EconomyConfigPublisher
                 // the flat key as its fallback — which is exactly what an older build already
                 // does by not knowing about this one.
                 'youthScholarshipPence' => $this->wageModel->youthScholarshipPence((string) $code, $tier, $config),
+                // PER-TIER SPONSOR BANDS, country-scaled like everything else here. The
+                // country-level `sponsorBandsPence` below stays and still resolves from the
+                // six flat columns, so a build that only knows about that one is unaffected;
+                // a tier with no authored row returns the same figures either way.
+                'sponsorBandsPence'     => $this->sponsorBands->bandsFor((string) $code, $config, $tier),
+                // 0 = the operator has not authored this division's ticket price, so use your
+                // own. There is no flat predecessor to fall back to — the backend has never
+                // held a ticket price — which is why the zero has to mean something.
+                'ticketPricePence'      => $config->getEconomyTicketPricePerTierPence()[$tier - 1] ?? 0,
             ];
         }
 
