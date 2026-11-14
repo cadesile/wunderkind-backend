@@ -98,7 +98,35 @@ happen there. They live on the backend so an operator can retune them without an
 | `sponsorWeeklyPence` | int | `0` | ⚠️ See below. |
 | `bankruptcyDeductionWeeks` | object[] \| **null** | **`null`** | The deficit ladder in **weeks of the club's own wage bill**. ⚠️ See below — `null` is meaningful. |
 
-### `bankruptcyDeductionWeeks` — null means "use your own ladder"
+### ⚠️ There is no country factor in this payload, and you do not need one
+
+Every money figure in `economyTierBaseline` is **already resolved for the country you asked
+for**: `turnoverPence`, `wageScaleMicroPence`, `sponsorBandsPence`, `youthScholarshipPence`.
+The country and tier factors are applied server-side before publishing.
+
+**The factors are deliberately not published.** Not an omission — a key named `countryFactorBp`
+sitting next to money invites a second application of a factor that is already in the number,
+and that bug is silent: at parity it looks right, and it only breaks once a country is set to
+anything but 10000. `SyncServiceGameConfigParityTest::testTheBlockDoesNotLeakACountryFactor`
+enforces the absence.
+
+### Rolling a sponsor pot — the case this trips up
+
+Roll straight from `sponsorBandsPence` for the club's tier. **Apply nothing.** Those figures are
+the resolved band, and the server's own `rollLeagueSponsors()` draws from exactly the same
+numbers, so the two agree by construction. Multiplying by a factor you derived elsewhere would
+double-scale every sponsor in the world.
+
+If a pot still looks wrong, the cause is almost certainly a **no-country read**: without
+`?country=` the block resolves at the const fallback and the bands come back *unscaled*. Check
+`source` — it is `"country"` on a resolved read and `"fallback"` otherwise — and refuse
+`"fallback"` rather than treating it as a country's figures.
+
+> The only place the factors *are* published is `GET`/`POST /api/club/season-investment`, as
+> `countryFactorBp` and `tierFactorBp`. They explain a ceiling the client cannot otherwise
+> account for, and nothing is rolled from them there.
+
+## `bankruptcyDeductionWeeks` — null means "use your own ladder"
 
 ```json
 "bankruptcyDeductionWeeks": [

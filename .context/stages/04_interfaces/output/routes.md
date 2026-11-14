@@ -142,6 +142,31 @@ so a token minted before the fix starts working without re-authentication. See
 
 ## `src/Controller/Admin/` — custom (non-CRUD) admin actions
 
+- **`ClubSaleAdminController`** (added 2026-11-14) — the admin club buyout, two routes:
+  `GET /admin/clubs/{id}/sale-quote` (`admin_club_sale_quote`) returns the valuation and its
+  full working as JSON plus a CSRF token, and `POST /admin/clubs/{id}/sale`
+  (`admin_club_sale`) records a `ClubSale` row and dispatches `SellClubMessage`.
+  Class-level `#[IsGranted('ROLE_ADMIN')]` on top of the `^/admin` firewall rule.
+
+  **NEITHER ROUTE DOES THE WORK.** Nothing is credited and no club is deleted inside a web
+  request — the handler does that off the `clubsale` transport. That is not about latency: a
+  request that both pays money and irreversibly deletes a club has no safe retry, and a
+  browser will retry. The POST's success assertion in `ClubSaleAdminTest` is therefore that
+  the club is **still there** afterwards.
+
+  Both qualify for the exemption in `src/Controller/Admin/CLAUDE.md` (one returns JSON, the
+  other only ever redirects — neither renders an `@EasyAdmin` template), so they use plain
+  route names like `admin_user_kill_session` does, while the redirect still goes through
+  `AdminUrlGenerator` so the page it lands on has its `ea` context.
+
+  The amount is parsed by `App\Service\Admin\MoneyInput::toPence()`, extracted from
+  `LeagueAdminController` for this. A blank or unparseable figure is **refused**, never
+  treated as 0 — see `services.md`.
+
+  The UI side is the `Est. Value` column and `Sell` control on
+  `templates/admin/user_profile.html.twig`, with the overlay in
+  `templates/admin/_club_sale_dialog.html.twig`.
+
 - **`LeaderboardAwardCloseController`** — `POST
   /admin/leaderboard-award/{definition}/close-now` (`admin_leaderboard_award_close_now`),
   CSRF-guarded, posted by the **Close now** panel on an award definition's detail page.

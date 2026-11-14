@@ -627,3 +627,32 @@ Four things worth knowing before touching these:
 - **`Version20261103180000`'s `down()` is lossy on purpose**: account-level entries
   (grants, pre-club purchases) have no club and cannot exist in the old NOT NULL shape,
   so they are deleted rather than silently attached to an arbitrary club.
+
+## 2026-11-14 — `club_sale`, one additive table
+
+`Version20261114102300` — the authorisation/receipt row for an admin club buyout. See
+`entities.md`'s `ClubSale` entry for the shape and `services.md` for what consumes it.
+
+**Provably inert on apply.** One new table; no column added to, widened or dropped from an
+existing one, and nothing backfilled. Nothing reads it until an operator uses the new admin
+action, so applying it changes no behaviour anywhere. The `UserLedgerEntryType::CLUB_SALE`
+case that goes with it needed **no migration at all** — the column is `varchar(30)` and
+`tests/Enum/UserLedgerEntryTypeTest.php` asserts every value still fits it.
+
+Two details that are deliberate and should not be "tidied":
+
+- **`club_id` carries no foreign key.** This row exists precisely to outlive the club it
+  describes — `ClubSaleService` deletes that club moments after crediting — so an FK would
+  be SET NULL at best and would take the club's identity with it. Same reasoning, and the
+  same technique, as `season_ratings_snapshot.club_id`.
+- **`uq_club_sale_club_live` is PARTIAL** (`WHERE (status)::text <> 'failed'`), so a FAILED
+  attempt does not permanently block the retry that fixes its cause. A plain UNIQUE would
+  need a row deleted by hand. Like the six partial uniques from 2026-11-03, the predicate is
+  spelled exactly as `pg_get_expr(indpred, indrelid)` reports it, and
+  `tests/Doctrine/SchemaIsInSyncTest.php` is what catches it if that drifts.
+
+**Remember `wunderkind_test` is not migration-tracked** (see
+`01_overview/output/environment.md`): this table reaches the test database only via
+`doctrine:schema:update --env=test`, which was run for it, and `--dump-sql` reported zero
+drift afterwards. A suite run before that step fails with `relation "club_sale" does not
+exist` on every new test, which looks nothing like the change.

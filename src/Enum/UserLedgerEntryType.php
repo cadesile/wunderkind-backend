@@ -46,6 +46,28 @@ enum UserLedgerEntryType: string
     case SELL_BACK_CREDIT = 'sell_back_credit';
 
     /**
+     * An admin buying a club out of a player's account. Positive.
+     *
+     * NOT SELL_BACK_CREDIT, although both pay a player for a liquidated club, because the two
+     * answer to different models and a support reader has to be able to tell them apart. A
+     * sell-back is the player's own choice, priced by PlotSellBackService at 0.9x land and 0.5x
+     * stadium. This is an operator-authorised goodwill payout priced by ClubSaleValuationService
+     * at 100% of both plus a reputation uplift and a deliberate over-estimate, and it DELETES the
+     * club rather than releasing its plot. Collapsing them would make `sourceKind` the only thing
+     * distinguishing a fee-bearing transaction from a gift.
+     *
+     * NOT CUSTOM_INCOME either, which is the other tempting reuse: that case carries either sign
+     * precisely because a human picks the direction per row, so it is absent from isDebit() and
+     * append() cannot guard it. A buyout only ever credits, and the fixed direction is worth
+     * keeping enforceable.
+     *
+     * The full working, the authorising admin and the club's name live on the `club_sale` row
+     * this entry's `sourceRef` names — they have to, because the club is deleted immediately
+     * afterwards and this row's own `club_id` is nulled by its ON DELETE SET NULL.
+     */
+    case CLUB_SALE = 'club_sale';
+
+    /**
      * Building out one facility site during club setup. ALL NEGATIVE.
      *
      * ONE CASE PER SITE, NOT ONE CASE WITH THE SITE IN `sourceRef`. The first draft did the
@@ -120,6 +142,9 @@ enum UserLedgerEntryType: string
             self::LAND_PURCHASE    => 'Land purchase',
             self::STADIUM_PURCHASE => 'Stadium purchase',
             self::SELL_BACK_CREDIT => 'Sell-back credit',
+            // PLAYER-VISIBLE, like CUSTOM_INCOME below: worded for the account holder reading
+            // their own ledger, not for the operator who authorised it.
+            self::CLUB_SALE        => 'Club sale',
             self::FACILITY_TRAINING => 'Training facilities',
             self::FACILITY_MEDICAL  => 'Medical facilities',
             self::FACILITY_SCOUTING => 'Scouting facilities',
@@ -176,7 +201,8 @@ enum UserLedgerEntryType: string
     public function badgeColour(): string
     {
         return match ($this) {
-            self::DIVIDEND_DRAW, self::SELL_BACK_CREDIT     => 'success',
+            self::DIVIDEND_DRAW, self::SELL_BACK_CREDIT,
+            self::CLUB_SALE                                 => 'success',
             self::STARTING_GRANT, self::QUIZ_BONUS          => 'info',
             self::LAND_PURCHASE, self::STADIUM_PURCHASE,
             self::FACILITY_TRAINING, self::FACILITY_MEDICAL,

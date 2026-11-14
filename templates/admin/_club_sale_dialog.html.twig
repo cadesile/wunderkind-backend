@@ -1,0 +1,204 @@
+{#
+  The club-buyout overlay.
+
+  ONE MODAL FOR THE WHOLE TABLE, filled over AJAX from admin_club_sale_quote — the same shape as
+  the global delete modal in templates/bundles/EasyAdminBundle/layout.html.twig. Inlining a
+  breakdown per club would put a dozen of them in the page to show one.
+
+  BOOTSTRAP, NOT BMC.confirm(). templates/admin/_bmc_dialog.html.twig is only included by
+  bmc_page.html.twig, which this page does not extend, so BMC.confirm() here would silently fall
+  back to window.confirm() — no fields, no breakdown, no note. This page is still in the older
+  Bootstrap/EasyAdmin visual system and the overlay matches it.
+
+  THE FORM POSTS A FIGURE AND A NOTE, AND NOTHING ELSE. The server recomputes the whole valuation
+  itself; the breakdown rendered below is read-only and is never sent back. So a crafted POST can
+  change what is PAID (which an operator can anyway) but not the stored working that explains it.
+#}
+<div class="modal fade" id="clubSaleModal" tabindex="-1" aria-labelledby="clubSaleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form method="POST" id="clubSaleForm" action="">
+        <input type="hidden" name="_token" id="clubSaleToken" value="">
+
+        <div class="modal-header py-2">
+          <h5 class="modal-title" id="clubSaleModalLabel">Sell club</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body" id="clubSaleModalBody">
+          <p class="text-muted mb-0">Loading valuation…</p>
+        </div>
+
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-danger" id="clubSaleConfirmBtn" disabled>
+            Pay &amp; delete club
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var modalEl  = document.getElementById('clubSaleModal');
+    var form     = document.getElementById('clubSaleForm');
+    var bodyEl   = document.getElementById('clubSaleModalBody');
+    var tokenEl  = document.getElementById('clubSaleToken');
+    var confirmEl = document.getElementById('clubSaleConfirmBtn');
+    var bsModal  = null;
+
+    if (!modalEl || !form) {
+        return;
+    }
+
+    function money(pence) {
+        return '£' + (pence / 100).toLocaleString('en-GB', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function esc(value) {
+        var d = document.createElement('div');
+        d.textContent = value === null || value === undefined ? '' : String(value);
+        return d.innerHTML;
+    }
+
+    // One row of the working. `muted` is for the terms that are informational rather than
+    // additive, so the column of figures still adds up when read top to bottom.
+    function row(label, value, muted, title) {
+        return '<tr' + (title ? ' title="' + esc(title) + '"' : '') + '>'
+            + '<td class="' + (muted ? 'text-muted small' : '') + '">' + esc(label) + '</td>'
+            + '<td class="text-end ' + (muted ? 'text-muted small' : '') + '">' + value + '</td>'
+            + '</tr>';
+    }
+
+    var BASIS_LABEL = {
+        active_claim:  'plot claim (authoritative)',
+        home_location: 'linked town',
+        name_match:    'inferred from club name',
+        unmatched:     'no plot found'
+    };
+
+    function render(d) {
+        if (d.existingSale) {
+            // The page this was opened from may be stale — a sale could have been queued in
+            // another tab. Refuse here rather than letting the POST bounce off the unique index.
+            bodyEl.innerHTML = '<div class="alert alert-warning py-2 mb-0">'
+                + 'A sale for <strong>' + esc(d.clubName) + '</strong> already exists ('
+                + esc(d.existingSale.label) + '). Reload the page.</div>';
+            confirmEl.disabled = true;
+            return;
+        }
+
+        var b = d.breakdown;
+        var l = b.land;
+
+        var html = ''
+            + '<div class="alert alert-danger py-2 small mb-3">'
+            + '<strong>Irreversible.</strong> This credits <strong>' + esc(d.userEmail) + '</strong>'
+            + ' and then permanently deletes <strong>' + esc(d.clubName) + '</strong> and all of its'
+            + ' history — syncs, season records, match results, awards and tournament entries.'
+            + ' The account and its other clubs are untouched.'
+            + (d.otherClubs && d.otherClubs.length
+                ? ' Other clubs on this account: ' + esc(d.otherClubs.join(', ')) + '.'
+                : ' This is the account\'s only club.')
+            + '</div>';
+
+        html += '<div class="table-responsive mb-3"><table class="table table-sm mb-0 align-middle">'
+            + '<tbody>'
+            + row('Balance (last sync)', money(b.balancePence))
+            + row('Facilities (sunk investment)', money(b.facilitiesPence))
+            + row('Land — ' + (BASIS_LABEL[l.basis] || esc(l.basis))
+                    + (l.town ? ' · ' + esc(l.town) : ''), money(b.landPence))
+            + row('Stadium (paid)', money(b.stadiumPence))
+            + row('<strong>Asset base</strong>', '<strong>' + money(b.basePence) + '</strong>')
+            + row('Reputation uplift — ' + esc(b.reputation) + ' pts @ '
+                    + (b.reputationFactor * 100).toFixed(1) + '%'
+                    + (b.reputationCapped ? ' (capped)' : ''),
+                  money(b.reputationUpliftPence))
+            + row('Generosity x' + esc(b.generosityMultiplier), money(b.generosityPence))
+            + row('<strong>Estimate</strong>', '<strong>' + money(b.estimatePence) + '</strong>')
+            + row('model ' + esc(b.modelVersion), '', true)
+            + '</tbody></table></div>';
+
+        if (l.note) {
+            html += '<div class="alert alert-warning py-2 small">' + esc(l.note) + '</div>';
+        }
+
+        html += '<div class="alert alert-warning py-2 small">'
+            + 'Balance and reputation are reported by the device, so this values the club as of its'
+            + ' last sync rather than live play.</div>';
+
+        html += '<div class="row g-3">'
+            + '<div class="col-md-5">'
+            + '<label class="form-label" for="clubSaleAmount">Amount to pay (£)</label>'
+            + '<input type="text" inputmode="decimal" class="form-control" id="clubSaleAmount"'
+            + ' name="agreedAmount" value="' + (b.estimatePence / 100).toFixed(2) + '">'
+            + '<div class="form-text">Commas and pence are both accepted. Editable — the estimate is an opening offer.</div>'
+            + '</div>'
+            + '<div class="col-md-7">'
+            + '<label class="form-label" for="clubSaleNote">Ledger note</label>'
+            + '<textarea class="form-control" id="clubSaleNote" name="ledgerNote" rows="3"'
+            + ' maxlength="255" placeholder="Club sale — ' + esc(d.clubName) + '"></textarea>'
+            + '<div class="form-text">Shown to the player on their own ledger. Write it for them, not for us.</div>'
+            + '</div>'
+            + '</div>';
+
+        bodyEl.innerHTML = html;
+        tokenEl.value = d.csrfToken;
+        confirmEl.disabled = false;
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-club-sale-trigger]');
+
+        if (!btn) {
+            return;
+        }
+
+        e.preventDefault();
+
+        var quoteUrl = btn.getAttribute('href');
+
+        // The POST route is the quote route without its suffix. Derived rather than rendered as a
+        // second attribute so the two cannot point at different clubs.
+        form.action = quoteUrl.replace(/\/sale-quote(\?.*)?$/, '/sale');
+
+        bodyEl.innerHTML = '<p class="text-muted mb-0">Loading valuation…</p>';
+        tokenEl.value = '';
+        confirmEl.disabled = true;
+
+        if (!bsModal) {
+            bsModal = new bootstrap.Modal(modalEl);
+        }
+
+        bsModal.show();
+
+        fetch(quoteUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) {
+                if (!r.ok) {
+                    throw new Error('HTTP ' + r.status);
+                }
+                return r.json();
+            })
+            .then(render)
+            .catch(function (err) {
+                bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0">'
+                    + 'Could not load the valuation (' + esc(err.message) + '). Nothing was sold.</div>';
+                confirmEl.disabled = true;
+            });
+    });
+
+    // A second click would POST the same authorisation twice. The unique index and the ledger's
+    // own idempotency guard both hold, but neither should be the first line of defence.
+    form.addEventListener('submit', function () {
+        confirmEl.disabled = true;
+        confirmEl.textContent = 'Queueing…';
+    });
+})();
+</script>

@@ -5,6 +5,44 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **New pass (2026-11-14), on top of commit `a93bb1d`** (uncommitted).
+  **Stages touched:** 02_architecture (`structure.md`), 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`routes.md`, `services.md`), shared (this file).
+  **Code:** the admin club buyout — an operator picks a user's club, is shown a generous
+  valuation, adjusts it, and authorises a sale that credits the owner's `UserLedger` and then
+  permanently deletes the club and all of its history. Queued from day one so the go-live
+  batch is the same handler. New: `src/Service/Club/`, `ClubSale` + `club_sale`,
+  `UserLedgerEntryType::CLUB_SALE`, the `clubsale` Messenger transport,
+  `app:clubs:sell-batch`, and the `Est. Value` column + overlay on `/admin/user/{id}`.
+
+  Four things worth carrying beyond the feature:
+
+  - **Most of the money half already existed and was unwired.** `ClubValuationService`,
+    `PlotSellBackService`, `ClaimReleaseReason::CLUB_DELETED` (already `paysOut()`), and
+    `PlotClaimRepository::releaseActiveForClubs()` — the last of which documents itself as
+    "so the caller can pay out" and had **no production caller at all**. Reading the land
+    economy's own services first turned a from-scratch feature into a wiring job plus a
+    valuation model. The stale forward-reference to a never-written
+    `detachClubScopedLedgerEntries()` in `AccountDeletionService`'s docblock was the clue
+    that a club-only delete path had been anticipated and never built.
+  - **A club-only delete is a different job from an account delete, because the owner
+    survives.** That one difference is the whole of `ClubScrubService`: `user_ledger` rows
+    must be DETACHED not deleted (the balance is a before/after chain, and deleting a club's
+    recent rows rolls the owner's balance backwards — already shipped once), and an active
+    `plot_claim` must be RELEASED first or `uq_plot_claim_active_plot` leaves the plot owned
+    by nobody and permanently unbuyable. The same latent bug was live in
+    `DeleteAdminController`'s club delete, now pointed at the shared service.
+  - **Order the two irreversible steps so the failure you can have is the recoverable one.**
+    Credit then scrub, not in one transaction: a crash between them leaves a paid player who
+    still has their club, and the retry pays nothing further (idempotent on the sale id). The
+    reverse order destroys the club and everything a payout could be recomputed from. Same
+    reasoning `PlotSellBackService::execute()` already documents.
+  - **`$user->getClubs()` can hand back an empty collection that never lazy-loads**, because
+    the inverse side is not synced when a `Club` is constructed. It made the new admin column
+    render "No clubs associated" under test. `AccountDeletionService` already avoids that
+    collection for the same reason; `UserCrudController::detail()` now queries too. Worth
+    assuming for any screen that lists a user's clubs.
+
 - **New pass (2026-11-12), on top of commit `3ecbc31`** (uncommitted).
   **Stages touched:** 02_architecture (`structure.md`), 03_data (`entities.md`,
   `migrations.md`), 04_interfaces (`routes.md`, `services.md`), shared (this file).

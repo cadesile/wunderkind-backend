@@ -40,7 +40,13 @@ final class AccountDeletionService
     /** Accounts per transaction in deleteAccountsBulk() — keeps IN() parameter lists bounded. */
     private const BULK_CHUNK_SIZE = 200;
 
-    private const BLOCKING_CLUB_DEPENDENTS = [
+    /**
+     * PUBLIC because it is the single record of which FKs block a club delete, and there are now
+     * two deletion paths that must agree: this one (whole account) and ClubScrubService (one
+     * club, owner survives). A second copy of the list would drift the first time an entity
+     * gained or lost an onDelete, and nothing would fail until a delete blocked in production.
+     */
+    public const BLOCKING_CLUB_DEPENDENTS = [
         'SeasonSnapshot',
         'SeasonRecord',
         'MatchResult',
@@ -51,13 +57,14 @@ final class AccountDeletionService
         // UserLedger is deliberately ABSENT. It was here while user_ledger.club_id was NOT NULL
         // with a plain FK — the column could not be nulled, so the rows had to be deleted for a
         // club delete to succeed. It is now nullable with ON DELETE SET NULL, so the rows are
-        // detached instead (see detachClubScopedLedgerEntries() below). Deleting them was
+        // detached instead — by the FK itself, on both paths, so no explicit statement is needed
+        // or wanted. Deleting them was
         // destructive in a way nobody intended: the balance is a chain of before/after
         // snapshots, so removing a club's most recent entries rolled the owner's balance back.
         //
         // On a FULL account delete the rows go anyway, via user_id's own ON DELETE CASCADE.
-        // Detaching only changes the club-only delete path — which is exactly the path where
-        // the owner survives and their balance matters.
+        // Detaching only changes the club-only delete path — ClubScrubService, which is exactly
+        // the path where the owner survives and their balance matters.
     ];
 
     public function __construct(
