@@ -217,12 +217,17 @@
             <div class="bmc-field-col">
                 <label for="leagueParachute">Parachute (JSON)</label>
                 <textarea id="leagueParachute" name="leagueParachute" rows="4" data-kind="text" data-blank="ok"
-                          placeholder='{"seasons":3,"perSeasonPence":[550000000,450000000,200000000]}'>{{ config.leagueParachute is null ? '' : config.leagueParachute|json_encode }}</textarea>
+                          placeholder='{"seasons":3,"perSeasonPence":[7202985402,4801990268,2400995134]}'>{{ config.leagueParachute is null ? '' : config.leagueParachute|json_encode }}</textarea>
                 <div class="bmc-data">
                     Served <strong>verbatim</strong> — the backend stores and publishes this without reading inside it, so the app
                     owns the shape. Resolution is <code>league ?? this</code>, <strong>whole-value</strong>: a league override
                     replaces this entirely rather than merging with it. Money in <strong>base-year pence</strong>.
                     Blank clears it; malformed JSON is ignored and leaves the stored value alone.
+                    <br><strong>You probably do not need this.</strong> The live scheme is authored <em>per tier</em> on the
+                    league tier defaults, because a parachute is sized against the division a club drops into &mdash; one global
+                    figure cannot be right for both tier 2 and tier 8. The placeholder shows the authored <strong>tier&nbsp;2</strong>
+                    schedule (60/40/20% of that tier's turnover) so the magnitude is real; this field is the fallback for a league
+                    whose tier has no default.
                 </div>
             </div>
         </div>
