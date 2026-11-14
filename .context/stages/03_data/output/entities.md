@@ -510,6 +510,38 @@ migrations are the change log (see `migrations.md`).
   `percentageOwned('5.00')`, `assignedAt/investedAt/lastPayoutAt`.
   `ManyToOne` → `club:?Club` (nullable).
 
+### `ClubSale` — admin club buyouts (2026-11-14)
+
+- **`ClubSale`** (table `club_sale`, `App\Entity\Club\ClubSale`) — the
+  authorisation, figure and receipt for an admin buying a club out of a
+  player's account. `clubId:string(36)` + `clubName` (**no FK**),
+  `estimatePence`, `agreedPence`, `workingJson:json`, `ledgerNote`,
+  `adminId`/`adminEmail`, `status:ClubSaleStatus(enum)` (`pending` /
+  `completed` / `failed`), `failureReason`, `scrubCountsJson:?json`,
+  `createdAt`, `completedAt`. `ManyToOne` → `user:User` (CASCADE),
+  `ledgerEntry:?UserLedger` (SET NULL). Partial unique
+  `uq_club_sale_club_live` on `club_id` **where status <> 'failed'** — one
+  live sale per club, retryable after a failure.
+
+  **It exists because the club will not.** `ClubSaleService` credits the
+  account and then deletes the club and everything pointing at it, so the
+  only other surviving evidence would be one `user_ledger` row whose
+  `club_id` its own ON DELETE SET NULL has just nulled — an amount and a
+  note, with no club name, no valuation and no operator. `clubId` carries
+  no FK deliberately, the same technique as
+  `SeasonRatingsSnapshot::$clubId` and `PlotClaim::$clubNameAtClaim`.
+
+  It is also the queue's **work order**: written before
+  `SellClubMessage` is dispatched, because that message carries only this
+  row's id. An operator's authorisation of a payout must not live inside a
+  Messenger envelope.
+
+  Valuation is `ClubSaleValuationService` (`clubsale-v1`), which is
+  deliberately NOT `ClubValuationService` (`club-v1`) — see
+  `services.md`. `UserLedgerEntryType` gained `CLUB_SALE` (positive,
+  absent from `isDebit()`, not `isClubEarnings()`), which needed no
+  migration.
+
 ## Messaging / admin comms
 
 - **`AdminMessage`** (table `admin_message`) — operator announcement.

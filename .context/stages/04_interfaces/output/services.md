@@ -1491,3 +1491,110 @@ backend-originated ledger entry. It takes a **per-user advisory lock**
 concurrent writers would fork the before/after chain — survivable while sync was the only
 writer (the device serialises per club), not survivable once a player can tap "buy"
 twice. Idempotent on `(sourceKind, sourceRef, type)`, and it refuses a positive debit.
+
+## Club buyouts (`App\Service\Club`, added 2026-11-14)
+
+An admin picks a user's club, is shown what it is worth, adjusts the figure, and authorises a
+buyout. The owner is credited and the club is then **destroyed**. Built queue-first so the
+go-live batch is the same code path, not a second implementation.
+
+- **`ClubSaleValuationService`** (`clubsale-v1`) — what we OFFER for a club.
+  `base = balance + facilities + land + stadium`, then
+  `estimate = round(base x (1 + repFactor) x GENEROSITY_MULTIPLIER)`.
+
+  **It is deliberately NOT `ClubValuationService` (`club-v1`), and must not be merged with
+  it.** That one answers "what is this club worth" for a plot release and answers it
+  conservatively; this answers "what do we pay to thank someone for the club they built" and
+  the honest answer is an over-estimate. A sell-back paying this figure would make churning
+  plots profitable. It reuses `club-v1`'s `breakdown()` for the balance and facility terms
+  rather than re-deriving them, and nests that output whole under `club` so a reader can tell
+  which model produced which term.
+
+  **Reputation is an UPLIFT, not a price per point.** Nothing in this codebase prices a
+  reputation point in money — `club-v1` excludes it explicitly — so a flat pence-per-point
+  would be an invented constant applied to an unbounded `bigint`. As a share of what the club
+  otherwise holds it scales with the club, and `REPUTATION_UPLIFT_CAP` (0.50) stops a
+  device-reported outlier becoming a payout.
+
+  **Land has four bases, in descending confidence**, recorded by name in the working:
+  `active_claim` (the plot's own price) → `home_location` → `name_match` → `unmatched`.
+  `Club::$homeLocation` is NULLABLE and expected to stay so, so "no link" is the COMMON case
+  here, not an edge one: the clubs this feature rewards are mostly the ones founded before
+  the land economy. `name_match` and `unmatched` are flagged in the UI, because the land term
+  can be the largest one. Land is taken at **100%**, and stadium at 100% of what was paid —
+  not `PlotSellBackService`'s 0.9/0.5, which exist to make churning cost something.
+
+- **`TownNameMatcher`** — extracted from `NpcClubLocationLinker`'s private `matchTown()` for
+  the basis above. The linker's own docblock refuses a SQL reimplementation of these rules; a
+  second PHP copy would be the same mistake with a shorter fuse. A player club is a weaker
+  case than an NPC one (a player typed the name), so a hit is evidence, not proof.
+  `NpcClubLocationLinkerTest` is the parity guard and passes unchanged.
+
+- **`ClubSaleService`** — `execute(ClubSale)`: credit, scrub, mark completed.
+  **Credit first, scrub second, and NOT in one transaction together** — the same reasoning
+  `PlotSellBackService::execute()` documents for the same pair. A crash after the credit
+  leaves a paid player who still has their club: visible, and the retry pays nothing further
+  because the credit is idempotent on `('club_sale', saleId, CLUB_SALE)`. A scrub that ran
+  first and then crashed leaves nothing to recompute a payout from. So the recoverable failure
+  is the one we choose to have. The credit is attributed to `club: null`, like the sell-back
+  credit, so it outlives the club.
+
+  Zero is allowed and writes no ledger row (an operator clearing a worthless club should not
+  put a £0 entry in somebody's visible history). A negative figure is refused — `CLUB_SALE` is
+  absent from `isDebit()`, so `append()` would otherwise happily write a debit dressed as a
+  reward. **A buyout is not reversible**: correct a mistake with a `REVERSAL` entry, never by
+  re-running the row.
+
+- **`ClubScrubService`** — deletes one club and everything pointing at it, in one transaction,
+  while the owner survives. **That survival is the whole difference from
+  `AccountDeletionService`**, which can let `user_ledger.user_id`'s CASCADE take the money
+  history with it.
+
+  **Step 1 is `PlotClaimRepository::releaseActiveForClubs()` and is not optional.**
+  `plot_claim.club_id` is SET NULL, so a club delete does not block on a claim — it leaves one
+  active with a NULL club, and because `uq_plot_claim_active_plot` keys on `plot_id` alone that
+  plot is then **permanently unbuyable**. That repository method existed with no production
+  caller until this service; it is also why `DeleteAdminController`'s club delete could strand
+  a plot, which is fixed by pointing that route at this service.
+
+  It shares `AccountDeletionService::BLOCKING_CLUB_DEPENDENTS` (now public) rather than
+  restating the table list — one record of which FKs block a club delete, for two paths.
+
+  **`user_ledger` rows are DETACHED, never deleted** (the FK does it; no statement needed).
+  Deleting a club's entries rolls the owner's balance backwards, because the balance is a
+  chain of before/after snapshots — a defect this codebase has shipped once already.
+
+  **Two things are deleted here that the account path retains, by explicit instruction**, and
+  both have an accepted cost: FINISHED `competition_entrant` rows (their frozen
+  `clubDisplayJson` is what renders a settled bracket, so a completed cup shows a blank
+  opponent — the shape of the bug fixed 2026-11-02, reintroduced deliberately because a
+  bought-out club should leave no trace), and `leaderboard_period_archive_entry` rows
+  (settled boards get ranks that skip a number).
+
+  `Player`, `Staff`, `Agent` and `Scout` carry **no `club_id`** — they are pool entities and
+  nothing here touches them. `DeleteAdminController`'s old comment claiming otherwise was
+  wrong.
+
+- **`App\Service\Admin\MoneyInput::toPence()`** — extracted from
+  `LeagueAdminController::parseMoneyToPence()`, which now delegates. Holds two shipped money
+  defects' fixes: thousands separators survive (a bare `(int)` cast stopped at the comma and
+  stored £10 for "1,000") and decimal pounds survive (`((int) $digits) * 100` truncated
+  "1000.50" to £1,000). **Garbage returns null, not 0** — callers must say which they mean;
+  the buyout refuses the submission, because a payout of nothing arrived at by mistyping is
+  not one anyone authorised.
+
+**Tenth Messenger transport, `clubsale`.** Separated from every other queue on **blast
+radius**, not throughput — it is the only one whose messages credit real money and then
+irreversibly delete player data. Two operational properties follow: a stuck buyout appears
+alone in `messenger:failed:show`, and commenting out its crontab line pauses exactly the
+destructive work and nothing else, which is the control an operator wants mid-batch at
+go-live. `--limit` is low to bound damage, so a defect found on sale five is a five-club
+problem. Drained by `docker/clubsale-consume.sh`; `in-memory://` in tests (NOT `sync://` —
+running the real handler in-process would delete a club as a side effect of asserting that a
+button posted). `SellClubMessage` carries only the `club_sale` id.
+
+**Batch path:** `app:clubs:sell-batch` (`SellClubsBatchCommand`) — `--club`, `--user`,
+`--all`, `--limit`, `--require-plot`, `--dry-run`. It QUEUES, like
+`CompetitionResolveRoundsCommand`. It pays the estimate **unreviewed**, which is the real
+difference from the overlay, so `--require-plot` exists for an operator who would rather
+handle inferred-town clubs by hand. Spoof clubs are refused even when named explicitly.

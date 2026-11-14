@@ -99,6 +99,24 @@ class UserLedgerEntryTypeTest extends TestCase
     {
         self::assertSame('dividend_draw', UserLedgerEntryType::DIVIDEND_DRAW->value);
         self::assertSame('custom_income', UserLedgerEntryType::CUSTOM_INCOME->value);
+        self::assertSame('club_sale', UserLedgerEntryType::CLUB_SALE->value);
+    }
+
+    /**
+     * CLUB_SALE credits and must never be marked a debit, nor counted as club earnings.
+     *
+     * Both halves matter and for different reasons. isDebit() is checked because
+     * UserLedgerService::append() throws when a debit type carries a positive amount, and a
+     * buyout only ever pays out — listing it would make the feature impossible to run at all.
+     * isClubEarnings() is checked because that predicate feeds the public career-earnings
+     * leaderboard and the Rich List: a buyout is a reward for leaving, not money the club
+     * earned, and counting it would put a departed club at the top of a board it quit.
+     */
+    public function testClubSaleCreditsAndIsNotClubEarnings(): void
+    {
+        self::assertFalse(UserLedgerEntryType::CLUB_SALE->isDebit());
+        self::assertFalse(UserLedgerEntryType::CLUB_SALE->isClubEarnings());
+        self::assertSame('Club sale', UserLedgerEntryType::CLUB_SALE->label());
     }
 
     /**

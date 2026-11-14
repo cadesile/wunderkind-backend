@@ -14,8 +14,12 @@ use App\Admin\FacetCounter;
 use App\Filter\Admin\AccountTypeFilter;
 use App\Filter\Admin\ActivityFilter;
 use App\Filter\Admin\ClubsOwnedFilter;
+use App\Entity\Club;
+use App\Repository\Club\ClubSaleRepository;
+use App\Repository\ClubRepository;
 use App\Repository\SyncRecordRepository;
 use App\Repository\UserLedgerRepository;
+use App\Service\Club\ClubSaleValuationService;
 use App\Service\SessionRevocationService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -47,6 +51,9 @@ class UserCrudController extends AbstractCrudController
         private readonly SyncRecordRepository $syncRecordRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
         private readonly SessionRevocationService $sessionRevocation,
+        private readonly ClubSaleValuationService $saleValuation,
+        private readonly ClubSaleRepository $saleRepository,
+        private readonly ClubRepository $clubRepository,
         private readonly FacetCounter $facets,
         private readonly BatchSelection $batchSelection,
         private readonly CsvExporter $csvExporter,
@@ -426,15 +433,43 @@ class UserCrudController extends AbstractCrudController
             );
     }
 
+    /**
+     * The account overview, including what each of its clubs is worth.
+     *
+     * VALUATIONS ARE COMPUTED PER CLUB ON EVERY RENDER, not stored. The figure depends on the
+     * club's last-synced balance and reputation and on the CURRENT price of the land under it,
+     * all three of which move without this page being involved — a cached estimate would be a
+     * stale number presented as an offer. Each one is a handful of indexed reads (the club's
+     * facility rows, its active claim or its town), and a user owns a few clubs, not thousands.
+     *
+     * The live sales are fetched in ONE query for all of the user's clubs rather than per row,
+     * which is what ClubSaleRepository::findLiveForClubs() exists for.
+     */
     public function detail(AdminContext $context): Response
     {
         /** @var User $user */
         $user = $context->getEntity()->getInstance();
 
+        // QUERIED, NOT READ OFF $user->getClubs(). The inverse side is not synced when a Club is
+        // constructed, so a User already in the identity map can hand back an empty collection
+        // that never lazy-loads — AccountDeletionService avoids the same collection for the same
+        // reason, and here it would silently render an account as having no clubs to sell.
+        $clubs = $this->clubRepository->findAllByUser($user);
+
+        $valuations = [];
+
+        foreach ($clubs as $club) {
+            $valuations[(string) $club->getId()] = $this->saleValuation->breakdown($club);
+        }
+
         return $this->render('admin/user_profile.html.twig', [
             'user'           => $user,
-            'clubs'          => $user->getClubs()->toArray(),
+            'clubs'          => $clubs,
             'activeSessions' => $this->sessionRevocation->countActiveSessions($user),
+            'valuations'     => $valuations,
+            'sales'          => $this->saleRepository->findLiveForClubs(
+                array_map(static fn (Club $c): string => (string) $c->getId(), $clubs),
+            ),
         ]);
     }
 }

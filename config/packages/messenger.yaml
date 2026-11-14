@@ -109,6 +109,24 @@ framework:
             # Drained by docker/suggestion-consume.sh, whose flock guard is what makes the
             # batches of one run drain in order — see that script for why that matters.
             suggestion: 'doctrine://default?queue_name=suggestion'
+            # Admin-authorised club buyouts — see ClubSaleService. One message per sale,
+            # carrying only the club_sale row's id.
+            #
+            # ITS OWN TRANSPORT FOR A DIFFERENT REASON FROM EVERY OTHER ONE ABOVE. The others are
+            # separated on throughput and latency: whose burst must not get in front of whose.
+            # This one is separated on BLAST RADIUS. Every message here credits real account
+            # money and then irreversibly deletes a player's club and all of its history, and it
+            # is the only queue in this file that does. Keeping it alone means a stuck or failing
+            # buyout is visible on its own `messenger:failed:show` listing rather than mixed into
+            # push-notification retries, and that pausing it (stop draining this queue) pauses
+            # exactly the destructive work and nothing else — which is the control an operator
+            # wants during a go-live batch and cannot have on a shared queue.
+            #
+            # The throughput argument holds too: the batch at go-live is thousands of these, and
+            # queueing an evening's push notifications behind them would be its own incident.
+            #
+            # Drained by docker/clubsale-consume.sh.
+            clubsale: 'doctrine://default?queue_name=clubsale'
 
         routing:
             # Admin-triggered leaderboard recalculation, from the list pages'
@@ -147,6 +165,10 @@ framework:
             # One batch of an admin town pull. Carries only a batch id; the handler re-reads
             # the row and skips a batch already completed, so a duplicate is a no-op.
             'App\Message\Location\SuggestTownsBatchMessage': suggestion
+            # One authorised club buyout. Carries only a club_sale id; the handler re-reads
+            # the row and the ledger credit is idempotent on that id, so a duplicate dispatch
+            # pays once. See src/Message/Club/SellClubMessage.php.
+            'App\Message\Club\SellClubMessage': clubsale
 
 when@test:
     framework:
@@ -180,4 +202,11 @@ when@test:
                 #
                 # The queueing itself is covered directly in RegistrationQueueingTest, with a
                 # spy bus, rather than inferred from transport config here.
+                # in-memory, NOT sync. The admin controller test asserts the envelope was
+                # dispatched (InMemoryTransport::getSent()); running the real handler in-process
+                # would credit a ledger and delete a club as a side effect of asserting that a
+                # button posted. ClubSaleServiceTest drives the handler's work directly instead,
+                # which is also the only way to test the crash-between-steps recovery.
+                clubsale: 'in-memory://'
+
                 registration: 'sync://'

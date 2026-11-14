@@ -264,3 +264,35 @@ by a FACTORY rather than an alias — `alias: '%env(...)%'` does not compile, so
 provider from an environment variable has to happen in PHP. Each falls back to its
 `Unconfigured*` implementation, which throws and says in the log whether the provider was
 not selected or selected-but-unusable. Nothing else in the feature names a vendor.
+
+## Club buyout module (added 2026-11-14)
+
+A small module, but it crosses more layers than its size suggests, and the pieces are only
+correct together:
+
+- **`src/Service/Club/`** — `ClubSaleValuationService` (what we offer),
+  `ClubSaleService` (credit → scrub → receipt), `ClubScrubService` (delete one club, owner
+  survives). See `04_interfaces/output/services.md` for the reasoning in each.
+- **`src/Entity/Club/ClubSale.php`** + `src/Enum/Club/ClubSaleStatus.php` +
+  `src/Repository/Club/ClubSaleRepository.php` — the authorisation and receipt, and the
+  queue's work order. Table `club_sale` (`Version20261114102300`).
+- **`src/Message/Club/SellClubMessage.php`** + `src/MessageHandler/Club/` — the queued
+  execution, on its own **`clubsale`** transport.
+- **`src/Controller/Admin/ClubSaleAdminController.php`** +
+  `templates/admin/_club_sale_dialog.html.twig` + the `Est. Value` column and `Sell`
+  control added to `templates/admin/user_profile.html.twig`.
+- **`src/Command/SellClubsBatchCommand.php`** (`app:clubs:sell-batch`) — the go-live batch,
+  which queues onto the same handler rather than reimplementing the work.
+- Two extractions, each because a second consumer appeared and a copy would have drifted:
+  `src/Service/Location/TownNameMatcher.php` (from `NpcClubLocationLinker`) and
+  `src/Service/Admin/MoneyInput.php` (from `LeagueAdminController`).
+
+**Deployment additions:** `docker/clubsale-consume.sh` plus its `COPY`, crontab line (every
+1 min) and `chmod` entry in the `Dockerfile`, bringing the baked cron table to 13 consumer/job
+entries. That consumer is deliberately separate from `messenger-consume.sh` on **blast
+radius** rather than throughput — it is the only queue that credits real money and then
+irreversibly deletes player data, so pausing it pauses exactly the destructive work.
+
+**The cross-layer invariant worth holding onto:** the web request only ever RECORDS and
+QUEUES. Crediting and deleting happen in the worker, because a request that does both has no
+safe retry and a browser will retry.

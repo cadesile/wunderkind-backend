@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Location;
 
-use App\Enum\Country;
 use App\Service\ClubNameNormalizer;
-use App\Service\CountryContent\CountryContentRegistry;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
@@ -19,47 +17,20 @@ use Doctrine\DBAL\ParameterType;
  * `is_capital` as COPIES rather than a reference — so the town is recoverable from the name, and
  * only from the name.
  *
- * THE MATCHING RULE, and why it is this and not a LIKE '%town%'.
- * NpcClubGenerationService::generateName() composes a name as exactly one space joining a town
- * and an affix: town-leading in 19 countries, affix-leading in the six listed in
- * CountryContentRegistry::SUFFIX_LEADS_NAME (PL, BE, SA, CO, EG, TN — Legia Lodz, Gornik Gdynia).
- * The town is always a whole, verbatim, space-delimited token. So:
- *
- *   1. longest whole-token match in the position the country PUTS the town, then
- *   2. longest whole-token match anywhere.
- *
- * THE POSITION IS PER COUNTRY, and getting that wrong is not theoretical — it shipped. An
- * earlier cut always preferred the PREFIX, which is right for the 19 town-leading countries and
- * exactly backwards for the six affix-leading ones. It mis-linked the Saudi club "Al Riyadh
- * Hail" to Riyadh instead of Hail, because `riyadh` is a longer token than `hail` and neither
- * is a prefix. Found on dev, where the affix pool happened to draw a club name containing
- * another town; local data never produced one. See LOCAL DATA IS NOT A PROOF, below.
- *
- * Measured over the real catalogues this resolves every club — 1,535 locally and 3,239 on dev,
- * zero unmatched, zero ambiguous. Three hazards make the obvious alternatives wrong:
- *
- *   - A SUBSTRING IS NOT A TOKEN. Manchester contains Chester; Enschede contains Ede (NL);
- *     Calabar contains Aba (NG); Las Palmas contains Palma (ES). Token matching rejects all of
- *     them, LIKE '%town%' does not.
- *   - SOME AFFIXES ARE THEMSELVES TOWNS, IN BOTH DIRECTIONS. Burgos is an ES generic suffix and
- *     an ES town; so are Bari and Palermo (IT prestige), Amiens (FR generic), Covilha (PT
- *     generic) — so "Metz Amiens" matches two towns and the LONGER one is wrong. The mirror case
- *     is "Al Riyadh Hail" in suffix-leading SA, where the longer token is in the AFFIX. Position
- *     outranks length; which position depends on the country.
- *   - COMPOUND TOWNS CONTAIN SHORTER ONES. Aparecida de Goiania contains Goiania; Richmond Hill
- *     contains Richmond. Longest positional match picks the compound, correctly.
+ * THE MATCHING RULE NOW LIVES IN TownNameMatcher, which this delegates to. It was extracted
+ * when ClubSaleValuationService needed the same rule to price the land under a player club that
+ * has no `home_location_id` — the choice was one shared implementation or two copies free to
+ * drift, and the rule's own reasoning (below, and at length in that class) is why a copy is not
+ * acceptable. Read TownNameMatcher for the rule, the per-country position, and the three hazards
+ * that make LIKE '%town%' wrong.
  *
  * LOCAL DATA IS NOT A PROOF. Club names are drawn at random from per-country affix pools, so
- * whether a given database contains a name that trips this rule is luck. Always dry-run against
+ * whether a given database contains a name that trips the rule is luck. Always dry-run against
  * the target environment and read the drift table: a club whose copied city_size disagrees with
  * the town it matched is the signature of a mis-link, not of drift.
  *
- * MATCHED IN PHP, NOT SQL, and that is deliberate. The comparison key is
- * ClubNameNormalizer::normalize() — the same function that produced `location.town_normalised`
- * and `club.name_normalised`. Reproducing it in SQL would need the `unaccent` extension and
- * would be a SECOND definition of the normalisation rules, free to drift from the PHP one; the
- * normalizer's own docblock already warns that the client mirrors it too. Two passes over a few
- * thousand short strings costs nothing.
+ * Measured over the real catalogues the rule resolves every NPC club — 1,535 locally and 3,239
+ * on dev, zero unmatched, zero ambiguous.
  *
  * IT ALSO RE-SYNCS the four copied scalars from the linked town, which is what closes the drift
  * those copies have accumulated — city size is a percentile split across a country's whole set,
@@ -70,7 +41,10 @@ use Doctrine\DBAL\ParameterType;
  */
 final class NpcClubLocationLinker
 {
-    public function __construct(private readonly Connection $connection) {}
+    public function __construct(
+        private readonly Connection      $connection,
+        private readonly TownNameMatcher $matcher,
+    ) {}
 
     /**
      * @param list<string>|null $countryCodes null means every country
@@ -85,7 +59,7 @@ final class NpcClubLocationLinker
         int $sampleSize = 15,
     ): array {
         $clubs     = $this->fetchClubs($countryCodes, $relink);
-        $townsByCc = $this->fetchTowns($countryCodes);
+        $townsByCc = $this->matcher->townsByCountry($countryCodes);
 
         $result = [
             'considered'       => count($clubs),
@@ -101,10 +75,10 @@ final class NpcClubLocationLinker
         foreach ($clubs as $club) {
             $countryCode = (string) $club['country'];
 
-            $town = $this->matchTown(
+            $town = $this->matcher->match(
                 ClubNameNormalizer::normalize((string) $club['name']),
                 $townsByCc[$countryCode] ?? [],
-                $this->suffixLeads($countryCode),
+                $this->matcher->suffixLeads($countryCode),
             );
 
             if ($town === null) {
@@ -182,64 +156,6 @@ final class NpcClubLocationLinker
     }
 
     /**
-     * Whether this country writes its club names as "{affix} {town}" rather than "{town} {affix}".
-     *
-     * Six do: PL, BE, SA, CO, EG, TN. Polish is uniformly like this (Legia Warszawa, Gornik
-     * Zabrze) and composing it the other way round produces names no Polish speaker would
-     * recognise — which is why NpcClubGenerationService asks the same question when it BUILDS
-     * the name. This reads the identical source, so the two cannot disagree.
-     */
-    private function suffixLeads(string $countryCode): bool
-    {
-        $country = Country::tryFrom(strtoupper(trim($countryCode)));
-
-        return $country !== null && CountryContentRegistry::suffixLeadsName($country);
-    }
-
-    /**
-     * The rule, applied to one club name against one country's towns.
-     *
-     * Towns arrive sorted longest-normalised-name first, so the first positional hit is the
-     * longest one and the first token hit is the longest token — no scoring pass needed.
-     *
-     * @param list<array<string, mixed>> $towns
-     *
-     * @return array<string, mixed>|null
-     */
-    private function matchTown(string $clubNorm, array $towns, bool $suffixLeads): ?array
-    {
-        $tokenHit = null;
-
-        foreach ($towns as $town) {
-            $t = (string) $town['town_normalised'];
-
-            if ($t === '') {
-                continue;
-            }
-
-            // PASS 1: the position this country actually puts the town in. Wins outright, so
-            // return immediately rather than scoring — and it is what stops a longer town name
-            // sitting in the AFFIX from beating the real one.
-            $positional = $suffixLeads
-                ? str_ends_with($clubNorm, ' ' . $t)
-                : str_starts_with($clubNorm, $t . ' ');
-
-            if ($clubNorm === $t || $positional) {
-                return $town;
-            }
-
-            // PASS 2: anywhere in the name, longest first. Reached when the name does not follow
-            // its country's convention at all — an imported or hand-edited club, say.
-            if ($tokenHit === null
-                && (str_ends_with($clubNorm, ' ' . $t) || str_contains($clubNorm, ' ' . $t . ' '))) {
-                $tokenHit = $town;
-            }
-        }
-
-        return $tokenHit;
-    }
-
-    /**
      * @param list<string>|null $countryCodes
      *
      * @return list<array<string, mixed>>
@@ -262,38 +178,6 @@ final class NpcClubLocationLinker
         }
 
         return $this->connection->fetchAllAssociative($sql . ' ORDER BY country, name', $params, $types);
-    }
-
-    /**
-     * Towns per country, longest normalised name first — which is what lets matchTown() return
-     * on its first hit instead of scoring every candidate.
-     *
-     * @param list<string>|null $countryCodes
-     *
-     * @return array<string, list<array<string, mixed>>>
-     */
-    private function fetchTowns(?array $countryCodes): array
-    {
-        $sql    = "SELECT id, country_code, town, town_normalised, region, city_size,
-                          population, is_capital
-                     FROM location WHERE status = 'active'";
-        $params = [];
-        $types  = [];
-
-        if ($countryCodes !== null && $countryCodes !== []) {
-            $sql .= ' AND country_code IN (:countries)';
-            $params['countries'] = $countryCodes;
-            $types['countries']  = ArrayParameterType::STRING;
-        }
-
-        $sql .= ' ORDER BY country_code, length(town_normalised) DESC, town ASC';
-
-        $out = [];
-        foreach ($this->connection->fetchAllAssociative($sql, $params, $types) as $row) {
-            $out[(string) $row['country_code']][] = $row;
-        }
-
-        return $out;
     }
 
     /**

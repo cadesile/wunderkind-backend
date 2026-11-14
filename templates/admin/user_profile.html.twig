@@ -105,6 +105,9 @@
                                     {# finding 7: hide low-priority columns on mobile #}
                                     <th class="ps-4">Club Name</th>
                                     <th class="d-none d-sm-table-cell">Country</th>
+                                    {# Valued as of the club's LAST SYNC, not live play — balance
+                                       and reputation are both device-reported. #}
+                                    <th class="text-end">Est. Value</th>
                                     <th class="d-none d-lg-table-cell">Last Sync Week</th>
                                     <th class="d-none d-md-table-cell">Last Sync Date</th>
                                     <th class="d-none d-lg-table-cell">Created</th>
@@ -124,6 +127,25 @@
                                                 <span class="text-muted">—</span>
                                             {% endif %}
                                         </td>
+                                        {# ── Estimated buyout value ──────────────────────── #}
+                                        <td class="text-end">
+                                            {% set v = valuations[club.id ~ ''] ?? null %}
+                                            {% if v %}
+                                                <span class="fw-semibold">£{{ (v.estimatePence / 100)|number_format(2) }}</span>
+                                                {# A guessed or absent plot is flagged, because the
+                                                   land term can be the largest one and an operator
+                                                   must not pay out on an inferred town unchecked. #}
+                                                {% if v.land.basis == 'name_match' %}
+                                                    <br><span class="badge bg-warning-subtle text-warning border border-warning-subtle"
+                                                              title="Town inferred from the club name">name match</span>
+                                                {% elseif v.land.basis == 'unmatched' %}
+                                                    <br><span class="badge bg-danger-subtle text-danger border border-danger-subtle"
+                                                              title="No plot link and no town matched — land counted as zero">no plot</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
                                         <td class="d-none d-lg-table-cell">
                                             {% if club.lastSyncedWeek > 0 %}
                                                 Week {{ club.lastSyncedWeek }}
@@ -139,7 +161,25 @@
                                             {% endif %}
                                         </td>
                                         <td class="d-none d-lg-table-cell text-muted small">{{ club.createdAt|date('d M Y') }}</td>
+                                        {# stopPropagation is REQUIRED here, not decorative: the whole
+                                           <tr> navigates to the club detail page, so anything
+                                           clickable in this cell must opt out of that. #}
                                         <td class="text-end pe-3" onclick="event.stopPropagation()">
+                                            {% set sale = sales[club.id ~ ''] ?? null %}
+                                            {% if sale %}
+                                                <span class="badge bg-{{ sale.status.badgeColour }}-subtle text-{{ sale.status.badgeColour }} border border-{{ sale.status.badgeColour }}-subtle px-3 py-2"
+                                                      title="£{{ (sale.agreedPence / 100)|number_format(2) }} authorised {{ sale.createdAt|date('d M Y, H:i') }} UTC">
+                                                    {{ sale.status.label }}
+                                                </span>
+                                            {% else %}
+                                                <a href="{{ path('admin_club_sale_quote', {id: club.id}) }}"
+                                                   class="btn btn-sm btn-outline-danger"
+                                                   data-club-sale-trigger="1"
+                                                   data-club-id="{{ club.id }}"
+                                                   aria-label="Sell {{ club.name }}">
+                                                    <i class="fa fa-sack-dollar me-1" aria-hidden="true"></i> Sell
+                                                </a>
+                                            {% endif %}
                                             <a href="{{ clubUrl }}"
                                                class="btn btn-sm btn-outline-secondary"
                                                aria-label="View {{ club.name }}">
@@ -157,4 +197,7 @@
     </div>
 
 </div>
+
+{# One overlay for the whole table, opened by any [data-club-sale-trigger] above. #}
+{% include 'admin/_club_sale_dialog.html.twig' %}
 {% endblock %}

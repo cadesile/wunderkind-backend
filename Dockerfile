@@ -63,6 +63,7 @@ COPY docker/starter-pool-audit.sh /usr/local/bin/starter-pool-audit.sh
 COPY docker/leaderboards-close-periods.sh /usr/local/bin/leaderboards-close-periods.sh
 COPY docker/enrichment-consume.sh /usr/local/bin/enrichment-consume.sh
 COPY docker/suggestion-consume.sh /usr/local/bin/suggestion-consume.sh
+COPY docker/clubsale-consume.sh /usr/local/bin/clubsale-consume.sh
 COPY docker/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-warn.sh
 COPY docker/plots-dormancy-reclaim.sh /usr/local/bin/plots-dormancy-reclaim.sh
 COPY docker/friendly-resolve-matches.sh /usr/local/bin/friendly-resolve-matches.sh
@@ -100,6 +101,13 @@ COPY docker/friendly-consume.sh /usr/local/bin/friendly-consume.sh
 #     progress bar must not queue behind it. Its --time-limit is deliberately long
 #     (280s, not 50s) so a whole run drains inside one process instead of stalling on
 #     tick boundaries — see the script for why that is visible to the operator.
+#   every 1 min — clubsale-consume: drains the `clubsale` transport, where each message
+#     credits real account money and then IRREVERSIBLY deletes a player's club and all of
+#     its history. Separated from every other consumer on BLAST RADIUS rather than on
+#     throughput: it is the only destructive-financial queue, so its failures stay in a
+#     listing of their own and commenting out THIS line pauses exactly that work and
+#     nothing else — the control an operator wants mid-batch at go-live. --limit is low
+#     to bound damage, not spend: a defect found on sale five is a five-club problem.
 #   daily 03:40 UTC — plots-dormancy-warn: warns owners at 23 and 29 days of inactivity
 #     that their plot is about to be reclaimed. MUST precede the reclaim below, which is
 #     why it is scheduled twenty minutes earlier; the reclaim also enforces the ordering
@@ -248,6 +256,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '4,14,24,34,44,54 * * * * /usr/local/bin/leaderboards-close-periods.sh >> /var/log/leaderboards-close-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/enrichment-consume.sh             >> /var/log/enrichment-consume-cron.log   2>&1' \
     '* * * * *    /usr/local/bin/suggestion-consume.sh             >> /var/log/suggestion-consume-cron.log   2>&1' \
+    '* * * * *    /usr/local/bin/clubsale-consume.sh               >> /var/log/clubsale-consume-cron.log     2>&1' \
     '40 3 * * *   /usr/local/bin/plots-dormancy-warn.sh           >> /var/log/plots-dormancy-cron.log       2>&1' \
     '0 4 * * *    /usr/local/bin/plots-dormancy-reclaim.sh        >> /var/log/plots-dormancy-cron.log       2>&1' \
     '* * * * *    /usr/local/bin/friendly-resolve-matches.sh     >> /var/log/friendly-resolve-cron.log     2>&1' \
@@ -256,7 +265,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/friendly-consume.sh /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/enrichment-consume.sh /usr/local/bin/suggestion-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
+RUN chmod +x /usr/local/bin/friendly-consume.sh /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/enrichment-consume.sh /usr/local/bin/suggestion-consume.sh /usr/local/bin/clubsale-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

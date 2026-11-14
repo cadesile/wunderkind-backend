@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\League;
+use App\Service\Admin\MoneyInput;
 use App\Service\TrophyConfigFactory;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
@@ -282,28 +283,15 @@ class LeagueAdminController extends AbstractController
      * form did not send is null rather than ''. The bulk form always sends every key, so it
      * never needed that; sharing the parser is what makes the two agree about "1,000".
      */
+    /**
+     * Delegated to App\Service\Admin\MoneyInput, which holds the rules and the reasons.
+     *
+     * Kept as a method rather than inlining ten call sites: the name is what tells a reader at
+     * each of them that the raw request value is NOT being cast. Read MoneyInput for the two
+     * shipped defects its body prevents.
+     */
     private function parseMoneyToPence(?string $raw): ?int
     {
-        $digits = str_replace(',', '', trim((string) $raw));
-
-        if ($digits === '') {
-            return null;
-        }
-
-        // DECIMAL POUNDS SURVIVE NOW. The old body was `((int) $digits) * 100`, and PHP's int
-        // cast truncates at the decimal point — so "1000.50" stored £1,000.00 and lost the
-        // fifty pence silently, on a field the screen labels with a currency symbol. Rounding
-        // the float is what makes the pence half arrive; the * 100 happens after, so there is
-        // exactly one rounding step.
-        //
-        // AND GARBAGE IS NULL, NOT ZERO. `(int) 'abc'` is 0, which this used to store as "a TV
-        // deal of nothing" — a real and different configuration from "no TV deal", as
-        // LeagueTierDefaultDiff's strict comparison is careful to preserve. A value that is not
-        // a number is not a figure, so it clears the field instead of inventing one.
-        if (!is_numeric($digits)) {
-            return null;
-        }
-
-        return (int) round((float) $digits * 100);
+        return MoneyInput::toPence($raw);
     }
 }

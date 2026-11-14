@@ -200,12 +200,29 @@ than read out of a sync payload:
 | `facility_stadium` | **negative** | Building out the stadium site at setup |
 | `facility_build` | **negative** | A facility site with no type of its own — only reachable if an admin adds a new category |
 | `club_funding` | **negative** | The opening capital staked into a new club at setup |
+| `club_sale` | positive | An operator bought one of the account's clubs out (see below) |
 | `custom_income` | **either** | An operator credited or deducted the account by hand |
 | `reversal` | either | A support reversal of an earlier entry |
 
 **One type is localised per site, deliberately.** The four `facility_*` values exist as separate
 types rather than one value carrying the site, because the client localises a row on its `type`
 and ships a copy key per site.
+
+**`club_sale` is paid for a club that no longer exists.** An operator can buy a club out of an
+account: the credit lands here and the club and all of its history are then permanently deleted.
+Three things a client must handle, and only this type combines them:
+
+- **`club` is always `null`** on these rows, deliberately — the credit is an account-level fact
+  that outlives the club it paid for, so there is nothing to attribute it to.
+- **The club is gone by the time the row is readable.** Any local cache keyed on that club id
+  should be dropped; its squad, season records, awards and tournament entries no longer exist
+  server-side. A sync for that club will not find it.
+- **`description` is free text an operator typed**, worded for the player, and its `label` is
+  `"Club sale"`. If no note was written the server falls back to `"Club sale — <club name>"`,
+  which is the only place that club's name still appears.
+
+It is **not** counted as club earnings, so it does not appear on the career-earnings
+leaderboard. A mistaken buyout is corrected with a `reversal` row, never by editing this one.
 
 **`custom_income` is the one an operator authors.** Two things follow from that and from nothing
 else in this table: its sign varies **per row**, so it cannot be assumed either way; and its
