@@ -217,6 +217,29 @@ from a reference squad whose size and ability spread come from `npcSquadConfig` 
 `leagueAbilityRanges` — the same config the world generator sizes real squads from, so the figure
 the scale is calibrated against is the figure that actually gets paid.
 
+### ⚠️ `wageModel` is the ONLY economy switch. There are no per-feature flags.
+
+**Owner decision, 2026-11-14.** `economyWageModel` is the single global flag for everything the
+turnover economy turns on. Client-side behaviours that belong to it — income-anchored wages,
+ticket-price elasticity, anything of that kind — gate on **`wageModel === 'turnover'`** and
+nothing else.
+
+So there is no `incomeAnchoredWages`, no `ticketPriceElasticity`, and no sibling of either. Their
+absence is not an omission and they will not be added: a second flag could disagree with the
+first, and "turnover model on but income anchoring off" is a state nobody intends and nobody
+could reason about.
+
+**A gate that reports them as a separate axis will mis-read the config.** With
+`wageModel: "turnover"`, treat those behaviours as **on**. A warning of the form *"turnover
+WITHOUT incomeAnchoredWages"* describes a state that does not exist.
+
+`wageModel` is published in two places, and they always agree:
+
+| surface | path |
+|---|---|
+| `GET /api/game-config`, `POST /api/sync` | `economyTierBaseline.wageModel` |
+| `GET /api/starter-config` (public) | `economy.wageModel` |
+
 **The flip is an operator action, not a config tweak.** Cached world packs hold wages and the pack
 cache has no TTL, so flipping the model changes pack *content* without changing pack *shape* —
 `WorldInitializationService::WORLD_PACK_VERSION` has to be bumped in the same pass or every
