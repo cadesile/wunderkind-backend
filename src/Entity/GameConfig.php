@@ -1822,6 +1822,125 @@ class GameConfig
         return $this;
     }
 
+    /**
+     * Per-tier sponsor bands, in pence per season. `[]` or a missing tier = use the flat columns.
+     *
+     * ── WHY PER TIER AT ALL ───────────────────────────────────────────────────────────────
+     *
+     * The six flat `smallSponsorMin`-style columns are one band for every division, scaled only
+     * by the country factor. A tier-8 club and a tier-1 club in the same country therefore draw
+     * sponsorship from an identical pot, and the only thing separating them is how many
+     * sponsors their league has. That was tolerable while the whole economy was flat; against
+     * a turnover ladder spanning 2,357x it is not.
+     *
+     * ── EIGHT AUTHORED ROWS, NOT A FACTOR ─────────────────────────────────────────────────
+     *
+     * Deliberately NOT `baseBand x tierFactor`, which would be fewer figures to author and is
+     * what the wage chain does. The owner chose direct per-tier control, and the reason holds:
+     * sponsorship is not a derivative of the wage ladder, it is a separate revenue line that an
+     * operator tunes against matchday and TV. Tying it to `economyTierFactorsBp` would mean a
+     * wage retune silently re-priced every sponsor in the world.
+     *
+     * The cost of that choice, stated: eight rows per country-independent table instead of one,
+     * and nothing stops them being authored in a non-monotonic order. The gate reports it
+     * rather than the setter forbidding it — a tier-6 cup run paying better than tier 5 might
+     * be deliberate.
+     *
+     * ── THE COUNTRY FACTOR STILL APPLIES ON TOP ───────────────────────────────────────────
+     *
+     * These are base-year figures like everything else in this chain. `SponsorBandResolver`
+     * scales whichever band it resolves — flat or per-tier — by the country factor afterwards,
+     * so a per-tier table does not have to be re-authored per country.
+     *
+     * Shape: `{"1": {"small": [min, max], "medium": [...], "large": [...]}, ...}`.
+     *
+     * KEYS ARE INTS IN PHP AND OBJECT KEYS IN JSON. PHP coerces a numeric string array key to
+     * an integer, so `['3' => ...]` is `[3 => ...]` and the setter cannot prevent it. It still
+     * encodes as a JSON object rather than a list because the keys start at 1, never 0 — which
+     * is also why tier 0 is dropped rather than clamped: a 0 key would make the whole table
+     * encode as an array and change the published shape.
+     *
+     * @var array<int, array<string, array{0:int, 1:int}>>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economySponsorBandsPerTierPence = [];
+
+    /** @return array<string, array<string, array{0:int, 1:int}>> */
+    public function getEconomySponsorBandsPerTierPence(): array { return $this->economySponsorBandsPerTierPence; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomySponsorBandsPerTierPence(array $v): static
+    {
+        $out = [];
+
+        foreach ($v as $tier => $row) {
+            $t = (int) $tier;
+
+            if ($t < 1 || $t > 8 || !is_array($row)) {
+                continue;
+            }
+
+            $sizes = [];
+
+            foreach (['small', 'medium', 'large'] as $size) {
+                $band = $row[$size] ?? null;
+
+                if (!is_array($band) || !isset($band[0], $band[1]) || !is_numeric($band[0]) || !is_numeric($band[1])) {
+                    continue;
+                }
+
+                $lo = max(0, (int) $band[0]);
+                $hi = max(0, (int) $band[1]);
+
+                // Both halves are authored independently, so a transposed pair is a real state
+                // of the row — normalised here exactly as bandFor() does on read.
+                $sizes[$size] = [min($lo, $hi), max($lo, $hi)];
+            }
+
+            // A tier must carry all three sizes or none. A partial row would silently fall back
+            // for one size and not the others, which is the hardest kind of band to debug.
+            if (count($sizes) === 3) {
+                $out[(string) $t] = $sizes;
+            }
+        }
+
+        ksort($out, SORT_NUMERIC);
+
+        $this->economySponsorBandsPerTierPence = $out;
+
+        return $this;
+    }
+
+    /**
+     * Base ticket price per tier, in pence. 0 = unset, use the app's own figure.
+     *
+     * NEW, WITH NO FLAT PREDECESSOR — the backend has never held a ticket price. The app
+     * computes matchday income and will keep doing so; this exists so the price per division is
+     * an operator figure rather than a constant compiled into a release, the same reason
+     * `matchdayFoodUptakePercent` and `npcSolvencyThresholds` live here.
+     *
+     * PUBLISHED, NOT CONSUMED. Nothing server-side reads it. Scaling it per country is the
+     * client's business too — it already receives `economyTierBaseline` for that.
+     *
+     * Zero-means-unset per tier rather than null for the whole list, so an operator can author
+     * the divisions they care about and leave the rest to the app.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyTicketPricePerTierPence = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    /** @return list<int> */
+    public function getEconomyTicketPricePerTierPence(): array { return $this->economyTicketPricePerTierPence; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomyTicketPricePerTierPence(array $v): static
+    {
+        $this->economyTicketPricePerTierPence = self::normaliseTierBpList($v, 0);
+
+        return $this;
+    }
+
     public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
     public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
 

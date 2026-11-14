@@ -69,15 +69,24 @@ final class SponsorBandResolver
      *
      * @return array{int, int} [min, max]
      */
-    public function bandFor(CompanySize $size, string $country = '', ?GameConfig $config = null): array
+    public function bandFor(CompanySize $size, string $country = '', ?GameConfig $config = null, int $tier = 0): array
     {
         $config = $config ?? $this->gameConfigRepository->getConfig();
 
-        [$min, $max] = match ($size) {
-            CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
-            CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
-            CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
-        };
+        // PER-TIER FIRST, FLAT AS THE FALLBACK. A tier with no authored row resolves exactly as
+        // it did before this column existed, which is what lets the table be filled in one
+        // division at a time instead of all eight at once.
+        $perTier = $config->getEconomySponsorBandsPerTierPence()[(string) $tier][$size->value] ?? null;
+
+        if ($perTier !== null) {
+            [$min, $max] = $perTier;
+        } else {
+            [$min, $max] = match ($size) {
+                CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
+                CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
+                CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
+            };
+        }
 
         $lo = min($min, $max);
         $hi = max($min, $max);
@@ -96,12 +105,12 @@ final class SponsorBandResolver
      *
      * @return array<string, array{min: int, max: int}>
      */
-    public function bandsFor(string $country = '', ?GameConfig $config = null): array
+    public function bandsFor(string $country = '', ?GameConfig $config = null, int $tier = 0): array
     {
         $out = [];
 
         foreach (CompanySize::cases() as $size) {
-            [$min, $max]       = $this->bandFor($size, $country, $config);
+            [$min, $max]       = $this->bandFor($size, $country, $config, $tier);
             $out[$size->value] = ['min' => $min, 'max' => $max];
         }
 
@@ -124,7 +133,14 @@ final class SponsorBandResolver
         $total  = 0;
 
         foreach ($league->getLeagueSponsors() as $ls) {
-            [$min, $max] = $this->bandFor($ls->getSponsor()->getSize(), $league->getCountry(), $config);
+            // THE LEAGUE'S OWN TIER. Forgetting it here is the one way a per-tier table could
+            // be authored and then silently ignored at the only point that spends it.
+            [$min, $max] = $this->bandFor(
+                $ls->getSponsor()->getSize(),
+                $league->getCountry(),
+                $config,
+                $league->getTier(),
+            );
 
             // `$max > $min` rather than `>=`, preserved from both originals: random_int() throws
             // on an inverted range, and an equal pair needs no roll.
