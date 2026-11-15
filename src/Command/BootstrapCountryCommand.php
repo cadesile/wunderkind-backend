@@ -140,11 +140,29 @@ class BootstrapCountryCommand extends Command
         }
 
         // ── 4. Pool warm ───────────────────────────────────────────────────
+        //
+        // --tier IS WHAT MAKES THE COUNTRY STARTABLE. The flat warm generates from
+        // PoolConfig's single distribution, which aims at no tier, while the starter draw
+        // asks for `currentAbility BETWEEN tier_min AND tier_max`. A country bootstrapped
+        // without this came out with leagues, clubs, staff, scouts and several hundred
+        // players, and still could not hand a new club a squad — the band for the tier a
+        // new club starts in was empty, and no amount of further warming would fill it.
+        //
+        // The tier is the BOTTOM of this country's pyramid, read off the leagues that
+        // actually exist rather than assumed to be 8, for the same reason the club loop
+        // above does: a country with a shallower pyramid starts its clubs higher up, and
+        // warming tier 8's band would fill a band it has no league for.
         if (!$input->getOption('skip-pool')) {
             $io->section('Pool Warm');
             $poolCommand = $this->getApplication()?->find('app:pool:warm');
             if ($poolCommand !== null) {
-                $poolCommand->run(new ArrayInput(['country' => $countryCode]), $output);
+                $poolInput = ['country' => $countryCode];
+
+                if ($tiers !== []) {
+                    $poolInput['--tier'] = (string) max($tiers);
+                }
+
+                $poolCommand->run(new ArrayInput($poolInput), $output);
             }
         }
 

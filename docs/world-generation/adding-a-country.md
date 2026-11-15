@@ -163,7 +163,8 @@ lando php bin/console app:country:bootstrap <CODE>
 
 This chains: `LeagueService::generateLeaguesForCountry()` (8 tiers) → `NpcClubGenerationService::
 generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<CODE>]` if missing
-→ `app:pool:warm <CODE>` → `app:worldpack:warm <CODE>` (all tiers). Useful flags:
+→ `app:pool:warm <CODE> --tier=<bottom tier>` → `app:worldpack:warm <CODE>` (all tiers). Useful
+flags:
 
 - `--clubs-per-tier=N` (default 8)
 - `--force` — proceed even with missing registry content (generic placeholders)
@@ -175,6 +176,39 @@ generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<
   already bootstrapped gives it a second full set of clubs.
 - `--enable-only` — promote to LIVE and do nothing else. This is the one to use on an
   already-bootstrapped country.
+
+### Why the pool warm passes `--tier`
+
+A pool warm without `--tier` generates from `pool_config`'s single distribution — one potential
+range, pool-wide ages, no tier anywhere. The starter pack draw, meanwhile, asks for
+`current_ability BETWEEN tier_min AND tier_max` and `date_of_birth <= today - first_team_age_min`,
+with the band coming from `starter_config.league_ability_ranges[<CODE>][<tier>]`.
+
+Nothing in the flat distribution aims at a band, so a country could finish bootstrap with
+leagues, clubs, staff, scouts and several hundred players and still be unable to hand a new club
+a squad: the band for the tier a new club starts in was empty, and warming again added more of
+the same distribution — none of which was in the band. **`--tier` generates players the way the
+world pack generates them**, through `PlayerGenerationService` with the tier's ability band and
+`PoolConfig::firstTeamAgeRange()`, which is what makes the country startable rather than merely
+populated. Bootstrap passes the BOTTOM tier of the country's pyramid, read off the leagues that
+exist, because that is the tier a brand-new club is assigned to.
+
+Two things to know about it:
+
+- **The band is applied as a POTENTIAL range, and realised ability is a fraction of potential.**
+  So a draw against a band lands inside it only some of the time — measured at 16–85% depending
+  on the position and how high the band sits — and when it misses, it always misses LOW.
+  Out-of-band draws are discarded and retried (`MarketPoolService::IN_BAND_ATTEMPTS_PER_PLAYER`),
+  so nothing out of band reaches the database, but generated players cluster near the band's
+  FLOOR and never reach its upper half. A band whose floor the generator cannot reach makes the
+  warm report a shortfall rather than fill it quietly.
+- **Players aged below `player_youth_ability_ceiling_age` can never land in any band**, because
+  that ceiling caps realised ability at a fraction of potential (20% on the current config). The
+  retry therefore selects players at or above that age, whatever age range it is given.
+
+The same `--tier` is what the admin's **Config → Starter pack check → GENERATE STARTER PACK**
+button presses, for the tier the check was run at. Before it existed, that button could be
+pressed indefinitely against an empty band without the number moving.
 
 ### The ability-range step on its own, from the admin
 

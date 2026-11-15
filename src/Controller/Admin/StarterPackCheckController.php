@@ -79,13 +79,27 @@ class StarterPackCheckController extends AbstractController
     }
 
     /**
-     * Tops the pool up for one country (app:pool:warm), so a country whose check came back
-     * short can be made servable without SSH — then redirects straight back into the check so
-     * the effect is visible rather than claimed.
+     * Tops the pool up for one country AND for the tier that was checked (app:pool:warm with
+     * --tier), so a country whose check came back short can be made servable without SSH —
+     * then redirects straight back into the check so the effect is visible rather than claimed.
+     *
+     * **--tier is what makes this button work at all.** The flat warm generates from
+     * PoolConfig's single distribution, which aims at no tier; the check fails on
+     * `currentAbility BETWEEN tier_min AND tier_max`. Topping up a distribution that contains
+     * none of the band adds none of the band, so before --tier existed this button could be
+     * pressed indefinitely against an empty band without the number moving. With it, the
+     * players are generated the way the world pack generates them — through
+     * PlayerGenerationService with the tier's band and the first-team age range — which is
+     * the only generation path in the codebase that has ever produced tier-appropriate
+     * players. See StarterPackPoolWarmService.
      *
      * POST, CSRF-guarded, and routed through EasyAdmin's entry point: unlike check() above
      * this one creates data, and the check screen extends an @EasyAdmin template, whose `ea`
      * context only exists for routes EasyAdmin created (see src/Controller/Admin/CLAUDE.md).
+     *
+     * The TIER is the one the check ran at, for the same reason as the country below: a band
+     * belongs to a (country, tier) pair, so warming for a tier the operator did not look at
+     * would fill a band they have no result for.
      *
      * The country comes from the server's own last-checked value, not from the form's select.
      * Warming is only meaningful for a country you have just looked at, and binding it to the
@@ -127,12 +141,20 @@ class StarterPackCheckController extends AbstractController
         $application->setAutoExit(false);
 
         $output = new BufferedOutput();
-        $status = $application->run(new ArrayInput(['command' => 'app:pool:warm', 'country' => $country]), $output);
+        $status = $application->run(new ArrayInput([
+            'command'  => 'app:pool:warm',
+            'country'  => $country,
+            '--tier'   => (string) $tier,
+        ]), $output);
 
         if ($status !== 0) {
             $this->addFlash('danger', sprintf('Pool warm for %s exited with status %d.', $country, $status));
         } else {
-            $this->addFlash('success', sprintf('Pool warmed for %s — the check below is re-run against the new counts.', $country));
+            $this->addFlash('success', sprintf(
+                'Pool warmed for %s, including players generated for tier %d\'s ability band — the check below is re-run against the new counts.',
+                $country,
+                $tier,
+            ));
         }
 
         $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));

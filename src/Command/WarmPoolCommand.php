@@ -12,6 +12,7 @@ use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Service\ClubInitializationService;
 use App\Service\MarketPoolService;
+use App\Service\StarterPackPoolWarmService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -40,6 +41,7 @@ class WarmPoolCommand extends Command
         private readonly StaffRepository   $staffRepo,
         private readonly ScoutRepository   $scoutRepo,
         private readonly NamePoolProvider  $namePools,
+        private readonly StarterPackPoolWarmService $starterPackWarm,
     ) {
         parent::__construct();
     }
@@ -53,7 +55,16 @@ class WarmPoolCommand extends Command
             ->addOption('min-scouts',        null, InputOption::VALUE_REQUIRED, 'Minimum scouts per nationality',                     50)
             ->addOption('min-international', null, InputOption::VALUE_REQUIRED, 'Minimum players/staff/scouts for the foreign pool', 300)
             ->addOption('international',     null, InputOption::VALUE_NONE,     'Also warm the international (foreign-slot) pool')
-            ->addOption('force',             null, InputOption::VALUE_NONE,     'Top up regardless of current counts');
+            ->addOption('force',             null, InputOption::VALUE_NONE,     'Top up regardless of current counts')
+            // TIER TARGETING. Without it this command generates from PoolConfig's flat
+            // distribution, which aims at no tier and therefore cannot fill a tier band that
+            // is empty — the reason pressing GENERATE on the starter pack check page never
+            // moved the number. With it, players are generated the way the world pack
+            // generates them: through PlayerGenerationService with the tier's ability band
+            // and the first-team age range. Requires a country, because a band is a property
+            // of (country, tier) and there is nothing to resolve without one.
+            ->addOption('tier',              null, InputOption::VALUE_REQUIRED, 'Also generate players targeted at this league tier\'s ability band, so a starter pack for it can actually be drawn')
+            ->addOption('squads',            null, InputOption::VALUE_REQUIRED, 'How many starter squads of headroom --tier should provision', StarterPackPoolWarmService::DEFAULT_SQUADS);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -66,6 +77,21 @@ class WarmPoolCommand extends Command
         $withIntl       = (bool) $input->getOption('international');
         $force          = (bool) $input->getOption('force');
         $countryArg     = $input->getArgument('country');
+        $tierOpt        = $input->getOption('tier');
+        $squads         = max(1, (int) $input->getOption('squads'));
+
+        $tier = null;
+        if ($tierOpt !== null) {
+            $tier = (int) $tierOpt;
+            if ($tier < 1 || $tier > 8) {
+                $io->error("--tier must be between 1 and 8, got '{$tierOpt}'.");
+                return Command::FAILURE;
+            }
+            if ($countryArg === null) {
+                $io->error('--tier needs a country: an ability band belongs to a (country, tier) pair.');
+                return Command::FAILURE;
+            }
+        }
 
         // ── Single-country mode (cron / targeted) ────────────────────────────
         if ($countryArg !== null) {
@@ -77,7 +103,17 @@ class WarmPoolCommand extends Command
                 return Command::FAILURE;
             }
 
-            return $this->warmCountry($io, $country, $nationality, $minPlayers, $minStaff, $minScouts, $force);
+            $status = $this->warmCountry($io, $country, $nationality, $minPlayers, $minStaff, $minScouts, $force);
+
+            // AFTER the flat top-up, never instead of it. The flat pool still has to exist —
+            // it is what serves browsing and youth at every tier — and running second means
+            // the deficit is measured against the pool as it will actually be when the draw
+            // happens, rather than against a pool that is about to grow.
+            if ($status === Command::SUCCESS && $tier !== null) {
+                $status = $this->warmTier($io, $country, $tier, $squads);
+            }
+
+            return $status;
         }
 
         // ── All-countries mode ────────────────────────────────────────────────
@@ -171,6 +207,64 @@ class WarmPoolCommand extends Command
             $io->error("[{$country}] FAILED: " . $e->getMessage());
             return Command::FAILURE;
         }
+    }
+
+    // ── Tier-targeted players ─────────────────────────────────────────────────
+
+    /**
+     * Reports the band it generated into and what each position ended up with, because the
+     * two ways this can disappoint an operator are invisible otherwise: a band resolved from
+     * a fallback rather than from the country's own authored ranges, and a band the generator
+     * cannot reliably hit.
+     */
+    private function warmTier(SymfonyStyle $io, string $country, int $tier, int $squads): int
+    {
+        $io->section("[{$country}] tier {$tier} — band-targeted players");
+
+        try {
+            $result = $this->starterPackWarm->warmForTier($country, $tier, $squads);
+        } catch (\Throwable $e) {
+            $io->error("[{$country}] tier {$tier} FAILED: " . $e->getMessage());
+
+            return Command::FAILURE;
+        }
+
+        $band = $result['band'];
+        $age  = $result['ageRange'];
+
+        $io->text(sprintf(
+            '  Band %d-%d (%s), ages %d-%d, nationality %s, %d squad(s) of headroom',
+            $band['min'], $band['max'], $band['source'], $age['min'], $age['max'],
+            $result['nationality'], $result['squads'],
+        ));
+
+        $rows = [];
+        foreach ($result['positions'] as $row) {
+            $rows[] = [
+                $row['position'],
+                $row['available'],
+                $row['target'],
+                $row['deficit'],
+                $row['generated'] . ($row['capped'] ? ' (capped)' : ''),
+                $row['attempts'],
+            ];
+        }
+        $io->table(['pos', 'had', 'target', 'deficit', 'generated', 'draws'], $rows);
+
+        if ($result['shortOfTarget']) {
+            $io->warning(sprintf(
+                'Some positions generated fewer players than asked for: the %d-%d band is hard to '
+                . 'hit, because realised ability is a fraction of potential and the band is applied '
+                . 'as a potential range. Widening the band, or lowering its floor, is the fix — not '
+                . 'running this again.',
+                $band['min'],
+                $band['max'],
+            ));
+        }
+
+        $io->text(sprintf('  Generated %d player(s) from %d draw(s).', $result['generated'], $result['attempts']));
+
+        return Command::SUCCESS;
     }
 
     // ── International pool ────────────────────────────────────────────────────

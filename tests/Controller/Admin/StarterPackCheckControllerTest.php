@@ -372,4 +372,29 @@ class StarterPackCheckControllerTest extends WebTestCase
         self::assertSelectorExists('#spc-funnel');
     }
 
+    /**
+     * GENERATE must warm the TIER, not just the country.
+     *
+     * The flat warm generates from PoolConfig's single distribution, which aims at no tier,
+     * while the check fails on `currentAbility BETWEEN tier_min AND tier_max` — so without
+     * --tier this button adds players that can never satisfy the band it was pressed to fix,
+     * and an operator can press it indefinitely with the number never moving. That is the
+     * bug this work removed, and it would come back silently: the button would still succeed,
+     * still flash green, and still change nothing.
+     *
+     * A source assertion rather than a behavioural one, deliberately. Exercising the real
+     * POST would generate hundreds of players in the test database for an assertion about
+     * one argument, and the failure mode here is a dropped argument, which reading the
+     * argument list catches exactly.
+     */
+    public function testTheWarmButtonWarmsTheCheckedTierAndNotOnlyTheCountry(): void
+    {
+        $source = file_get_contents(
+            \dirname(__DIR__, 3) . '/src/Controller/Admin/StarterPackCheckController.php'
+        );
+
+        self::assertIsString($source);
+        self::assertStringContainsString("'app:pool:warm'", $source);
+        self::assertStringContainsString("'--tier'", $source, 'the warm must be tier-targeted');
+    }
 }
