@@ -6,7 +6,9 @@ namespace App\Tests\Command;
 
 use App\Command\WarmPoolCommand;
 use App\Repository\PlayerRepository;
+use App\Entity\StarterConfig;
 use App\Repository\ScoutRepository;
+use App\Repository\StarterConfigRepository;
 use App\Repository\StaffRepository;
 use App\Service\MarketPoolService;
 use App\Repository\Location\CountryProfileRepository;
@@ -111,6 +113,12 @@ final class WarmPoolTierOptionTest extends TestCase
         $profiles->method('findAll')->willReturn([]);
         $namePools = new NamePoolProvider($profiles);
 
+        // The staff roles the warm covers are READ FROM CONFIGURATION now, so the command
+        // needs a StarterConfig to ask. A default one is right for this test: it carries the
+        // shipped per-role starter counts, which is what a real box warms against.
+        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
+        $starterConfigRepo->method('getConfig')->willReturn(new StarterConfig());
+
         $command = new WarmPoolCommand(
             $this->createStub(MarketPoolService::class),
             $playerRepo,
@@ -118,6 +126,7 @@ final class WarmPoolTierOptionTest extends TestCase
             $scoutRepo,
             $namePools,
             $warm,
+            $starterConfigRepo,
         );
 
         return new CommandTester($command);

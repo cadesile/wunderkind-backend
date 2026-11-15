@@ -12,6 +12,8 @@ use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
 use App\Service\ClubInitializationService;
 use App\Service\MarketPoolService;
+use App\Repository\StarterConfigRepository;
+use App\Service\StarterPackDiagnosticService;
 use App\Service\StarterPackPoolWarmService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -28,12 +30,86 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class WarmPoolCommand extends Command
 {
-    // Roles needed by WorldInitializationService when building NPC league packs.
-    private const WORLDPACK_STAFF_ROLES = [
-        StaffRole::MANAGER,
-        StaffRole::COACH,
-        StaffRole::CHAIRMAN,
-    ];
+    /**
+     * THE STAFF ROLES THIS INSTALLATION ACTUALLY USES, READ FROM CONFIGURATION.
+     *
+     * ── WHAT THIS REPLACED, AND WHAT IT COST ──────────────────────────────────────────────
+     *
+     * A hardcoded `WORLDPACK_STAFF_ROLES = [MANAGER, COACH, CHAIRMAN]`, commented "roles
+     * needed by WorldInitializationService when building NPC league packs" — a premise that
+     * was wrong in both directions. The worldpack does NOT draw staff from the pool
+     * (`WorldPackClubGenerationService::generateStaff()` builds its own), and the thing that
+     * DOES draw from it — the starter pack — asks for five roles, not three.
+     *
+     * So `app:pool:warm` had never been asked to make a single native DIRECTOR_OF_FOOTBALL or
+     * FACILITY_MANAGER. The only other path that makes them,
+     * `GenerateMarketDataCommand::generateStaff()`, sets no nationality at all. On dev that
+     * read as **0 English against 97 in pool** for exactly those two roles while every other
+     * role had 50+.
+     *
+     * **And it showed GREEN**, because the starter-pack check falls back to foreign staff
+     * when natives run out. Every English club quietly got a foreign director of football and
+     * facility manager, and nothing on the screen said so. A hardcoded list of roles cannot
+     * be wrong loudly — it can only be short.
+     *
+     * ── WHY BOTH CONFIGS ──────────────────────────────────────────────────────────────────
+     *
+     * The union of what the STARTER PACK asks for (`StarterConfig`'s per-role counts, via
+     * `StarterPackDiagnosticService::staffRequirementsFor()` — the same source the check
+     * screen reads, so the warmer and the page it is meant to satisfy cannot drift) and what
+     * NPC TIERS ask for (`npcSquadConfig`). NPC clubs generate their own staff today rather
+     * than drawing from the pool, so that half is belt-and-braces — but a role an operator
+     * has configured anywhere is a role this pool should be able to serve, and tying the list
+     * to one consumer is how it went short in the first place.
+     *
+     * A role configured at 0 everywhere is skipped: that is an operator saying they do not
+     * use it, which is different from the list forgetting it exists.
+     *
+     * @return list<StaffRole>
+     */
+    private function configuredStaffRoles(): array
+    {
+        $starter = $this->starterConfigRepo->getConfig();
+        $needed  = [];
+
+        foreach (StarterPackDiagnosticService::staffRequirementsFor($starter) as $roleValue => $count) {
+            if ($count > 0 && ($role = StaffRole::tryFrom($roleValue)) !== null) {
+                $needed[$role->value] = $role;
+            }
+        }
+
+        // The NPC side, keyed by the same `*Count` names the tier config uses.
+        $npcKeys = [
+            'managerCount'             => StaffRole::MANAGER,
+            'coachCount'               => StaffRole::COACH,
+            'chairmanCount'            => StaffRole::CHAIRMAN,
+            'directorOfFootballCount'  => StaffRole::DIRECTOR_OF_FOOTBALL,
+            'facilityManagerCount'     => StaffRole::FACILITY_MANAGER,
+        ];
+
+        foreach ($starter->getNpcSquadConfig() as $tierConf) {
+            if (!is_array($tierConf)) {
+                continue;
+            }
+
+            foreach ($npcKeys as $key => $role) {
+                if ((int) ($tierConf[$key] ?? 0) > 0) {
+                    $needed[$role->value] = $role;
+                }
+            }
+        }
+
+        // Stable order so two runs print the same thing — `StaffRole::cases()` order, not
+        // discovery order, which would vary with the tier config's key order.
+        $out = [];
+        foreach (StaffRole::cases() as $role) {
+            if (isset($needed[$role->value])) {
+                $out[] = $role;
+            }
+        }
+
+        return $out;
+    }
 
     public function __construct(
         private readonly MarketPoolService $pool,
@@ -42,6 +118,7 @@ class WarmPoolCommand extends Command
         private readonly ScoutRepository   $scoutRepo,
         private readonly NamePoolProvider  $namePools,
         private readonly StarterPackPoolWarmService $starterPackWarm,
+        private readonly StarterConfigRepository   $starterConfigRepo,
     ) {
         parent::__construct();
     }
@@ -177,8 +254,8 @@ class WarmPoolCommand extends Command
                 $io->text("  Players: {$currentPlayers} in pool — OK (min {$minPlayers})");
             }
 
-            // Staff (manager / coach / chairman)
-            foreach (self::WORLDPACK_STAFF_ROLES as $role) {
+            // Staff — every role the starter pack or an NPC tier is configured to use.
+            foreach ($this->configuredStaffRoles() as $role) {
                 $current = $this->staffRepo->countInPoolByNationalityAndRole($nationality, $role);
                 if ($force || $current < $minStaff) {
                     $needed = $force ? $minStaff : $minStaff - $current;
@@ -297,7 +374,7 @@ class WarmPoolCommand extends Command
             }
 
             // Staff
-            foreach (self::WORLDPACK_STAFF_ROLES as $role) {
+            foreach ($this->configuredStaffRoles() as $role) {
                 $foreignStaff = $this->countForeignStaff($mappedNationalities, $role);
                 if ($force || $foreignStaff < $minPerType) {
                     $needed = $force ? $minPerType : $minPerType - $foreignStaff;

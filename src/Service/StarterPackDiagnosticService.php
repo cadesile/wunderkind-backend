@@ -212,8 +212,43 @@ final class StarterPackDiagnosticService
         ];
     }
 
+    /**
+     * The staff roles a club needs, and how many of each — FROM CONFIGURATION.
+     *
+     * ── WHY THIS IS PUBLIC AND STATIC ─────────────────────────────────────────────────────
+     *
+     * Because `app:pool:warm` has to ask the same question, and until 2026-11-15 it answered
+     * it with a hardcoded list of three roles (`WORLDPACK_STAFF_ROLES`: manager, coach,
+     * chairman) while the starter pack asks for five. The two roles missing from that list
+     * were exactly the two that reported **0 native staff in the pool** on the starter-pack
+     * check — the warmer had never been asked to make a single English director of football
+     * or facility manager, and `GenerateMarketDataCommand`, the only other path that makes
+     * them, sets no nationality at all.
+     *
+     * It showed GREEN the whole time, because the check falls back to foreign staff when
+     * natives run out. So every English club quietly got a foreign DoF and facility manager
+     * and nothing said so.
+     *
+     * One source, therefore, and the roles come from `StarterConfig` rather than from a list
+     * somebody has to remember to extend when a role is added. A role whose count is 0 is
+     * still returned, so a caller can tell "configured as zero" from "not a role" — filtering
+     * is the caller's decision, not this method's.
+     *
+     * @return array<string, int> role value => how many the starter pack asks for
+     */
+    public static function staffRequirementsFor(StarterConfig $config): array
+    {
+        return self::requirements($config);
+    }
+
     /** @return array<string, int> role value => how many the starter pack asks for */
     private function staffRequirements(StarterConfig $config): array
+    {
+        return self::requirements($config);
+    }
+
+    /** @return array<string, int> */
+    private static function requirements(StarterConfig $config): array
     {
         return [
             StaffRole::MANAGER->value              => $config->getStarterManagerCount(),
