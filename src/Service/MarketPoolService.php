@@ -31,6 +31,18 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class MarketPoolService
 {
+    /**
+     * How many draws generatePlayersInBand() will spend trying to land ONE player inside a
+     * tier's band before giving up on him. Generation is pure CPU with no database round
+     * trip, so a discarded draw costs almost nothing. The measured per-draw hit rate ranges
+     * from 16% (defenders against tier 1's 40-90 band) to 85% (tier 8's 2-7 band), and 25
+     * draws turns even the worst of those into roughly a 1% chance of failing to place a
+     * player. Raising it would hide a band nobody can hit — if a band needs more tries than
+     * this, the band is wrong, and the caller reporting a short result is how that becomes
+     * visible rather than being absorbed as a slower warm.
+     */
+    public const IN_BAND_ATTEMPTS_PER_PLAYER = 25;
+
     // ── Nationality → regional cluster ──────────────────────────────────────
     // Used to add regional flavour to SMALL and MEDIUM business names. The mapping itself
     // lives in CountryContentRegistry::businessCluster(), keyed by Country — 'Polish' is the
@@ -154,60 +166,7 @@ class MarketPoolService
             $position = $this->weightedPosition($cfg);
             $player   = $this->playerGen->generate($position, $source, $nationality);
 
-            $player->setStatus(PlayerStatus::ACTIVE);
-
-            // THROUGH THE RESOLVER, AND DELIBERATELY WITH NO COUNTRY OR TIER. A pool player is
-            // ONE row served to every country at every tier, so there is nothing to price it
-            // against at generation time — the figure stored here is always the legacy one, and
-            // the turnover model prices a pool player AT SERVE TIME from the requesting club's
-            // country and tier (PlayerBrowseSerializer). Flipping the model therefore changes
-            // nothing stored about the pool, and flipping back is instant. See
-            // WageModelResolver's note on the two populations.
-            $player->setContractValue($this->wageModel->playerWeeklyPence($player->getCurrentAbility()));
-
-            $addAgent = false;
-
-            if (!empty($agents)) {
-                if($player->getAge() > 18){
-                    $addAgent = true;
-                }
-                else if (random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
-                    $addAgent = true;
-                }
-            }
-
-            if($addAgent){
-                $player->setAgent($agents[array_rand($agents)]);
-            }
-
-            // Guardian generation
-            $lastName = $player->getLastName();
-            $nat      = $player->getNationality();
-
-            $roll = random_int(1, 100);
-            if ($roll <= 80) {
-                $genderPair = ['male', 'female'];
-            } elseif ($roll <= 90) {
-                $genderPair = [random_int(0, 1) === 0 ? 'male' : 'female'];
-            } else {
-                $sameGender = random_int(0, 1) === 0 ? 'male' : 'female';
-                $genderPair = [$sameGender, $sameGender];
-            }
-
-            $guardianLastName = $lastName !== ''
-                ? $lastName
-                : $this->nameGenerator->generateLastName($nat);
-
-            foreach ($genderPair as $guardianGender) {
-                $guardianFirstName = $this->nameGenerator->generateFirstName($nat);
-                $guardian          = new Guardian($guardianFirstName, $guardianLastName, $player, $guardianGender);
-                $guardian->setDateOfBirth($this->dobFromAge(random_int(30, 55)));
-                $guardian->setDemandLevel(random_int(1, 10));
-                $guardian->setLoyaltyToClub(random_int(30, 80));
-                $this->em->persist($guardian);
-            }
-
-            $this->em->persist($player);
+            $this->finishPoolPlayer($player, $agents, $cfg);
             $players[] = $player;
 
             if ($i > 0 && $i % 50 === 0) {
@@ -219,6 +178,150 @@ class MarketPoolService
 
         $this->em->flush();
         return $players;
+    }
+
+    /**
+     * Everything that makes a generated Player a POOL row: active status, the legacy
+     * country-less wage, an agent roll, guardians. Extracted so the flat warm and the
+     * tier-targeted warm below cannot drift apart — the only difference between them is
+     * what gets asked of PlayerGenerationService, never what happens to the result.
+     *
+     * @param Agent[] $agents
+     */
+    private function finishPoolPlayer(Player $player, array $agents, PoolConfig $cfg): void
+    {
+        $player->setStatus(PlayerStatus::ACTIVE);
+
+        // THROUGH THE RESOLVER, AND DELIBERATELY WITH NO COUNTRY OR TIER. A pool player is
+        // ONE row served to every country at every tier, so there is nothing to price it
+        // against at generation time — the figure stored here is always the legacy one, and
+        // the turnover model prices a pool player AT SERVE TIME from the requesting club's
+        // country and tier (PlayerBrowseSerializer). Flipping the model therefore changes
+        // nothing stored about the pool, and flipping back is instant. See
+        // WageModelResolver's note on the two populations.
+        $player->setContractValue($this->wageModel->playerWeeklyPence($player->getCurrentAbility()));
+
+        $addAgent = false;
+
+        if (!empty($agents)) {
+            if($player->getAge() > 18){
+                $addAgent = true;
+            }
+            else if (random_int(1, 100) <= $cfg->getPlayerAgentChancePercent()) {
+                $addAgent = true;
+            }
+        }
+
+        if($addAgent){
+            $player->setAgent($agents[array_rand($agents)]);
+        }
+
+        // Guardian generation
+        $lastName = $player->getLastName();
+        $nat      = $player->getNationality();
+
+        $roll = random_int(1, 100);
+        if ($roll <= 80) {
+            $genderPair = ['male', 'female'];
+        } elseif ($roll <= 90) {
+            $genderPair = [random_int(0, 1) === 0 ? 'male' : 'female'];
+        } else {
+            $sameGender = random_int(0, 1) === 0 ? 'male' : 'female';
+            $genderPair = [$sameGender, $sameGender];
+        }
+
+        $guardianLastName = $lastName !== ''
+            ? $lastName
+            : $this->nameGenerator->generateLastName($nat);
+
+        foreach ($genderPair as $guardianGender) {
+            $guardianFirstName = $this->nameGenerator->generateFirstName($nat);
+            $guardian          = new Guardian($guardianFirstName, $guardianLastName, $player, $guardianGender);
+            $guardian->setDateOfBirth($this->dobFromAge(random_int(30, 55)));
+            $guardian->setDemandLevel(random_int(1, 10));
+            $guardian->setLoyaltyToClub(random_int(30, 80));
+            $this->em->persist($guardian);
+        }
+
+        $this->em->persist($player);
+    }
+
+    /**
+     * THE SAME GENERATION CALL THE WORLD PACK MAKES, for the pool.
+     *
+     * WorldPackClubGenerationService generates an NPC side for a known (country, tier): it
+     * passes that tier's ability band as the potential range and PoolConfig::firstTeamAgeRange()
+     * as the age range, so a tier-1 club is genuinely stronger than a tier-8 one. The flat
+     * generatePlayers() above passes neither, because a pool row is served to every country at
+     * every tier and has no tier to be generated for.
+     *
+     * That is fine for browsing and youth, and fatal for the starter pack, which draws from the
+     * pool with `currentAbility BETWEEN tier_min AND tier_max`. Nothing in the flat distribution
+     * aims at a band, so topping the pool up could never fill one that was empty — more of the
+     * same distribution is still none of the band. This method closes that gap by asking
+     * PlayerGenerationService for exactly what the world pack asks it for.
+     *
+     * THE BAND IS A POTENTIAL RANGE, NOT A RESULT. Realised ability is a fraction of potential
+     * (PlayerGenerationService::buildAbilityTarget(), age-dependent and youth-capped), so a
+     * single draw against a band lands inside it only 29-85% of the time depending on the tier,
+     * and when it misses it always misses LOW. Since the starter draw filters on the result,
+     * an out-of-band row is worthless to it, so draws are retried and only in-band players are
+     * kept. Retries are discarded before persist() — nothing out-of-band reaches the database.
+     *
+     * @param array{min: int, max: int} $abilityRange the tier band, as resolveAbilityRange() returns it
+     * @param array{min: int, max: int} $ageRange     normally PoolConfig::firstTeamAgeRange()
+     *
+     * @return array{players: Player[], attempts: int} players is at most $count long; short means
+     *         the band could not be hit within the attempt budget, which the caller should report
+     *         rather than hide
+     */
+    public function generatePlayersInBand(
+        int $count,
+        PlayerPosition $position,
+        ?string $nationality,
+        array $abilityRange,
+        array $ageRange,
+        RecruitmentSource $source = RecruitmentSource::YOUTH_INTAKE,
+        int $attemptsPerPlayer = self::IN_BAND_ATTEMPTS_PER_PLAYER,
+    ): array {
+        $cfg     = $this->poolConfigRepo->getConfig();
+        $agents  = $this->agentRepo->findAll();
+        $min     = $abilityRange['min'];
+        $max     = max($min, $abilityRange['max']);
+        $players = [];
+        $attempts = 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            $kept = null;
+
+            for ($try = 0; $try < $attemptsPerPlayer; $try++) {
+                $attempts++;
+                $candidate = $this->playerGen->generate($position, $source, $nationality, $abilityRange, $ageRange);
+                $ability   = $candidate->getCurrentAbility();
+
+                if ($ability >= $min && $ability <= $max) {
+                    $kept = $candidate;
+                    break;
+                }
+            }
+
+            if ($kept === null) {
+                continue;
+            }
+
+            $this->finishPoolPlayer($kept, $agents, $cfg);
+            $players[] = $kept;
+
+            if ($i > 0 && $i % 50 === 0) {
+                $this->em->flush();
+                $this->em->clear(Player::class);
+                $agents = $this->agentRepo->findAll();
+            }
+        }
+
+        $this->em->flush();
+
+        return ['players' => $players, 'attempts' => $attempts];
     }
 
     /** @return Staff[] */

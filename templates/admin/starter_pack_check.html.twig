@@ -94,10 +94,11 @@
                 <input type="hidden" name="tier" value="{{ tier }}">
                 <button type="submit" class="bmc-btn bmc-btn--orange"
                         data-bmc-dialog-title="GENERATE STARTER PACK FOR {{ country }}?"
-                        data-bmc-dialog-message="Creates pool players, staff and scouts. This writes data and can take up to a minute."
+                        data-bmc-dialog-message="Creates pool staff, scouts, and players generated for tier {{ tier }}'s ability band. This writes data and can take up to a minute."
                         data-bmc-dialog-confirm="GENERATE" data-bmc-dialog-variant="yellow"><span>GENERATE STARTER PACK</span></button>
                 <span class="bmc-data">
-                    Tops the {{ country }} pool up to the minimums the starter draw needs, then re-runs this check.
+                    Tops the {{ country }} pool up, and generates players for tier {{ tier }}'s ability band the
+                    way the world pack generates them, then re-runs this check.
                 </span>
             </form>
         {% endif %}
