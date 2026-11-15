@@ -191,7 +191,7 @@
     {% for code, byTier in leaguesByCountry %}
         {% set n = 0 %}
         {% for l in byTier %}{% if leagueDiffs[l.id|ea_as_string]|default([])|length > 0 %}{% set n = n + 1 %}{% endif %}{% endfor %}
-        <button type="button" role="tab" aria-selected="{{ loop.first ? 'true' : 'false' }}" aria-controls="pyramid-{{ code }}" data-value="{{ code }}">
+        <button type="button" class="bmc-tab" role="tab" aria-selected="{{ loop.first ? 'true' : 'false' }}" aria-controls="pyramid-{{ code }}" data-value="{{ code }}">
             <span class="bmc-flag" style="background-image:url('{{ asset('assets/flags/' ~ code|lower ~ '.svg') }}')"></span>
             {{ code }}{% if n > 0 %} <span class="ink-warning">{{ n }}</span>{% endif %}
         </button>
