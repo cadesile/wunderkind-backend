@@ -76,7 +76,11 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      * Club and player counts are computed in PostgreSQL using JSON functions so
      * the payload column is never loaded into PHP memory.
      *
-     * @return array<array{id:string, country:string, tier:int, club_count:int, player_count:int, generated_at:string}>
+     * `payload_version` is selected so the admin can show staleness per row without a second
+     * query: a row whose version differs from `WorldInitializationService::WORLD_PACK_VERSION`
+     * is what the cache treats as a miss, so it is the same comparison the rebuild path makes.
+     *
+     * @return array<array{id:string, country:string, tier:int, clubCount:int, playerCount:int, payloadVersion:int, generatedAt:\DateTimeImmutable}>
      */
     public function findAllSummaries(): array
     {
@@ -85,6 +89,7 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
                 id::text                                        AS id,
                 country,
                 tier,
+                payload_version,
                 generated_at,
                 COALESCE(json_array_length(payload->'clubs'), 0)         AS club_count,
                 COALESCE((
@@ -100,9 +105,10 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
                 'id'          => $row['id'],
                 'country'     => $row['country'],
                 'tier'        => (int) $row['tier'],
-                'clubCount'   => (int) $row['club_count'],
-                'playerCount' => (int) $row['player_count'],
-                'generatedAt' => new \DateTimeImmutable($row['generated_at']),
+                'clubCount'      => (int) $row['club_count'],
+                'playerCount'    => (int) $row['player_count'],
+                'payloadVersion' => (int) $row['payload_version'],
+                'generatedAt'    => new \DateTimeImmutable($row['generated_at']),
             ];
         }, $rows);
     }
