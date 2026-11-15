@@ -99,8 +99,28 @@ class WorldInitializationService
      *     Adding a key IS a shape change, which is why this is a bump rather than a quiet
      *     addition — the rule at the top of this docblock applies to the service's own
      *     changes too.
+     *
+     * 6 — the sponsor tier-1 base and the per-tier ratio tables were AUTHORED on 2026-11-15,
+     *     which is the content-not-shape case the warning above describes, in its second
+     *     guise. `sponsorPot` is part of the cached league block: it is rolled at pack-build
+     *     time from whatever bands were resolved then, so every pack cached before the
+     *     authoring holds pots drawn from the old flat band and would serve them forever.
+     *     Nothing about those payloads looks different.
+     *
+     *     The figures: a tier-1 base at 13.041x the previous flat columns, with
+     *     `economySponsorTierRatioBp` `[10000, 3475, 2540, 1658, 1658, 827, 340, 96]`. The
+     *     defect it closes is that one flat band served every division, so a tier-8 league
+     *     pot equalled tier 1's — measured in the app, club plus league sponsorship came to
+     *     175% of tier-8 authored turnover against 1.2% at tier 1. It now lands at 22% at
+     *     both ends.
+     *
+     *     ⚠️ The ticket ladder authored in the same pass (`economyTicketPriceTier1Pence`
+     *     8000 plus `economyTicketPriceTierRatioBp`) did NOT require this bump on its own:
+     *     the ticket price is published-only and is not part of any cached pack. The
+     *     sponsor half is what makes the bump mandatory, and conflating the two would
+     *     teach the next reader the wrong rule.
      */
-    public const WORLD_PACK_VERSION = 5;
+    public const WORLD_PACK_VERSION = 6;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
