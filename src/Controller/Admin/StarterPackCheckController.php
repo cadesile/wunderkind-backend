@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Enum\Country;
+use App\Repository\Location\CountryProfileRepository;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -34,8 +35,22 @@ class StarterPackCheckController extends AbstractController
 
     public function __construct(
         private readonly StarterPackDiagnosticService $diagnostics,
+        private readonly CountryProfileRepository $countryProfileRepository,
     ) {}
 
+    /**
+     * The dropdown lists LIVE countries; the handler accepts any code. That asymmetry is
+     * deliberate.
+     *
+     * A pre-flight check you cannot run until after you have gone live is not a pre-flight
+     * check. The useful question is "could this country serve players if I took it live",
+     * and refusing a non-live code would make that unanswerable — while the operator pasting
+     * `?country=ES` into the URL has already said what they want. `StarterPackDiagnosticService`
+     * reports the gap itself as an info finding ("%s has no LIVE country profile, so clients
+     * cannot pick it even if the pool can serve it"), so nothing is hidden by allowing it.
+     *
+     * The dropdown is narrowed because it is a menu of suggestions, not a validator.
+     */
     #[Route('/admin/starter-pack-check', name: 'admin_starter_pack_check')]
     #[IsGranted('ROLE_ADMIN')]
     public function check(Request $request): Response
@@ -48,7 +63,14 @@ class StarterPackCheckController extends AbstractController
             // The page strip's crumb and title, using the LIVE sidebar group label.
             'bmcGroup'    => 'Config',
             'bmcTitle'    => 'Starter pack check',
-            'countries'   => Country::generationCapableLabels(),
+            // LIVE COUNTRIES ONLY, not generation-capable ones. The two are different axes —
+            // generation-capability is compiled into the enum, LIVE is an operator decision in
+            // `country_profile` — and this page is about whether a country can actually serve
+            // players, so the operator's list is the right one. On a box where one country is
+            // live, offering twenty-five is offering twenty-four dead ends.
+            //
+            // `check()` itself stays permissive on purpose: see its docblock.
+            'countries'   => Country::labelsFor($this->countryProfileRepository->liveCountryCodes()),
             'country'     => $country,
             'tier'        => $tier,
             'defaultTier' => StarterPackService::DEFAULT_STARTER_TIER,

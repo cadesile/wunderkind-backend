@@ -444,6 +444,41 @@ enum Country: string
         return $out;
     }
 
+    /**
+     * `code => label` for an arbitrary list of codes, unknown ones dropped.
+     *
+     * FOR LISTS THAT ARE AN OPERATOR DECISION rather than a property of the code —
+     * `liveCountryCodes()` above all, which is a database answer the enum knows nothing about.
+     * `generationCapableLabels()` cannot serve those: generation-capability is compiled in,
+     * LIVE is chosen, and this enum's own docblock is explicit that they are different axes.
+     *
+     * UNKNOWN CODES ARE DROPPED, NOT RENDERED. A `country_profile` row can outlive its enum
+     * case — a retired code, a typo made directly in SQL — and a dropdown is the wrong place
+     * to discover that. The same `tryFrom()` filter `StarterConfigController` and
+     * `WorldOverviewService` already apply, kept here so a fourth caller does not write a
+     * fourth copy of it.
+     *
+     * ORDER IS THE CALLER'S. The input order is preserved, so a repository's `ORDER BY` is
+     * what the operator sees rather than enum declaration order.
+     *
+     * @param  iterable<mixed>        $codes
+     * @return array<string, string>  code => label
+     */
+    public static function labelsFor(iterable $codes): array
+    {
+        $out = [];
+
+        foreach ($codes as $code) {
+            $country = is_string($code) ? self::tryFrom(strtoupper(trim($code))) : null;
+
+            if ($country !== null) {
+                $out[$country->value] = $country->label();
+            }
+        }
+
+        return $out;
+    }
+
     /** @return array<string, string> code => nationality, for the whole set. */
     public static function nationalityMap(): array
     {

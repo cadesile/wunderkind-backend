@@ -3,6 +3,10 @@
   Config → Starter pack check, on bmc_page + bmc-pages.css/js.
   Data: StarterPackCheckController::check() — countries, country, tier, defaultTier, result.
 
+  `countries` is LIVE countries only (CountryProfileRepository::liveCountryCodes()), not the
+  generation-capable enum subset: the two are different axes and this page is about serving
+  real players. The handler still accepts any code by URL — see check()'s docblock for why.
+
   A DIAGNOSTIC, NOT A SETTINGS PAGE. No save bar and no data-bmc-form: nothing here is edited,
   it is a question asked of the pool and the answer. The only control that writes is the warm
   button, and that is its own POST.
@@ -43,8 +47,8 @@
             <div class="bmc-field-col">
                 <label class="bmc-lbl bmc-lbl--ink" for="spc-country">COUNTRY</label>
                 <span class="bmc-select">
-                    <select name="country" id="spc-country" required style="min-width:220px">
-                        <option value="">— Select a country —</option>
+                    <select name="country" id="spc-country" required style="min-width:220px"{{ countries is empty ? ' disabled' : '' }}>
+                        <option value="">{{ countries is empty ? '— No live countries —' : '— Select a country —' }}</option>
                         {% for code, label in countries %}
                             <option value="{{ code }}"{{ code == country ? ' selected' : '' }}>{{ label }} ({{ code }})</option>
                         {% endfor %}
@@ -63,8 +67,24 @@
                 </span>
             </div>
 
-            <button type="submit" class="bmc-btn bmc-btn--blue"><span>RUN CHECK</span></button>
+            <button type="submit" class="bmc-btn bmc-btn--blue"{{ countries is empty ? ' disabled' : '' }}><span>RUN CHECK</span></button>
         </form>
+
+        {#
+          THE SELECTS STAY RENDERED WHEN THERE IS NOTHING TO PICK, disabled rather than removed.
+          Replacing the form would change the page's shape depending on data, which costs the
+          operator their bearings and costs the screen test its anchors. The note says what to do
+          instead of leaving an empty dropdown to be puzzled over.
+        #}
+        {% if countries is empty %}
+            <div style="margin-top:12px">
+                <span class="bmc-empty-note">NO LIVE COUNTRIES — TAKE ONE LIVE FIRST</span>
+                <div class="bmc-data" style="margin-top:6px">
+                    This list is the countries whose profile is <strong>LIVE</strong>, which is the set players can
+                    actually pick. Promote one on <strong>World → Countries</strong> and it appears here.
+                </div>
+            </div>
+        {% endif %}
 
         {% if result is not null %}
             <form method="post" action="{{ path('admin', {routeName: 'admin_starter_pack_warm'}) }}"
