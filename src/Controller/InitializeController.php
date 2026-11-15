@@ -215,7 +215,26 @@ class InitializeController extends AbstractController
             'trophy'            => $league->getTrophy(),
         ], $leagues);
 
-        return $this->json(['leagues' => $data]);
+        // ── packVersion, AND IT MEANS SOMETHING SLIGHTLY DIFFERENT HERE ───────────────────
+        //
+        // On a tier pack this key is the version that pack WAS BUILT AT — a fact about the
+        // payload in your hand. This response is not a pack: it is an uncached list assembled
+        // live from `league` rows, with no version of its own. So here it is the version the
+        // server builds AT, which is what the next `POST /api/initialize/league/{tier}` will
+        // stamp whatever it returns.
+        //
+        // Published because a client wants to know before fetching eight tiers, not after. The
+        // distinction matters when they disagree: during a regeneration this reads 5 while a
+        // not-yet-rebuilt pack still holds 4, and the honest reading of that is "the packs you
+        // are about to fetch will be rebuilt", not "you already have version 5".
+        //
+        // Additive sibling of `leagues` — this endpoint has always returned an object, so no
+        // client sees a shape change. Uncached, so no WORLD_PACK_VERSION bump is needed to add
+        // it, unlike the pack itself.
+        return $this->json([
+            'leagues'     => $data,
+            'packVersion' => WorldInitializationService::WORLD_PACK_VERSION,
+        ]);
     }
 
     /**
