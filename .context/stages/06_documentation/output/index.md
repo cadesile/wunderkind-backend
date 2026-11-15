@@ -161,7 +161,27 @@ claiming canonical status)
   keyed `(country, tier)` with no season dimension. Also documents the trap worth knowing
   before touching sponsor money: `sponsorWeeklyPence` is **weekly** while the six existing
   sponsor band columns are **per season**, and the two are not convertible by dividing by a
-  season length — they describe different deals.
+  season length — they describe different deals. **Extended 2026-11-15** with the ticket-price
+  contract — when the published per-tier `ticketPricePence` is above 0 it is the price the game
+  treats as **advised**, both the price a club starts at and the denominator of the elasticity
+  ratio, so publishing one cannot make clubs mispriced — and with a correction: the section
+  saying the per-tier rows deliberately carry no sponsor bands had been **wrong since
+  `a93bb1d8`** and now documents the three-step resolution (explicit row → flat column x tier
+  ratio → flat column, country factor once and last). It also records the decision that
+  **`wageModel` is the ONLY economy switch** — income anchoring and ticket-price elasticity are
+  derived from it rather than carrying flags of their own, because the backend has no admin
+  surface for a standalone boolean and `wageModel` is already configurable. So there is no
+  `incomeAnchoredWages` or `ticketPriceElasticity` key to look for on the backend, and a client
+  gating a behaviour on one of those names is gating on nothing.
+- **`docs/api/world-pack-version.md`** (added 2026-11-15) — `packVersion`, the one key that
+  says which generation of the world a device holds. Additive on two surfaces, and the thing to
+  read before trusting either: **they are different facts and may legitimately disagree.**
+  `POST /api/initialize/league/{tier}` reports the version the pack in your hand was built at;
+  `GET /api/initialize/leagues` reports the version the server builds at now. Mid-regeneration
+  the second says 5 while the first still says 4, which means "the packs you are about to fetch
+  will be rebuilt", not that anything is wrong. The problem it closes is concrete: the dev box
+  held 60 packs on the calibrated economy and 140 on the pre-calibration one, and nothing in the
+  payload said which you had.
 - **`docs/api/season-investment.md`** — the owner's once-a-season gift into a club. Leads with
   the two things a client must get right: `creditClubPence` is an **instruction the device
   applies**, not a report (the server cannot credit `club.balance`), and the **season is not a

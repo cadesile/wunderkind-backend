@@ -1151,6 +1151,53 @@ the knob arrives switched off and is turned on per country by an operator.
   make a long save's ceiling approach zero, so the owner who played longest
   could invest least.
 
+**Five more economy columns landed after those nine, in two passes, and this
+section did not mention them until 2026-11-15.** All five ship inert, by the
+same mechanism as the original nine.
+
+`Version20261114100000` added the two **explicit** per-tier tables:
+
+- `economySponsorBandsPerTierPence` — json, default `[]`, shape
+  `{"1": {"small": [min, max], "medium": …, "large": …}}`. A tier not listed
+  falls through to the six flat `*_sponsor_min/max` columns, which is what lets
+  the table be filled one division at a time. **A tier must carry all three
+  sizes or the setter discards the row entirely** — a partial row would fall
+  back for one size and not the others, which is the hardest kind of band to
+  debug. Keys are ints in PHP (numeric string keys coerce) but encode as a JSON
+  object because they start at 1, never 0.
+- `economyTicketPricePerTierPence` — json, eight zeros. **`0` means "unauthored,
+  use your own figure", not "free"**: there is no flat ticket-price column to
+  fall back to, which is why the zero has to carry that meaning.
+
+`Version20261115190000` added the **ratio** form of the same two ladders, plus
+the base they hang off:
+
+- `economySponsorTierRatioBp`, `economyTicketPriceTierRatioBp` — json, eight
+  basis-point figures, index 0 = tier 1, default eight `10000`s (parity).
+  Normalised by `normaliseTierBpList()` exactly as `economyTierFactorsBp` is.
+- `economyTicketPriceTier1Pence` — bigint, default 0, base-year pence.
+
+**Why both forms exist.** The explicit table is 48 sponsor figures per country
+to author, and all 48 have to be re-derived by hand whenever the tier-1 band
+moves. The ratio form is the same ladder as a tier-1 base plus eight ratios —
+nine figures, and a retune of the base carries the ladder with it. The explicit
+table stays the **override**: `SponsorBandResolver::bandFor()` reads it first
+and uses it verbatim, so a division authored by hand does not move when a ratio
+is retuned.
+
+**Two ratio tables, not one "tier shape", and neither is
+`economyTierFactorsBp`.** A ticket and a shirt sponsor do not fall off at the
+same rate down a pyramid, and the tier factors price wages. Three tables is
+three things to author; one shared table is a wage retune silently re-pricing
+every sponsor and every ticket in the world. `SponsorBandResolverTest` pins the
+tier factor staying out of the sponsor chain, with both tables authored.
+
+**`economyTicketPriceTier1Pence` propagating its zero is the compatibility
+mechanism**, the same shape as `max_enrichment_requests_per_user`'s
+`0 = unlimited`: with no base authored, `TicketPriceResolver` returns 0 for
+every tier whatever the ratios say — so the ratio ladder is safe to author
+*before* the base figure is agreed, and nothing moves until it lands.
+
 **`economyBaselineTurnoverPence` ships as eight ZEROS, which is not a usable
 configuration and deliberately not a harmless one.** The wage scale divides by
 turnover, so zero makes the turnover model *undefined* rather than cheap —

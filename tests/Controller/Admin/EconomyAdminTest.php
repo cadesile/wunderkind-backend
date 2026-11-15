@@ -230,6 +230,81 @@ class EconomyAdminTest extends WebTestCase
         self::assertNull($this->config()->getLeagueParachute());
     }
 
+    // ── The sponsor and ticket ratio tables ───────────────────────────────
+
+    public function testTheRatioTablesSaveByIndexAndStayEightRows(): void
+    {
+        $this->submitSave([
+            'sponsorTierRatioBp'     => [0 => '10000', 1 => '5000', 7 => '400'],
+            'ticketPriceTierRatioBp' => [0 => '10000', 7 => '2200'],
+        ]);
+
+        $sponsor = $this->config()->getEconomySponsorTierRatioBp();
+        $ticket  = $this->config()->getEconomyTicketPriceTierRatioBp();
+
+        self::assertCount(8, $sponsor);
+        self::assertCount(8, $ticket);
+        // The index IS the tier: a sparse post must not slide tier 8's ratio up the table.
+        self::assertSame(5000, $sponsor[1]);
+        self::assertSame(400,  $sponsor[7]);
+        self::assertSame(2200, $ticket[7]);
+        // Untouched rows keep parity rather than collapsing to 0.
+        self::assertSame(10000, $sponsor[4]);
+        self::assertSame(10000, $ticket[4]);
+    }
+
+    public function testABlankRatioCellLeavesThatTierAlone(): void
+    {
+        $this->submitSave(['sponsorTierRatioBp' => [7 => '400']]);
+        $this->submitSave(['sponsorTierRatioBp' => [7 => '']]);
+
+        self::assertSame(400, $this->config()->getEconomySponsorTierRatioBp()[7]);
+    }
+
+    public function testTheTicketBaseIsTypedInPoundsAndClearsToUnauthored(): void
+    {
+        // POUNDS IN, PENCE STORED, as the turnover table is — and blank means 0 here rather
+        // than "leave it alone", because 0 is the off switch for the whole published ladder.
+        $this->submitSave(['ticketPriceTier1Pounds' => '42.50']);
+        self::assertSame(4_250, $this->config()->getEconomyTicketPriceTier1Pence());
+
+        $this->submitSave(['ticketPriceTier1Pounds' => '']);
+        self::assertSame(0, $this->config()->getEconomyTicketPriceTier1Pence());
+    }
+
+    public function testTheResolvedTableNamesWhereEachFigureCameFrom(): void
+    {
+        // The screen's actual job: two of the three sources produce the same number, so the
+        // provenance cannot be inferred from the output and has to be printed.
+        $this->submitSave([
+            'sponsorTierRatioBp'     => [7 => '2500'],
+            'ticketPriceTier1Pounds' => '40',
+        ]);
+
+        $this->client->request('GET', '/admin?routeName=admin_economy&preview=EN');
+
+        self::assertResponseIsSuccessful();
+        $html = (string) $this->client->getResponse()->getContent();
+
+        self::assertStringContainsString('RESOLVED SPONSOR &amp; TICKET', $html);
+        self::assertStringContainsString('ratio', $html);
+        self::assertStringContainsString('flat', $html);
+    }
+
+    public function testANonMonotonicRatioIsWarnedAboutRatherThanRefused(): void
+    {
+        // Warn, never forbid: a division that pays better than the one above it may be
+        // deliberate. The save must still store exactly what was typed.
+        $this->submitSave(['sponsorTierRatioBp' => [1 => '2000', 2 => '9000']]);
+
+        self::assertSame(9000, $this->config()->getEconomySponsorTierRatioBp()[2]);
+
+        $this->client->request('GET', '/admin?routeName=admin_economy&preview=EN');
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('HIGHER than tier', (string) $this->client->getResponse()->getContent());
+    }
+
     // ── Inflation ─────────────────────────────────────────────────────────
 
     public function testSettingTheRateRecordsWhatItWas(): void
@@ -382,6 +457,11 @@ class EconomyAdminTest extends WebTestCase
                 economy_reputation_spread_bp = 0,
                 economy_weeks_per_season = 46,
                 inflation_rate_per_season_bp = 0,
+                economy_sponsor_tier_ratio_bp = '[10000,10000,10000,10000,10000,10000,10000,10000]',
+                economy_ticket_price_tier_ratio_bp = '[10000,10000,10000,10000,10000,10000,10000,10000]',
+                economy_ticket_price_tier1_pence = 0,
+                economy_ticket_price_per_tier_pence = '[0,0,0,0,0,0,0,0]',
+                economy_sponsor_bands_per_tier_pence = '[]',
                 league_parachute = NULL
         SQL);
         $this->connection()->executeStatement('DELETE FROM inflation_rate_history');

@@ -73,31 +73,68 @@ final class SponsorBandResolver
     {
         $config = $config ?? $this->gameConfigRepository->getConfig();
 
-        // PER-TIER FIRST, FLAT AS THE FALLBACK. A tier with no authored row resolves exactly as
-        // it did before this column existed, which is what lets the table be filled in one
-        // division at a time instead of all eight at once.
+        // ── RESOLUTION ORDER: OVERRIDE, THEN RATIO, THEN FLAT ────────────────────────────
+        //
+        //  1. the explicit per-tier row, which stays an OVERRIDE and is used verbatim;
+        //  2. the flat column scaled by this tier's ratio;
+        //  3. the flat column.
+        //
+        // A tier with neither an authored row nor a ratio other than parity resolves exactly
+        // as it did before either column existed, which is what lets the table be filled in
+        // one division at a time instead of all eight at once.
+        //
+        // THE RATIO IS NOT APPLIED TO AN OVERRIDE ROW. That row is already somebody's resolved
+        // answer for the division; multiplying it by a ratio would mean authoring a tier by
+        // hand silently moved it the moment a ratio was retuned, and there would be no reading
+        // of the two tables that told you which figure you were going to get.
         $perTier = $config->getEconomySponsorBandsPerTierPence()[(string) $tier][$size->value] ?? null;
 
         if ($perTier !== null) {
             [$min, $max] = $perTier;
+            $ratioBp     = self::BP;
         } else {
             [$min, $max] = match ($size) {
                 CompanySize::SMALL  => [$config->getSmallSponsorMin(),  $config->getSmallSponsorMax()],
                 CompanySize::MEDIUM => [$config->getMediumSponsorMin(), $config->getMediumSponsorMax()],
                 CompanySize::LARGE  => [$config->getLargeSponsorMin(),  $config->getLargeSponsorMax()],
             };
+
+            // TIER 0 MEANS "NO TIER", not tier 1. `bandFor()` defaults to it for callers with
+            // no league in hand, and the published country-level `sponsorBandsPence` block
+            // relies on that resolving to the unscaled flat band — so the ratio table is read
+            // only for a real division.
+            $ratioBp = ($tier >= 1 && $tier <= 8)
+                ? ($config->getEconomySponsorTierRatioBp()[$tier - 1] ?? self::BP)
+                : self::BP;
         }
 
         $lo = min($min, $max);
         $hi = max($min, $max);
 
-        if ($country === '') {
-            return [$lo, $hi];
-        }
+        // ── THE TIER FACTOR IS DELIBERATELY NOT IN THIS CHAIN ────────────────────────────
+        //
+        // `economySponsorTierRatioBp` is a DIFFERENT TABLE from `economyTierFactorsBp`, and
+        // the resemblance is the trap: both are eight basis-point figures indexed by tier, and
+        // the obvious tidy-up is to notice that and collapse them into one.
+        //
+        // They are kept apart on purpose. The tier factors price WAGES; this table prices a
+        // revenue line an operator tunes against TV and matchday. Sharing them would mean a
+        // wage retune silently re-priced every sponsor in the world, which is a change nobody
+        // reading the wage screen could see coming.
+        // `SponsorBandResolverTest::testTheTierFactorIsDeliberatelyNOTApplied()` pins exactly
+        // that: a 5x tier-1 wage factor must not inflate a tier-1 sponsor pot.
+        //
+        // So the only two multipliers below are this table's own ratio and the country factor.
+        $countryFactorBp = $country === '' ? self::BP : $this->scaleResolver->countryFactorBp($country);
 
-        $factorBp = $this->scaleResolver->countryFactorBp($country);
-
-        return [intdiv($lo * $factorBp, self::BP), intdiv($hi * $factorBp, self::BP)];
+        // ONE intdiv PER FIGURE, AT THE END OF THE CHAIN. Dividing after the ratio and again
+        // after the country factor would truncate twice, and a band that loses a penny per
+        // step disagrees with the same band resolved in a different order — which is how the
+        // published figure and the rolled figure come to differ by one.
+        return [
+            intdiv($lo * $ratioBp * $countryFactorBp, self::BP * self::BP),
+            intdiv($hi * $ratioBp * $countryFactorBp, self::BP * self::BP),
+        ];
     }
 
     /**

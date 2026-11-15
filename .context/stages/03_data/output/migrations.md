@@ -656,3 +656,37 @@ Two details that are deliberate and should not be "tidied":
 `doctrine:schema:update --env=test`, which was run for it, and `--dump-sql` reported zero
 drift afterwards. A suite run before that step fails with `relation "club_sale" does not
 exist` on every new test, which looks nothing like the change.
+
+## `Version20261115190000` — sponsor and ticket ratio tables (2026-11-15)
+
+Three additive `game_config` columns, all shipping inert:
+`economy_sponsor_tier_ratio_bp` and `economy_ticket_price_tier_ratio_bp` (JSON, eight basis-point
+figures, index 0 = tier 1, default eight `10000`s = parity) and
+`economy_ticket_price_tier1_pence` (BIGINT, default 0).
+
+**Why, when `Version20261114100000` already added per-tier tables.** That migration added the
+EXPLICIT tables — 48 sponsor figures per country, re-derived by hand every time the tier-1 band
+moves. These express the same ladder as a tier-1 base plus eight ratios: nine figures, and a
+retune of the base carries the ladder with it. The explicit tables are **not** replaced or
+dropped; they remain the override (`SponsorBandResolver::bandFor()` reads them first).
+
+**Two ratio tables, not one "tier shape"**, and neither is `economy_tier_factors_bp`: a ticket
+and a shirt sponsor do not fall off at the same rate down a pyramid, and the wage factors price
+wages. Three tables is three things to author; one shared table is a wage retune silently
+re-pricing every sponsor and every ticket in the world.
+
+**Inert by construction.** Parity ratios resolve every sponsor band to the flat column it
+resolved to before, byte for byte; a 0 ticket base propagates through `TicketPriceResolver`
+whatever the ratios say, so the published ticket price stays 0 ("unauthored"). Verified by
+hashing `EconomyConfigPublisher::clientBlock()` before and after on a default-config box — all
+five argument combinations byte-identical; `publicBlock()` differs only by the two added ratio
+keys, which is the intended addition.
+
+Add-with-default then `DROP DEFAULT` on all three, the pattern this series uses for JSON columns
+so the mapping owns the default afterwards. Reversible: three drops.
+
+**Remember `wunderkind_test` is not migration-tracked**: the three columns reached it via a hand
+`ALTER` with the same defaults (`--force` refuses NOT NULL columns on existing rows), and
+`doctrine:schema:update --dump-sql --env=test` reported zero drift afterwards. The local dev
+database carries one pre-existing, unrelated drift statement (`COMMENT ON COLUMN
+npc_club.land_plot_id IS ''`) which predates this change.

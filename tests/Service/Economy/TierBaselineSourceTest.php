@@ -12,6 +12,7 @@ use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyConfigPublisher;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\SponsorBandResolver;
+use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
 use PHPUnit\Framework\TestCase;
 
@@ -118,6 +119,7 @@ class TierBaselineSourceTest extends TestCase
             $scale,
             new WageModelResolver($gameConfigRepo, $scale),
             new SponsorBandResolver($gameConfigRepo, $scale),
+            new TicketPriceResolver($gameConfigRepo, $scale),
         );
     }
 }

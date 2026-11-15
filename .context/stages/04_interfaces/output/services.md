@@ -1217,6 +1217,41 @@ priced — so it applies the moment a country factor is set. That is why the run
 `WORLD_PACK_VERSION` bump on a factor change and not only on a model flip: `sponsorPot` is part
 of the cached league block.
 
+**THREE SOURCES SINCE 2026-11-15, resolved in this order** (`bandFor()`): the explicit per-tier
+row (`economySponsorBandsPerTierPence`, used **verbatim** — an override), else the flat column x
+that tier's ratio (`economySponsorTierRatioBp`), else the flat column alone. The country factor
+applies **once, last**, to whichever won, in a single `intdiv` per figure — truncating after the
+ratio and again after the factor loses a penny twice, and the published band then disagrees with
+the rolled one.
+
+The ratio table exists because the explicit table is 48 figures per country to author and
+re-derive by hand; this is the same ladder as a tier-1 base plus eight ratios. The override is
+**not** scaled by the ratio: a hand-authored division must not move when a ratio is retuned,
+and no reading of the two tables would tell you which figure won. **Tier 0 means "no tier"** and
+reads neither table, which is what keeps the published country-level `sponsorBandsPence` (what
+an older build reads) unscaled. Ships at parity, so every tier resolves exactly as before.
+
+`economySponsorTierRatioBp` is deliberately **a different table from `economyTierFactorsBp`** —
+the two look identical in shape and price different things, and sharing them would mean a wage
+retune silently re-pricing every sponsor in the world.
+`SponsorBandResolverTest::testTheTierFactorStaysOutEvenWhenASponsorRatioTableIsAuthored()` pins
+that with both authored. Ladder behaviour: `SponsorTierRatioTest`.
+
+**`TicketPriceResolver` — the gate price per division, same shape, added 2026-11-15.** The
+backend has never held a ticket price; the app shipped a flat 2500p compiled into the release,
+which under elasticity starts a bottom-tier club ~39% under its own attendance. `priceFor()`
+resolves the explicit per-tier price (`economyTicketPricePerTierPence`) as an override, else
+`economyTicketPriceTier1Pence` x `economyTicketPriceTierRatioBp`, else 0 — country factor once,
+last, one `intdiv`.
+
+**0 means "unauthored, use your own figure"**, not "free", because there is no flat predecessor
+to fall back to, and it propagates: a 0 base resolves every tier to 0 whatever the ratios say,
+which is what makes the ladder safe to author before the base figure is agreed. A real price is
+**floored at 1p** so a very cheap division cannot truncate into reading as an unauthored one; a
+country whose factor truncates to 0 against the baseline resolves to 0, matching `scalePence()`.
+**Published above 0, it is the ADVISED price** the app's elasticity measures a club against —
+see `docs/api/economy-config.md`. `TicketPriceResolverTest`.
+
 **`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that
 was a GAP rather than a choice: decision 4 of the economy brief lists NPC balances among the
 things the backend bakes the country factor into, and the step-5 wage unification threaded

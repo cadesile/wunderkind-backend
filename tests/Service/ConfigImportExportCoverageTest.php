@@ -180,6 +180,36 @@ class ConfigImportExportCoverageTest extends TestCase
         self::assertSame(12_345, $starter->getStartingBalance());
     }
 
+    /**
+     * The economy ratio tables and the tier-1 ticket base survive an export/import cycle.
+     *
+     * The coverage test above is reflection-total and already fails if one of these is not
+     * exported at all. This pins the half of the contract reflection cannot see: that the
+     * VALUES come back intact rather than normalised into something else on the way in.
+     * A ratio table that round-trips as eight 10000s would restore a backup as "inert" while
+     * reporting success — the quietest possible way to lose an authored economy.
+     */
+    public function testTheEconomyRatioTablesRoundTripWithTheirValues(): void
+    {
+        $source = (new GameConfig())
+            ->setEconomySponsorTierRatioBp([10000, 5000, 2500, 1500, 1000, 700, 500, 400])
+            ->setEconomyTicketPriceTierRatioBp([10000, 8000, 6500, 5000, 4000, 3200, 2600, 2200])
+            ->setEconomyTicketPriceTier1Pence(4_000);
+
+        $exported = ConfigImportExportService::exportEntity($source);
+
+        self::assertSame([10000, 5000, 2500, 1500, 1000, 700, 500, 400], $exported['economySponsorTierRatioBp']);
+        self::assertSame([10000, 8000, 6500, 5000, 4000, 3200, 2600, 2200], $exported['economyTicketPriceTierRatioBp']);
+        self::assertSame(4_000, $exported['economyTicketPriceTier1Pence']);
+
+        $target = new GameConfig();
+        self::assertSame([], ConfigImportExportService::applyEntity($target, $exported));
+
+        self::assertSame([10000, 5000, 2500, 1500, 1000, 700, 500, 400], $target->getEconomySponsorTierRatioBp());
+        self::assertSame([10000, 8000, 6500, 5000, 4000, 3200, 2600, 2200], $target->getEconomyTicketPriceTierRatioBp());
+        self::assertSame(4_000, $target->getEconomyTicketPriceTier1Pence());
+    }
+
     public function testUnknownKeysAreIgnored(): void
     {
         $pool = new PoolConfig();

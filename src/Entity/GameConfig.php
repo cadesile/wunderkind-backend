@@ -1941,6 +1941,107 @@ class GameConfig
         return $this;
     }
 
+    /**
+     * Sponsor-band ratio per tier, in basis points of the TIER-1 band. 10000 = parity.
+     *
+     * ── WHY A RATIO TABLE WHEN `economySponsorBandsPerTierPence` ALREADY EXISTS ────────────
+     *
+     * The explicit per-tier table is eight rows x three sizes x two halves — 48 figures to
+     * author before a pyramid is priced, and every one of them has to be re-derived by hand
+     * when the tier-1 band moves. This is the same shape expressed as a tier-1 base (the six
+     * flat columns) plus eight ratios: nine figures, and a retune of the base carries the
+     * whole ladder with it.
+     *
+     * Both live. The explicit table stays the OVERRIDE — see `SponsorBandResolver::bandFor()`
+     * for the resolution order — so a division somebody has already authored by hand keeps the
+     * figures it was authored with, and the ratio prices everything else.
+     *
+     * ── DELIBERATELY NOT `economyTierFactorsBp` ───────────────────────────────────────────
+     *
+     * A separate table from the wage factors, for the reason
+     * `economySponsorBandsPerTierPence` already states and
+     * `SponsorBandResolverTest::testTheTierFactorIsDeliberatelyNOTApplied()` pins: sponsorship
+     * is a revenue line an operator tunes against TV and matchday, not a derivative of the
+     * wage ladder. Sharing the table would mean a wage retune silently re-priced every sponsor
+     * in the world. The cost of keeping them apart is one more table to author; the cost of
+     * sharing them is a change nobody can see coming.
+     *
+     * INDEX 0 IS TIER 1, so index 0 is the base and is 10000 by construction — a value other
+     * than parity there scales the base against itself, which the gate reports rather than the
+     * setter forbidding it (nothing here forbids a deliberate oddity).
+     *
+     * SHIPS AT PARITY, which is inert: every tier resolves the flat band exactly as it did
+     * before this column existed.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economySponsorTierRatioBp = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000];
+
+    /** @return list<int> */
+    public function getEconomySponsorTierRatioBp(): array { return $this->economySponsorTierRatioBp; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomySponsorTierRatioBp(array $v): static
+    {
+        $this->economySponsorTierRatioBp = self::normaliseTierBpList($v, 10000);
+
+        return $this;
+    }
+
+    /**
+     * Ticket-price ratio per tier, in basis points of `economyTicketPriceTier1Pence`.
+     *
+     * The ticket half of the same idea, and the only way the lower divisions get a price at
+     * all without authoring eight of them: one believable tier-1 gate price and a ladder down.
+     *
+     * SEPARATE FROM THE SPONSOR RATIOS, not one shared "tier shape". A ticket and a shirt
+     * sponsor do not fall off at the same rate down a pyramid — a tier-8 crowd still pays a
+     * recognisable fraction of a tier-1 gate price, while a tier-8 shirt is worth almost
+     * nothing — and sharing one table would force a retune of one to re-price the other.
+     *
+     * INDEX 0 IS TIER 1 and is the base, as with the sponsor ratios. Parity everywhere is the
+     * shipped state, and with a tier-1 base of 0 the whole ladder resolves to 0, which is
+     * "unauthored, use your own figure" per `economyTicketPricePerTierPence`.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyTicketPriceTierRatioBp = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000];
+
+    /** @return list<int> */
+    public function getEconomyTicketPriceTierRatioBp(): array { return $this->economyTicketPriceTierRatioBp; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomyTicketPriceTierRatioBp(array $v): static
+    {
+        $this->economyTicketPriceTierRatioBp = self::normaliseTierBpList($v, 10000);
+
+        return $this;
+    }
+
+    /**
+     * Tier-1 base ticket price, in BASE-YEAR pence. 0 = unauthored, and that is the shipped
+     * state.
+     *
+     * The one authored figure the whole ticket ladder hangs off, held here rather than as
+     * `economyTicketPricePerTierPence[0]` because the ratio table needs a base that is not
+     * itself a resolved row — reading the base out of the override table would make clearing
+     * tier 1 clear every tier.
+     *
+     * 0 PROPAGATES. `TicketPriceResolver` returns 0 for every tier while this is 0, whatever
+     * the ratios say, so authoring a ladder before a base changes nothing — which is what
+     * makes the ratio table safe to ship ahead of the figure.
+     *
+     * BASE-YEAR, like every money figure on this entity: the app compounds
+     * `inflationRatePerSeasonBp` itself.
+     */
+    #[ORM\Column(type: 'bigint')]
+    private int $economyTicketPriceTier1Pence = 0;
+
+    public function getEconomyTicketPriceTier1Pence(): int { return $this->economyTicketPriceTier1Pence; }
+    public function setEconomyTicketPriceTier1Pence(int $v): static { $this->economyTicketPriceTier1Pence = max(0, $v); return $this; }
+
     public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
     public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
 

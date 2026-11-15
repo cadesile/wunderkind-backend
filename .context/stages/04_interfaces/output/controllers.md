@@ -140,7 +140,21 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`StarterPackCheckController`** — renders
   `StarterPackDiagnosticService`'s result for one country/tier. No writes,
   no entity consumption; the same result object the
-  `app:starter-pack:check` command prints.
+  `app:starter-pack:check` command prints. **Lists only LIVE countries as of
+  2026-11-15** (`Country` enum), rather than every code the enum carries: a
+  draft country has no authored pyramid, so every tier of it reported as
+  broken and the screen's real findings were buried in noise from countries
+  nobody had started.
+- **The world-pack cache screen** (`DashboardController`, template
+  `worldpack_cache.html.twig`) **shows `payload_version` per cached pack as of
+  2026-11-15**, read through `CountryWorldPackCacheRepository`. It is the
+  operator half of the same change that put `packVersion` in the API payload
+  (see `routes.md`'s `InitializeController`): the column had always decided
+  whether to rebuild, and nothing displayed it, so an operator could not tell a
+  stale pack from a current one without querying the database. The constant it
+  compares against is `WorldInitializationService::WORLD_PACK_VERSION`, which
+  is what the rollout runbook has you bump **with the data, not with the
+  code**.
 - **`BetaRequestInviteController`** — sends beta invites via
   `EmailVerificationService` + `EntityManagerInterface`.
 - **`SocialAuthController`** — Facebook/Twitter OAuth connect/callback/
@@ -191,6 +205,26 @@ baselines is legal for the index and is a state `EconomyScaleResolver` already h
 resolving every country at parity, while two is what it refuses. The transaction is what stops
 a concurrent request observing the gap. `EconomyAdminTest::testTheBaselineIsNeverMomentarilyDuplicatedOrAbsent`
 moves the baseline four times and is what caught the original version.
+
+**The screen gained the sponsor and ticket half on 2026-11-15.** The eight-row table now also
+carries SPONSOR RATIO and TICKET RATIO columns, read by index exactly as the tier factors are
+(the input's index IS the tier, so collapsing a sparse post with `array_values()` would re-price
+the wrong division rather than erroring), plus a tier-1 ticket base in **pounds in, pence
+stored** — the same conversion the turnover table uses, for the same reason: England tier 1 is
+around half a billion pounds and typing that in pence is how two orders of magnitude go missing.
+
+Alongside it, a second read-only section — **RESOLVED SPONSOR & TICKET** — runs
+`SponsorBandResolver` and `TicketPriceResolver` and prints, per row, **where each figure came
+from**: `override` (an explicit authored row, used verbatim), `ratio` (the flat column x this
+tier's ratio), `flat` (the fallback), or `unauthored`. **The provenance is the feature, not the
+figures:** two of the three sources produce the same number — a parity ratio and no ratio are
+indistinguishable in the output — so the resolved figure alone cannot tell an operator which
+table to edit.
+
+**Warn, never forbid**, consistent with the rest of this screen: non-monotonic ratios, a tier-1
+ratio that is not 10000 (tier 1 IS the base, so anything else scales the base against itself), a
+company size with no band, and no ticket base authored are all reported and all still save. A
+division that pays better than the one above it may be deliberate.
 
 **Blank means "leave it alone" on every scalar field**, which is the guard the game-config
 screen's `contractValueRandMin/Max` pair needed and did not have. The exception is the baseline

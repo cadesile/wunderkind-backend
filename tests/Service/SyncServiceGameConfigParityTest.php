@@ -177,6 +177,57 @@ class SyncServiceGameConfigParityTest extends TestCase
         self::assertStringNotContainsString('combinedFactor', $json);
     }
 
+    public function testTheShippedDefaultsPublishNoTicketPrice(): void
+    {
+        // INERT, and the zero is the contract: there is no flat ticket price for the app to
+        // fall back to, so 0 means "the operator has authored nothing for this division, use
+        // your own figure". A published 0 is what keeps a release behaving exactly as it did.
+        $tiers = $this->publisher()->clientBlock(new GameConfig(), 'EN')['economyTierBaseline']['tiers'];
+
+        foreach ($tiers as $row) {
+            self::assertArrayHasKey('ticketPricePence', $row, "tier {$row['tier']}");
+            self::assertSame(0, $row['ticketPricePence'], "tier {$row['tier']}");
+        }
+    }
+
+    public function testEveryTierCarriesTheRESOLVEDTicketPriceNotTheRawColumn(): void
+    {
+        // The key already existed and used to be the raw `economyTicketPricePerTierPence` row.
+        // It now carries the figure `TicketPriceResolver` resolves — base x ratio x country —
+        // so a division the operator never typed a price for still gets one.
+        //
+        // WHY THAT MATTERS TO THE APP AND NOT ONLY TO THE BACKEND: when this is greater than
+        // 0 it is the ADVISED price, the denominator of the elasticity ratio the app measures
+        // a club's own price against. Publishing a resolved ladder is therefore how a
+        // bottom-tier club stops starting 39% under its own attendance.
+        $config = (new GameConfig())
+            ->setEconomyTicketPriceTier1Pence(4_000)
+            ->setEconomyTicketPriceTierRatioBp([10000, 8000, 6500, 5000, 4000, 3200, 2600, 2200]);
+
+        $tiers = $this->publisher()->clientBlock($config, 'EN')['economyTierBaseline']['tiers'];
+
+        self::assertSame(
+            [4_000, 3_200, 2_600, 2_000, 1_600, 1_280, 1_040, 880],
+            array_map(static fn (array $row): int => $row['ticketPricePence'], $tiers),
+        );
+    }
+
+    public function testTheRatioTablesAreOnThePublicBlockAndTheResolvedFiguresAreNot(): void
+    {
+        // THE SPLIT THIS ENDPOINT PAIR EXISTS FOR. `/api/starter-config` is unauthenticated
+        // and has no club to resolve a country from, so it carries the country-INDEPENDENT
+        // authoring tables only. Anything resolved and country-scaled belongs on
+        // `/api/game-config?country=` and on sync, where a country is in hand.
+        $public = $this->publisher()->publicBlock();
+
+        self::assertSame([10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000], $public['sponsorTierRatioBp']);
+        self::assertSame([10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000], $public['ticketPriceTierRatioBp']);
+
+        self::assertArrayNotHasKey('ticketPricePence', $public);
+        self::assertArrayNotHasKey('sponsorBandsPence', $public);
+        self::assertArrayNotHasKey('economyTicketPriceTier1Pence', $public);
+    }
+
     // ───────────────────────────── plumbing ─────────────────────────────
 
     /** @return array{list<string>, list<string>} */
@@ -235,6 +286,7 @@ class SyncServiceGameConfigParityTest extends TestCase
             // needs it for the per-tier youth-scholarship figure.
             new \App\Service\Economy\WageModelResolver($gameConfigRepo, $scaleResolver),
             new \App\Service\Economy\SponsorBandResolver($gameConfigRepo, $scaleResolver),
+            new \App\Service\Economy\TicketPriceResolver($gameConfigRepo, $scaleResolver),
         );
     }
 }
