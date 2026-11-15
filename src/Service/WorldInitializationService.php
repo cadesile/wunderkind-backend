@@ -86,8 +86,21 @@ class WorldInitializationService
      * the country's entries up front and leaves it with none until the run finishes.
      * Warming is a manual step, and the admin dashboard's `stalePacks` count is the
      * signal for what is still outstanding.
+     *
+     * 5 — the payload now carries its own `packVersion`, so a DEVICE can tell which
+     *     generation of the world it is holding. Until now the version existed only as a
+     *     column on the cache row: the server knew, the client did not, and a pack built
+     *     before a calibration was indistinguishable from one built after it. On 2026-11-15
+     *     that difference was live and large — 60 packs carried turnover wages, re-authored
+     *     TV and parachutes, while 140 still held the pre-calibration economy, and nothing
+     *     in the payload said which you had. A player reporting "my TV money looks wrong"
+     *     could not be placed on either side of it.
+     *
+     *     Adding a key IS a shape change, which is why this is a bump rather than a quiet
+     *     addition — the rule at the top of this docblock applies to the service's own
+     *     changes too.
      */
-    public const WORLD_PACK_VERSION = 4;
+    public const WORLD_PACK_VERSION = 5;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -181,6 +194,11 @@ class WorldInitializationService
     public function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, int $sponsorPot, GameConfig $gameConfig): array
     {
         return [
+            // THE GENERATION THIS PACK WAS BUILT UNDER, so a device can say which world it
+            // holds and a support question can be placed on one side of a calibration or the
+            // other. Server-side the same number lives on `country_world_pack_cache
+            // .payload_version` and decides rebuilds; this is the client's copy of it.
+            'packVersion'                   => self::WORLD_PACK_VERSION,
             'id'                            => (string) $league->getId(),
             'tier'                          => $league->getTier(),
             'name'                          => $league->getName(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Controller\Admin;
 
+use App\Service\WorldInitializationService;
 use App\Entity\Admin;
 use App\Entity\CountryWorldPackCache;
 use Doctrine\DBAL\Connection;
@@ -85,6 +86,16 @@ class WorldpackCacheScreenTest extends WebTestCase
         $em->flush();
 
         return $entry;
+    }
+
+    /** Stamps a seeded entry with a version, bypassing the constructor's current-version default. */
+    private function stampVersion(CountryWorldPackCache $entry, int $version): void
+    {
+        self::getContainer()->get(Connection::class)->executeStatement(
+            'UPDATE country_world_pack_cache SET payload_version = :v WHERE id = :id',
+            ['v' => $version, 'id' => $entry->getId()->toRfc4122()],
+        );
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
     }
 
     private function open(): Crawler
@@ -234,4 +245,54 @@ class WorldpackCacheScreenTest extends WebTestCase
 
         return (string) preg_replace('#/\*.*?\*/#s', '', $css);
     }
+
+    // ── Version and staleness, added 2026-11-15 ──────────────────────────
+
+    public function testTheStatsStripShowsTheWorldpackVersion(): void
+    {
+        // The operator's question is "which generation is this box building?", and before this
+        // the only answer was reading a PHP constant.
+        $this->seedEntry();
+
+        $text = $this->open()->filter('.bmc-stats')->text();
+
+        self::assertStringContainsString('WORLDPACK VERSION', $text);
+        self::assertStringContainsString('v' . WorldInitializationService::WORLD_PACK_VERSION, $text);
+    }
+
+    public function testAFreshPackCountsAsCurrentNotStale(): void
+    {
+        // NOTE the constructor defaults payloadVersion to 0, so a seeded entry is stale until
+        // stamped — the real build path passes the version explicitly. Stamped here so the
+        // test exercises "current" rather than accidentally re-testing "stale".
+        $this->stampVersion($this->seedEntry(), WorldInitializationService::WORLD_PACK_VERSION);
+
+        $text = $this->open()->filter('.bmc-stats')->text();
+
+        self::assertMatchesRegularExpression('/STALE PACKS\s*0/', $text);
+        self::assertStringContainsString('CURRENT', $this->open()->filter('#country-pick')->text());
+    }
+
+    public function testAnOldVersionedPackIsCountedAndLabelledStale(): void
+    {
+        // THE CASE THE FEATURE EXISTS FOR. A pack built before a calibration is
+        // indistinguishable from one built after it unless something says so.
+        $entry = $this->seedEntry();
+        $this->stampVersion($entry, WorldInitializationService::WORLD_PACK_VERSION - 1);
+
+        self::assertMatchesRegularExpression('/STALE PACKS\s*1/', $this->open()->filter('.bmc-stats')->text());
+        self::assertStringContainsString('STALE 1/1', $this->open()->filter('#country-pick')->text());
+    }
+
+    public function testACountryWithNoPacksReadsNoneRatherThanCurrent(): void
+    {
+        // Three states, not two: "nothing cached" needs a first warm, "stale" needs a
+        // regenerate. Collapsing them would tell an operator to regenerate a country that has
+        // nothing to regenerate.
+        $pick = $this->open()->filter('#country-pick')->text();
+
+        self::assertStringContainsString('NONE', $pick);
+        self::assertStringNotContainsString('STALE', $pick, 'an empty cache has nothing stale in it');
+    }
+
 }

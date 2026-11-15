@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Club;
+use App\Service\WorldInitializationService;
 use App\Entity\SyncRecord;
 use App\Entity\User;
 use App\Entity\GameConfig;
@@ -1521,18 +1522,44 @@ class DashboardController extends AbstractDashboardController
     {
         $summaries = $this->worldPackCacheRepository->findAllSummaries();
 
-        $entries   = [];
-        $byCountry = [];
-
-        foreach ($summaries as $row) {
-            $entries[] = $row;
-            $byCountry[$row['country']][$row['tier']] = true;
-        }
-
         // Cache warming only makes sense for countries the league/club
         // generation process can actually build - independent of
         // StarterConfig's player-facing "enabled countries" toggle.
         $enabledCountries = Country::generationCapableLabels();
+        $packVersion      = WorldInitializationService::WORLD_PACK_VERSION;
+
+        $entries   = [];
+        $byCountry = [];
+        $staleBy   = [];
+        $freshBy   = [];
+
+        foreach ($summaries as $row) {
+            $entries[] = $row;
+            $byCountry[$row['country']][$row['tier']] = true;
+
+            // THE SAME COMPARISON THE CACHE MAKES. WorldPackCacheService treats any row
+            // stamped with a different version as a miss, so "stale" here means exactly
+            // "would be rebuilt on next read" rather than a separate admin opinion.
+            if ($row['payloadVersion'] !== $packVersion) {
+                $staleBy[$row['country']] = ($staleBy[$row['country']] ?? 0) + 1;
+            } else {
+                $freshBy[$row['country']] = ($freshBy[$row['country']] ?? 0) + 1;
+            }
+        }
+
+        // Counted over ACTIVE countries only. A pack for a country generation can no longer
+        // build is neither current nor actionable — warming it is not an option the page
+        // offers — so folding it into the headline would overstate the work outstanding. It
+        // is reported separately instead, because silently dropping rows from a total is how
+        // a number stops adding up.
+        $activeStale  = 0;
+        $activeFresh  = 0;
+        foreach (array_keys($enabledCountries) as $code) {
+            $activeStale += $staleBy[$code] ?? 0;
+            $activeFresh += $freshBy[$code] ?? 0;
+        }
+
+        $orphanPacks = count($entries) - $activeStale - $activeFresh;
 
         return $this->render('admin/worldpack_cache.html.twig', [
             // The page strip's crumb and title, using the LIVE sidebar group label.
@@ -1543,6 +1570,12 @@ class DashboardController extends AbstractDashboardController
             'totalEntries'     => count($entries),
             'enabledCountries' => $enabledCountries,
             'countryLabels'    => Country::labelMap(),
+            'packVersion'      => $packVersion,
+            'staleByCountry'   => $staleBy,
+            'freshByCountry'   => $freshBy,
+            'activeStale'      => $activeStale,
+            'activeFresh'      => $activeFresh,
+            'orphanPacks'      => $orphanPacks,
         ]);
     }
 
