@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Controller\Admin;
 
+use App\Entity\Location\CountryProfile;
+use App\Enum\Location\CountryProfileStatus;
+use Doctrine\DBAL\Connection;
 use App\Entity\Admin;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -40,10 +43,95 @@ class StarterPackCheckControllerTest extends WebTestCase
         $client->loginUser($admin, 'admin');
     }
 
+    /** @var array<string, string|null> code => status before this test touched it; null = row did not exist */
+    private array $countrySnapshot = [];
+
+    /**
+     * Make exactly `$codes` live, and nothing else.
+     *
+     * STATUS IS FLIPPED, NOT DELETED AND RECREATED. `location.code` carries a foreign key onto
+     * `country_profile`, and the test database has locations for real countries — so deleting
+     * EN fails with a constraint violation rather than giving a clean slate. Flipping status
+     * leaves every referencing row untouched.
+     *
+     * Every other profile is demoted for the duration, because the assertion that matters is
+     * "only these appear", and a live country seeded by another test would make that pass or
+     * fail for reasons this file cannot see.
+     */
+    private function setLiveCodes(string ...$codes): void
+    {
+        $em   = self::getContainer()->get(EntityManagerInterface::class);
+        $repo = $em->getRepository(CountryProfile::class);
+
+        foreach ($repo->findAll() as $profile) {
+            $this->countrySnapshot[$profile->getCode()] ??= $profile->getStatus()->value;
+            $profile->setStatus(CountryProfileStatus::DRAFT);
+        }
+
+        foreach ($codes as $code) {
+            $profile = $repo->findOneBy(['code' => $code]);
+
+            if ($profile === null) {
+                // Tracked as null so teardown deletes it rather than demoting a row that was
+                // never there — and a row this test created has no locations pointing at it.
+                $this->countrySnapshot[$code] = null;
+                $profile = new CountryProfile($code, $code);
+                $em->persist($profile);
+            }
+
+            $profile->setStatus(CountryProfileStatus::LIVE);
+        }
+
+        $em->flush();
+        $em->clear();
+    }
+
+    /**
+     * Put every status back.
+     *
+     * A LIVE profile left behind shows up in `liveCountryCodes()` for every later test — the
+     * leak `BootstrapCountryEnableTest` documents.
+     */
+    private function restoreCountries(): void
+    {
+        if ($this->countrySnapshot === []) {
+            return;
+        }
+
+        $em   = self::getContainer()->get(EntityManagerInterface::class);
+        $repo = $em->getRepository(CountryProfile::class);
+
+        foreach ($this->countrySnapshot as $code => $status) {
+            $profile = $repo->findOneBy(['code' => $code]);
+
+            if ($profile === null) {
+                continue;
+            }
+
+            if ($status === null) {
+                $em->remove($profile);
+                continue;
+            }
+
+            $profile->setStatus(CountryProfileStatus::from($status));
+        }
+
+        $em->flush();
+        $this->countrySnapshot = [];
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreCountries();
+
+        parent::tearDown();
+    }
+
     public function testScreenRendersItsCountryPickerBeforeAnyCountryIsChosen(): void
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         // Reached through EasyAdmin's entry point, not the bare route: AdminRouterSubscriber
         // only populates the `ea` Twig context for the dashboard's own /admin route.
@@ -58,6 +146,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         $crawler = $client->request('GET', '/admin', [
             'routeName' => 'admin_starter_pack_check',
@@ -98,6 +187,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         // Matched on the form it submits rather than on its label: the button's copy is
         // upper-cased by the redesign and would be re-worded again by the next one, where what
@@ -118,6 +208,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         $before = $this->playerCount();
 
@@ -136,6 +227,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
         $token   = $crawler->filter('input[name="_token"]')->attr('value');
@@ -163,6 +255,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         $client->request('GET', '/admin', ['routeName' => 'admin_starter_pack_check', 'country' => 'US', 'tier' => 8]);
 
@@ -187,6 +280,7 @@ class StarterPackCheckControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
 
         $crawler = $client->request('GET', '/admin?routeName=admin_starter_pack_check&country=EN&tier=8');
         self::assertResponseIsSuccessful();
@@ -206,4 +300,76 @@ class StarterPackCheckControllerTest extends WebTestCase
             'generating a starter pack writes data, so it must confirm first',
         );
     }
+
+    // ── The live-only picker, added 2026-11-15 ──────────────────────────
+
+    public function testThePickerListsOnlyLiveCountries(): void
+    {
+        // THE WHOLE POINT. Generation-capability is compiled into the enum and lists 25 codes;
+        // LIVE is an operator decision and is usually far fewer. This page is about serving
+        // real players, so offering a country nobody can pick is offering a dead end.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN');
+
+        $options = $client->request('GET', '/admin', ['routeName' => 'admin_starter_pack_check'])
+            ->filter('select[name="country"] option')
+            ->each(static fn ($node) => $node->attr('value'));
+
+        // The placeholder plus England, and nothing else — ES and DE are generation-capable
+        // but not live, so they must not appear.
+        self::assertSame(['', 'EN'], $options);
+    }
+
+    public function testACountryTakenLiveAppearsWithoutACodeChange(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN', 'US');
+
+        $options = $client->request('GET', '/admin', ['routeName' => 'admin_starter_pack_check'])
+            ->filter('select[name="country"] option')
+            ->each(static fn ($node) => $node->attr('value'));
+
+        self::assertContains('US', $options);
+        self::assertContains('EN', $options);
+    }
+
+    public function testWithNoLiveCountriesThePickerIsDisabledAndSaysWhatToDo(): void
+    {
+        // A real state on a fresh box, and the one an empty dropdown would leave someone
+        // puzzling over. The selects stay rendered — disabled, not removed — so the page keeps
+        // its shape.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->setLiveCodes();
+
+        $crawler = $client->request('GET', '/admin', ['routeName' => 'admin_starter_pack_check']);
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('select[name="country"]'), 'the select stays, it is only disabled');
+        self::assertCount(1, $crawler->filter('select[name="country"][disabled]'));
+        self::assertCount(0, $crawler->filter('select[name="country"] option[value!=""]'), 'no country options');
+        self::assertStringContainsString('NO LIVE COUNTRIES', $crawler->filter('.bmc-empty-note')->text());
+    }
+
+    public function testANonLiveCountryIsStillCheckableByUrl(): void
+    {
+        // DELIBERATE ASYMMETRY: the dropdown is a menu, not a validator. A pre-flight check you
+        // cannot run until after going live is not a pre-flight check, and the diagnostic
+        // already reports the missing profile as a finding of its own.
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $this->setLiveCodes('EN');
+
+        $client->request('GET', '/admin', [
+            'routeName' => 'admin_starter_pack_check',
+            'country'   => 'ES',
+            'tier'      => 8,
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('#spc-funnel');
+    }
+
 }

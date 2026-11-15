@@ -317,4 +317,47 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
     {
         $this->cleanup[] = $entity;
     }
+
+    /**
+     * The device's copy of the pack's generation.
+     *
+     * WHY IT IS ON THE PACK AND NOT ONLY ON THE CACHE ROW: `payload_version` tells the SERVER
+     * whether to rebuild; it never reached the client. So a pack built before a calibration was
+     * indistinguishable from one built after it, and a player reporting "my TV money looks
+     * wrong" could not be placed on either side of it. This key is what makes that answerable.
+     *
+     * Asserted against the constant rather than a literal, so bumping the version does not
+     * require editing this test — and so the test cannot pass while the two drift apart.
+     */
+    public function testGeneratedTierPackCarriesItsOwnPackVersion(): void
+    {
+        $league = new League(self::COUNTRY, self::TIER, 'Pack Version League');
+        $this->em->persist($league);
+        $this->track($league);
+
+        foreach (['Zeta', 'Eta'] as $name) {
+            $npc = new NpcClub($name . ' FC', self::COUNTRY, self::TIER, 20, '#111111', '#eeeeee', 1_000_000, []);
+            $npc->setLeague($league);
+            $this->em->persist($npc);
+            $this->track($npc);
+        }
+
+        $user = new User('packversion-tierpack-test@example.com');
+        $user->setPassword('x');
+        $this->em->persist($user);
+        $this->track($user);
+        $club = new Club('Pack Version Club', $user);
+        $this->em->persist($club);
+        $this->track($club);
+
+        $this->em->flush();
+
+        /** @var WorldInitializationService $svc */
+        $svc  = self::getContainer()->get(WorldInitializationService::class);
+        $pack = $svc->buildTierPack($club, self::COUNTRY, self::TIER);
+
+        $this->assertArrayHasKey('packVersion', $pack);
+        $this->assertSame(WorldInitializationService::WORLD_PACK_VERSION, $pack['packVersion']);
+    }
+
 }

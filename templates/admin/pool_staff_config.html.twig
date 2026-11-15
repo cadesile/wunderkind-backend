@@ -67,11 +67,13 @@
 
     <div class="bmc-card__body">
         <div class="bmc-tabs" data-bmc-tabs id="modes" role="tablist" aria-label="Generation mode">
-            <button type="button" role="tab" aria-selected="true" aria-controls="pane-replenish" data-value="replenish">
-                REPLENISH TO TARGET<span>Adds only each pool's shortfall · nationality is random</span>
+            <button type="button" class="bmc-tab" role="tab" aria-selected="true" aria-controls="pane-replenish" data-value="replenish">
+                <i data-lucide="arrow-up-to-line" width="18" height="18"></i>
+                <span class="bmc-tab__text"><span class="bmc-tab__label">REPLENISH TO TARGET</span><span class="bmc-tab__sub">Adds only each pool&rsquo;s shortfall &middot; nationality is random</span></span>
             </button>
-            <button type="button" role="tab" aria-selected="false" aria-controls="pane-force" data-value="force">
-                FORCE ADD BATCH<span>Adds each pool's full target per job</span>
+            <button type="button" class="bmc-tab" role="tab" aria-selected="false" aria-controls="pane-force" data-value="force">
+                <i data-lucide="zap" width="18" height="18"></i>
+                <span class="bmc-tab__text"><span class="bmc-tab__label">FORCE ADD BATCH</span><span class="bmc-tab__sub">Adds each pool&rsquo;s full target per job</span></span>
             </button>
         </div>
 
