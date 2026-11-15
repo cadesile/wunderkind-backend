@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Entity\GameConfig;
+use App\Enum\CompanySize;
 use App\Enum\EconomyWageModel;
 use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\LeagueSizeResolver;
+use App\Service\Economy\SponsorBandResolver;
+use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -32,10 +35,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * deliberately not from arguments. A preview computed from numbers typed on the command line
  * would be a preview of nothing: the whole question is what the STORED configuration produces.
  *
- * ── THE SIX CHECKS ────────────────────────────────────────────────────────────────────────
+ * ── THE SEVEN CHECKS ──────────────────────────────────────────────────────────────────────
  *
  * A table of plausible-looking numbers can still be wrong in ways that are invisible row by
- * row, so the command answers six questions it would be easy not to ask:
+ * row, so the command answers seven questions it would be easy not to ask:
  *
  *  1. **Is `S_tier` strictly decreasing?** It has to be, or a lower division pays more per unit
  *     of ability than the one above it.
@@ -56,6 +59,17 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *     figure the factor chain never touches — it is a stored absolute — so a factored country
  *     would pay a fifth of the wages and collect full baseline TV money. Check 3 cannot see
  *     this: TV at five times its intended share still passes a bound of 100% of turnover.
+ *  7. **Is sponsorship a believable share of the turnover it is authored against?** Club plus
+ *     league sponsorship between 8% and 30% at every tier, the bottom division no more than 3x
+ *     the top, and non-increasing ratios. **The COVERAGE figure is the APP's** — this prints
+ *     the sponsorship lines only; `scripts/economy/variantGate.ts` in `wunderkind-app` is the
+ *     acceptance test, because modelled income needs a ground model, fill and elasticity that
+ *     this backend does not have.
+ *
+ * The two deduction-ladder checks inside (5) read country-independent columns and therefore run
+ * ONCE for the whole invocation, not once per country argument — see checkDeductionLadders().
+ * That is a fix, not a detail: they used to run inside the per-country loop, so the finding
+ * count rose with the number of countries asked for and nothing on screen explained it.
  *
  * Exit code 1 when any check fails, so this can gate a deploy rather than just inform one.
  */
@@ -68,12 +82,33 @@ final class EconomyWageTableCommand extends Command
     /** Shown alongside England by default, because a shallow pyramid is the other shape to check. */
     private const DEFAULT_COUNTRIES = ['EN', 'SC'];
 
+    /**
+     * The sponsorship band the owner review settled on, as a share of authored turnover.
+     *
+     * 8% because below it the mechanic is decoration; 30% because above it sponsorship crowds
+     * out matchday and TV and the wage anchor starts following sponsorship rather than the
+     * turnover ladder it is defined against. The tier-1 target inside that band is 20-25%.
+     */
+    private const SPONSOR_SHARE_MIN_PCT = 8;
+    private const SPONSOR_SHARE_MAX_PCT = 30;
+
+    /**
+     * How much more of its turnover the BOTTOM division may draw from sponsorship than the top.
+     *
+     * Not 1: sponsorship is supposed to matter relatively more where there is no TV money. But
+     * past about 3x the bottom of the pyramid is a sponsorship game and the top is a TV game,
+     * which is two economies rather than one ladder.
+     */
+    private const SPONSOR_SHARE_SPREAD = 3;
+
     public function __construct(
         private readonly GameConfigRepository    $gameConfigRepository,
         private readonly EconomyScaleResolver    $scaleResolver,
         private readonly WageModelResolver       $wageModel,
         private readonly LeagueRepository        $leagueRepository,
         private readonly LeagueSizeResolver      $leagueSizeResolver,
+        private readonly SponsorBandResolver     $sponsorBands,
+        private readonly TicketPriceResolver     $ticketPrices,
     ) {
         parent::__construct();
     }
@@ -112,6 +147,11 @@ final class EconomyWageTableCommand extends Command
             $country = strtoupper(trim((string) $raw));
             $problems = [...$problems, ...$this->tableFor($io, $config, $country, $reputation)];
         }
+
+        // ONCE, WHATEVER THE ARGUMENT LIST. These read country-independent `game_config`
+        // columns; running them inside the loop above is what made the finding count rise with
+        // the number of countries asked for and no explanation on screen.
+        $problems = [...$problems, ...$this->checkDeductionLadders($config)];
 
         if ($problems !== []) {
             $io->section('PROBLEMS');
@@ -226,6 +266,7 @@ final class EconomyWageTableCommand extends Command
         $problems = [...$problems, ...$this->checkTvAgainstTurnover($io, $country, $tierCount, $config)];
         $problems = [...$problems, ...$this->checkTvIsCountryScaled($io, $country, $tierCount)];
         $problems = [...$problems, ...$this->checkAbsoluteThresholds($io, $country, $tierCount, $config)];
+        $problems = [...$problems, ...$this->checkSponsorshipShares($io, $country, $tierCount, $config)];
 
         return $problems;
     }
@@ -544,10 +585,39 @@ final class EconomyWageTableCommand extends Command
             );
         }
 
-        // Independent of any tier: overlapping unbounded rows make later rows unreachable under
-        // the first-match-wins contract the column documents.
+        // THE TWO COUNTRY-INDEPENDENT CHECKS USED TO BE HERE, AND THAT IS WHY THE FINDING
+        // COUNT MOVED WITH THE ARGUMENT LIST. The `deficitMax: null` scan and
+        // checkDeductionWeeks() read `game_config` columns that have no country dimension at
+        // all, but this method runs once per country argument — so `wage-table EN SC` reported
+        // every ladder defect twice and `wage-table EN SC WA` three times. An operator
+        // comparing two runs saw the count rise with no explanation, which made the whole
+        // output look unreliable at exactly the moment it was supposed to gate a deploy.
+        //
+        // They are now called once from execute(), in checkDeductionLadders(). Nothing in this
+        // method may read a country-independent column for the same reason.
+
+        return $problems;
+    }
+
+    /**
+     * The two deduction-ladder checks, run ONCE — they have no country dimension.
+     *
+     * `bankruptcyDeductionTiers` and `bankruptcyDeductionWeeks` are single `game_config` JSON
+     * columns. Nothing about them varies per country, so a finding about them is one finding
+     * however many countries were asked for. Keeping them here rather than in
+     * checkAbsoluteThresholds() is what makes two runs comparable: `wage-table EN` and
+     * `wage-table EN SC` may now differ only by genuinely per-country findings.
+     *
+     * @return list<string>
+     */
+    private function checkDeductionLadders(GameConfig $config): array
+    {
+        $problems = [];
+
+        // Overlapping unbounded rows make later rows unreachable under the first-match-wins
+        // contract the column documents.
         $unbounded = 0;
-        foreach ($bands as $i => $band) {
+        foreach ($config->getBankruptcyDeductionTiers() as $i => $band) {
             if (($band['deficitMax'] ?? null) === null) {
                 $unbounded++;
                 if ($unbounded > 1) {
@@ -559,9 +629,196 @@ final class EconomyWageTableCommand extends Command
             }
         }
 
-        $problems = [...$problems, ...$this->checkDeductionWeeks($config)];
+        return [...$problems, ...$this->checkDeductionWeeks($config)];
+    }
+
+    /**
+     * CHECK 7 — is sponsorship a believable share of the turnover it is authored against?
+     *
+     * ── THE THREE CONSTRAINTS, AND WHY THEY ARE HERE AND NOT ONLY IN THE APP ──────────────
+     *
+     * The sponsor tables are authored on this backend, so an operator has to be able to see
+     * what they are worth before a pack is warmed with them. The constraints the owner review
+     * settled on:
+     *
+     *  1. **club + league sponsorship is between 8% and 30% of authored turnover at every
+     *     tier.** Below 8% the mechanic is decoration; above 30% it crowds out matchday and TV
+     *     and makes the wage anchor follow sponsorship instead of the turnover ladder.
+     *  2. **the tier-8 share is no more than 3x the tier-1 share.** Sponsorship is SUPPOSED to
+     *     matter relatively more at the bottom, where there is no TV money — but a bottom
+     *     division where it is the whole economy is a different game from the top, not a
+     *     poorer version of it.
+     *  3. **the ratios are non-increasing.** A division worth more per sponsor than the one
+     *     above it is almost always a typo; it is reported, never refused, because it may be
+     *     deliberate.
+     *
+     * ── THIS IS NOT THE COVERAGE FIGURE, AND MUST NOT BE READ AS ONE ──────────────────────
+     *
+     * The acceptance test is the APP's gate — `scripts/economy/variantGate.ts` in
+     * `wunderkind-app` — whose COVERAGE column is modelled income over authored turnover, with
+     * matchday computed per club over real ground levels and fill under elasticity. **The
+     * backend cannot compute that**: it has no ground model, no elasticity and no fill, which
+     * is exactly why the app owns the figure.
+     *
+     * What this prints is narrower and says so: the sponsorship LINES only, as a share of the
+     * same denominator. A share inside 8-30% here is a necessary condition, not a verdict.
+     *
+     * ── THE ARITHMETIC MIRRORS `sponsorSeasonPence()` DELIBERATELY ────────────────────────
+     *
+     * Band selection by reputation (75/40/15), the mean of the eligible mix, position inside
+     * each band by reputation, x the sponsor count. Copied from the app's own helper so the two
+     * gates cannot disagree about a figure an operator is asked to approve. A second,
+     * differently-shaped estimate here would be worse than no estimate: it would look like a
+     * cross-check and would not be one.
+     *
+     * One divergence is inherited and reported rather than fixed: the club sponsor COUNT is
+     * looked up through a tier->commercial-tier map (1-2 elite, 3-4 national, 5-6 regional,
+     * 7-8 local) while the engine's own lookup uses a different one (tier 1 elite, 2 national,
+     * 3 regional, 4+ local). They disagree for tiers 2-6. Fixing it is not this pass.
+     *
+     * @return list<string>
+     */
+    private function checkSponsorshipShares(SymfonyStyle $io, string $country, int $tierCount, GameConfig $config): array
+    {
+        $problems  = [];
+        $rows      = [];
+        $shares    = [];
+        $maxByTier = $config->getMaxSponsorsByTier();
+        $ratios    = $config->getEconomySponsorTierRatioBp();
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $scale = $this->scaleResolver->resolve($country, $tier);
+
+            if (!$scale->isResolvable || $scale->turnoverPence <= 0) {
+                // Unauthored turnover: there is no denominator, and check 1 already said so.
+                continue;
+            }
+
+            $league   = $this->leagueRepository->findByCountryAndTier($country, $tier);
+            $anchor   = $this->anchorReputation($tier);
+            $clubs    = $maxByTier[$this->commercialTier($tier)] ?? 2;
+            $leagueN  = $league?->getSponsorCount() ?? 0;
+
+            $perSponsor   = $this->meanSponsorPence($anchor, $country, $config, $tier);
+            $clubPence    = (int) round($perSponsor * $clubs);
+            $leaguePence  = (int) round($perSponsor * $leagueN);
+            $totalPence   = $clubPence + $leaguePence;
+            $sharePct     = $totalPence * 100 / $scale->turnoverPence;
+
+            $shares[$tier] = $sharePct;
+
+            $rows[] = [
+                'T' . $tier,
+                $this->money($clubPence),
+                $this->money($leaguePence),
+                $this->money($scale->turnoverPence),
+                sprintf('%.1f%%', $sharePct),
+                sprintf('%d bp', $ratios[$tier - 1] ?? 10000),
+                $this->money($this->ticketPrices->priceFor($tier, $country, $config)),
+            ];
+
+            if ($sharePct < self::SPONSOR_SHARE_MIN_PCT || $sharePct > self::SPONSOR_SHARE_MAX_PCT) {
+                $problems[] = sprintf(
+                    '%s tier %d: club + league sponsorship is %.1f%% of authored turnover (%s of %s) — outside the agreed %d-%d%% band.',
+                    $country,
+                    $tier,
+                    $sharePct,
+                    $this->money($totalPence),
+                    $this->money($scale->turnoverPence),
+                    self::SPONSOR_SHARE_MIN_PCT,
+                    self::SPONSOR_SHARE_MAX_PCT,
+                );
+            }
+        }
+
+        if ($rows !== []) {
+            $io->text('Sponsorship against authored turnover (the APP\'s gate owns COVERAGE — this is the sponsorship lines only):');
+            $io->table(
+                ['T', 'club sponsors', 'league pot', 'turnover', 'share', 'sponsor ratio', 'ticket'],
+                $rows,
+            );
+        }
+
+        // Constraint 2: the bottom division may lean on sponsorship, but not three times as
+        // hard as the top one.
+        $first = $shares[1] ?? null;
+        $last  = $shares[min(8, $tierCount)] ?? null;
+
+        if ($first !== null && $last !== null && $first > 0 && $last > $first * self::SPONSOR_SHARE_SPREAD) {
+            $problems[] = sprintf(
+                '%s: the tier-%d sponsorship share (%.1f%%) is more than %dx the tier-1 share (%.1f%%).',
+                $country,
+                min(8, $tierCount),
+                $last,
+                self::SPONSOR_SHARE_SPREAD,
+                $first,
+            );
+        }
+
+        // Constraint 3: non-increasing ratios. Reported, never refused.
+        for ($i = 1; $i < min(8, $tierCount); $i++) {
+            if (($ratios[$i] ?? 0) > ($ratios[$i - 1] ?? 0)) {
+                $problems[] = sprintf(
+                    'economySponsorTierRatioBp: tier %d (%d bp) is higher than tier %d (%d bp) — a lower division worth more per sponsor than the one above it.',
+                    $i + 1,
+                    $ratios[$i] ?? 0,
+                    $i,
+                    $ratios[$i - 1] ?? 0,
+                );
+            }
+        }
 
         return $problems;
+    }
+
+    /**
+     * The mean pence one sponsor pays at this tier, mirroring the app's `sponsorSeasonPence()`.
+     *
+     * Band selection by reputation and position inside the band by reputation, over the bands
+     * the resolver resolves for this tier and country — so an authored per-tier row or a ratio
+     * is reflected here without this method knowing which produced the band.
+     */
+    private function meanSponsorPence(int $anchorReputation, string $country, GameConfig $config, int $tier): float
+    {
+        $rep = max(0, min(100, $anchorReputation));
+
+        $sizes = match (true) {
+            $rep >= 75 => [CompanySize::LARGE],
+            $rep >= 40 => [CompanySize::MEDIUM, CompanySize::LARGE],
+            $rep >= 15 => [CompanySize::SMALL, CompanySize::MEDIUM],
+            default    => [CompanySize::SMALL],
+        };
+
+        $sum = 0.0;
+
+        foreach ($sizes as $size) {
+            [$min, $max] = $this->sponsorBands->bandFor($size, $country, $config, $tier);
+            $sum        += $min + ($rep / 100) * ($max - $min);
+        }
+
+        return $sum / count($sizes);
+    }
+
+    /** `repTierForLeagueLevel`'s anchor: 1-2 elite, 3-4 national, 5-6 regional, 7-8 local. */
+    private function anchorReputation(int $tier): int
+    {
+        return match (true) {
+            $tier <= 2 => 87,
+            $tier <= 4 => 57,
+            $tier <= 6 => 27,
+            default    => 7,
+        };
+    }
+
+    /** `npcTierToCommercialRepString` — the map the app's gate uses for `maxSponsorsByTier`. */
+    private function commercialTier(int $tier): string
+    {
+        return match (true) {
+            $tier <= 2 => 'elite',
+            $tier <= 4 => 'national',
+            $tier <= 6 => 'regional',
+            default    => 'local',
+        };
     }
 
     /**

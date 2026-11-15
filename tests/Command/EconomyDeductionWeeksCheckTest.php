@@ -53,14 +53,42 @@ class EconomyDeductionWeeksCheckTest extends KernelTestCase
         $em->clear();
     }
 
-    private function runGate(): string
+    /** @param list<string> $countries */
+    private function runGate(array $countries = ['EN']): string
     {
         $tester = new CommandTester(
             (new Application(self::$kernel))->find('app:economy:wage-table'),
         );
-        $tester->execute(['countries' => ['EN']]);
+        $tester->execute(['countries' => $countries]);
 
         return $tester->getDisplay();
+    }
+
+    // ── Once per invocation, not once per country ────────────────────────
+
+    public function testTheLadderIsReportedONCEHOWEVERMANYCOUNTRIESAreAskedFor(): void
+    {
+        // THE DEFECT THIS PINS, in the operator's words: "the gate reported 10 findings, then
+        // 13, with no explanation."
+        //
+        // `bankruptcy_deduction_weeks` is a single country-independent `game_config` column, but
+        // the check used to run inside the per-country loop — so asking for a second country
+        // duplicated every ladder finding. Two runs of the same configuration were not
+        // comparable, which is fatal for a command whose job is to gate a deploy.
+        //
+        // Asserted by COUNTING the occurrences rather than by looking for the string: the bug
+        // was never a missing finding, it was the same finding more than once.
+        $this->store([
+            ['weeksMin' => 1, 'weeksMax' => 2,    'points' => 3],
+            // A gap: a 3-week deficit falls through it.
+            ['weeksMin' => 4, 'weeksMax' => null, 'points' => 10],
+        ]);
+
+        $one = substr_count($this->runGate(['EN']), 'bankruptcyDeductionWeeks');
+        $two = substr_count($this->runGate(['EN', 'SC']), 'bankruptcyDeductionWeeks');
+
+        self::assertGreaterThan(0, $one, 'the fixture must produce at least one finding');
+        self::assertSame($one, $two, 'a country-independent finding must not multiply by the country count');
     }
 
     // ── Silent when it should be ─────────────────────────────────────────

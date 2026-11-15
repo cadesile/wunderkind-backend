@@ -5,6 +5,59 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Backlog review (2026-11-15), on top of commit `c057106`** (uncommitted, branch
+  `development`). **Stages touched:** 04_interfaces (`routes.md`, `controllers.md`),
+  06_documentation (`index.md`), shared (this file, `token-savings.md`).
+
+  Ran the staleness check the session should have opened with: `a93bb1d..HEAD` was **10
+  commits**, and reviewing them found **exactly one real gap**. The 2026-11-14 club-buyout pass
+  had documented itself properly — `ClubSale` appears across five stage files — so eight of the
+  ten were already covered.
+
+  The gap was **`packVersion`, which had zero coverage anywhere in `.context/`** despite
+  landing on two API payloads and an admin screen. Now in `routes.md` (both
+  `/api/initialize` surfaces, including the point that the tier pack's version and `/leagues`'
+  version are DIFFERENT FACTS that legitimately disagree mid-regeneration), in `controllers.md`
+  (the world-pack cache screen showing `payload_version`, and the starter-pack check's
+  LIVE-countries filter), and in the docs index.
+
+  Also recorded in the docs index: **`wageModel` is the only economy switch** — income
+  anchoring and elasticity derive from it rather than carrying flags of their own, so a client
+  gating on an `incomeAnchoredWages` or `ticketPriceElasticity` key backend-side is gating on
+  nothing.
+
+- **New pass (2026-11-15), on top of commit `c057106`** (uncommitted, branch `development`).
+  **Stages touched:** 03_data (`entities.md`, `migrations.md`), 04_interfaces (`services.md`,
+  `routes.md`, `controllers.md`), shared (this file, `api-backwards-compatibility.md`,
+  `token-savings.md`, `usage-savings-log.md`).
+  **Code:** steps 1-2 of the economy loose-ends pass. Sponsor bands and ticket prices expressed
+  as a tier-1 base plus a ratio table (`economySponsorTierRatioBp`,
+  `economyTicketPriceTierRatioBp`, `economyTicketPriceTier1Pence`, `Version20261115190000`), a
+  new `TicketPriceResolver`, and the `app:economy:wage-table` gate's two country-independent
+  checks moved out of the per-country loop.
+
+  Three things worth carrying beyond the feature:
+
+  - **The explicit per-tier tables and the ratio tables are both live, and the explicit one is
+    the override.** Not a replacement: 48 authored sponsor figures per country is a ladder
+    nobody can retune in one place, but a hand-authored division must not move when a ratio is
+    retuned either. `SponsorBandResolver::bandFor()` reads explicit → ratio → flat, country
+    factor once and last, one `intdiv` per figure.
+  - **A gate whose finding count moves with its arguments is not a gate.** Two
+    country-independent emitters ran inside the per-country loop, so `wage-table EN SC`
+    double-reported every deduction-ladder defect and nothing on screen explained the jump from
+    10 findings to 13. Pinned now by COUNTING occurrences, not by looking for the string.
+  - **`0` had to keep meaning "unauthored" through a whole new resolver.** There is no flat
+    ticket-price column to fall back to, so a published 0 is the only way to say "use your own
+    figure" — which is why `TicketPriceResolver` propagates zero from every input that means
+    off, and floors a real price at 1p so a very cheap division cannot truncate into reading as
+    an unauthored one.
+
+  **Staleness check run this pass:** `a93bb1d..HEAD` was **10 commits** — the admin club buyout
+  UI, the world-pack version work and the starter-pack check — none reviewed into `.context/`
+  before this pass began. The 2026-11-14 entry below was written against `a93bb1d` and those ten
+  landed after it.
+
 - **New pass (2026-11-14), on top of commit `a93bb1d`** (uncommitted).
   **Stages touched:** 02_architecture (`structure.md`), 03_data (`entities.md`,
   `migrations.md`), 04_interfaces (`routes.md`, `services.md`), shared (this file).
