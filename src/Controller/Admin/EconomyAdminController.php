@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\GameConfig;
 use App\Entity\InflationRateHistory;
+use App\Enum\CompanySize;
 use App\Enum\Country;
 use App\Enum\EconomyWageModel;
 use App\Repository\GameConfigRepository;
@@ -14,6 +15,8 @@ use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\LeagueSizeResolver;
+use App\Service\Economy\SponsorBandResolver;
+use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
 use App\Service\WorldInitializationService;
 use Doctrine\DBAL\Connection;
@@ -65,6 +68,8 @@ class EconomyAdminController extends AbstractController
         private readonly EconomyScaleResolver           $scaleResolver,
         private readonly WageModelResolver              $wageModel,
         private readonly LeagueSizeResolver             $leagueSizeResolver,
+        private readonly SponsorBandResolver            $sponsorBands,
+        private readonly TicketPriceResolver            $ticketPrices,
     ) {}
 
     #[Route('/admin/economy', name: 'admin_economy')]
@@ -92,6 +97,9 @@ class EconomyAdminController extends AbstractController
             'history'         => $this->inflationHistoryRepository->findRecent(20),
             'previewCountry'  => $previewCountry,
             'preview'         => $this->buildPreview($previewCountry, $config),
+            // The sponsor and ticket half of the same screen, resolved through the real
+            // resolvers and read-only — see buildRevenuePreview().
+            'revenue'         => $this->buildRevenuePreview($previewCountry, $config),
             'wageScaleUnit'   => EconomyScaleResolver::WAGE_SCALE_UNIT,
             // So the screen can say what flipping the model will cost before it is flipped.
             'worldPackVersion' => WorldInitializationService::WORLD_PACK_VERSION,
@@ -179,6 +187,53 @@ class EconomyAdminController extends AbstractController
         // POUNDS IN, PENCE STORED, and BLANK MEANS ZERO here rather than "leave it alone" —
         // zero is the off switch for the whole season-investment feature, so an operator has
         // to be able to clear the field to turn it back off. The placeholder says "off".
+        // THE TWO RATIO TABLES, read by index exactly as the tier factors are, and for the
+        // same reason: the input name's index IS the tier, so collapsing a sparse post with
+        // array_values() would move tier 8's ratio onto tier 2 — re-pricing the wrong division
+        // rather than erroring.
+        //
+        // A blank cell leaves that tier alone. Unlike the turnover table there is no "clear it
+        // back to unauthored" state to express here: parity IS the unauthored state, and an
+        // operator who wants a tier back at parity types 10000.
+        foreach ([
+            'sponsorTierRatioBp'     => [
+                fn (): array => $config->getEconomySponsorTierRatioBp(),
+                fn (array $v): GameConfig => $config->setEconomySponsorTierRatioBp($v),
+            ],
+            'ticketPriceTierRatioBp' => [
+                fn (): array => $config->getEconomyTicketPriceTierRatioBp(),
+                fn (array $v): GameConfig => $config->setEconomyTicketPriceTierRatioBp($v),
+            ],
+        ] as $field => [$read, $write]) {
+            $posted = $request->request->all($field);
+
+            if ($posted === []) {
+                continue;
+            }
+
+            $current = $read();
+
+            for ($i = 0; $i < 8; $i++) {
+                if (isset($posted[$i]) && trim((string) $posted[$i]) !== '') {
+                    $current[$i] = (int) $posted[$i];
+                }
+            }
+
+            $write($current);
+        }
+
+        // POUNDS IN, PENCE STORED, and BLANK MEANS ZERO rather than "leave it alone" — zero is
+        // the off switch for the whole ticket ladder (0 propagates through
+        // TicketPriceResolver whatever the ratios say), so an operator has to be able to clear
+        // the field to turn a published price back off. The placeholder says "unauthored".
+        $ticketBase = $request->request->get('ticketPriceTier1Pounds');
+        if ($ticketBase !== null) {
+            $raw = str_replace(',', '', trim((string) $ticketBase));
+            $config->setEconomyTicketPriceTier1Pence(
+                $raw === '' ? 0 : (int) round(((float) $raw) * 100),
+            );
+        }
+
         $seasonBase = $request->request->get('seasonInvestmentBasePounds');
         if ($seasonBase !== null) {
             $raw = str_replace(',', '', trim((string) $seasonBase));
@@ -412,6 +467,130 @@ class EconomyAdminController extends AbstractController
         ];
     }
 
+
+    /**
+     * The resolved sponsor bands and ticket price per tier, and WHERE EACH FIGURE CAME FROM.
+     *
+     * ── WHY PROVENANCE IS THE POINT, NOT THE FIGURES ──────────────────────────────────────
+     *
+     * There are now three places a sponsor band can come from — the explicit per-tier row, the
+     * flat column x this tier's ratio, or the flat column alone — and they resolve in that
+     * order. A screen that printed only the resolved number would leave an operator unable to
+     * answer the one question they actually have when a figure looks wrong: which table am I
+     * editing to change it? Two of the three sources look identical in the output (a parity
+     * ratio and no ratio give the same band), so the answer cannot be inferred from the
+     * number.
+     *
+     * READ-ONLY, AND THROUGH THE REAL RESOLVERS, for the reason buildPreview() already states:
+     * a second copy of the arithmetic here would agree with itself and disagree with the
+     * world.
+     *
+     * ── WARN, NEVER FORBID ────────────────────────────────────────────────────────────────
+     *
+     * Non-monotonic ratios and a company size with no band are reported, not rejected. A
+     * division that pays better than the one above it may be deliberate, and a size left at
+     * zero is a legitimate half-authored state on the way to a full table. The setter's job is
+     * eight integers; the screen's job is to make an accident visible.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildRevenuePreview(string $country, GameConfig $config): array
+    {
+        $tierCount   = $this->scaleResolver->tierCountFor($country);
+        $explicit    = $config->getEconomySponsorBandsPerTierPence();
+        $sponsorRatio = $config->getEconomySponsorTierRatioBp();
+        $ticketRatio = $config->getEconomyTicketPriceTierRatioBp();
+        $ticketBase  = $config->getEconomyTicketPriceTier1Pence();
+        $explicitTicket = $config->getEconomyTicketPricePerTierPence();
+
+        $rows     = [];
+        $warnings = [];
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $row = [
+                'tier'         => $tier,
+                'sponsorRatioBp' => $sponsorRatio[$tier - 1] ?? 10000,
+                'ticketRatioBp'  => $ticketRatio[$tier - 1] ?? 10000,
+                'sizes'        => [],
+                'ticketPence'  => $this->ticketPrices->priceFor($tier, $country, $config),
+            ];
+
+            foreach (CompanySize::cases() as $size) {
+                [$min, $max] = $this->sponsorBands->bandFor($size, $country, $config, $tier);
+
+                $row['sizes'][$size->value] = [
+                    'min'    => $min,
+                    'max'    => $max,
+                    // The resolution order, named. 'flat' and 'ratio' can produce the same
+                    // figure, which is exactly why the label is not derived from the figure.
+                    'source' => isset($explicit[(string) $tier][$size->value])
+                        ? 'override'
+                        : (($sponsorRatio[$tier - 1] ?? 10000) !== 10000 ? 'ratio' : 'flat'),
+                ];
+
+                if ($max <= 0) {
+                    $warnings[] = sprintf(
+                        'Tier %d has no %s sponsor band — a sponsor of that size pays nothing. Author the flat column or this tier\'s row.',
+                        $tier,
+                        strtoupper($size->value),
+                    );
+                }
+            }
+
+            $row['ticketSource'] = ($explicitTicket[$tier - 1] ?? 0) > 0
+                ? 'override'
+                : ($ticketBase > 0 ? 'ratio' : 'unauthored');
+
+            $rows[] = $row;
+        }
+
+        // NON-MONOTONIC IS A WARNING, and it is checked on the RATIOS rather than on the
+        // resolved bands: the country factor is a constant down the table, so a ladder that
+        // rises in ratio terms rises everywhere, and saying so in the operator's own units is
+        // what makes the message actionable.
+        foreach ([
+            ['sponsor ratio', $sponsorRatio],
+            ['ticket ratio',  $ticketRatio],
+        ] as [$label, $table]) {
+            for ($i = 1; $i < min(8, $tierCount); $i++) {
+                if (($table[$i] ?? 0) > ($table[$i - 1] ?? 0)) {
+                    $warnings[] = sprintf(
+                        'Tier %d\'s %s (%d bp) is HIGHER than tier %d\'s (%d bp). Allowed, but check it is deliberate.',
+                        $i + 1,
+                        $label,
+                        $table[$i] ?? 0,
+                        $i,
+                        $table[$i - 1] ?? 0,
+                    );
+                }
+            }
+        }
+
+        if (($sponsorRatio[0] ?? 10000) !== 10000) {
+            $warnings[] = sprintf(
+                'The tier-1 sponsor ratio is %d bp, not 10000. Tier 1 IS the base, so this scales the base against itself.',
+                $sponsorRatio[0],
+            );
+        }
+
+        if (($ticketRatio[0] ?? 10000) !== 10000) {
+            $warnings[] = sprintf(
+                'The tier-1 ticket ratio is %d bp, not 10000. Tier 1 IS the base, so this scales the base against itself.',
+                $ticketRatio[0],
+            );
+        }
+
+        if ($ticketBase <= 0) {
+            $warnings[] = 'No tier-1 ticket base is authored, so every published ticket price is 0 — the app falls back to its own 2500p constant whatever the ratios say.';
+        }
+
+        return [
+            'tierCount' => $tierCount,
+            'rows'      => $rows,
+            'warnings'  => $warnings,
+            'ticketBasePence' => $ticketBase,
+        ];
+    }
 
     private function squadSize(int $tier): int
     {

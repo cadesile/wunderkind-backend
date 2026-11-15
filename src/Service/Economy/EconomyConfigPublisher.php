@@ -57,6 +57,7 @@ final class EconomyConfigPublisher
         private readonly EconomyScaleResolver $resolver,
         private readonly WageModelResolver    $wageModel,
         private readonly SponsorBandResolver  $sponsorBands,
+        private readonly TicketPriceResolver  $ticketPrices,
     ) {}
 
     /**
@@ -119,6 +120,24 @@ final class EconomyConfigPublisher
             'tierFactorsBp'          => $config->getEconomyTierFactorsBp(),
             'baselineTurnoverPence'  => $config->getEconomyBaselineTurnoverPence(),
             'inflationRatePerSeasonBp' => $config->getInflationRatePerSeasonBp(),
+            // ── THE TWO RATIO TABLES, AND ONLY THE TABLES ────────────────────────────────
+            //
+            // Country-independent authoring figures, which is the whole admission criterion
+            // for this endpoint: it is unauthenticated and has no club to resolve a country
+            // from. The RESOLVED per-tier sponsor bands and ticket prices are deliberately
+            // NOT here — they are country-scaled, so they belong on
+            // `/api/game-config?country=` and on sync, where a country is in hand.
+            //
+            // Published for the same reason `tierFactorsBp` is: this is the authoring view,
+            // and the landing page and operator tooling read it. A running game reads the
+            // resolved table.
+            //
+            // ADDITIVE, INSIDE `economy`.
+            // `LegacyNewGameFlowTest::testTheEconomyBlockOnlyADDSToStarterConfig` pins the
+            // top-level key diff on starter-config, so a key that escaped this block would
+            // fail that test rather than quietly widening a public contract.
+            'sponsorTierRatioBp'     => $config->getEconomySponsorTierRatioBp(),
+            'ticketPriceTierRatioBp' => $config->getEconomyTicketPriceTierRatioBp(),
         ];
     }
 
@@ -211,10 +230,19 @@ final class EconomyConfigPublisher
                 // six flat columns, so a build that only knows about that one is unaffected;
                 // a tier with no authored row returns the same figures either way.
                 'sponsorBandsPence'     => $this->sponsorBands->bandsFor((string) $code, $config, $tier),
-                // 0 = the operator has not authored this division's ticket price, so use your
-                // own. There is no flat predecessor to fall back to — the backend has never
-                // held a ticket price — which is why the zero has to mean something.
-                'ticketPricePence'      => $config->getEconomyTicketPricePerTierPence()[$tier - 1] ?? 0,
+                // THE RESOLVED PRICE, country-scaled, not the raw authored column.
+                //
+                // 0 still means "the operator has not authored this division's ticket price,
+                // so use your own" — there is no flat predecessor to fall back to, which is
+                // why the zero has to mean something. What changed is that the figure now
+                // comes through `TicketPriceResolver`, so an unauthored division that the
+                // ratio table and tier-1 base DO cover gets a price instead of a zero.
+                //
+                // WHEN THIS IS GREATER THAN 0 IT IS THE ADVISED PRICE, which is the contract
+                // the app's elasticity measures against (`docs/api/economy-config.md`). That
+                // is the point of publishing it: a club started at a price the backend itself
+                // calls advised cannot be mispriced by the act of publishing one.
+                'ticketPricePence'      => $this->ticketPrices->priceFor($tier, (string) $code, $config),
             ];
         }
 

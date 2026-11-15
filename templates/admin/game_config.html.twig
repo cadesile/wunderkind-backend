@@ -474,23 +474,59 @@
                         </div>
                         <div class="bmc-field-col">
                             <label for="economySponsorBandsPerTierPence">Sponsor Bands PER TIER (JSON, pence/season)</label>
+                            {#
+                              PLACEHOLDER DERIVED FROM THE STORED FIGURES, NOT TYPED IN.
+                              It used to be a literal, and the literal drifted: it showed a
+                              medium max of 13,400,000 while a box held 12,400,000, so the
+                              screen taught an operator a figure the backend did not have.
+                              Tier 1 is the flat columns as stored; tier 8 is those columns
+                              through the tier-8 sponsor ratio, which is what this tier would
+                              resolve to today if it were not authored.
+                            #}
+                            {% set r8 = config.economySponsorTierRatioBp[7]|default(10000) %}
+                            {% set sponsorBandHint = {
+                                '1': {
+                                    'small':  [config.smallSponsorMin,  config.smallSponsorMax],
+                                    'medium': [config.mediumSponsorMin, config.mediumSponsorMax],
+                                    'large':  [config.largeSponsorMin,  config.largeSponsorMax]
+                                },
+                                '8': {
+                                    'small':  [(config.smallSponsorMin  * r8 // 10000), (config.smallSponsorMax  * r8 // 10000)],
+                                    'medium': [(config.mediumSponsorMin * r8 // 10000), (config.mediumSponsorMax * r8 // 10000)],
+                                    'large':  [(config.largeSponsorMin  * r8 // 10000), (config.largeSponsorMax  * r8 // 10000)]
+                                }
+                            } %}
                             <textarea id="economySponsorBandsPerTierPence" name="economySponsorBandsPerTierPence"
                                       rows="6"
-                                      placeholder='{"1":{"small":[5600000,8200000],"medium":[8200000,13400000],"large":[25000000,80000000]},"8":{"small":[56000,82000],"medium":[82000,134000],"large":[250000,800000]}}' data-kind="text" data-blank="ok">{{ config.economySponsorBandsPerTierPence|json_encode }}</textarea>
+                                      placeholder='{{ sponsorBandHint|json_encode }}' data-kind="text" data-blank="ok">{{ config.economySponsorBandsPerTierPence|json_encode }}</textarea>
                             <div class="bmc-data">
-                                Keyed by tier <code>"1"</code>&ndash;<code>"8"</code>, each with <code>small</code>, <code>medium</code> and <code>large</code> as <code>[min, max]</code> in <strong>base-year pence per season</strong>. The placeholder shows tier 1 at the current flat bands and tier 8 at a hundredth of them, to make the shape obvious &mdash; both are illustrative, not authored.
+                                Keyed by tier <code>"1"</code>&ndash;<code>"8"</code>, each with <code>small</code>, <code>medium</code> and <code>large</code> as <code>[min, max]</code> in <strong>base-year pence per season</strong>. The placeholder is <strong>derived from the figures this box actually holds</strong> &mdash; tier 1 at the stored flat bands, tier 8 at those bands through the stored tier-8 sponsor ratio &mdash; so it cannot drift from them the way a typed-in example did.
                                 <br><strong>A tier must carry all three sizes or it is ignored</strong> &mdash; a partial row would fall back for one size and not the others.
-                                <br>Any tier left out uses the six flat sponsor fields above, which is the shipped state. The country factor still applies on top either way, so this table is authored once in base-year money.
+                                <br>An authored row here is an <strong>override</strong>: it is used verbatim and is <strong>not</strong> scaled by the sponsor ratio. Any tier left out uses the flat columns &times; its ratio, and a tier at parity resolves to the flat columns exactly as it did before the ratio table existed. The country factor still applies on top in every case, so this table is authored once in base-year money. Author the ladder on <a href="{{ path('admin', {routeName: 'admin_economy'}) }}">World &rarr; Economy</a> rather than here unless a single division needs a figure of its own.
                             </div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="economyTicketPricePerTierPence">Ticket Price PER TIER (JSON, pence)</label>
+                            {#
+                              DERIVED, AND EMPTY WHEN THERE IS NOTHING TO DERIVE FROM. The old
+                              placeholder was an invented £50-to-£11 ladder; this is the ladder
+                              the stored tier-1 base and ratios actually produce. With no base
+                              authored there is no honest figure to suggest, so the field shows
+                              nothing rather than a number somebody might take for a default.
+                            #}
+                            {% set ticketHint = [] %}
+                            {% for i in 0..7 %}
+                                {% set ticketHint = ticketHint|merge([
+                                    config.economyTicketPriceTier1Pence * (config.economyTicketPriceTierRatioBp[i]|default(10000)) // 10000
+                                ]) %}
+                            {% endfor %}
                             <textarea id="economyTicketPricePerTierPence" name="economyTicketPricePerTierPence"
                                       rows="3"
-                                      placeholder='[5000, 3200, 2400, 2000, 1700, 1500, 1300, 1100]' data-kind="text" data-blank="ok">{{ config.economyTicketPricePerTierPence|json_encode }}</textarea>
+                                      placeholder='{{ config.economyTicketPriceTier1Pence > 0 ? ticketHint|json_encode : '' }}' data-kind="text" data-blank="ok">{{ config.economyTicketPricePerTierPence|json_encode }}</textarea>
                             <div class="bmc-data">
-                                Eight values, tier 1 first, in <strong>base-year pence</strong> &mdash; the placeholder is a plausible English ladder (&pound;50 down to &pound;11), not an authored figure. <strong><code>0</code> means &ldquo;not authored &mdash; the app uses its own price&rdquo;</strong> for that tier, not &ldquo;free&rdquo;: there is no flat fallback, so the zero has to carry that meaning.
-                                <br>Published only. The app computes matchday income and scales per country itself.
+                                Eight values, tier 1 first, in <strong>base-year pence</strong>. The placeholder is the ladder the stored tier-1 base and ticket ratios resolve to; with no base authored it is blank, because there is no honest figure to suggest.
+                                <br><strong><code>0</code> means &ldquo;not authored&rdquo;</strong> for that tier, not &ldquo;free&rdquo;: there is no flat fallback, so the zero has to carry that meaning. A tier left at 0 falls through to the base &times; its ratio, and only resolves to 0 &mdash; &ldquo;the app uses its own price&rdquo; &mdash; when no base is authored either.
+                                <br>A value here is an <strong>override</strong>, used instead of the ladder. <strong>The backend resolves and country-scales what it publishes</strong>, and a published price above 0 is the price the app treats as <strong>advised</strong> &mdash; the figure its elasticity measures a club's own price against &mdash; so the app applies no country factor of its own. Author the ladder on <a href="{{ path('admin', {routeName: 'admin_economy'}) }}">World &rarr; Economy</a>; use this field only for a division that needs a figure of its own.
                             </div>
                         </div>
                         <div class="bmc-field-col">

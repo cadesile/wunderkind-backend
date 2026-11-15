@@ -113,6 +113,28 @@ class SponsorBandResolverTest extends TestCase
         }
     }
 
+    public function testTheTierFactorStaysOutEvenWhenASponsorRatioTableIsAuthored(): void
+    {
+        // THE SAME DECISION, UNDER THE PRESSURE THAT WILL ACTUALLY BREAK IT. Once
+        // `economySponsorTierRatioBp` exists there are two eight-row basis-point tables keyed
+        // by tier, and the tidy-up that suggests itself is to collapse them into one.
+        //
+        // They price different things: `economyTierFactorsBp` prices wages, the sponsor ratios
+        // price a revenue line. Sharing one table would mean a wage retune silently re-priced
+        // every sponsor in the world. So with BOTH authored, only the sponsor ratio may show
+        // up in the band.
+        $config = $this->config();
+        $config->setEconomyTierFactorsBp([50000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]);
+        $config->setEconomySponsorTierRatioBp([10000, 10000, 10000, 10000, 10000, 10000, 10000, 2500]);
+
+        $resolver = $this->resolver($config, ['EN' => $this->profile('EN', isBaseline: true)]);
+
+        // Tier 1: a 5x wage factor must leave the band exactly as the flat columns hold it.
+        self::assertSame([25_000_000, 80_000_000], $resolver->bandFor(CompanySize::LARGE, 'EN', $config, 1));
+        // Tier 8: the sponsor ratio applies, and the 0.1x wage factor does not.
+        self::assertSame([6_250_000, 20_000_000], $resolver->bandFor(CompanySize::LARGE, 'EN', $config, 8));
+    }
+
     // ── The roll ─────────────────────────────────────────────────────────
 
     public function testTheRollTakesTheCountryFromTheLeague(): void

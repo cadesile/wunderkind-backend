@@ -11,6 +11,7 @@ use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyConfigPublisher;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\SponsorBandResolver;
+use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
 use App\Entity\GameConfig;
 use PHPUnit\Framework\TestCase;
@@ -193,6 +194,7 @@ class AbilityRangeParityTest extends TestCase
             $resolver,
             new WageModelResolver($gameConfigRepo, $resolver),
             new SponsorBandResolver($gameConfigRepo, $resolver),
+            new TicketPriceResolver($gameConfigRepo, $resolver),
         );
     }
 }

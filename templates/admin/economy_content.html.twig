@@ -130,12 +130,41 @@
                 resolver refuses it — which is what keeps the model unreachable until somebody authors these.
                 Figures are <strong>base-year</strong> for the baseline country; the app applies inflation.
             </div>
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">TIER-1 TICKET BASE (£)</span>
+                    <span class="bmc-setting__help">
+                        The one figure the whole ticket ladder hangs off. Blank or 0 = unauthored, and
+                        <strong>0 propagates</strong>: every division publishes 0 whatever the ratios say, so the app keeps
+                        using its own 2500p constant. Base-year pounds for the baseline country.
+                    </span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--fill" style="min-width:150px">
+                        <span class="bmc-num__unit">£</span>
+                        <input name="ticketPriceTier1Pounds" inputmode="decimal" data-kind="money"
+                               value="{{ config.economyTicketPriceTier1Pence > 0
+                                         ? (config.economyTicketPriceTier1Pence / 100)|number_format(2, '.', '')
+                                         : '' }}"
+                               placeholder="unauthored"
+                               aria-label="tier 1 base ticket price pounds">
+                    </label>
+                </div>
+            </div>
+
             <div style="overflow-x:auto">
-                <table class="bmc-minitable" style="min-width:560px">
+                <table class="bmc-minitable" style="min-width:860px">
                     <thead><tr>
                         <th>TIER</th>
                         <th class="is-right">TIER FACTOR (bp)</th>
                         <th class="is-right">BASELINE TURNOVER (£)</th>
+                        <th class="is-right">SPONSOR RATIO (bp)</th>
+                        <th class="is-right">TICKET RATIO (bp)</th>
+                    </tr>
+                    <tr>
+                        <th colspan="5" style="font-weight:400">
+                            <span class="bmc-data">10000 = parity. Tier 1 is the base for both ratio columns, so its own ratio is 10000 by construction. The resolved figures are in RESOLVED SPONSOR &amp; TICKET below.</span>
+                        </th>
                     </tr></thead>
                     <tbody>
                         {% for i in 0..7 %}
@@ -157,6 +186,22 @@
                                                          : '' }}"
                                                placeholder="unauthored"
                                                aria-label="tier {{ i + 1 }} baseline turnover pounds">
+                                    </label>
+                                </td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="sponsorTierRatioBp[{{ i }}]" inputmode="numeric" data-kind="int"
+                                               value="{{ config.economySponsorTierRatioBp[i]|default(10000) }}"
+                                               placeholder="10000"
+                                               aria-label="tier {{ i + 1 }} sponsor ratio basis points">
+                                    </label>
+                                </td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="ticketPriceTierRatioBp[{{ i }}]" inputmode="numeric" data-kind="int"
+                                               value="{{ config.economyTicketPriceTierRatioBp[i]|default(10000) }}"
+                                               placeholder="10000"
+                                               aria-label="tier {{ i + 1 }} ticket ratio basis points">
                                     </label>
                                 </td>
                             </tr>
@@ -382,6 +427,81 @@
         </div>
     </section>
 {% endif %}
+
+{# ── the resolved revenue tables ──────────────────────────────────────── #}
+{#
+  READ-ONLY, AND THE PROVENANCE IS THE FEATURE. A sponsor band can come from three places and
+  two of them look identical in the output — a parity ratio and no ratio give the same figure —
+  so the resolved number alone cannot tell an operator which table to edit. The SOURCE column
+  answers that, and it comes from the controller rather than being inferred from the number.
+#}
+<section class="bmc-card" data-domain="location" id="revenue">
+    <div class="bmc-card__head">
+        <i data-lucide="receipt"></i>
+        <span class="bmc-card__title">RESOLVED SPONSOR &amp; TICKET — {{ countryLabels[previewCountry]|default(previewCountry) }}</span>
+        <span class="bmc-card__meta">{{ revenue.tierCount }} tier(s) · the real resolvers, not a copy</span>
+    </div>
+    <div class="bmc-card__body">
+        <div class="bmc-data" style="margin-bottom:10px">
+            <strong>Resolution order, per tier:</strong> the explicit per-tier row (an override, used verbatim), then the
+            flat column × this tier's ratio, then the flat column alone. The country factor applies once, last, to
+            whichever won — these figures are therefore <strong>resolved and country-scaled</strong>, which is exactly what
+            the app receives, and the app applies no factor of its own.
+            <br>A published ticket price above 0 is the <strong>advised</strong> price the app's elasticity measures a club
+            against, so publishing one cannot make a club mispriced.
+        </div>
+
+        {% if revenue.warnings is not empty %}
+            <div class="bmc-data" style="margin-bottom:10px">
+                {% for w in revenue.warnings %}
+                    <div class="ink-warning">⚠ {{ w }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:1080px">
+                <thead><tr>
+                    <th>T</th>
+                    <th class="is-right">SPONSOR RATIO</th>
+                    <th class="is-right">SMALL</th>
+                    <th class="is-right">MEDIUM</th>
+                    <th class="is-right">LARGE</th>
+                    <th>SOURCE</th>
+                    <th class="is-right">TICKET RATIO</th>
+                    <th class="is-right">TICKET</th>
+                    <th>SOURCE</th>
+                </tr></thead>
+                <tbody>
+                    {% for r in revenue.rows %}
+                        <tr>
+                            <td>T{{ r.tier }}</td>
+                            <td class="is-right">{{ _self.bp(r.sponsorRatioBp) }}</td>
+                            {% for size in ['small', 'medium', 'large'] %}
+                                <td class="is-right{{ r.sizes[size].max <= 0 ? ' ink-warning' : '' }}">
+                                    {{ _self.money(r.sizes[size].min) }}–{{ _self.money(r.sizes[size].max) }}
+                                </td>
+                            {% endfor %}
+                            <td>{{ r.sizes.large.source }}</td>
+                            <td class="is-right">{{ _self.bp(r.ticketRatioBp) }}</td>
+                            <td class="is-right{{ r.ticketPence <= 0 ? ' ink-warning' : '' }}">
+                                {{ r.ticketPence > 0 ? _self.money(r.ticketPence) : 'UNAUTHORED' }}
+                            </td>
+                            <td>{{ r.ticketSource }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bmc-data" style="margin-top:10px">
+            <code>override</code> = this tier has an explicit authored row, used verbatim and <strong>not</strong> scaled by
+            the ratio. <code>ratio</code> = the base × this tier's ratio. <code>flat</code> = the flat column, unscaled
+            (what every tier resolved to before the ratio table existed). <code>unauthored</code> = no figure at all; the
+            app uses its own. The SOURCE column shows the <code>large</code> band's source, which is the row's source —
+            a tier is authored all three sizes or none.
+        </div>
+    </div>
+</section>
 
 {# ── the preview ──────────────────────────────────────────────────────── #}
 <section class="bmc-card" data-domain="location" id="preview">

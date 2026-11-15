@@ -39,8 +39,25 @@ actually worth).
   "wageCurveExponentBp": 25000,
   "reputationSpreadBp": 0,
   "wageScaleUnit": 1000000,
+  "sponsorBandsPence": {
+    "small":  { "min": 5600000,  "max": 8200000  },
+    "medium": { "min": 8200000,  "max": 13400000 },
+    "large":  { "min": 25000000, "max": 80000000 }
+  },
   "tiers": [
-    { "tier": 1, "turnoverPence": 0, "wageScaleMicroPence": 0, "resolvable": false }
+    {
+      "tier": 1,
+      "turnoverPence": 0,
+      "wageScaleMicroPence": 0,
+      "resolvable": false,
+      "youthScholarshipPence": 25000,
+      "sponsorBandsPence": {
+        "small":  { "min": 5600000,  "max": 8200000  },
+        "medium": { "min": 8200000,  "max": 13400000 },
+        "large":  { "min": 25000000, "max": 80000000 }
+      },
+      "ticketPricePence": 0
+    }
   ]
 }
 ```
@@ -195,9 +212,20 @@ for the same reason.
   "wageScaleUnit": 1000000,
   "tierFactorsBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000],
   "baselineTurnoverPence": [0, 0, 0, 0, 0, 0, 0, 0],
-  "inflationRatePerSeasonBp": 0
+  "inflationRatePerSeasonBp": 0,
+  "sponsorTierRatioBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000],
+  "ticketPriceTierRatioBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000]
 }
 ```
+
+`sponsorTierRatioBp` and `ticketPriceTierRatioBp` are **authoring tables, not resolved figures**:
+basis points of tier 1, index 0 = tier 1, `10000` = parity, which is the shipped state. They are
+here rather than only on the resolved endpoints for the same reason `tierFactorsBp` is — this is
+the country-agnostic authoring view, and the landing page and operator tooling read it.
+
+**The resolved per-tier sponsor bands and ticket prices are deliberately NOT on this endpoint.**
+They are country-scaled, and this endpoint is unauthenticated with no club to resolve a country
+from. Read them off `GET /api/game-config?country=` or the sync `gameConfig` block.
 
 `baselineTurnoverPence` shipping as eight zeros is **not a usable configuration and deliberately
 not a harmless one** — the wage scale divides by turnover, so zero makes the turnover model
@@ -469,12 +497,85 @@ the wages.
 
 Still **per season**, like the flat keys, and still not convertible with `sponsorWeeklyPence`.
 
-**Country factor only — these are not tier-scaled.** A league's tier variation is already
-expressed by how many sponsors it has and which size bands they draw from, so the per-tier rows
-deliberately do not carry their own sponsor bands.
-
 Unlike the wage model this is **not gated on `wageModel`**: it applies as soon as a country
 factor is set.
+
+### ⚠️ The per-tier bands, and what this block-level key now means
+
+**This section used to say the per-tier rows deliberately do not carry their own sponsor bands.
+That stopped being true in `a93bb1d8` and the text was not updated.** Each row of `tiers` has
+carried its own `sponsorBandsPence` since then, resolved for that tier, and **that is the one to
+read for a club.**
+
+The two keys differ and the difference is the whole point:
+
+| Key | What it is | Read it for |
+|---|---|---|
+| `economyTierBaseline.sponsorBandsPence` | the **tier-less** band: the flat columns, country-scaled, no tier ratio | nothing in a running game; it is the fallback an older build reads |
+| `economyTierBaseline.tiers[].sponsorBandsPence` | the band **for that division**, fully resolved | a club's sponsor offers, and a league's pot |
+
+A tier's band resolves in three steps, in this order:
+
+1. the **explicit authored row** for that tier (`economySponsorBandsPerTierPence`), used
+   verbatim — an operator's figure for one division;
+2. the flat column × that tier's **ratio** (`economySponsorTierRatioBp`);
+3. the flat column alone, which is what every tier resolved to before either table existed.
+
+The country factor applies **once, last**, to whichever won. A tier at a parity ratio with no
+authored row is byte-identical to the old behaviour, so the tables can be filled in one division
+at a time.
+
+**Still no tier FACTOR in this chain.** `economyTierFactorsBp` prices wages and is deliberately
+not applied here: a league's sponsor count and size mix already express its tier, and sharing the
+wage table would mean a wage retune silently re-priced every sponsor in the world.
+`economySponsorTierRatioBp` is a **separate table** that exists precisely so the two can be tuned
+apart — do not read one for the other.
+
+## `ticketPricePence` — the advised price, and what `0` means
+
+`economyTierBaseline.tiers[].ticketPricePence` is the **resolved, country-scaled, base-year**
+ticket price for that division, in pence.
+
+### `0` means "unauthored", never "free"
+
+There is **no flat ticket-price key to fall back to** — the backend has never held one — so the
+zero has to carry that meaning. A `0` means the operator has authored nothing for this division
+and the app should use its own figure, exactly as it did before this key existed.
+
+That makes the zero consequential in both directions, which is why the server resolves it rather
+than publishing a column:
+
+- a `0` that should have been a price hands every club in the division the app's compiled-in
+  constant back, which is the defect this key exists to fix;
+- a real price is **floored at 1p** rather than being allowed to truncate to zero, because a
+  very cheap division must not read as an unauthored one.
+
+### ⚠️ When it is greater than 0, it is the ADVISED price
+
+This is the contract, and it is the reason publishing a price cannot make a club mispriced:
+
+> When `ticketPricePence > 0`, it is the price the game treats as **advised** for that division —
+> both the price a new club **starts** at and the denominator of the elasticity ratio
+> `r = price / advised` that attendance is measured against.
+
+So a club started at the published price starts at `r = 1`. Reading the key for one of those two
+purposes and not the other is the one way to use it wrongly: starting a club at a published price
+while measuring elasticity against a different advised figure would place every club in the
+division off its own advised price by construction, which is worse than the flat constant it
+replaced.
+
+### How it resolves, and what the app must not do to it
+
+1. the **explicit authored price** for that tier (`economyTicketPricePerTierPence`), when greater
+   than 0 — an override, used verbatim;
+2. `economyTicketPriceTier1Pence` × that tier's `ticketPriceTierRatioBp`;
+3. `0`.
+
+The country factor applies **once, last**, to whichever won. **Apply no country factor in the
+app** — the same rule as `sponsorBandsPence`, and the same failure if it is broken: the figure is
+already resolved, and scaling it again double-scales every gate price in the country.
+
+Base-year, like everything else here: the app compounds `inflationRatePerSeasonBp` itself.
 
 ## Before flipping `economyWageModel`
 
@@ -501,6 +602,19 @@ omitting it is byte-identical to the previous behaviour plus the new keys.
 
 `seasonTicketHolderPercent` was **not** duplicated into the economy block — it is already live on
 both `/api/game-config` and the sync `gameConfig` block.
+
+`sponsorTierRatioBp` and `ticketPriceTierRatioBp` are **additions inside the `economy` block** of
+`GET /api/starter-config` — no top-level key changed, which
+`tests/Controller/Api/LegacyNewGameFlowTest.php` asserts by diffing the top-level key set. Both
+ship at parity.
+
+`ticketPricePence` **kept its name, type and position** and changed its source: it was the raw
+`economyTicketPricePerTierPence` row and is now the figure `TicketPriceResolver` resolves (base ×
+ratio × country factor, override first). On a default box every tier publishes `0` exactly as
+before, and on a box with the per-tier column authored and a parity country factor the figure is
+unchanged — the value only moves once a ratio, a tier-1 base or a country factor is set. **An
+authored price is now country-scaled where it previously was not**, which is a behaviour change
+for any box that authored both; no deployed box has.
 
 `tvPoolPence`, `clubCount` and the resolved `leaguePositionDecreasePercent` are additions to
 three uncached payloads; `tvDeal` is byte-identical on every league, guaranteed by the

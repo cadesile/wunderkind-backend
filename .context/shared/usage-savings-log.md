@@ -11,8 +11,8 @@
 
 ## Running total
 
-- **Tasks logged:** 1
-- **Cumulative estimated tokens saved:** 16090
+- **Tasks logged:** 2
+- **Cumulative estimated tokens saved:** 34090
 
 Both numbers only ever increment, on every new entry — never recomputed
 from the table below, so the total survives old rows rolling off.
@@ -21,6 +21,7 @@ from the table below, so the total survives old rows rolling off.
 
 | Date | Stage(s) consulted | Task | Est. tokens saved |
 |---|---|---|---|
+| 2026-11-15 | 01_overview, 03_data, 04_interfaces | Economy loose ends — per-tier sponsor/ticket ratio tables, gate loop fix. Read `environment.md` for the Lando/test-DB facts (that `wunderkind_test` is built from entity metadata so a new migration never reaches it, and that `--force` refuses NOT NULL columns on existing rows) instead of re-deriving them from `.lando.yml`, `doctrine.yaml` and the migrations dir; read `services.md`/`entities.md` for the economy chain instead of grepping `src/Service/Economy/` cold | 18000 |
 | 2026-09-19 | 05_ui | Admin UI for viewing an Active Competition (bracket/rounds/results) — read design-system.md instead of grepping admin-theme.css/templates for the retro theme conventions | 16090 |
 
 **Computing a task's estimate:** from `token-savings.md`, take the

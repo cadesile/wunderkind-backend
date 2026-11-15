@@ -182,6 +182,42 @@ class PerTierSponsorAndTicketTest extends TestCase
         self::assertSame([0, 1, 2, 3, 4, 5, 6, 7], $config->getEconomyTicketPricePerTierPence());
     }
 
+    // ── The explicit table against the ratio table ───────────────────────
+
+    public function testTheExplicitRowStillWinsOnceARatioTableExists(): void
+    {
+        // THE PRECEDENCE THAT KEEPS BOTH TABLES READABLE. A second way to price a tier was
+        // added after this table (`economySponsorTierRatioBp`), and the explicit row stays the
+        // override — otherwise authoring a division by hand would be undone by a later ratio
+        // retune, with nothing in either table to say which figure won.
+        //
+        // The ratio ladder is pinned in full by `SponsorTierRatioTest`; this is the seam.
+        $config = $this->config();
+        $config->setEconomySponsorTierRatioBp([10000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]);
+        $config->setEconomySponsorBandsPerTierPence(['2' => $this->row(9_000_000, 9_000_000)]);
+
+        $resolver = $this->resolver($config);
+
+        self::assertSame([9_000_000, 9_000_000], $resolver->bandFor(CompanySize::LARGE, 'EN', $config, 2));
+        self::assertSame([5_000_000, 16_000_000], $resolver->bandFor(CompanySize::LARGE, 'EN', $config, 3));
+    }
+
+    public function testADiscardedPartialRowFallsThroughToTheRatioNotTheFlatBand(): void
+    {
+        // The half-configured state, now that there is a middle step. A partial row is
+        // discarded entirely (see above), and what it falls through to is the RATIO — which is
+        // the behaviour an operator filling in one division at a time actually gets.
+        $config = $this->config();
+        $config->setEconomySponsorTierRatioBp([10000, 10000, 2500, 10000, 10000, 10000, 10000, 10000]);
+        $config->setEconomySponsorBandsPerTierPence(['3' => ['large' => [1_000, 2_000]]]);
+
+        self::assertSame([], $config->getEconomySponsorBandsPerTierPence());
+        self::assertSame(
+            [6_250_000, 20_000_000],
+            $this->resolver($config)->bandFor(CompanySize::LARGE, 'EN', $config, 3),
+        );
+    }
+
     // ───────────────────────────── plumbing ─────────────────────────────
 
     private function row(int $lo, int $hi): array
