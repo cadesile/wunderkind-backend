@@ -283,8 +283,77 @@ class WorldInitializationService
     public function resolveTierConfig(int $tier): array
     {
         $npcConfig = $this->starterConfigRepository->getConfig()->getNpcSquadConfig();
+        $row       = $npcConfig[(string) $tier] ?? null;
 
-        return $npcConfig[(string) $tier] ?? $this->defaultTierConfig($tier);
+        // ── A PARTIAL ROW IS FILLED, NOT TAKEN AS ZERO ───────────────────────────────────
+        //
+        // The generators read these with `?? 0` (`WorldPackClubGenerationService`), so a row
+        // that omits `directorOfFootballCount` produced a club with no director rather than a
+        // club with the default — a config edit that dropped one key silently removed a role
+        // from every club in the tier.
+        if (is_array($row) && $row !== []) {
+            // EXCLUDES ITS OWN TIER. Without that the search finds this very row at distance 0
+            // and "fills" the partial row from itself, which is a no-op that looks like a fix.
+            return $row + $this->inheritedTierConfig($npcConfig, $tier, $tier);
+        }
+
+        return $this->inheritedTierConfig($npcConfig, $tier);
+    }
+
+    /**
+     * What an UNCONFIGURED tier inherits — from the nearest configured tier, not from code.
+     *
+     * ── WHY NOT A HARDCODED TABLE ─────────────────────────────────────────────────────────
+     *
+     * There was one, and it disagreed with the live configuration in four places: it gave
+     * tiers 3-4 **no director of football** and tiers 5-6 **no facility manager** where the
+     * authored `npcSquadConfig` asks for one at every tier, it capped `coachCount` at **1**
+     * against an authored 7-13, and it gave tiers 7-8 **no scout** against an authored 1.
+     *
+     * None of it was biting, because the table only applies where configuration is absent —
+     * which is exactly what made it dangerous. It is the same defect as `app:pool:warm`'s
+     * hardcoded role list: **staffing numbers living in code beside the configuration that
+     * owns them, drifting quietly because nothing exercises them.**
+     *
+     * So an unconfigured tier now borrows from the nearest tier that IS configured, by tier
+     * distance, preferring the tier ABOVE on a tie — a tier with no config of its own is far
+     * more likely to resemble its neighbour than a figure somebody typed here in 2026.
+     *
+     * `defaultTierConfig()` remains for the one case that cannot borrow: `npcSquadConfig`
+     * entirely empty, on a box where nobody has authored anything.
+     *
+     * @param  array<string, mixed> $npcConfig
+     * @param  int|null              $excludeTier Skip this tier — used when FILLING its own
+     *                                            partial row, which must inherit from a
+     *                                            neighbour rather than from itself.
+     * @return array<string, mixed>
+     */
+    private function inheritedTierConfig(array $npcConfig, int $tier, ?int $excludeTier = null): array
+    {
+        $best         = null;
+        $bestDistance = PHP_INT_MAX;
+
+        foreach ($npcConfig as $key => $row) {
+            if (!is_array($row) || $row === []) {
+                continue;
+            }
+
+            $candidate = (int) $key;
+
+            if ($excludeTier !== null && $candidate === $excludeTier) {
+                continue;
+            }
+            $distance  = abs($candidate - $tier);
+
+            // `<` not `<=`, and the keys ascend, so an equal distance keeps the LOWER tier
+            // number — the stronger division. A tier-5 gap between configured 4 and 6 takes 4.
+            if ($distance < $bestDistance) {
+                $best         = $row;
+                $bestDistance = $distance;
+            }
+        }
+
+        return $best ?? $this->defaultTierConfig($tier);
     }
 
     /**
@@ -304,13 +373,28 @@ class WorldInitializationService
             : (self::ABILITY_RANGES[$tier] ?? ['min' => 5, 'max' => 35]);
     }
 
+    /**
+     * The last resort: `npcSquadConfig` is entirely empty, so there is nothing to inherit from.
+     *
+     * ⚠️ **Every staff role is present at 1 or more, deliberately.** The previous table zeroed
+     * the director of football at tiers 3-8 and the facility manager at 5-8, which meant a box
+     * with no configuration generated clubs missing roles the rest of the game assumes exist.
+     * A fallback should produce a WORKING club, not a minimal one — if these figures are ever
+     * reached, nobody has authored anything and the right failure is "plain" rather than
+     * "subtly short-staffed".
+     *
+     * These are not a second opinion about what a tier should look like. `npcSquadConfig` is
+     * the source of truth; anything configured anywhere is inherited in preference to this.
+     *
+     * @return array<string, mixed>
+     */
     private function defaultTierConfig(int $tier): array
     {
         return match (true) {
             $tier <= 2 => ['playerMin' => 20, 'playerMax' => 24, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 1, 'facilityManagerCount' => 1, 'scoutCount' => 2, 'foreignPercent' => 60],
-            $tier <= 4 => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 1, 'scoutCount' => 1, 'foreignPercent' => 25],
-            $tier <= 6 => ['playerMin' => 13, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 0, 'scoutCount' => 1, 'foreignPercent' => 12],
-            default    => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 0, 'facilityManagerCount' => 0, 'scoutCount' => 0, 'foreignPercent' => 4],
+            $tier <= 4 => ['playerMin' => 16, 'playerMax' => 20, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 1, 'facilityManagerCount' => 1, 'scoutCount' => 1, 'foreignPercent' => 25],
+            $tier <= 6 => ['playerMin' => 13, 'playerMax' => 17, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 1, 'facilityManagerCount' => 1, 'scoutCount' => 1, 'foreignPercent' => 12],
+            default    => ['playerMin' => 11, 'playerMax' => 14, 'managerCount' => 1, 'coachCount' => 1, 'chairmanCount' => 1, 'directorOfFootballCount' => 1, 'facilityManagerCount' => 1, 'scoutCount' => 1, 'foreignPercent' => 4],
         };
     }
 }
