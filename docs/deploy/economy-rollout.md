@@ -151,6 +151,37 @@ it twice invites the two to disagree. The resulting ladder, against the table ab
 **If you want a different anchor, change only the £1,500** and re-run the gate — the whole ladder
 moves with it proportionally, and the floor and cap keep the bottom sane without further tuning.
 
+### ⚠️ Re-authoring turnover LATER is not a one-field change
+
+**If you ever change the turnover table after the sponsor ratios are authored, the tier 6–8
+sponsor ratios must be re-derived against the new figures, and `WORLD_PACK_VERSION` bumped
+again.**
+
+The ratios in `economySponsorTierRatioBp` — `[10000, 3475, 2540, 1658, 1658, 827, 340, 96]` —
+are not free parameters. They were solved so that club plus league sponsorship comes to **22% of
+each tier's authored turnover**, and at the bottom they hit it exactly: measured on the dev
+export, club + league sponsorship is **22.0% at tier 6, 7 and 8** (7.3% + 14.7%, and 8.8% + 13.2%
+twice). **That 22% is a share of the turnover figure as it stands today.** Change the
+denominator and the ratios no longer express the relationship they were derived from — they are
+simply stale constants that happen to have been correct once.
+
+Nothing will fail loudly. Sponsorship will keep resolving, the bands will look authored, and the
+only symptom is that the bottom of the pyramid earns the wrong share of its own turnover — which
+is exactly the defect the per-tier ratios were introduced to fix, reintroduced by a change
+somewhere else.
+
+So re-authoring turnover means all three, in this order:
+
+1. Re-derive the tier 6–8 ratios against the NEW turnover, holding the 22% target.
+2. Author them, then re-run the gate (§3) and check the COVERAGE column at tiers 6–8.
+3. Bump `WORLD_PACK_VERSION` as a separate change after the data, and re-warm (§6). **The
+   sponsor pot lives inside the cached league block**, so a pack that is not rebuilt serves the
+   old figures regardless of what is authored.
+
+(Owner decision, 2026-11-15: turnover re-authoring is DEFERRED, and coverage outside 85–110% at
+tier 1 and tiers 6–8 is accepted for the device pass. This note exists so that whenever that
+deferral ends, the dependency is not rediscovered the hard way.)
+
 ---
 
 ## 3. Run the gate until it exits 0
