@@ -1308,6 +1308,23 @@ x6 band not x4; and an ability at or above the last `maxAbility` falls out of th
 last row via `end()`, because the live table has no null catch-all. Both priced every row in the
 world.
 
+**⚠️ What `wageScaleMicroPence` is calibrated AGAINST, and why a client can read it wrongly.**
+`EconomyScaleResolver::wageScaleMicroPence()` solves
+`round(playerBudget × WAGE_SCALE_UNIT / (weeks × sigma))`, where sigma is
+`referenceSquadAbilitySum()` — the sum of `ability^k` over a reference squad drawn evenly across
+**that tier's authored ability band** (`starter_config.league_ability_ranges`). So the published
+scale is only meaningful for abilities inside that band. The method's own comment names the
+case: **"England tier 8 spans 2-7, so 22 players land on six distinct integers."**
+
+With `k = 2.5`, extrapolating outside the band is violent — `20^2.5 / 3^2.5` is about **115×**.
+The app's debug wage table samples a fixed global ladder `[10, 20, 40, 60, 80, 95]` at every
+tier, so every row it shows for tier 8 is off the end of the band and an "ability 20" player
+reads £3,199.88/wk against a tier mean near £29.30. **The arithmetic is right on both sides and
+`WAGE_SCALE_UNIT` is 1,000,000 in both** — it is the sample points that are wrong, which is an
+app-side display fix. Worth knowing here because the figure looks like a backend authoring error
+and is not: re-authoring `wageScaleMicroPence` to make that table look sane would break every
+real squad the band actually produces.
+
 **TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
 all. Per-country rows (world-pack clubs) are generated for a known country and tier, so they are
 priced at generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION`
@@ -1394,6 +1411,29 @@ absolutes for one country — turnover and wage scale per tier — and **no coun
 Publishing one would invite the client to apply it a second time to an already-scaled figure.
 `resolvable: false` distinguishes "the operator has not authored this tier" from "this tier is
 worth nothing", which a bare `0` cannot express, and the first is the shipped state.
+
+**⚠️ `wageModel` is not one switch on the client — it is three (confirmed on device,
+2026-11-16).** The app has no admin surface for a standalone boolean, so it DERIVES two further
+flags from this one published value, each with `config.X ?? (baseline?.wageModel === 'turnover')`:
+
+| app flag | where | what publishing `turnover` turns on |
+|---|---|---|
+| `incomeAnchoredWages` | `economyConfig.ts` | A club's wage scale follows its own income, not the tier's authored figure — a bounded 25-50% premium over the authored rate |
+| `ticketPriceElasticity` | `matchdayIncome.ts` | Attendance responds to how far a club's ticket price sits from the advised one |
+
+Both are **absent** from the live export and both therefore resolve **TRUE**, because
+`economyTierBaseline.wageModel` is `turnover`. The app's own `game-mechanics.md` recorded the
+opposite for a while ("an absent key resolves false") and read its release gate's two arms the
+wrong way round as a result. **Publishing `wageModel` changes three behaviours, not one**; if a
+standalone key is ever added for either flag, an explicit value wins over the derivation.
+
+**⚠️ `tiers[].ticketPricePence` now sets shirt income as well as gate income (app change,
+2026-11-16).** The app prices a shirt at `ticketPricePence × SHIRT_TO_TICKET_RATIO` (0.5625),
+replacing a flat £45 compiled into the client for every division in the world. So **re-authoring
+a division's ticket price now moves two revenue lines**, and the ratio is set so tier 1 is
+unchanged at £45 (£80 × 0.5625). A published `0` still means "unauthored" and falls back to the
+old flat figure, so an unauthored backend is byte-identical as before. Nothing is published for
+shirts; the backend authors one ladder and the client derives the other.
 
 `?country=` on `/api/game-config` is **optional and absent means parity** — that endpoint is
 `PUBLIC_ACCESS`, so unlike sync there is no club to resolve a country from. An empty code

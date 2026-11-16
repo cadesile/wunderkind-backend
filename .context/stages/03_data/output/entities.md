@@ -235,6 +235,34 @@ migrations are the change log (see `migrations.md`).
 - **`League`** — a competitive tier. `country`, `tier`, `name`,
   `promotionSpots`, `tvDeal`, `leagueReputationTier:?ReputationTier(enum)`,
   `prizeMoney`, `leaguePositionPot`, `sponsorCount`,
+
+  > ⚠️ **`prizeMoney` and `leaguePositionPot` are PER-CLUB figures, not pools, and the authored
+  > EN ladder appears to have been sized as if they were pools (measured 2026-11-16).** `tvDeal`
+  > has a pool beside it (`tvPoolPence`, and `tvPoolPence / slots === tvDeal` holds on all eight
+  > EN tiers), so it is unambiguous. These two have no such pair and no divisor anywhere in the
+  > app, so the authored number **is** what one club receives: `prizeMoney` goes whole to the
+  > champion (`finalPosition === LEAGUE_PRIZE_POSITION`), and `leaguePositionPot` is the base
+  > each club's taper is applied to.
+  >
+  > Against authored `turnoverPence`, the EN ladder **inverts at tier 3**:
+  >
+  > | tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  > |---|---|---|---|---|---|---|---|---|
+  > | `prizeMoney` ÷ turnover | 0.26× | 0.62× | 1.41× | 1.53× | 3.61× | 6.41× | 17.16× | **30.33×** |
+  > | `leaguePositionPot` ÷ turnover | 0.26× | 0.67× | 1.41× | 1.51× | 1.41× | 3.72× | 8.58× | **12.13×** |
+  >
+  > while `tvDeal` runs monotone the other way (0.350× → 0.030×). A tier-8 champion receives
+  > **£5,000,000 against £164,852** of authored annual turnover. The app's variant gate hides it
+  > because it models a mid-table finish, and the NPC path never reads the forecast at all — but
+  > **the player can win their division**, and until 2026-11-16 the app's own projection credited
+  > the flat prize to every club unconditionally, so the figure was reaching live budgets.
+  >
+  > Nothing in the app rescales either value (`inflate()` is a no-op at
+  > `inflationRatePerSeasonBp = 0`; the gate's `RESCALE` is harness-only). **Correcting the
+  > shape is a backend authoring decision.** One candidate, not chosen: express the champion's
+  > prize as a fixed fraction of that tier's turnover at tier 1's current 0.2573×, which leaves
+  > tier 1 untouched and puts tier 8 at ~£42,415. Full trace in the app repo's
+  > `docs/economy-loose-ends/F9-prize-pool-forecast-fix.md`.
   `trophy:?array` (json, nullable — the 16-bit trophy sprite's own
   `TrophyConfig`: `{style, finish, ribbons, ribbonPrimary, ribbonSecondary}`,
   stored and served verbatim like `Player::$appearance`. Replaced the retired

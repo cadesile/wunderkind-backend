@@ -5,6 +5,45 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Economy findings from the app's income-truth batch (2026-11-16), on top of commit
+  `5caa68d1`** (branch `development`). **Stages touched:** 03_data (`entities.md`),
+  04_interfaces (`services.md`, `routes.md`), shared (this file).
+
+  **No backend code changed.** These are facts about backend-AUTHORED data and the published
+  config contract, found while correcting three income defects in the app
+  (`economy-income-truth`, app repo @ `4d75a15e`). Recorded here because each one is either a
+  backend authoring decision or a contract the client now depends on more heavily than before.
+
+  - **`League::$prizeMoney` / `$leaguePositionPot` look pool-sized but are consumed per club.**
+    `tvDeal` has `tvPoolPence` beside it and `pool / slots === tvDeal` holds on all eight EN
+    tiers; these two have no such pair and no divisor anywhere in the app. Against authored
+    turnover the EN ladder **inverts at tier 3** — a tier-8 champion receives **£5,000,000
+    against £164,852 (30.3×)**, where tier 1 is 0.26×. Nothing rescales it. **An authoring
+    decision, named and left**; the app's own forecast bug (it paid the flat prize to every
+    club) is fixed separately.
+
+  - **`wageModel` is three switches, not one.** The app derives both `incomeAnchoredWages` and
+    `ticketPriceElasticity` from `baseline?.wageModel === 'turnover'` when no explicit key is
+    published — and neither IS published, so both resolve TRUE on the live export. The app had
+    recorded the opposite and read its release gate's two arms the wrong way round for a while.
+    Worth knowing before anyone publishes a standalone key for either.
+
+  - **`tiers[].ticketPricePence` now drives shirt income too.** The app replaced a flat £45
+    shirt price (compiled in, every division in the world) with `ticketPrice × 0.5625`. So
+    re-authoring a division's ticket price moves two revenue lines now. Tier 1 is unchanged by
+    construction; tier 8 goes £45 → £7.88. Nothing is published for shirts.
+
+  - **`fanBaseRanges` and `leagueAbilityRanges` are keyed differently on the same payload** —
+    the first by tier alone, the second by country then tier. A `[country][tier]` read of the
+    first type-checks, misses every time and returns a plausible zero.
+
+  - **`wageScaleMicroPence` is calibrated against the tier's authored ability band**
+    (`referenceSquadAbilitySum`, EN tier 8 spans **2–7**), so it is only meaningful inside it.
+    With `k = 2.5` an ability-20 reading extrapolates ~115× past an ability-3 one. The app's
+    debug table samples a fixed `[10,20,40,60,80,95]` ladder at every tier and so shows £3,200
+    for a tier-8 "ability 20". **That is an app display fix, not an authoring error** — recorded
+    so nobody re-authors the scale to make that table look sane and breaks every real squad.
+
 - **Backlog review (2026-11-15), on top of commit `c057106`** (uncommitted, branch
   `development`). **Stages touched:** 04_interfaces (`routes.md`, `controllers.md`),
   06_documentation (`index.md`), shared (this file, `token-savings.md`).
