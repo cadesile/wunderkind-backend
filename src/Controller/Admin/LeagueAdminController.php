@@ -180,7 +180,11 @@ class LeagueAdminController extends AbstractController
                 continue;
             }
             $league->setPromotionSpots($defaults['promotionSpots']);
-            $league->setTvDeal($defaults['tvDeal']);
+            // ⚠️ NO `setTvDeal()` HERE. It used to assign the tier's per-club figure and let
+            // `syncTvDeal()` below correct it when a pool existed. With TV authored once per
+            // tier as a pool, assigning a share first would overwrite a league's correct
+            // derived figure with a tier-wide one whenever the tier has no pool yet — a silent
+            // loss on exactly the leagues that are already right.
             $league->setPrizeMoney($defaults['prizeMoney']);
             $league->setLeaguePositionPot($defaults['leaguePositionPot']);
             $league->setSponsorCount($defaults['sponsorCount']);
@@ -189,11 +193,11 @@ class LeagueAdminController extends AbstractController
             $league->setLeaguePositionDecreasePercent($defaults['leaguePositionDecreasePercent']);
             $league->setParachute($defaults['parachute']);
 
-            // AFTER the tvDeal assignment above, not instead of it. A tier default may carry a
-            // per-club tvDeal, a pool, or both; when there is a pool it is the authored figure
-            // and the share is derived from this league's own size, which the tier default
-            // cannot know. With no pool the tier's tvDeal stands, which is the behaviour this
-            // screen has always had.
+            // The ONLY writer of `tvDeal` on this path. The pool is the authored figure and
+            // the share is derived from THIS league's own size, which a tier default cannot
+            // know — two leagues in one tier with different `slots` get different shares of the
+            // same pool, which is what "divided evenly" means. With no pool it does nothing and
+            // the league keeps the share it already had.
             $this->leagueSizeResolver->syncTvDeal($league);
             $applied++;
         }
@@ -211,7 +215,11 @@ class LeagueAdminController extends AbstractController
     {
         return [
             'promotionSpots'    => ($row['promotionSpots'] ?? '') !== '' ? (int) $row['promotionSpots'] : null,
-            'tvDeal'            => $this->parseMoneyToPence($row['tvDeal'] ?? ''),
+            // ⚠️ NOT read from the form any more: TV is authored once per tier as the POOL and
+            // `tvDeal` is the derived per-club share. Kept in the shape as null so stored
+            // defaults written before 2026-11-16 are overwritten rather than left to look
+            // authoritative beside a pool that now outranks them.
+            'tvDeal'            => null,
             'prizeMoney'        => $this->parseMoneyToPence($row['prizeMoney'] ?? ''),
             'leaguePositionPot' => $this->parseMoneyToPence($row['leaguePositionPot'] ?? ''),
             'tvPoolPence'       => $this->parseMoneyToPence($row['tvPoolPence'] ?? ''),

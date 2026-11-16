@@ -414,7 +414,7 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
    take. Fixed in the template with `bmc-num--fill`; widened here so a 12-character figure like
    £136,000,000 is comfortable rather than merely possible. The parachute column grows with it:
    it holds raw JSON and two rows of 180px showed about a third of one. */
-.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(150px, 1fr)) 96px minmax(260px, 1.4fr) 84px 132px; gap: 10px; align-items: center; }
+.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(3, minmax(150px, 1fr)) 96px minmax(260px, 1.4fr) 84px 132px; gap: 10px; align-items: center; }
 /* The parachute cell is a verbatim JSON passthrough, so it gets a textarea rather than a
    number input — the backend has no schema to build a field set from. */
 .bmc-ta--parachute { display: block; }

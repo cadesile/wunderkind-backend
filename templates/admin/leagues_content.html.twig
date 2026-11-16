@@ -50,7 +50,7 @@
             <div class="bmc-tiergrid" style="min-width:1240px">
                 <div class="bmc-tiergrid__head">
                     <span>TIER</span><span>TROPHY</span><span>PROMOTED</span>
-                    <span>TV POOL</span><span>TV DEAL</span><span>PRIZE MONEY</span><span>POSITION POT</span>
+                    <span>TV (TIER)</span><span>PRIZE MONEY</span><span>POSITION POT</span>
                     <span>TAPER %</span><span>PARACHUTE</span><span>SPONSORS</span><span>LEAGUES</span>
                 </div>
                 {% for tier in 1..8 %}
@@ -93,7 +93,15 @@
                            column and clipped every figure that mattered: a tier-1 TV deal of
                            £136,000,000 rendered as "£ 136,0". The column always had the room —
                            the input refused to use it. #}
-                        {% for f in ['tvPoolPence', 'tvDeal', 'prizeMoney', 'leaguePositionPot'] %}
+                        {# ⚠️ ONE TV field, and it is the POOL (owner, 2026-11-16): TV is authored
+                           as a flat figure per tier and divided evenly among a league's clubs.
+                           `tvDeal` is the derived PER-CLUB share and is no longer authored
+                           anywhere — `LeagueSizeResolver::syncTvDeal()` writes it from this
+                           pool and each league's own size. Offering both here was the confusion:
+                           the tier row showed a populated per-club deal beside an empty pool,
+                           which is the inverse of every league it applies to, where the pool is
+                           set and the deal is derived from it. #}
+                        {% for f in ['tvPoolPence', 'prizeMoney', 'leaguePositionPot'] %}
                             <label class="bmc-num bmc-num--fill"><span class="bmc-num__unit">£</span>
                                 <input name="tiers[{{ tier }}][{{ f }}]" inputmode="numeric" data-kind="money" data-blank="ok"
                                        value="{{ _self.money(attribute(row, f)|default(null)) }}"
