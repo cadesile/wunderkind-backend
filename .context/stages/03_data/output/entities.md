@@ -262,7 +262,7 @@ migrations are the change log (see `migrations.md`).
   > shape is a backend authoring decision.** One candidate, not chosen: express the champion's
   > prize as a fixed fraction of that tier's turnover at tier 1's current 0.2573×, which leaves
   > tier 1 untouched and puts tier 8 at ~£42,415. Full trace in the app repo's
-  > `docs/economy-loose-ends/F9-prize-pool-forecast-fix.md`.
+  > `docs/economy-loose-ends/REMAINING-WORK.md` §3, and in the app's `game-mechanics.md` §13.5.
   `trophy:?array` (json, nullable — the 16-bit trophy sprite's own
   `TrophyConfig`: `{style, finish, ribbons, ribbonPrimary, ribbonSecondary}`,
   stored and served verbatim like `Player::$appearance`. Replaced the retired
