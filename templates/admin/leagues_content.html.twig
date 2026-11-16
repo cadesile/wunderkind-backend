@@ -88,15 +88,20 @@
                             </label>
                         {% endif %}
 
+                        {# ⚠️ `bmc-num--fill`, not bare `bmc-num`. The base class is a HARD
+                           `width: 64px`, so these four sat at 64px inside a `minmax(118px, 1fr)`
+                           column and clipped every figure that mattered: a tier-1 TV deal of
+                           £136,000,000 rendered as "£ 136,0". The column always had the room —
+                           the input refused to use it. #}
                         {% for f in ['tvPoolPence', 'tvDeal', 'prizeMoney', 'leaguePositionPot'] %}
-                            <label class="bmc-num"><span class="bmc-num__unit">£</span>
+                            <label class="bmc-num bmc-num--fill"><span class="bmc-num__unit">£</span>
                                 <input name="tiers[{{ tier }}][{{ f }}]" inputmode="numeric" data-kind="money" data-blank="ok"
                                        value="{{ _self.money(attribute(row, f)|default(null)) }}"
                                        aria-label="tier {{ tier }} {{ f }}">
                             </label>
                         {% endfor %}
 
-                        <label class="bmc-num bmc-num--76">
+                        <label class="bmc-num bmc-num--fill"><span class="bmc-num__unit">%</span>
                             <input name="tiers[{{ tier }}][leaguePositionDecreasePercent]" inputmode="numeric"
                                    value="{{ row.leaguePositionDecreasePercent|default('') }}"
                                    data-min="0" data-max="100" data-blank="ok"
@@ -104,7 +109,7 @@
                         </label>
 
                         <label class="bmc-ta bmc-ta--parachute">
-                            <textarea name="tiers[{{ tier }}][parachute]" rows="2"
+                            <textarea name="tiers[{{ tier }}][parachute]" rows="3"
                                       placeholder="none"
                                       aria-label="tier {{ tier }} parachute json">{{ row.parachute is defined and row.parachute is not null ? row.parachute|json_encode : '' }}</textarea>
                         </label>

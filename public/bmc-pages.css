@@ -409,11 +409,16 @@ body:has(.bmc-savebar) .bmc-toasts { bottom: 84px; }
 /* Tier defaults: tier · trophy · promoted · three money columns · sponsors · drift. */
 .bmc-tiergrid { display: flex; flex-direction: column; gap: 2px; }
 .bmc-tiergrid__head,
-.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(118px, 1fr)) 84px 180px 84px 132px; gap: 10px; align-items: center; }
+/* ⚠️ The four money columns were `minmax(118px, 1fr)` and still clipped, because `.bmc-num` is
+   a hard `width: 64px` and these cells used it bare — the column had room the input would not
+   take. Fixed in the template with `bmc-num--fill`; widened here so a 12-character figure like
+   £136,000,000 is comfortable rather than merely possible. The parachute column grows with it:
+   it holds raw JSON and two rows of 180px showed about a third of one. */
+.bmc-tiergrid__row { display: grid; grid-template-columns: 52px 72px 92px repeat(4, minmax(150px, 1fr)) 96px minmax(260px, 1.4fr) 84px 132px; gap: 10px; align-items: center; }
 /* The parachute cell is a verbatim JSON passthrough, so it gets a textarea rather than a
    number input — the backend has no schema to build a field set from. */
 .bmc-ta--parachute { display: block; }
-.bmc-ta--parachute textarea { width: 100%; min-height: 44px; font: var(--text-mono, inherit); font-size: 11px; resize: vertical; }
+.bmc-ta--parachute textarea { width: 100%; min-height: 64px; font: var(--text-mono, inherit); font-size: 11px; line-height: 1.35; resize: vertical; }
 .bmc-tiergrid__head { padding: 0 2px 4px; font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); text-transform: uppercase; }
 .bmc-tiergrid__row { min-height: 64px; padding: 4px 2px; border-bottom: 1px solid var(--wk-stroke); }
 

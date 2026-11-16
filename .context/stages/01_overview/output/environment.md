@@ -119,6 +119,26 @@ docker exec wunderkindbackend_database_1 \
   psql -U postgres -c 'CREATE DATABASE wunderkind_testmaster OWNER wunderkind;'
 lando ssh -s appserver -c 'TEST_TOKEN=master php bin/console doctrine:schema:create --env=test'
 lando ssh -s appserver -c 'TEST_TOKEN=master php vendor/bin/phpunit --no-coverage tests/...'
+
+### Known test failures — the baseline to judge a run against (2026-11-16)
+
+**`lando php bin/phpunit` is ~3,181 tests with FOUR failures, and all four are pre-existing.**
+Recorded here because a green run is not the bar and someone who does not know that will go
+hunting:
+
+1. `NotificationLogCrudControllerTest` — empty content table.
+2. `CompetitionControllerTest`, the narrative timeline — empty content table.
+3. `FriendlyResolveSingleMatchTest` — empty content table.
+4. `NpcClubForeignClubsCitySizeTest::testFindForeignClubsHandlesDefaultCitySizeFields` —
+   **environmental, established rather than assumed**: it passes in isolation, fails inside the
+   Repository suite, and still failed with every source change of the day reverted. It expects a
+   persisted club inside `findForeignClubs(..., 10)` while the SHARED test database holds 14
+   `npc_club` rows. Deliberately NOT "fixed" by deleting rows — cleaning the shared database
+   only moves the breakage somewhere else.
+
+⚠️ **Check a failure against this list before treating it as yours, and check it the way #4 was
+checked** — stash the change and re-run the one test. Both are one command, and today a
+template-and-CSS change was briefly suspected of breaking #1 for want of doing it.
 ```
 
 `TEST_TOKEN` must be set INSIDE the container (`lando ssh -s appserver -c '...'`); prefixing
