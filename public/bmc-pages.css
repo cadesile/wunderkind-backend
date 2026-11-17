@@ -45,6 +45,13 @@
 .bmc-card__meta { font: var(--text-data); color: var(--wk-text-dim); white-space: nowrap; }
 .bmc-card__link { font: var(--text-label); letter-spacing: .5px; color: var(--wk-text-dim); padding: 4px 6px; text-decoration: none; white-space: nowrap; }
 .bmc-card__body { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+/* A card body that is ALSO a grid. Both are single-class selectors, so the cascade decided
+   this on source order alone and .bmc-card__body's `display:flex` won — which silently turned
+   every `.bmc-card__body.bmc-grid` into a one-column flex stack and made its own inline
+   `grid-template-columns` inert. That is what left the starter config page's league-range and
+   NPC squad cards in a single narrow column with the rest of the card empty. Specificity, not
+   order, so moving either rule cannot bring it back. */
+.bmc-card__body.bmc-grid { display: grid; }
 .bmc-card__band { padding: 12px; border-bottom: 3px solid var(--wk-stroke); }   /* full-width strip inside a card */
 .bmc-card__band:last-child { border-bottom: 0; }
 

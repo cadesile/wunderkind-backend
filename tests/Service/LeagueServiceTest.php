@@ -64,7 +64,26 @@ class LeagueServiceTest extends TestCase
                     $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
                 ),
             ),
+            // A REAL StarterAbilityRangeService over stubbed repositories, because it is
+            // final and cannot be doubled. Its config repo hands back a fresh StarterConfig
+            // (the column default — all 21 shipped countries at the full eight tiers), and
+            // the stubbed EntityManager makes persist/flush no-ops, so syncToPyramid() runs
+            // for real and writes nowhere. Countries these fixtures use that the default does
+            // not carry simply gain an in-memory band that nothing here asserts on.
+            new \App\Service\StarterAbilityRangeService(
+                $this->starterConfigRepoStub(),
+                $em,
+            ),
         );
+    }
+
+    /** A StarterConfigRepository stub that answers getConfig() with the column defaults. */
+    private function starterConfigRepoStub(): \App\Repository\StarterConfigRepository
+    {
+        $repo = $this->createStub(\App\Repository\StarterConfigRepository::class);
+        $repo->method('getConfig')->willReturn(new \App\Entity\StarterConfig());
+
+        return $repo;
     }
 
     public function testGenerateLeaguesStillDefaultsToEightTiers(): void

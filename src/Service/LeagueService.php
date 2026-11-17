@@ -34,6 +34,7 @@ class LeagueService
         private readonly \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
         private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
         private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
+        private readonly StarterAbilityRangeService $abilityRangeService,
     ) {}
 
     /** The deepest pyramid the per-tier config tables describe. */
@@ -52,7 +53,10 @@ class LeagueService
      * only what future packs are built from, not anybody's running game. Nothing cascades
      * at the database level, so the order below matters.
      *
-     * @return array{created: League[], skipped: int, removedTiers: int, removedClubs: int}
+     * The country's authored ability band is brought in line with the resulting pyramid as the
+     * last step — see StarterAbilityRangeService::syncToPyramid(), and the note at the call.
+     *
+     * @return array{created: League[], skipped: int, removedTiers: int, removedClubs: int, bandsAdded: int[], bandsRemoved: int[]}
      */
     public function generateLeaguesForCountry(string $country, int $tiers = self::MAX_TIERS): array
     {
@@ -88,11 +92,25 @@ class LeagueService
 
         $removed = $this->removeTiersBelow($country, $tiers);
 
+        // THE AUTHORED ABILITY BAND FOLLOWS THE PYRAMID, 2026-11-17. Creating a tier used to
+        // leave `starter_config.league_ability_ranges` untouched, so a pyramid that grew got
+        // divisions with no authored band — generation fell through to
+        // WorldInitializationService::ABILITY_RANGES and looked fine, while the authored table
+        // (which prices players and is published to the app as `leaguePlayerAbilityRanges`)
+        // silently described a shallower country. Scotland rebuilt 4 -> 8 is the case that
+        // found it. Gap-fill only: an existing tier's hand-tuned figures are never rewritten.
+        //
+        // AFTER removeTiersBelow(), not before, so a shrink drops the right keys — this runs
+        // against the pyramid as it now stands, not as it was asked for.
+        $bands = $this->abilityRangeService->syncToPyramid($country, $tiers);
+
         return [
-            'created'      => $created,
-            'skipped'      => $skipped,
-            'removedTiers' => $removed['tiers'],
-            'removedClubs' => $removed['clubs'],
+            'created'       => $created,
+            'skipped'       => $skipped,
+            'removedTiers'  => $removed['tiers'],
+            'removedClubs'  => $removed['clubs'],
+            'bandsAdded'    => $bands['added'],
+            'bandsRemoved'  => $bands['removed'],
         ];
     }
 

@@ -93,6 +93,154 @@ class StarterAbilityRangeServiceTest extends TestCase
         $this->assertFalse($empty->seedDefaults('  '));
     }
 
+    // ── syncToPyramid(): the authored band follows the pyramid ────────────────────────────
+    //
+    // Added 2026-11-17 with the method. The defect it closes is silent in both directions: a
+    // grown pyramid leaves tiers with no authored band (generation falls through to
+    // WorldInitializationService::ABILITY_RANGES and looks correct, while the table that
+    // prices players and feeds the app's "N TIERS" chip describes a shallower country), and a
+    // shrunk one leaves bands for divisions that no longer exist.
+
+    public function testFillsTheTiersAGrownPyramidAdded(): void
+    {
+        // Scotland as it actually was on dev: authored at four tiers, pyramid rebuilt to eight.
+        $config = StarterConfig::defaults();
+        $config->setLeagueAbilityRanges(['SC' => $this->band([1, 2, 3, 4])]);
+
+        $result = $this->serviceFor($config, managed: true, expectFlush: true)
+            ->syncToPyramid('SC', 8);
+
+        $this->assertSame([5, 6, 7, 8], $result['added']);
+        $this->assertSame([], $result['removed']);
+        // INT keys, not string. PHP normalises a numeric string key to an integer on write,
+        // and json_decode does the same on the way back out of the column — so the band is
+        // int-keyed at runtime no matter how it was authored, including the `'1' =>` rows in
+        // StarterConfig::DEFAULT_TIER_RANGES. Readers index it with `(string) $tier` and are
+        // unaffected (PHP normalises the lookup too), and json_encode still emits an OBJECT
+        // because the keys do not start at 0 — so the published shape is unchanged.
+        $this->assertSame(
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            array_keys($config->getLeagueAbilityRanges()['SC']),
+            'the app counts these keys to show the country depth',
+        );
+        $this->assertSame(
+            StarterConfig::defaultTierRanges()['6'],
+            $config->getLeagueAbilityRanges()['SC']['6'],
+        );
+    }
+
+    public function testNeverRewritesATierThatIsAlreadyAuthored(): void
+    {
+        // THE PROMISE THAT MAKES THIS SAFE TO RUN ON EVERY LEAGUE GENERATION. Tier 1 here is
+        // nothing like the default; it must come back out untouched.
+        $tuned  = ['min' => 41, 'max' => 93];
+        $config = StarterConfig::defaults();
+        $config->setLeagueAbilityRanges(['SC' => ['1' => $tuned]]);
+
+        $this->serviceFor($config, managed: true, expectFlush: true)->syncToPyramid('SC', 4);
+
+        $this->assertSame($tuned, $config->getLeagueAbilityRanges()['SC']['1']);
+    }
+
+    public function testDropsBandsForTiersThePyramidNoLongerHas(): void
+    {
+        $config = StarterConfig::defaults();
+        $config->setLeagueAbilityRanges(['SC' => $this->band([1, 2, 3, 4, 5, 6, 7, 8])]);
+
+        $result = $this->serviceFor($config, managed: true, expectFlush: true)
+            ->syncToPyramid('SC', 4);
+
+        $this->assertSame([], $result['added']);
+        $this->assertSame([5, 6, 7, 8], $result['removed']);
+        $this->assertSame([1, 2, 3, 4], array_keys($config->getLeagueAbilityRanges()['SC']));
+    }
+
+    public function testReplacesAStoredBandThatWouldGenerateZeroAbilityPlayers(): void
+    {
+        // A zero floor is not "authored", it is a broken row — and it does not throw anywhere,
+        // it just generates a division of 0-ability players.
+        $config = StarterConfig::defaults();
+        $config->setLeagueAbilityRanges(['SC' => ['1' => ['min' => 0, 'max' => 0], '2' => 'nonsense']]);
+
+        $result = $this->serviceFor($config, managed: true, expectFlush: true)
+            ->syncToPyramid('SC', 2);
+
+        $this->assertSame([1, 2], $result['added']);
+        $this->assertSame(StarterConfig::defaultTierRanges()['1'], $config->getLeagueAbilityRanges()['SC']['1']);
+    }
+
+    public function testWritesNothingWhenTheBandAlreadyMatchesThePyramid(): void
+    {
+        // Every league generation calls this, and most of them have nothing to do. A flush per
+        // call would be a write on every admin "generate leagues" press for no change at all.
+        $config = StarterConfig::defaults();
+
+        $result = $this->serviceFor($config, managed: true, expectFlush: false)
+            ->syncToPyramid('EN', 8);
+
+        $this->assertSame(['added' => [], 'removed' => []], $result);
+    }
+
+    public function testSeedsACountryWithNoBandAtAllFromTheDepthAsked(): void
+    {
+        $config = StarterConfig::defaults();
+
+        $this->serviceFor($config, managed: true, expectFlush: true)->syncToPyramid('PL', 3);
+
+        $this->assertSame([1, 2, 3], array_keys($config->getLeagueAbilityRanges()['PL']));
+    }
+
+    public function testClampsAndNormalisesTheArgumentsTheSameWaySeedDefaultsDoes(): void
+    {
+        // LeagueService clamps to 1..8 before it ever calls this, but this is a public method
+        // on a service an admin action can reach, so it clamps for itself too.
+        $config = StarterConfig::defaults();
+        $config->setLeagueAbilityRanges([]);
+
+        $this->serviceFor($config, managed: true, expectFlush: true)->syncToPyramid(' sc ', 99);
+        $this->assertCount(8, $config->getLeagueAbilityRanges()['SC']);
+
+        $empty = StarterConfig::defaults();
+        $this->assertSame(
+            ['added' => [], 'removed' => []],
+            $this->serviceFor($empty, managed: true, expectFlush: false)->syncToPyramid('  ', 8),
+        );
+    }
+
+    public function testPersistsAnUnmanagedConfigBeforeWriting(): void
+    {
+        // Same fresh-database trap seedDefaults() has: flushing the unmanaged defaults object
+        // getConfig() hands back writes nothing while reporting success.
+        $config = StarterConfig::defaults();
+        $em     = $this->createMock(EntityManagerInterface::class);
+        $em->method('contains')->willReturn(false);
+        $em->expects($this->once())->method('persist')->with($config);
+        $em->expects($this->once())->method('flush');
+
+        $repo = $this->createStub(StarterConfigRepository::class);
+        $repo->method('getConfig')->willReturn($config);
+
+        (new StarterAbilityRangeService($repo, $em))->syncToPyramid('PL', 2);
+    }
+
+    /**
+     * A band covering exactly these tiers, with figures that are NOT the defaults — so a test
+     * asserting a tier survived cannot pass by accident when it was rewritten.
+     *
+     * @param int[] $tiers
+     *
+     * @return array<string, array{min: int, max: int}>
+     */
+    private function band(array $tiers): array
+    {
+        $band = [];
+        foreach ($tiers as $tier) {
+            $band[(string) $tier] = ['min' => $tier, 'max' => $tier + 1];
+        }
+
+        return $band;
+    }
+
     private function serviceFor(StarterConfig $config, bool $managed, bool $expectFlush): StarterAbilityRangeService
     {
         $em = $this->createMock(EntityManagerInterface::class);
