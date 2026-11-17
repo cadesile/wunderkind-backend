@@ -65,6 +65,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *     the sponsorship lines only; `scripts/economy/variantGate.ts` in `wunderkind-app` is the
  *     acceptance test, because modelled income needs a ground model, fill and elasticity that
  *     this backend does not have.
+ *  8. **Do the league payout ladders cost a division something sane?** `prize_money` and
+ *     `league_position_pot` are PER-CLUB figures that read like pools, and the authored ladder
+ *     inverted at tier 3 — a tier-8 champion was paid 30.33x its own authored turnover against
+ *     tier 1's 0.26x. Four constraints: both ladders non-increasing; TV + position + prize per
+ *     average club inside 10-50% of turnover with the two ends of the pyramid within 4x either
+ *     way; a champion's own take (prize + first place) at or under 100% of its turnover; and
+ *     the prize-plus-position contribution FLAT across tiers, which is the invariant the ladder
+ *     creates and the only one of the four the TV ladder cannot drown out. The band is 10-50%
+ *     rather than the 25-75% first proposed, for a reason the constant's own docblock gives.
  *
  * The two deduction-ladder checks inside (5) read country-independent columns and therefore run
  * ONCE for the whole invocation, not once per country argument — see checkDeductionLadders().
@@ -101,6 +110,64 @@ final class EconomyWageTableCommand extends Command
      */
     private const SPONSOR_SHARE_SPREAD = 3;
 
+    /**
+     * What TV + position money + the champion's prize may come to for an AVERAGE club in a
+     * division, as a share of that club's own authored turnover.
+     *
+     * ⚠️ 10-50%, NOT THE 25-75% THE BRIEF PROPOSED, and the data is why. Once the prize and the
+     * pot are a flat share of each tier's own turnover, those two lines contribute a CONSTANT
+     * 9.29 percentage points at every tier by construction. Every point of tier-to-tier
+     * variation left in this figure therefore comes from the TV ladder, which is monotone 35%
+     * at tier 1 down to 3% at tier 8 and is deliberately out of scope.
+     *
+     * So a 25% floor is not a statement about prize money at all: it asserts that TV must be at
+     * least about 15.7% of turnover at tier 8, five times what the TV table was authored to pay.
+     * It would fail at tiers 4-8 on figures that are correct. These three lines are also not a
+     * club's whole income — sponsorship is separately held to 8-30% of turnover by check 7 — so
+     * 12.3% here plus 22% there plus matchday is a believable bottom-tier mix.
+     *
+     * 10-50% brackets the authored shape with headroom at both ends and still catches what was
+     * actually wrong: tiers 6, 7 and 8 were at 157%, 362% and 542%.
+     */
+    private const PAYOUT_SHARE_MIN_PCT = 10;
+    private const PAYOUT_SHARE_MAX_PCT = 50;
+
+    /**
+     * How much more of its turnover the BOTTOM division may draw from these three lines than the
+     * top, and vice versa.
+     *
+     * The brief asked for "the tier-8 share no more than 3x tier 1's", which the authored ladder
+     * passes at 0.278x — tier 8 is LOWER, because TV collapses faster than the flat prize share
+     * compensates. Checked in BOTH directions for that reason: the one-sided form would have
+     * been silent on the real spread, which is tier 1 at 3.60x tier 8.
+     */
+    private const PAYOUT_SHARE_SPREAD = 4;
+
+    /**
+     * The hard ceiling on what ONE CLUB can bank for winning its division: prize + first-place
+     * position money, against its own authored turnover.
+     *
+     * 100% because past it a single season's trophy is worth more than everything else the club
+     * does in a year, which is the defect this ladder was authored to fix — tier 8 was at
+     * 4,246%. The authored ladder sits at 51.4-51.5% at every tier.
+     */
+    private const CHAMPION_SHARE_MAX_PCT = 100;
+
+    /**
+     * How far the prize-plus-position contribution may vary between tiers, in percentage points
+     * of turnover.
+     *
+     * THE INVARIANT THIS LADDER CREATES, and the only check here that is blind to TV. Both
+     * ladders are a flat share of each tier's own turnover, so this contribution is the same at
+     * every tier — 9.29pp on the authored figures, varying by 0.008pp across all eight, which is
+     * three-significant-figure rounding in the ratios and nothing else. A retune of the turnover
+     * table without re-deriving the ratios breaks it immediately and visibly, which is the trap
+     * the sponsor ratios already carry a warning about in the rollout doc. 0.5pp is generous
+     * against a 0.008pp observed spread, and still an order of magnitude tighter than any drift
+     * worth shipping.
+     */
+    private const PAYOUT_FLATNESS_TOLERANCE_PP = 0.5;
+
     public function __construct(
         private readonly GameConfigRepository    $gameConfigRepository,
         private readonly EconomyScaleResolver    $scaleResolver,
@@ -109,6 +176,7 @@ final class EconomyWageTableCommand extends Command
         private readonly LeagueSizeResolver      $leagueSizeResolver,
         private readonly SponsorBandResolver     $sponsorBands,
         private readonly TicketPriceResolver     $ticketPrices,
+        private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayouts,
     ) {
         parent::__construct();
     }
@@ -267,6 +335,7 @@ final class EconomyWageTableCommand extends Command
         $problems = [...$problems, ...$this->checkTvIsCountryScaled($io, $country, $tierCount)];
         $problems = [...$problems, ...$this->checkAbsoluteThresholds($io, $country, $tierCount, $config)];
         $problems = [...$problems, ...$this->checkSponsorshipShares($io, $country, $tierCount, $config)];
+        $problems = [...$problems, ...$this->checkLeaguePayouts($io, $country, $tierCount, $config)];
 
         return $problems;
     }
@@ -765,6 +834,197 @@ final class EconomyWageTableCommand extends Command
                     $i,
                     $ratios[$i - 1] ?? 0,
                 );
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Check 8 — the league payout ladders, and what they cost a division.
+     *
+     * ── WHAT WAS WRONG, AND WHY A CHECK RATHER THAN A FIX ─────────────────────────────────
+     *
+     * `prize_money` and `league_position_pot` are PER-CLUB figures sized as though they were
+     * pools, and against the authored turnover ladder they INVERTED at tier 3: tier 1 paid its
+     * champion 0.26x its turnover, tier 8 paid 30.33x. Version20261116181000 re-authored them
+     * as a flat share of each tier's own turnover. These checks are what stops that being
+     * undone by the next retune — the ladder is decoupled from the turnover table on purpose,
+     * so nothing but a check can notice the two drifting apart.
+     *
+     * ── THE ARITHMETIC MIRRORS THE RESOLVER, NOT A SECOND MODEL ───────────────────────────
+     *
+     * Figures come from `LeaguePayoutResolver`, and the taper sum from its own `taperSumPpm()`,
+     * for the reason check 7 states at length: a differently-shaped estimate here would look
+     * like a cross-check and would not be one. The club count and the decrease percent come off
+     * this country's own league rows — `slots` is 10 in KR, 14 in BE, 18 in EN and 20 in FR, so
+     * assuming 18 would quietly misreport three quarters of the world.
+     *
+     * ── FOUR CONSTRAINTS ──────────────────────────────────────────────────────────────────
+     *
+     *  a. both ladders non-increasing down the pyramid;
+     *  b. TV + position + prize per AVERAGE club inside PAYOUT_SHARE_MIN/MAX_PCT, and the
+     *     top-to-bottom spread inside PAYOUT_SHARE_SPREAD either way;
+     *  c. a champion's own take (prize + first place) at or under CHAMPION_SHARE_MAX_PCT;
+     *  d. the prize-plus-position contribution flat across tiers — the invariant the ladder
+     *     creates, and the only one of the four that TV cannot drown out.
+     *
+     * @return list<string>
+     */
+    private function checkLeaguePayouts(SymfonyStyle $io, string $country, int $tierCount, GameConfig $config): array
+    {
+        $problems   = [];
+        $rows       = [];
+        $shares     = [];
+        $flatness   = [];
+        $prizeRatio = $config->getEconomyPrizeTierRatioPpm();
+        $potRatio   = $config->getEconomyPositionPotTierRatioPpm();
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $scale = $this->scaleResolver->resolve($country, $tier);
+
+            if (!$scale->isResolvable || $scale->turnoverPence <= 0) {
+                // No denominator. Check 1 already reports an unauthored tier; saying so twice
+                // would make this command's finding count depend on how many tiers are blank.
+                continue;
+            }
+
+            $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
+
+            if ($league === null) {
+                continue;
+            }
+
+            $prize = $this->leaguePayouts->prizeFor($league, $config) ?? 0;
+            $pot   = $this->leaguePayouts->positionPotFor($league, $config) ?? 0;
+
+            $clubs    = max(1, $this->leagueSizeResolver->sizeOf($league));
+            $decrease = $league->getLeaguePositionDecreasePercent()
+                ?? $config->getLeaguePositionDecreasePercent();
+            $taperPpm = $this->leaguePayouts->taperSumPpm($clubs, $decrease);
+
+            $tvPerClub     = $league->getTvDeal() ?? 0;
+            $positionTotal = intdiv($pot * $taperPpm, 1_000_000);
+
+            // PER AVERAGE CLUB: this club's TV, the division's position bill spread over its
+            // clubs, and the prize spread the same way — the champion takes it all, but the
+            // question here is what the tier pays out per head.
+            $perClub  = $tvPerClub + intdiv($positionTotal, $clubs) + intdiv($prize, $clubs);
+            $sharePct = $perClub * 100 / $scale->turnoverPence;
+
+            $payoutOnlyPct  = (intdiv($positionTotal, $clubs) + intdiv($prize, $clubs)) * 100 / $scale->turnoverPence;
+            $championPct    = ($prize + $pot) * 100 / $scale->turnoverPence;
+
+            $shares[$tier]   = $sharePct;
+            $flatness[$tier] = $payoutOnlyPct;
+
+            $rows[] = [
+                'T' . $tier,
+                $this->money($prize),
+                $this->money($pot),
+                $clubs . ' @ ' . $decrease . '%',
+                sprintf('%.2fx', $taperPpm / 1_000_000),
+                $this->money($league->getTvPoolPence() ?? 0),
+                $this->money(($league->getTvPoolPence() ?? 0) + $positionTotal + $prize),
+                $this->money($scale->turnoverPence * $clubs),
+                sprintf('%.1f%%', $sharePct),
+                sprintf('%.1f%%', $championPct),
+            ];
+
+            // Constraint b, first half.
+            if ($sharePct < self::PAYOUT_SHARE_MIN_PCT || $sharePct > self::PAYOUT_SHARE_MAX_PCT) {
+                $problems[] = sprintf(
+                    '%s tier %d: TV + position + prize is %.1f%% of authored turnover for an average club (%s of %s) — outside the agreed %d-%d%% band.',
+                    $country,
+                    $tier,
+                    $sharePct,
+                    $this->money($perClub),
+                    $this->money($scale->turnoverPence),
+                    self::PAYOUT_SHARE_MIN_PCT,
+                    self::PAYOUT_SHARE_MAX_PCT,
+                );
+            }
+
+            // Constraint c. The hard one: this is what a single club banks for winning.
+            if ($championPct > self::CHAMPION_SHARE_MAX_PCT) {
+                $problems[] = sprintf(
+                    '%s tier %d: a champion banks %s (prize %s + first-place pot %s), which is %.1f%% of its own authored turnover of %s — over the %d%% ceiling.',
+                    $country,
+                    $tier,
+                    $this->money($prize + $pot),
+                    $this->money($prize),
+                    $this->money($pot),
+                    $championPct,
+                    $this->money($scale->turnoverPence),
+                    self::CHAMPION_SHARE_MAX_PCT,
+                );
+            }
+        }
+
+        if ($rows !== []) {
+            $io->text('League payouts against authored turnover (POSITION is the FIRST-PLACE amount; the division pays the taper multiple of it):');
+            $io->table(
+                ['T', 'prize', 'position (1st)', 'clubs @ taper', 'x pot', 'tv pool', 'league total', 'league turnover', 'per club', 'champion'],
+                $rows,
+            );
+        }
+
+        // Constraint b, second half — BOTH directions. The brief asked only whether the bottom
+        // outran the top, which the authored ladder passes at 0.278x precisely because TV
+        // collapses faster than a flat prize share compensates. The real spread is the other
+        // way round, and a one-sided check would never have said so.
+        $first = $shares[1] ?? null;
+        $last  = $shares[min(8, $tierCount)] ?? null;
+
+        if ($first !== null && $last !== null && $first > 0 && $last > 0) {
+            $spread = max($first / $last, $last / $first);
+
+            if ($spread > self::PAYOUT_SHARE_SPREAD) {
+                $problems[] = sprintf(
+                    '%s: the tier-1 payout share (%.1f%%) and the tier-%d share (%.1f%%) are %.2fx apart, over the %dx limit — the two ends of the pyramid are running different economies.',
+                    $country,
+                    $first,
+                    min(8, $tierCount),
+                    $last,
+                    $spread,
+                    self::PAYOUT_SHARE_SPREAD,
+                );
+            }
+        }
+
+        // Constraint d — the invariant, and the only check here TV cannot mask.
+        if (count($flatness) > 1) {
+            $min = min($flatness);
+            $max = max($flatness);
+
+            if ($max - $min > self::PAYOUT_FLATNESS_TOLERANCE_PP) {
+                $problems[] = sprintf(
+                    '%s: prize + position money is %.2fpp of turnover at its lowest tier and %.2fpp at its highest, a %.2fpp spread over the %.1fpp tolerance — the ratio tables no longer track the turnover ladder they were derived from. Re-derive them, do not widen the tolerance.',
+                    $country,
+                    $min,
+                    $max,
+                    $max - $min,
+                    self::PAYOUT_FLATNESS_TOLERANCE_PP,
+                );
+            }
+        }
+
+        // Constraint a. Reported, never refused — as with the sponsor ratios.
+        foreach ([
+            ['economyPrizeTierRatioPpm',       $prizeRatio],
+            ['economyPositionPotTierRatioPpm', $potRatio],
+        ] as [$label, $table]) {
+            for ($i = 1; $i < min(8, $tierCount); $i++) {
+                if (($table[$i] ?? 0) > ($table[$i - 1] ?? 0)) {
+                    $problems[] = sprintf(
+                        '%s: tier %d (%d ppm) is higher than tier %d (%d ppm) — a lower division paying its champion more, relative to tier 1, than the one above it.',
+                        $label,
+                        $i + 1,
+                        $table[$i] ?? 0,
+                        $i,
+                        $table[$i - 1] ?? 0,
+                    );
+                }
             }
         }
 

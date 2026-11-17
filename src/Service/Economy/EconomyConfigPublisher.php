@@ -138,6 +138,18 @@ final class EconomyConfigPublisher
             // fail that test rather than quietly widening a public contract.
             'sponsorTierRatioBp'     => $config->getEconomySponsorTierRatioBp(),
             'ticketPriceTierRatioBp' => $config->getEconomyTicketPriceTierRatioBp(),
+            // PARTS PER MILLION, NOT BASIS POINTS — and the two units sit side by side here, so
+            // the key names carry the unit. 1000000 is parity on these two; 10000 is parity on
+            // the two above. A client dividing either by the wrong constant is out by 100x,
+            // which is why `docs/api/economy-config.md` states the unit per key rather than
+            // once for the block. The prize ladder needs the finer unit because tier 8 is
+            // 4.24 bp, where one integer bp step would be 23.6% of the figure.
+            //
+            // The RESOLVED prize and pot are not here, for the reason given above: they are
+            // country-scaled, so they arrive on the per-league payload where a country is in
+            // hand. These two are the authoring view.
+            'prizeTierRatioPpm'       => $config->getEconomyPrizeTierRatioPpm(),
+            'positionPotTierRatioPpm' => $config->getEconomyPositionPotTierRatioPpm(),
         ];
     }
 

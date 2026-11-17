@@ -214,18 +214,60 @@ for the same reason.
   "baselineTurnoverPence": [0, 0, 0, 0, 0, 0, 0, 0],
   "inflationRatePerSeasonBp": 0,
   "sponsorTierRatioBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000],
-  "ticketPriceTierRatioBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000]
+  "ticketPriceTierRatioBp": [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000],
+  "prizeTierRatioPpm": [1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000],
+  "positionPotTierRatioPpm": [1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000]
 }
 ```
 
-`sponsorTierRatioBp` and `ticketPriceTierRatioBp` are **authoring tables, not resolved figures**:
-basis points of tier 1, index 0 = tier 1, `10000` = parity, which is the shipped state. They are
-here rather than only on the resolved endpoints for the same reason `tierFactorsBp` is — this is
-the country-agnostic authoring view, and the landing page and operator tooling read it.
+All four ratio tables are **authoring tables, not resolved figures**: a ratio of tier 1, index
+0 = tier 1, parity being the shipped state. They are here rather than only on the resolved
+endpoints for the same reason `tierFactorsBp` is — this is the country-agnostic authoring view,
+and the landing page and operator tooling read it.
 
-**The resolved per-tier sponsor bands and ticket prices are deliberately NOT on this endpoint.**
-They are country-scaled, and this endpoint is unauthenticated with no club to resolve a country
-from. Read them off `GET /api/game-config?country=` or the sync `gameConfig` block.
+> ⚠️ **TWO DIFFERENT UNITS, AND THE KEY NAME CARRIES IT.** `sponsorTierRatioBp` and
+> `ticketPriceTierRatioBp` are **basis points**, where `10000` is parity.
+> `prizeTierRatioPpm` and `positionPotTierRatioPpm` are **parts per million**, where
+> `1000000` is parity. Dividing either pair by the other's constant is out by 100x.
+>
+> The finer unit is not a style choice: the prize ladder spans 424 ppm at tier 8 against
+> 1000000 at tier 1, which is **4.24 basis points**. An integer bp table would store `4` — a
+> 5.7% error — and one bp step would be 23.6% of the figure, so the bottom of the ladder could
+> not be adjusted at all. The sponsor ratios bottom out at 96 bp, where bp is still fine, which
+> is why that table was left as it is.
+
+**The resolved per-tier sponsor bands, ticket prices, prizes and position pots are deliberately
+NOT on this endpoint.** They are country-scaled, and this endpoint is unauthenticated with no
+club to resolve a country from. Read the sponsor and ticket figures off
+`GET /api/game-config?country=` or the sync `gameConfig` block; the prize and position pot
+arrive on the **per-league** payload as `prizeMoney` and `leaguePositionPot`.
+
+### `prizeMoney` and `leaguePositionPot` are resolved, and both are PER CLUB
+
+Both keep their names, their nullable-int types and their position on every payload that carried
+them. What changed is where the value comes from: since `Version20261116181000` they are resolved
+by `LeaguePayoutResolver` as **the league's own column when it is set, else the tier-1 base x
+this tier's ratio x the country factor**, with the factor applied once and last. `null` still
+means "unauthored" and is not `0`.
+
+Read them for what they are, because the names suggest pools and they are not:
+
+| key | what one club gets |
+|---|---|
+| `prizeMoney` | paid **whole to the champion**, and to nobody else |
+| `leaguePositionPot` | the **first-place** amount; position `p` is paid `pot x (1 - leaguePositionDecreasePercent/100 x (p - 1))`, floored at 0 |
+
+So a division's whole position bill is the pot times the sum of those multipliers — **5.5x at the
+authored 10% taper, for any league of 11 clubs or more**. A client modelling a league total from
+the pot alone will be out by that factor, and a client crediting `prizeMoney` to a non-champion
+will be out by the whole prize.
+
+⚠️ **The VALUES moved on 2026-11-16, under unchanged keys.** The previous England ladder was
+sized as though both figures were pools and inverted at tier 3 — a tier-8 champion was paid
+£5,000,000 against £164,852 of authored turnover, 30.3x, where tier 1 was at 0.26x. Both ladders
+are now a flat 0.2573x of each tier's own authored turnover. By this repo's own rule a changed
+value under an unchanged key is a breaking change, and the consumer check was the app's
+income-truth batch, which already reads both correctly.
 
 `baselineTurnoverPence` shipping as eight zeros is **not a usable configuration and deliberately
 not a harmless one** — the wage scale divides by turnover, so zero makes the turnover model
@@ -603,10 +645,23 @@ omitting it is byte-identical to the previous behaviour plus the new keys.
 `seasonTicketHolderPercent` was **not** duplicated into the economy block — it is already live on
 both `/api/game-config` and the sync `gameConfig` block.
 
-`sponsorTierRatioBp` and `ticketPriceTierRatioBp` are **additions inside the `economy` block** of
+`sponsorTierRatioBp`, `ticketPriceTierRatioBp`, `prizeTierRatioPpm` and
+`positionPotTierRatioPpm` are **additions inside the `economy` block** of
 `GET /api/starter-config` — no top-level key changed, which
-`tests/Controller/Api/LegacyNewGameFlowTest.php` asserts by diffing the top-level key set. Both
-ship at parity.
+`tests/Controller/Api/LegacyNewGameFlowTest.php` asserts by diffing the top-level key set. All
+four ship at parity.
+
+⚠️ **`prizeMoney` and `leaguePositionPot` are the one genuine break in this pass**, and it is a
+VALUE break rather than a shape one: the keys, types and positions are untouched on all five
+payloads that carry them (the world pack, sync, the season pyramid,
+`GET /api/initialize/leagues` and the admin overview), but the figures they carry moved on
+2026-11-16 when the ratio ladders were authored. See the section above for what changed and why.
+The code change alone is inert — every league still held its own column, which the resolver
+returns verbatim — so the break lands with `Version20261116181000`, not with the deploy.
+
+`WORLD_PACK_VERSION` went **6 → 7** in the same release, because both figures are baked into the
+cached league block. Without the bump the packs would keep serving the old ladder with nothing
+about the payload looking different, which is exactly what happened to `tvDeal` on 2026-11-13.
 
 `ticketPricePence` **kept its name, type and position** and changed its source: it was the raw
 `economyTicketPricePerTierPence` row and is now the figure `TicketPriceResolver` resolves (base ×

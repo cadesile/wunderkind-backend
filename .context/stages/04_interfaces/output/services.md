@@ -1252,6 +1252,46 @@ country whose factor truncates to 0 against the baseline resolves to 0, matching
 **Published above 0, it is the ADVISED price** the app's elasticity measures a club against —
 see `docs/api/economy-config.md`. `TicketPriceResolverTest`.
 
+**`LeaguePayoutResolver` — the champion's prize and the position pot, added 2026-11-16.** The
+third resolver in this family and the first for figures that were already published as stored
+absolutes. `prizeFor(League, ?GameConfig)` and `positionPotFor(...)` resolve **the league's own
+column when it is NOT NULL (an override, verbatim — no ratio, no country factor), else the tier-1
+base × this tier's ratio × the country factor, else null**. `null` means unauthored and is not
+`0`; the publish sites render it `—`.
+
+**NULL NOW MEANS INHERIT**, which is the change that makes the ladder reachable.
+`Version20261116181000` cleared the column on every league precisely because every one held a
+cascaded tier default — measured on the live export, all 24 eight-tier countries byte-identical
+and SC holding rows 1-4 of the same ladder, so there was not one genuine override in the world.
+Had the column kept winning, the ratio tables would have been authored, correct and ignored.
+NULL = inherit is already the convention for the two sibling fields `League::$tvPoolPence` and
+`League::$leaguePositionDecreasePercent`.
+
+**READ WHAT THE TWO FIGURES ARE**, because the names suggest pools and they are not: `prizeMoney`
+goes **whole to the champion**, and `leaguePositionPot` is the **first-place** amount, each lower
+placing tapered by `leaguePositionDecreasePercent`. So a division's whole position bill is the pot
+times the sum of the multipliers — **5.5× at the authored 10% taper for any league of 10+ clubs**,
+but 3.85× at 15% and 2.70× in a 3-club league, which is why `taperSumPpm(clubs, decreasePercent)`
+computes it rather than anyone assuming it.
+
+⚠️ **ITS ARITHMETIC IS NOT THE SIBLINGS' ARITHMETIC, AND MUST NOT BE "TIDIED" INTO IT.** Both
+other resolvers end in one `intdiv` over `BP * BP`. At parts per million and a £100,000,000 base
+that numerator is `1e10 × 1e6 × 1e4 = 1e20` against an int64 ceiling of 9.223e18 — PHP does not
+raise, it silently becomes a float and loses pence. Pre-combining the two dimensionless factors
+avoids the overflow but is **wrong**, and was written that way first: at tier 8 against a 20%
+country a 424 ppm ratio truncates to 84 ppm instead of 84.8, a 0.94% error that grows as the
+ladder steepens. The shipped form splits the money instead — `n = base × ratio`, then
+`n = a·D + b`, then `a × factor + intdiv(b × factor, D)` — which is ONE truncation on the exact
+quantity with no intermediate above 1e16. `LeaguePayoutResolverTest` pins the overflow case and
+the exact-20% case; both were caught by tests, not by reading.
+
+The tier factor is deliberately absent, as with sponsors. Gate check 8 bounds the result:
+non-increasing ladders, TV + position + prize per average club inside 10-50% of turnover with the
+pyramid's two ends within 4× either way, a champion's own take under 100% of its turnover, and the
+prize-plus-position contribution flat across tiers — that last being the invariant the ladder
+creates and the only one TV cannot mask. `LeaguePayoutResolverTest`, and
+`docs/deploy/economy-rollout.md` §4c for the authored figures.
+
 **`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that
 was a GAP rather than a choice: decision 4 of the economy brief lists NPC balances among the
 things the backend bakes the country factor into, and the step-5 wage unification threaded

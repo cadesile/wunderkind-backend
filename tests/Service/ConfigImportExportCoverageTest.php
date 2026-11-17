@@ -210,6 +210,46 @@ class ConfigImportExportCoverageTest extends TestCase
         self::assertSame(4_000, $target->getEconomyTicketPriceTier1Pence());
     }
 
+    /**
+     * The league-payout ladders, which are PARTS PER MILLION and therefore the pair most likely
+     * to be silently halved by a normaliser written for basis points.
+     *
+     * The failure this guards is the same one as above and worse: a config export is the ONLY
+     * record of an authored prize ladder — the per-league columns are cleared by
+     * Version20261116181000 and `down()` restores from a stash table that a fresh box will not
+     * have. A round trip that quietly returned parity would restore a backup as "every division
+     * paid tier 1's prize", which is £100,000,000 to a tier-8 champion.
+     */
+    public function testTheLeaguePayoutLaddersRoundTripWithTheirValues(): void
+    {
+        $ladder = [1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424];
+
+        $source = (new GameConfig())
+            ->setEconomyPrizeTierRatioPpm($ladder)
+            ->setEconomyPositionPotTierRatioPpm($ladder)
+            ->setEconomyLeaguePrizeTier1Pence(10_000_000_000)
+            ->setEconomyLeaguePositionPotTier1Pence(10_000_000_000);
+
+        $exported = ConfigImportExportService::exportEntity($source);
+
+        self::assertSame($ladder, $exported['economyPrizeTierRatioPpm']);
+        self::assertSame($ladder, $exported['economyPositionPotTierRatioPpm']);
+        self::assertSame(10_000_000_000, $exported['economyLeaguePrizeTier1Pence']);
+        self::assertSame(10_000_000_000, $exported['economyLeaguePositionPotTier1Pence']);
+
+        $target = new GameConfig();
+        self::assertSame([], ConfigImportExportService::applyEntity($target, $exported));
+
+        self::assertSame($ladder, $target->getEconomyPrizeTierRatioPpm());
+        self::assertSame($ladder, $target->getEconomyPositionPotTierRatioPpm());
+        self::assertSame(10_000_000_000, $target->getEconomyLeaguePrizeTier1Pence());
+        self::assertSame(10_000_000_000, $target->getEconomyLeaguePositionPotTier1Pence());
+
+        // AND THE UNIT IS NOT CONFUSED WITH THE BASIS-POINT TABLES on the same entity. 424 ppm
+        // read as 424 bp is 100x the money.
+        self::assertNotSame($target->getEconomyPrizeTierRatioPpm(), $target->getEconomySponsorTierRatioBp());
+    }
+
     public function testUnknownKeysAreIgnored(): void
     {
         $pool = new PoolConfig();

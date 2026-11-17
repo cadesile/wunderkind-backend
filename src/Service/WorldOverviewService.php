@@ -38,6 +38,7 @@ class WorldOverviewService
         private readonly StarterConfigRepository $starterConfigRepository,
         private readonly CountryProfileRepository $countryProfileRepository,
         private readonly CacheInterface $cache,
+        private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
     ) {}
 
     /** @return array<string, mixed> */
@@ -91,13 +92,15 @@ class WorldOverviewService
                     // Money columns are nullable bigint pence. A tier with no
                     // value configured returns null and the caller omits the row —
                     // printing "£0" would read as a deliberate figure.
-                    'prizeMoney'        => self::pence($league->getPrizeMoney()),
+                    // RESOLVED through LeaguePayoutResolver, so an inherited tier reads as
+                    // the figure it will actually pay rather than as an unauthored dash.
+                    'prizeMoney'        => self::pence($this->leaguePayoutResolver->prizeFor($league)),
                     'tvDeal'            => self::pence($league->getTvDeal()),
                     // The POOL as well as the per-club share, through the same pence-to-pounds
                     // helper — a tier showing a share with no pool is a tier nobody has
                     // authored a pool for yet, which is the state every league ships in.
                     'tvPoolPence'       => self::pence($league->getTvPoolPence()),
-                    'leaguePositionPot' => self::pence($league->getLeaguePositionPot()),
+                    'leaguePositionPot' => self::pence($this->leaguePayoutResolver->positionPotFor($league)),
                 ];
             }
 

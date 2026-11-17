@@ -119,8 +119,29 @@ class WorldInitializationService
      *     the ticket price is published-only and is not part of any cached pack. The
      *     sponsor half is what makes the bump mandatory, and conflating the two would
      *     teach the next reader the wrong rule.
+     *
+     * 7 — `prizeMoney` and `leaguePositionPot` are now RESOLVED through
+     *     `LeaguePayoutResolver` rather than read off the league column, and the same release
+     *     nulls the column on every league still holding a cascaded tier default. Another
+     *     content-not-shape bump: the two keys and their types are untouched, but both figures
+     *     are in the cached league block above, so a pack cached before this would keep serving
+     *     the inverted ladder — tier-8 champions on £5,000,000 against £164,852 of authored
+     *     turnover — with nothing about the payload looking different.
+     *
+     *     The ladder: tier-1 bases unchanged at £100,000,000 for both, with
+     *     `economyPrizeTierRatioPpm` and `economyPositionPotTierRatioPpm` both
+     *     `[1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424]` — parts per million, not
+     *     basis points, because tier 8 is 4.24 bp and one bp step there would be 23.6% of the
+     *     value. That puts both figures at a flat 0.2573x of each tier's own authored turnover,
+     *     which is tier 1's existing ratio, and takes the EN tier-8 division's total payout
+     *     from 5.42x its combined authored turnover to 0.12x.
+     *
+     *     ⚠️ The bump goes with THE CODE, not with the authoring pass. The resolver reads
+     *     `GameConfig` at pack-build time, so the figures move the moment the ratios are
+     *     authored — and the 2026-11-13 `tv_deal` incident is what happens when that is left
+     *     to the data step: 60 of 200 packs sat on the current version and 25x out of date.
      */
-    public const WORLD_PACK_VERSION = 6;
+    public const WORLD_PACK_VERSION = 7;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -145,6 +166,7 @@ class WorldInitializationService
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly WorldPackClubGenerationService $clubGenerator,
         private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
+        private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
     ) {}
 
     /**
@@ -227,8 +249,13 @@ class WorldInitializationService
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
             'tvDeal'                        => $league->getTvDeal(),
             'sponsorPot'                    => $sponsorPot,
-            'prizeMoney'                    => $league->getPrizeMoney(),
-            'leaguePositionPot'             => $league->getLeaguePositionPot(),
+            // RESOLVED, NOT READ OFF THE COLUMN. A null column means "inherit the authored
+            // tier-1 base x this tier's ratio x the country factor" — see LeaguePayoutResolver.
+            // The KEYS and their types are unchanged, so this is not a shape change; the VALUES
+            // move the moment the ratios are authored, which is why WORLD_PACK_VERSION is
+            // bumped in the same release rather than left to the authoring pass.
+            'prizeMoney'                    => $this->leaguePayoutResolver->prizeFor($league, $gameConfig),
+            'leaguePositionPot'             => $this->leaguePayoutResolver->positionPotFor($league, $gameConfig),
             'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
             'trophy'                        => $league->getTrophy(),
             'clubs'                         => $clubsData,

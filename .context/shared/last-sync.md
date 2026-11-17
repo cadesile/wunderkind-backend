@@ -5,6 +5,38 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **The league payout ladders authored relative to the top tier (2026-11-16), on top of commit
+  `d06ebd9c`** (branch `development`). **Stages touched:** 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`services.md`), shared (this file).
+
+  Acts on the finding the entry below recorded and left as an authoring decision.
+  `LeaguePayoutResolver` + two migrations + gate check 8 + `WORLD_PACK_VERSION` 6 → 7. Both
+  ladders now sit at a flat **0.2573× of each tier's own authored turnover** (tier 1's existing
+  ratio), so EN tier 8 goes £5,000,000 → £42,400 and its division's total payout 5.42× → 0.12× of
+  combined authored turnover. The `entities.md` warning is marked resolved in place rather than
+  deleted, with the original finding kept under it.
+
+  Three things worth carrying forward:
+
+  - **Parts per million, not basis points.** Tier 8 is 4.24 bp, where one integer step is 23.6%
+    of the figure. The entity now carries `GameConfig::TIER_RATIO_PPM_PARITY` beside the bp
+    tables, and the admin grid labels the unit per column because the two now sit side by side.
+  - **The sibling resolvers' single-`intdiv` chain overflows at this unit** and the obvious fix
+    (pre-combining the dimensionless factors) is wrong by 0.94% at tier 8. See `services.md`.
+    Caught by a test asserting a 20% country resolves to exactly one fifth — the kind of defect
+    that reads as a rounding quirk.
+  - **NULL now means inherit** on `league.prize_money` / `league.league_position_pot`, and the
+    tier-defaults row's own prize/pot cells were cleared too, because that row is what
+    `generateLeaguesForCountry()` writes onto a new league — leave it populated and the next
+    country added silently opts out of the ladder.
+
+  **Environmental, not ours:** `wunderkind_test` is ~64 schema statements behind this branch, so
+  a full-suite run reports 873 errors BEFORE this change (3181 tests) and 877 after (3207). The
+  four extra are three new `EconomyAdminTest` cases in a class whose 23 existing tests already
+  error on a kernel-boot problem here, plus one order-dependent flake that passes in isolation.
+  `tests/Controller/Admin` + `tests/Service` is at exact parity: 527 errors / 88 failures both
+  ways, with zero tests newly broken.
+
 - **Economy findings from the app's income-truth batch (2026-11-16), on top of commit
   `5caa68d1`** (branch `development`). **Stages touched:** 03_data (`entities.md`),
   04_interfaces (`services.md`, `routes.md`), shared (this file).

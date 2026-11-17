@@ -14,6 +14,7 @@ use App\Repository\InflationRateHistoryRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Service\Economy\EconomyScaleResolver;
+use App\Service\Economy\LeaguePayoutResolver;
 use App\Service\Economy\LeagueSizeResolver;
 use App\Service\Economy\SponsorBandResolver;
 use App\Service\Economy\TicketPriceResolver;
@@ -70,6 +71,7 @@ class EconomyAdminController extends AbstractController
         private readonly LeagueSizeResolver             $leagueSizeResolver,
         private readonly SponsorBandResolver            $sponsorBands,
         private readonly TicketPriceResolver            $ticketPrices,
+        private readonly LeaguePayoutResolver           $leaguePayouts,
     ) {}
 
     #[Route('/admin/economy', name: 'admin_economy')]
@@ -100,6 +102,9 @@ class EconomyAdminController extends AbstractController
             // The sponsor and ticket half of the same screen, resolved through the real
             // resolvers and read-only — see buildRevenuePreview().
             'revenue'         => $this->buildRevenuePreview($previewCountry, $config),
+            // The league-payout half: what each tier's champion and placings are paid, and what
+            // that costs the whole division — see buildPayoutPreview().
+            'payouts'         => $this->buildPayoutPreview($previewCountry, $config),
             'wageScaleUnit'   => EconomyScaleResolver::WAGE_SCALE_UNIT,
             // So the screen can say what flipping the model will cost before it is flipped.
             'worldPackVersion' => WorldInitializationService::WORLD_PACK_VERSION,
@@ -204,6 +209,19 @@ class EconomyAdminController extends AbstractController
                 fn (): array => $config->getEconomyTicketPriceTierRatioBp(),
                 fn (array $v): GameConfig => $config->setEconomyTicketPriceTierRatioBp($v),
             ],
+            // THE SAME LOOP, A DIFFERENT UNIT. These two are PARTS PER MILLION, so parity is
+            // 1000000 and not 10000 — the tier-8 prize ratio is 424 ppm, which integer basis
+            // points cannot hold (see GameConfig::$economyPrizeTierRatioPpm). The loop does not
+            // care, because it only ever copies integers by index; the parity figure lives in
+            // the setter's normaliser and in the column's placeholder, not here.
+            'prizeTierRatioPpm'       => [
+                fn (): array => $config->getEconomyPrizeTierRatioPpm(),
+                fn (array $v): GameConfig => $config->setEconomyPrizeTierRatioPpm($v),
+            ],
+            'positionPotTierRatioPpm' => [
+                fn (): array => $config->getEconomyPositionPotTierRatioPpm(),
+                fn (array $v): GameConfig => $config->setEconomyPositionPotTierRatioPpm($v),
+            ],
         ] as $field => [$read, $write]) {
             $posted = $request->request->all($field);
 
@@ -232,6 +250,29 @@ class EconomyAdminController extends AbstractController
             $config->setEconomyTicketPriceTier1Pence(
                 $raw === '' ? 0 : (int) round(((float) $raw) * 100),
             );
+        }
+
+        // THE TWO LEAGUE-PAYOUT BASES, same pounds-in/pence-stored and same blank-means-zero
+        // rule as the ticket base above, and for the same reason: 0 propagates through
+        // LeaguePayoutResolver whatever the ratios say, so clearing the field is how an
+        // operator turns a ladder back off and hands every division to its own column again.
+        //
+        // ⚠️ THE POT BASE IS THE FIRST-PLACE AMOUNT, NOT THE DIVISION'S BILL. At the authored
+        // 10% taper the division pays out 5.5x whatever is typed here, so this field moves five
+        // and a half times as much money as it appears to. The resolved preview shows the
+        // league total beside it for exactly that reason.
+        foreach ([
+            'leaguePrizeTier1Pounds'       => fn (int $p): GameConfig => $config->setEconomyLeaguePrizeTier1Pence($p),
+            'leaguePositionPotTier1Pounds' => fn (int $p): GameConfig => $config->setEconomyLeaguePositionPotTier1Pence($p),
+        ] as $field => $write) {
+            $posted = $request->request->get($field);
+
+            if ($posted === null) {
+                continue;
+            }
+
+            $raw = str_replace(',', '', trim((string) $posted));
+            $write($raw === '' ? 0 : (int) round(((float) $raw) * 100));
         }
 
         $seasonBase = $request->request->get('seasonInvestmentBasePounds');
@@ -589,6 +630,162 @@ class EconomyAdminController extends AbstractController
             'rows'      => $rows,
             'warnings'  => $warnings,
             'ticketBasePence' => $ticketBase,
+        ];
+    }
+
+    /**
+     * What each tier's champion and placings are paid, and what that costs the division.
+     *
+     * ── WHY THE LEAGUE TOTAL IS THE COLUMN THAT MATTERS ───────────────────────────────────
+     *
+     * `leaguePositionPot` is the FIRST-PLACE amount, not a pool, and the per-club figure is the
+     * one an operator types — so the figure that actually left the building is invisible on the
+     * authoring screen. At the configured 10% taper a division pays out 5.5x the pot, and that
+     * is how a tier-8 pot of £2,000,000 came to cost £11,000,000 a year against £2,967,328 of
+     * combined authored turnover without anybody noticing. This column is that arithmetic, run
+     * once, beside the figure that causes it.
+     *
+     * ── COMPUTED PER LEAGUE, NOT ASSUMED ──────────────────────────────────────────────────
+     *
+     * The taper sum is 5.5 for any league of 11 clubs or more at a 10% taper, which makes it
+     * tempting to hardcode. It is not constant: `slots` is 10 in KR, 14 in BE, 18 in EN and 20
+     * in FR, and `leaguePositionDecreasePercent` has a per-league override. So the club count
+     * and the decrease come off THIS country's league row, through the same
+     * `LeagueSizeResolver` the TV divisor uses, and both are shown in the row so the arithmetic
+     * can be checked rather than trusted.
+     *
+     * READ-ONLY AND THROUGH THE REAL RESOLVER, as the sibling previews are.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPayoutPreview(string $country, GameConfig $config): array
+    {
+        $tierCount   = $this->scaleResolver->tierCountFor($country);
+        $prizeRatio  = $config->getEconomyPrizeTierRatioPpm();
+        $potRatio    = $config->getEconomyPositionPotTierRatioPpm();
+        $prizeBase   = $config->getEconomyLeaguePrizeTier1Pence();
+        $potBase     = $config->getEconomyLeaguePositionPotTier1Pence();
+        $turnover    = $config->getEconomyBaselineTurnoverPence();
+
+        $rows     = [];
+        $warnings = [];
+
+        for ($tier = 1; $tier <= $tierCount; $tier++) {
+            $league = $this->leagueRepository->findOneBy(['country' => $country, 'tier' => $tier]);
+
+            $prize = $league !== null
+                ? $this->leaguePayouts->prizeFor($league, $config)
+                : $this->leaguePayouts->inheritedFor($tier, $country, $config)['prize'];
+            $pot = $league !== null
+                ? $this->leaguePayouts->positionPotFor($league, $config)
+                : $this->leaguePayouts->inheritedFor($tier, $country, $config)['positionPot'];
+
+            $clubs = $league !== null ? $this->leagueSizeResolver->sizeOf($league) : 0;
+            $decrease = $league?->getLeaguePositionDecreasePercent()
+                ?? $config->getLeaguePositionDecreasePercent();
+            $taperSumPpm = $this->leaguePayouts->taperSumPpm($clubs, $decrease);
+
+            // The division's whole payout: the TV pool as authored, every placing's share of
+            // the pot, and the champion's prize once.
+            $tvPool        = $league?->getTvPoolPence() ?? 0;
+            $positionTotal = $pot !== null ? intdiv($pot * $taperSumPpm, 1000000) : 0;
+            $leagueTotal   = $tvPool + $positionTotal + ($prize ?? 0);
+            $leagueTurnover = ($turnover[$tier - 1] ?? 0) * $clubs;
+
+            $rows[] = [
+                'tier'            => $tier,
+                'prizeRatioPpm'   => $prizeRatio[$tier - 1] ?? GameConfig::TIER_RATIO_PPM_PARITY,
+                'potRatioPpm'     => $potRatio[$tier - 1] ?? GameConfig::TIER_RATIO_PPM_PARITY,
+                'prizePence'      => $prize,
+                'potPence'        => $pot,
+                // THE RESOLUTION ORDER, NAMED, and not derived from the figure — an override
+                // and a ratio can land on the same number, which is exactly when an operator
+                // most needs to be told which one is in force.
+                'prizeSource'     => $league?->getPrizeMoney() !== null
+                    ? 'override'
+                    : ($prizeBase > 0 ? 'ratio' : 'unauthored'),
+                'potSource'       => $league?->getLeaguePositionPot() !== null
+                    ? 'override'
+                    : ($potBase > 0 ? 'ratio' : 'unauthored'),
+                'clubs'           => $clubs,
+                'decreasePercent' => $decrease,
+                'taperSumPpm'     => $taperSumPpm,
+                'tvPoolPence'     => $tvPool,
+                'positionTotalPence' => $positionTotal,
+                'leagueTotalPence'   => $leagueTotal,
+                'leagueTurnoverPence' => $leagueTurnover,
+                // Null rather than 0 when turnover is unauthored: "no share" and "a share of
+                // nothing" are different states and the template prints them differently.
+                'shareOfTurnoverPct' => $leagueTurnover > 0
+                    ? round($leagueTotal / $leagueTurnover * 100, 1)
+                    : null,
+                'championSharePct' => ($turnover[$tier - 1] ?? 0) > 0 && $prize !== null && $pot !== null
+                    ? round(($prize + $pot) / $turnover[$tier - 1] * 100, 1)
+                    : null,
+            ];
+        }
+
+        // NON-MONOTONIC IS A WARNING, checked on the ratios and in the operator's own unit, as
+        // the sponsor and ticket tables are.
+        foreach ([
+            ['prize ratio',        $prizeRatio],
+            ['position pot ratio', $potRatio],
+        ] as [$label, $table]) {
+            for ($i = 1; $i < min(8, $tierCount); $i++) {
+                if (($table[$i] ?? 0) > ($table[$i - 1] ?? 0)) {
+                    $warnings[] = sprintf(
+                        'Tier %d\'s %s (%d ppm) is HIGHER than tier %d\'s (%d ppm). Allowed, but a lower division paying more than the one above it is how the ladder inverted before.',
+                        $i + 1,
+                        $label,
+                        $table[$i] ?? 0,
+                        $i,
+                        $table[$i - 1] ?? 0,
+                    );
+                }
+            }
+        }
+
+        foreach ([
+            ['prize', $prizeRatio[0] ?? GameConfig::TIER_RATIO_PPM_PARITY],
+            ['position pot', $potRatio[0] ?? GameConfig::TIER_RATIO_PPM_PARITY],
+        ] as [$label, $tier1]) {
+            if ($tier1 !== GameConfig::TIER_RATIO_PPM_PARITY) {
+                $warnings[] = sprintf(
+                    'The tier-1 %s ratio is %d ppm, not %d. Tier 1 IS the base, so this scales the base against itself.',
+                    $label,
+                    $tier1,
+                    GameConfig::TIER_RATIO_PPM_PARITY,
+                );
+            }
+        }
+
+        if ($prizeBase <= 0) {
+            $warnings[] = 'No tier-1 champion prize is authored, so every division falls back to its own stored column whatever the ratios say.';
+        }
+
+        if ($potBase <= 0) {
+            $warnings[] = 'No tier-1 position pot is authored, so every division falls back to its own stored column whatever the ratios say.';
+        }
+
+        foreach ($rows as $row) {
+            if ($row['shareOfTurnoverPct'] !== null && $row['shareOfTurnoverPct'] > 100) {
+                $warnings[] = sprintf(
+                    'Tier %d\'s division pays out %s%% of its own combined authored turnover (%s against %s across %d clubs). Allowed, but it means the league hands out more than its clubs are modelled to earn.',
+                    $row['tier'],
+                    number_format($row['shareOfTurnoverPct'], 1),
+                    '£' . number_format($row['leagueTotalPence'] / 100, 0),
+                    '£' . number_format($row['leagueTurnoverPence'] / 100, 0),
+                    $row['clubs'],
+                );
+            }
+        }
+
+        return [
+            'tierCount'      => $tierCount,
+            'rows'           => $rows,
+            'warnings'       => $warnings,
+            'prizeBasePence' => $prizeBase,
+            'potBasePence'   => $potBase,
         ];
     }
 

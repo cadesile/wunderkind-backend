@@ -24,6 +24,10 @@
 
 {% macro money(pence) %}{{ pence is null ? '—' : '£' ~ (pence / 100)|number_format(2) }}{% endmacro %}
 {% macro bp(v) %}{{ (v / 100)|number_format(2) }}%{% endmacro %}
+{# PARTS PER MILLION, so the divisor is 10000 and not 100 — the league-payout ladders are
+   authored in ppm because tier 8 is 4.24 basis points. Rendering one through bp() would be out
+   by 100x, which is the whole reason the column headers name their unit. #}
+{% macro ppm(v) %}{{ (v / 10000)|number_format(4) }}%{% endmacro %}
 
 {% block bmc_body %}
 
@@ -151,6 +155,50 @@
                     </label>
                 </div>
             </div>
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">TIER-1 CHAMPION PRIZE (£)</span>
+                    <span class="bmc-setting__help">
+                        Paid <strong>whole, to the champion only</strong>. The base the prize ladder hangs off: a
+                        division with no figure of its own is paid this times its tier's PRIZE RATIO times the
+                        country factor. Blank or 0 = unauthored, and <strong>0 propagates</strong> — every division
+                        falls back to its own stored column. Base-year pounds for the baseline country.
+                    </span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--fill" style="min-width:150px">
+                        <span class="bmc-num__unit">£</span>
+                        <input name="leaguePrizeTier1Pounds" inputmode="decimal" data-kind="money"
+                               value="{{ config.economyLeaguePrizeTier1Pence > 0
+                                         ? (config.economyLeaguePrizeTier1Pence / 100)|number_format(2, '.', '')
+                                         : '' }}"
+                               placeholder="unauthored"
+                               aria-label="tier 1 base champion prize pounds">
+                    </label>
+                </div>
+            </div>
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">TIER-1 POSITION POT (£)</span>
+                    <span class="bmc-setting__help">
+                        ⚠️ This is the <strong>first-place amount, not the division's bill</strong>. Each club is paid
+                        this tapered by its finishing position, so at the configured taper the division pays out
+                        <strong>several times</strong> what is typed here — RESOLVED LEAGUE PAYOUTS below shows the
+                        real total per tier. Blank or 0 = unauthored and propagates, as above.
+                    </span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--fill" style="min-width:150px">
+                        <span class="bmc-num__unit">£</span>
+                        <input name="leaguePositionPotTier1Pounds" inputmode="decimal" data-kind="money"
+                               value="{{ config.economyLeaguePositionPotTier1Pence > 0
+                                         ? (config.economyLeaguePositionPotTier1Pence / 100)|number_format(2, '.', '')
+                                         : '' }}"
+                               placeholder="unauthored"
+                               aria-label="tier 1 base position pot pounds">
+                    </label>
+                </div>
+            </div>
 
             <div style="overflow-x:auto">
                 <table class="bmc-minitable" style="min-width:860px">
@@ -160,10 +208,12 @@
                         <th class="is-right">BASELINE TURNOVER (£)</th>
                         <th class="is-right">SPONSOR RATIO (bp)</th>
                         <th class="is-right">TICKET RATIO (bp)</th>
+                        <th class="is-right">PRIZE RATIO (ppm)</th>
+                        <th class="is-right">POSITION RATIO (ppm)</th>
                     </tr>
                     <tr>
-                        <th colspan="5" style="font-weight:400">
-                            <span class="bmc-data">10000 = parity. Tier 1 is the base for both ratio columns, so its own ratio is 10000 by construction. The resolved figures are in RESOLVED SPONSOR &amp; TICKET below.</span>
+                        <th colspan="7" style="font-weight:400">
+                            <span class="bmc-data">Tier 1 is the base for every ratio column, so its own ratio is parity by construction. <strong>Two different units:</strong> the sponsor and ticket columns are basis points, where 10000 = parity; the prize and position columns are <strong>parts per million</strong>, where 1000000 = parity, because a tier-8 prize ratio of 424 ppm is 4.24 bp and integer basis points cannot hold it. Resolved figures are in RESOLVED SPONSOR &amp; TICKET and RESOLVED LEAGUE PAYOUTS below.</span>
                         </th>
                     </tr></thead>
                     <tbody>
@@ -202,6 +252,22 @@
                                                value="{{ config.economyTicketPriceTierRatioBp[i]|default(10000) }}"
                                                placeholder="10000"
                                                aria-label="tier {{ i + 1 }} ticket ratio basis points">
+                                    </label>
+                                </td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="prizeTierRatioPpm[{{ i }}]" inputmode="numeric" data-kind="int"
+                                               value="{{ config.economyPrizeTierRatioPpm[i]|default(1000000) }}"
+                                               placeholder="1000000"
+                                               aria-label="tier {{ i + 1 }} prize ratio parts per million">
+                                    </label>
+                                </td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="positionPotTierRatioPpm[{{ i }}]" inputmode="numeric" data-kind="int"
+                                               value="{{ config.economyPositionPotTierRatioPpm[i]|default(1000000) }}"
+                                               placeholder="1000000"
+                                               aria-label="tier {{ i + 1 }} position pot ratio parts per million">
                                     </label>
                                 </td>
                             </tr>
@@ -499,6 +565,102 @@
             (what every tier resolved to before the ratio table existed). <code>unauthored</code> = no figure at all; the
             app uses its own. The SOURCE column shows the <code>large</code> band's source, which is the row's source —
             a tier is authored all three sizes or none.
+        </div>
+    </div>
+</section>
+
+{# ── the resolved league payouts ───────────────────────────────────────── #}
+{#
+  THE LEAGUE TOTAL IS WHY THIS CARD EXISTS. Both authored figures are PER CLUB, and the position
+  pot is the first-place amount rather than a pool, so the money the division actually hands out
+  is invisible on the authoring grid above. That is how a tier-8 pot of £2,000,000 came to cost
+  £11,000,000 a year against £2,967,328 of combined authored turnover. The TOTAL and SHARE
+  columns are that arithmetic, run once, where the figures causing it are edited.
+#}
+<section class="bmc-card" data-domain="location" id="payouts">
+    <div class="bmc-card__head">
+        <i data-lucide="trophy"></i>
+        <span class="bmc-card__title">RESOLVED LEAGUE PAYOUTS — {{ countryLabels[previewCountry]|default(previewCountry) }}</span>
+        <span class="bmc-card__meta">{{ payouts.tierCount }} tier(s) · the real resolver, not a copy</span>
+    </div>
+    <div class="bmc-card__body">
+        <div class="bmc-data" style="margin-bottom:10px">
+            <strong>Resolution order, per tier:</strong> the league's own column when it is set (an override, used
+            verbatim and <strong>not</strong> scaled), then the tier-1 base × this tier's ratio. The country factor
+            applies once, last, so these figures are <strong>resolved and country-scaled</strong> — what the app
+            receives, with no factor of its own to apply.
+            <br><strong>PRIZE goes whole to the champion.</strong> POSITION is the first-place amount; each lower
+            placing is tapered by the decrease percent, so the division's bill is POSITION × the taper sum, which is
+            the ×POT column. TOTAL is TV pool + position bill + prize. SHARE is TOTAL against the tier's combined
+            authored turnover across its own club count.
+        </div>
+
+        {% if payouts.warnings is not empty %}
+            <div class="bmc-data" style="margin-bottom:10px">
+                {% for w in payouts.warnings %}
+                    <div class="ink-warning">⚠ {{ w }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div style="overflow-x:auto">
+            <table class="bmc-minitable" style="min-width:1240px">
+                <thead><tr>
+                    <th>T</th>
+                    <th class="is-right">PRIZE RATIO</th>
+                    <th class="is-right">PRIZE</th>
+                    <th>SOURCE</th>
+                    <th class="is-right">POSITION RATIO</th>
+                    <th class="is-right">POSITION (1st)</th>
+                    <th>SOURCE</th>
+                    <th class="is-right">CLUBS</th>
+                    <th class="is-right">TAPER</th>
+                    <th class="is-right">×POT</th>
+                    <th class="is-right">TOTAL</th>
+                    <th class="is-right">SHARE</th>
+                    <th class="is-right">CHAMPION</th>
+                </tr></thead>
+                <tbody>
+                    {% for r in payouts.rows %}
+                        <tr>
+                            <td>T{{ r.tier }}</td>
+                            <td class="is-right">{{ _self.ppm(r.prizeRatioPpm) }}</td>
+                            <td class="is-right{{ r.prizePence is null ? ' ink-warning' : '' }}">
+                                {{ r.prizePence is null ? 'UNAUTHORED' : _self.money(r.prizePence) }}
+                            </td>
+                            <td>{{ r.prizeSource }}</td>
+                            <td class="is-right">{{ _self.ppm(r.potRatioPpm) }}</td>
+                            <td class="is-right{{ r.potPence is null ? ' ink-warning' : '' }}">
+                                {{ r.potPence is null ? 'UNAUTHORED' : _self.money(r.potPence) }}
+                            </td>
+                            <td>{{ r.potSource }}</td>
+                            <td class="is-right{{ r.clubs <= 0 ? ' ink-warning' : '' }}">{{ r.clubs }}</td>
+                            <td class="is-right">{{ r.decreasePercent }}%</td>
+                            <td class="is-right">{{ (r.taperSumPpm / 1000000)|number_format(2) }}×</td>
+                            <td class="is-right">{{ _self.money(r.leagueTotalPence) }}</td>
+                            <td class="is-right{{ r.shareOfTurnoverPct is not null and r.shareOfTurnoverPct > 100 ? ' ink-warning' : '' }}">
+                                {{ r.shareOfTurnoverPct is null ? '—' : r.shareOfTurnoverPct|number_format(1) ~ '%' }}
+                            </td>
+                            <td class="is-right{{ r.championSharePct is not null and r.championSharePct > 100 ? ' ink-warning' : '' }}">
+                                {{ r.championSharePct is null ? '—' : r.championSharePct|number_format(1) ~ '%' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bmc-data" style="margin-top:10px">
+            <code>override</code> = this league has its own stored figure, used verbatim and <strong>not</strong> scaled
+            by the ratio or the country factor. <code>ratio</code> = the tier-1 base × this tier's ratio.
+            <code>unauthored</code> = no base authored, so the league's own column is all there is.
+            <br><strong>TAPER</strong> is the decrease percent per finishing position and <strong>×POT</strong> is the
+            resulting sum of multipliers — the number the first-place amount is multiplied by to get the division's
+            bill. Both come off this country's own league rows, never assumed: <code>slots</code> is 10 in KR, 14 in BE,
+            18 in EN and 20 in FR, and the decrease has a per-league override.
+            <br><strong>CHAMPION</strong> is prize + first-place position against that tier's own authored turnover —
+            what one club can bank for winning, which is the figure the economy gate bounds at 100%.
+            <br>A <code>—</code> in SHARE or CHAMPION means the tier has no authored turnover to measure against, not a
+            share of zero.
         </div>
     </div>
 </section>

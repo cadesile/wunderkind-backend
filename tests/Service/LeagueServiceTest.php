@@ -51,6 +51,19 @@ class LeagueServiceTest extends TestCase
                     $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
                 ),
             ),
+            // A REAL LeaguePayoutResolver, for the same reason as the two above: it is final.
+            // With no country profile rows every country resolves at parity, and with no
+            // tier-1 base authored on the stubbed config every tier resolves to the league's
+            // own column — so these fixtures publish exactly what they published before the
+            // ladder existed.
+            new \App\Service\Economy\LeaguePayoutResolver(
+                $configRepo,
+                new \App\Service\Economy\EconomyScaleResolver(
+                    $configRepo,
+                    $this->createStub(\App\Repository\StarterConfigRepository::class),
+                    $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ),
+            ),
         );
     }
 

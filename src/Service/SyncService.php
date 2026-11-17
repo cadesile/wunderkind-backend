@@ -57,6 +57,7 @@ class SyncService
         private readonly ActivePeriodService             $activePeriodService,
         private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
         private readonly \App\Service\Economy\LeagueSizeResolver      $leagueSizeResolver,
+        private readonly \App\Service\Economy\LeaguePayoutResolver    $leaguePayoutResolver,
     ) {}
 
     /**
@@ -824,8 +825,12 @@ class SyncService
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
             'tvDeal'                        => $league->getTvDeal() !== null ? (int) $league->getTvDeal() : null,
             'sponsorPot'                    => (int) $sponsorPot,
-            'prizeMoney'                    => $league->getPrizeMoney() !== null ? (int) $league->getPrizeMoney() : null,
-            'leaguePositionPot'             => $league->getLeaguePositionPot() !== null ? (int) $league->getLeaguePositionPot() : null,
+            // RESOLVED, `league column ?? base x ratio x country factor`. Same keys, same
+            // nullable-int types, same position in the array — so the key-set-and-order parity
+            // contract between this branch and the no-config branch below is untouched. Only
+            // the VALUE moves, and only once an operator authors the ratios.
+            'prizeMoney'                    => $this->leaguePayoutResolver->prizeFor($league, $gameConfig),
+            'leaguePositionPot'             => $this->leaguePayoutResolver->positionPotFor($league, $gameConfig),
             // RESOLVED `league ?? gameConfig`. Same key, same type, and the same VALUE for
             // every league that has no override — which is all of them until an operator sets
             // one, so this is additive in effect as well as in shape.
