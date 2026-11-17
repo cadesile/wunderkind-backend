@@ -31,16 +31,41 @@ class StaffGenerationService
 
     /**
      * `$country` and `$tier` are OPTIONAL AND DEFAULT TO "no context", which is what every
-     * shared-pool caller passes. Only per-club world-pack generation knows a country and tier,
-     * and only the `turnover` wage model uses them — a pool staff member is one row served to
-     * every country at every tier, so it is priced at serve time instead. See
-     * WageModelResolver's note on the two populations.
+     * shared-pool caller passes. Only per-club generation knows a country and tier — a pool
+     * staff member is one row served to every country at every tier, so it is priced at serve
+     * time instead. See WageModelResolver's note on the two populations.
+     *
+     * `$abilityRange` is the club's tier band, and passing it is what stops a tier-8 club being
+     * handed a world-class manager. Without it ability came from a SINGLE GLOBAL RANGE
+     * (`PoolConfig::$coachAbilityMin/Max`, 4-75 on dev) no matter what the club was — so the
+     * bottom of the pyramid drew from the same distribution as the top, and since ability
+     * drives `wageMultiplierTiers[].staffMultiplier` (2.0 up to 12.0) it was also a 6x swing in
+     * pay. Players never had this problem: their band has always been per-tier.
+     *
+     * Absent, the global range still applies, which is correct for the shared pool: a market
+     * coach has no tier to be banded against.
+     *
+     * @param array{min: int, max: int}|null $abilityRange
      */
-    public function build(StaffRole $role, ?string $nationality = null, string $country = '', int $tier = 0): Staff
-    {
+    public function build(
+        StaffRole $role,
+        ?string $nationality = null,
+        string $country = '',
+        int $tier = 0,
+        ?array $abilityRange = null,
+    ): Staff {
         $cfg = $this->poolConfigRepo->getConfig();
 
-        $ability        = random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax());
+        $abilityMin = $abilityRange !== null ? (int) $abilityRange['min'] : $cfg->getCoachAbilityMin();
+        $abilityMax = $abilityRange !== null ? (int) $abilityRange['max'] : $cfg->getCoachAbilityMax();
+
+        // Normalised rather than trusted: `league_ability_ranges` is a hand-editable admin grid
+        // and a transposed pair is a real state of that row, same reasoning as legacyRoll().
+        if ($abilityMin > $abilityMax) {
+            [$abilityMin, $abilityMax] = [$abilityMax, $abilityMin];
+        }
+
+        $ability        = random_int($abilityMin, $abilityMax);
         $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();
         $name           = $this->nameGenerator->generateName($nat);
         [$first, $last] = array_pad(explode(' ', $name, 2), 2, '');
@@ -54,7 +79,7 @@ class StaffGenerationService
         $member->setNationality($nat);
         $member->setDob($this->dobFromAge(random_int($cfg->getCoachAgeMin(), $cfg->getCoachAgeMax())));
         $member->setCoachingAbility($ability);
-        $member->setScoutingRange(random_int($cfg->getCoachAbilityMin(), $cfg->getCoachAbilityMax()));
+        $member->setScoutingRange(random_int($abilityMin, $abilityMax));
         $member->setSpecialisms(
             $role === StaffRole::MANAGER
                 ? $this->generateManagerSpecialisms()

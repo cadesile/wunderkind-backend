@@ -140,8 +140,16 @@ class WorldInitializationService
      *     `GameConfig` at pack-build time, so the figures move the moment the ratios are
      *     authored — and the 2026-11-13 `tv_deal` incident is what happens when that is left
      *     to the data step: 60 of 200 packs sat on the current version and 25x out of date.
+     *
+     *   - **8 (2026-11-17)** — staff pay gained a tier dimension, and staff ABILITY gained a
+     *     tier band. A tier-8 club was paying ~£1,000/wk in staff against ~£165/wk for its
+     *     whole squad, because the role bands are flat absolutes while players scale with an
+     *     ability that is per-tier. `buildStaffSnapshot()` writes `weeklySalary` into every
+     *     pack, so this is a CONTENT change at an unchanged shape — the case this constant
+     *     exists for. Every WorldPackSet became unclaimable on the bump;
+     *     `app:worldpack:maintain` restocks live countries without an operator.
      */
-    public const WORLD_PACK_VERSION = 7;
+    public const WORLD_PACK_VERSION = 8;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -233,7 +241,8 @@ class WorldInitializationService
                 $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
                 $country, $tier, $npcClub->getReputation(),
             );
-            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier);
+            // Same $abilityRange as the players: one band per club, staff included.
+            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier, $abilityRange);
             $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality);
 
             $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);

@@ -61,6 +61,9 @@ class WorldPackClubGenerationServiceTest extends TestCase
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
             ),
+            new \App\Service\Economy\TierBandScaleResolver(
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+            ),
         );
 
         $playerGen = new PlayerGenerationService($nameGen, $poolConfigRepo, new PersonalityGeneratorService());

@@ -85,27 +85,39 @@ class WorldPackClubGenerationService
      * precedent); DOF/Facility Manager use the club's own nationality, matching
      * StarterPackService's pattern for the player's own club.
      *
+     * `$abilityRange` is the club's tier band — THE SAME ARRAY the players were generated
+     * from. Passing it is what keeps a club's staff at its own level: without it staff came
+     * from a single global range regardless of tier, so a tier-8 side could field a
+     * world-class manager while its players sat at ability 1-5. See
+     * StaffGenerationService::build().
+     *
      * @param array<string, mixed> $tierConf
+     * @param array{min: int, max: int}|null $abilityRange
      * @return Staff[]
      */
-    public function generateStaff(array $tierConf, string $nationality, string $country = '', int $tier = 0): array
-    {
+    public function generateStaff(
+        array $tierConf,
+        string $nationality,
+        string $country = '',
+        int $tier = 0,
+        ?array $abilityRange = null,
+    ): array {
         $staff = [];
 
         for ($i = 0; $i < (int) $tierConf['managerCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier, $abilityRange);
         }
         for ($i = 0; $i < (int) $tierConf['coachCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier, $abilityRange);
         }
         for ($i = 0; $i < (int) $tierConf['chairmanCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier, $abilityRange);
         }
         for ($i = 0; $i < (int) ($tierConf['directorOfFootballCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier, $abilityRange);
         }
         for ($i = 0; $i < (int) ($tierConf['facilityManagerCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality, $country, $tier, $abilityRange);
         }
 
         return $staff;

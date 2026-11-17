@@ -229,6 +229,11 @@ client-side escape.
    stock nulls several tier runs sharing a `(run_id, tier)` and they collide on that partial
    index — so an ordinary admin "delete this country's sets" fails with a unique violation
    raised from inside the FK. Changing either choice back reintroduces the other's failure.
+3b. **Staff are priced and generated per tier too, since 2026-11-17.** Ability comes from
+   the club's band (`StaffGenerationService::build()`'s `$abilityRange`) and the legacy role
+   band is scaled by `Economy\TierBandScaleResolver`. Before that a tier-8 club paid ~£1,000/wk
+   in staff against ~£165/wk for its whole squad. The scaling is applied to the BAND, never
+   inside `legacyStaffPence()`, which is pinned byte-for-byte by `WageModelLegacyParityTest`.
 4. **Never price a player inside `PlayerSnapshotSerializer`.** `WorldPackSnapshotBuilder`
    delegates to it, and the pack is a frozen cached surface gated by `WORLD_PACK_VERSION`;
    re-pricing there changes cached content on every read with no version bump. Generated

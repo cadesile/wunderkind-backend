@@ -117,7 +117,7 @@ class TierBaselineSourceTest extends TestCase
         return new EconomyConfigPublisher(
             $gameConfigRepo,
             $scale,
-            new WageModelResolver($gameConfigRepo, $scale),
+            new WageModelResolver($gameConfigRepo, $scale, new \App\Service\Economy\TierBandScaleResolver($starterRepo)),
             new SponsorBandResolver($gameConfigRepo, $scale),
             new TicketPriceResolver($gameConfigRepo, $scale),
         );

@@ -819,3 +819,28 @@ failing every test that reads `GameConfig` with `column ... does not exist`. Add
 defaults, then the defaults dropped, and the values set to the ENTITY defaults (0 / parity ppm),
 not the migration's authored ladder, since authoring them turns the economy on and breaks
 `WorldOverviewServiceTest`'s "an unset tier must stay null".
+
+## `Version20261117150000` — staff pay gets a tier dimension (2026-11-17)
+
+Two columns on `game_config`: `economy_staff_tier_scaling_enabled` (bool, **default true**) and
+`economy_staff_tier_floor_pence` (int, default 500).
+
+The defect: a tier-8 club paid ~£1,000/week in staff against ~£165/week for its entire squad.
+`economy_staff_role_bands_pence` is a single absolute per role, so it can only ever be right at
+one tier, while a legacy player's wage scales with an ability that IS per-tier. The same shape
+of defect as the youth scholarship, where a flat £250 was 1.97x an average tier-8 wage and
+0.19% of an average tier-1 wage.
+
+**It ships ON, deliberately breaking this repo's ship-inert habit.** That habit is for changes
+that are untuned; this one is wrong. The switch remains a column so a box can have the old
+figures back without a deploy — and it must be reversible, because the figure is baked into
+cached world packs.
+
+**Paired with `WORLD_PACK_VERSION` 7 → 8**, in the same commit. `buildStaffSnapshot()` writes
+`weeklySalary` into every pack, so repricing staff is a CONTENT change at an unchanged shape —
+precisely what that constant exists for. The bump makes every `WorldPackSet` unclaimable at
+once; `app:worldpack:maintain` restocks live countries unattended, and until it does new games
+generate their world live.
+
+A second, code-only half went with it: staff ABILITY is now drawn from the club's tier band
+rather than a single global range, so a tier-8 side can no longer field a world-class manager.

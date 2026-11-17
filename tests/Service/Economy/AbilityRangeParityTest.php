@@ -168,6 +168,18 @@ class AbilityRangeParityTest extends TestCase
         return $config;
     }
 
+    /**
+     * A real TierBandScaleResolver over the same StarterConfig this test already builds, so
+     * the staff tier ladder reads the same authored ranges everything else here does.
+     */
+    private function tierBandScale(\App\Entity\StarterConfig $starter): \App\Service\Economy\TierBandScaleResolver
+    {
+        $starterRepo = $this->createStub(StarterConfigRepository::class);
+        $starterRepo->method('getConfig')->willReturn($starter);
+
+        return new \App\Service\Economy\TierBandScaleResolver($starterRepo);
+    }
+
     private function resolver(StarterConfig $starter): EconomyScaleResolver
     {
         $gameConfigRepo = $this->createStub(GameConfigRepository::class);
@@ -192,7 +204,7 @@ class AbilityRangeParityTest extends TestCase
         return new EconomyConfigPublisher(
             $gameConfigRepo,
             $resolver,
-            new WageModelResolver($gameConfigRepo, $resolver),
+            new WageModelResolver($gameConfigRepo, $resolver, $this->tierBandScale($starter)),
             new SponsorBandResolver($gameConfigRepo, $resolver),
             new TicketPriceResolver($gameConfigRepo, $resolver),
         );

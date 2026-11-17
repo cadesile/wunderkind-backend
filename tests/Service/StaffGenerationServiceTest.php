@@ -84,6 +84,9 @@ class StaffGenerationServiceTest extends TestCase
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
             ),
+            new \App\Service\Economy\TierBandScaleResolver(
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+            ),
         );
     }
 

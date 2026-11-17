@@ -180,6 +180,7 @@ final class MarketPoolGenerateInBandTest extends TestCase
         $wageModel = new WageModelResolver(
             $gameConfigRepo,
             new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo),
+            new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );
 
         return new MarketPoolService(

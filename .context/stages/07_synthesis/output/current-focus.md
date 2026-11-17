@@ -1,5 +1,45 @@
 # Current Focus
 
+## Fixed 2026-11-17 — staff cost more than the players they coached
+
+Reported from a tier-8 Clydebank save: **staff −£1,000/week against −£165/week for the entire
+squad**. Two independent causes, both pre-existing and neither created by the set work — it
+merely made them visible.
+
+1. **Staff ability came from one global range** (`PoolConfig::$coachAbilityMin/Max`, 4-75 on
+   dev) regardless of tier, so a local club could field a world-class manager — and ability
+   drives `staffMultiplier`, 2.0 up to 12.0, so that alone was a 6x swing in pay. Players never
+   had this problem; their band has always been per-tier. `StaffGenerationService::build()` now
+   takes the club's band, and every per-club caller passes the SAME array its players came from.
+2. **Legacy staff pay had no tier dimension at all.** The role bands are single absolutes, so
+   they can only be right at one tier, while a legacy player's wage scales with a per-tier
+   ability. `staffWeeklyPence()` now scales the band by `Economy\TierBandScaleResolver` —
+   `midpoint(tier) / midpoint(tier 1)` over the already-authored `league_ability_ranges`, which
+   is the only tier ladder that exists under `legacy` and is the same axis players scale on.
+
+EN after the fix: staff average £1,116/wk at tier 1, £240 at tier 4, £18.88 at tier 8; a
+founder's staff total £233/wk against £4,852/wk of players.
+
+**`TierBandScaleResolver` exists because `EconomyScaleResolver` cannot be used here** — it
+resolves from authored turnover and returns `isResolvable === false` on every deployed box, so
+everything built on it is inert under the model every box is actually running.
+
+Three things to carry forward:
+
+- **The scaling is applied to the BAND, never inside `legacyStaffPence()`**, which
+  `WageModelLegacyParityTest` pins byte-for-byte. That test passes unmodified, which is the
+  proof `legacy` still means what it meant.
+- **`WORLD_PACK_VERSION` went 7 → 8** in the same commit, because `buildStaffSnapshot()` bakes
+  `weeklySalary` into every pack. Every set became unclaimable at once; `app:worldpack:maintain`
+  restocks live countries without an operator.
+- **The kill switch ships ON**, against this repo's ship-inert habit, because the old behaviour
+  is wrong rather than untuned — and it stays a column because the figure is cached.
+
+**Still open:** the overall staff SHARE of a wage bill is a separate calibration question this
+does not answer. At tier 1 staff now come to ~2.4% of a player's wage and at tier 8 ~6.6%, so
+the ladder is sane and slightly favours the bottom, but whether those shares are right is the
+turnover model's business (`economyStaffWageShareBp`), not legacy's.
+
 ## Landed 2026-11-17 — world packs become single-use SETS
 
 **Every world a player is given is now unique, and it can no longer exist without a squad.**
@@ -17,7 +57,7 @@ What it fixes, both of which were real rather than theoretical:
   packs were perfectly warm — a gap between "the world exists" and "a squad to play it with
   exists", at the first step of game init, with no client-side escape.
 
-**No API shape changed and `WORLD_PACK_VERSION` stays 7.** Two values moved under unchanged
+**No API shape changed, and `WORLD_PACK_VERSION` stayed 7 for the set work itself** (it moved to 8 later the same day for the staff-pay fix below). Two values moved under unchanged
 keys (packs are now per-device-distinct, and a player's own tier's `fixtures` no longer carries
 their club id); both are logged in `shared/api-backwards-compatibility.md` with their consumer
 checks, the second one definitive — the app types that field as not consumed and generates its
