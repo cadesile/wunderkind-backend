@@ -1,5 +1,14 @@
 # Adding a new playable country
 
+
+> **Since 2026-11-17 a world pack is a SET** — one starter squad plus a payload for every
+> tier, claimed whole by one club and never served twice, with each live country holding two.
+> `app:worldpack:warm <CODE>` now means "clear this country's unclaimed stock and rebuild the
+> buffer" (claimed sets are spared), and **`--tier` is a hard error**: a set has to be whole to
+> be servable, so there is nothing useful a single-tier warm can produce. Use
+> `app:worldpack:topup <CODE>` to add one set without clearing anything.
+
+
 This is the repeatable process for standing up a new country's league pyramid, NPC clubs,
 player/staff/scout pool, and world pack cache. It replaces the ad hoc "add a case here, a
 const there" approach that caused real drift bugs twice before (`App\Enum\Country`'s own
@@ -163,7 +172,8 @@ lando php bin/console app:country:bootstrap <CODE>
 
 This chains: `LeagueService::generateLeaguesForCountry()` (8 tiers) → `NpcClubGenerationService::
 generateClubs()` (once per tier) → seeds `StarterConfig::leagueAbilityRanges[<CODE>]` if missing
-→ `app:pool:warm <CODE> --tier=<bottom tier>` → `app:worldpack:warm <CODE>` (all tiers). Useful
+→ `app:pool:warm <CODE> --tier=<bottom tier>` → `app:worldpack:warm <CODE>` (rebuilds the
+country's whole set buffer; `--tier` is no longer accepted). Useful
 flags:
 
 - `--clubs-per-tier=N` (default 8)

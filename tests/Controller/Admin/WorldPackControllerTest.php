@@ -20,6 +20,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class WorldPackControllerTest extends WebTestCase
 {
+
     private const TEST_ADMIN_EMAIL = 'worldpack-controller-test-admin@example.com';
     private const COUNTRY          = 'PT'; // low collision risk with other suites' fixtures
     private const TIER             = 6;
@@ -84,6 +85,15 @@ class WorldPackControllerTest extends WebTestCase
         ];
     }
 
+    /**
+     * A league and one NPC club. No pool fixture, and that is the point.
+     *
+     * A regenerate builds world pack SETS, each a world plus its starter squad — and both are
+     * generated from tier config rather than drawn from the shared `player` table, so these
+     * tests pass against an empty pool. While the squad was a draw they did not: every one of
+     * them failed on supply instead of on what it was asserting, and did so ORDER-DEPENDENTLY,
+     * passing in isolation whenever another suite had left players behind.
+     */
     private function seedLeague(EntityManagerInterface $em, string $country, int $tier): League
     {
         $league = $this->track(new League($country, $tier, "WorldPackControllerTest League {$tier}"));

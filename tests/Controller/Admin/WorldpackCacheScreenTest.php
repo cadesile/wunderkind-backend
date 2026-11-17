@@ -50,11 +50,18 @@ class WorldpackCacheScreenTest extends WebTestCase
 
     private function purge(): void
     {
-        self::getContainer()->get(Connection::class)->executeStatement(
+        $conn = self::getContainer()->get(Connection::class);
+
+        // Sets first — their payload rows follow via ON DELETE CASCADE, so deleting the cache
+        // rows on their own would leave the sets behind and the stock figures on the screen
+        // would carry across tests.
+        $conn->executeStatement('DELETE FROM world_pack_set WHERE country = :c', ['c' => self::COUNTRY]);
+        $conn->executeStatement(
             'DELETE FROM country_world_pack_cache WHERE country = :c',
             ['c' => self::COUNTRY],
         );
         self::getContainer()->get(EntityManagerInterface::class)->clear();
+        $this->seededSets = [];
     }
 
     private function loginAsAdmin(): void
@@ -72,11 +79,29 @@ class WorldpackCacheScreenTest extends WebTestCase
         $this->client->loginUser($admin, 'admin');
     }
 
-    /** One club, two players — the counts findAllSummaries() digs out of the payload JSON. */
+    /**
+     * One club, two players — the counts findAllSummaries() digs out of the payload JSON.
+     *
+     * A payload row now belongs to a WorldPackSet, so the fixture has to make one. That is the
+     * schema being honest rather than ceremony: a tier payload with no set is a row nothing
+     * can serve, because a club is given a SET and reads its tiers out of that.
+     */
     private function seedEntry(int $tier = 3): CountryWorldPackCache
     {
-        $em    = self::getContainer()->get(EntityManagerInterface::class);
-        $entry = new CountryWorldPackCache(self::COUNTRY, $tier, [
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $set = new \App\Entity\WorldPack\WorldPackSet(
+            self::COUNTRY,
+            \App\Service\WorldInitializationService::WORLD_PACK_VERSION,
+            ['players' => [['id' => 1]], 'staff' => [], 'scouts' => []],
+            0,
+            8,
+        );
+        $set->setStatus(\App\Enum\WorldPack\WorldPackSetStatus::READY);
+        $set->setReadyAt(new \DateTimeImmutable());
+        $em->persist($set);
+
+        $entry = new CountryWorldPackCache($set, $tier, [
             'clubs' => [
                 ['name' => 'Screen Test FC', 'players' => [['id' => 1], ['id' => 2]]],
             ],
@@ -85,8 +110,13 @@ class WorldpackCacheScreenTest extends WebTestCase
         $em->persist($entry);
         $em->flush();
 
+        $this->seededSets[] = $set;
+
         return $entry;
     }
+
+    /** @var \App\Entity\WorldPack\WorldPackSet[] */
+    private array $seededSets = [];
 
     /** Stamps a seeded entry with a version, bypassing the constructor's current-version default. */
     private function stampVersion(CountryWorldPackCache $entry, int $version): void

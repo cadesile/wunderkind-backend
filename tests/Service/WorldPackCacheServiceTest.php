@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Service;
 
+use App\Entity\WorldPack\WorldPackSet;
+use App\Enum\WorldPack\WorldPackSetStatus;
 use App\Repository\CountryWorldPackCacheRepository;
 use App\Service\WorldInitializationService;
 use App\Service\WorldPackCacheService;
@@ -11,15 +13,26 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * WorldPackCacheService::getOrBuild() serializes a cache miss behind a Postgres advisory
- * lock and re-checks under it.
+ * WorldPackCacheService reads and writes the tier payloads that make up a WorldPackSet.
  *
- * Without that, two concurrent `POST /api/initialize/league/{tier}` calls for the same tier
- * both miss, both run the generator — which creates and then DQL-deletes a whole tier of
- * Player/Staff rows — and both insert, so one dies on `uq_country_tier` with a 500 after
- * doing all of that work. That went from theoretical to likely when the client started
- * treating an empty or truncated 2xx as a retryable network failure: a backgrounded request
- * is now retried while the first may still be in flight.
+ * This file used to pin the behaviour of `getOrBuild()`: a cache miss serialized behind a
+ * Postgres advisory lock on (country, tier) and re-checked under it, because two concurrent
+ * `POST /api/initialize/league/{tier}` calls both missed, both ran the generator and both
+ * inserted, so one died on `uq_country_tier`.
+ *
+ * That whole mechanism is gone, and the tests with it, because the race it guarded no longer
+ * exists rather than because it stopped mattering:
+ *
+ *   - Payload rows are now written only inside a generation run, which is single-flight per
+ *     country, or by the top-up, which is single-flight per country via its own advisory lock.
+ *     Neither can be entered twice concurrently for one country.
+ *   - A request that finds no set builds its tier inline and writes NOTHING, so there is no
+ *     insert left to collide.
+ *
+ * What is still worth pinning — and is, below — is that a row belongs to exactly one set, that
+ * a stale-shaped row is not served, and that set-scoped reads do not leak between two sets of
+ * the same country. That last one is the whole reason `findForCountryAndTier()` was removed:
+ * with two sets per country it would have returned an arbitrary one of them.
  */
 class WorldPackCacheServiceTest extends KernelTestCase
 {
@@ -27,6 +40,8 @@ class WorldPackCacheServiceTest extends KernelTestCase
     private WorldPackCacheService $service;
     private CountryWorldPackCacheRepository $repository;
     private string $country;
+    /** @var WorldPackSet[] */
+    private array $sets = [];
 
     protected function setUp(): void
     {
@@ -39,97 +54,138 @@ class WorldPackCacheServiceTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        $this->service->deleteByCountry($this->country);
+        foreach ($this->sets as $set) {
+            $managed = $this->em->find(WorldPackSet::class, (string) $set->getId());
+            if ($managed !== null) {
+                // Its payload rows go with it via ON DELETE CASCADE.
+                $this->em->remove($managed);
+            }
+        }
+        $this->em->flush();
+        $this->sets = [];
+
         parent::tearDown();
     }
 
-    public function testASecondCallIsServedFromCacheAndNeverRunsTheGenerator(): void
+    public function testATierIsReadBackFromTheSetItWasWrittenTo(): void
     {
-        $runs = 0;
-        $generator = function () use (&$runs): array {
-            $runs++;
+        $set = $this->makeSet();
 
-            return ['clubs' => [['id' => 'club-1']]];
-        };
+        $this->service->replaceWithPayload($set, 3, ['clubs' => [['id' => 'club-1']]]);
 
-        $first  = $this->service->getOrBuild($this->country, 3, $generator);
-        $second = $this->service->getOrBuild($this->country, 3, $generator);
-
-        $this->assertSame(1, $runs, 'the generator must run exactly once for a given country+tier');
-        $this->assertSame($first, $second);
-        $this->assertSame(['clubs' => [['id' => 'club-1']]], $second);
-    }
-
-    /** `isCached()` is read before a getOrBuild() call so logging can say hit or build. */
-    public function testIsCachedTracksWhetherACallWouldPayForABuild(): void
-    {
-        $this->assertFalse($this->service->isCached($this->country, 6));
-
-        $this->service->getOrBuild($this->country, 6, fn (): array => ['clubs' => []]);
-
-        $this->assertTrue($this->service->isCached($this->country, 6));
+        $this->assertSame(['clubs' => [['id' => 'club-1']]], $this->service->readTier($set, 3));
+        $this->assertTrue($this->service->hasTier($set, 3));
+        $this->assertNull($this->service->readTier($set, 4), 'a tier never written must read as absent');
     }
 
     /**
-     * The lock has to be released on the way out, not just on the happy path — a generator
-     * that throws must not leave the lock held for the rest of the connection's life, or
-     * every later caller for that tier blocks forever.
+     * The property that replaced `findForCountryAndTier()`.
+     *
+     * Two sets for one country hold tier 3 independently, and reading either must never
+     * return the other's bytes. Before sets, both rows would have been `(country, 3)` and a
+     * `findOneBy` would have picked one at random — a client served tier 3 of one world and
+     * tier 4 of another, with every response a 200 and nothing in a log to see.
      */
-    public function testAFailingGeneratorStillReleasesTheLock(): void
+    public function testTwoSetsForOneCountryDoNotLeakTiersIntoEachOther(): void
     {
-        $boom = function (): array {
-            throw new \RuntimeException('generation failed');
-        };
+        $a = $this->makeSet();
+        $b = $this->makeSet();
 
-        try {
-            $this->service->getOrBuild($this->country, 4, $boom);
-            self::fail('the generator exception should propagate');
-        } catch (\RuntimeException $e) {
-            $this->assertSame('generation failed', $e->getMessage());
-        }
+        $this->service->replaceWithPayload($a, 3, ['clubs' => ['from-a']]);
+        $this->service->replaceWithPayload($b, 3, ['clubs' => ['from-b']]);
 
-        $this->assertSame(
-            0,
-            (int) $this->em->getConnection()->fetchOne(
-                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()",
-            ),
-            'no advisory lock may outlive the call',
-        );
+        $this->assertSame(['clubs' => ['from-a']], $this->service->readTier($a, 3));
+        $this->assertSame(['clubs' => ['from-b']], $this->service->readTier($b, 3));
+    }
 
-        // And the tier is still buildable afterwards.
-        $payload = $this->service->getOrBuild($this->country, 4, fn (): array => ['clubs' => []]);
-        $this->assertSame(['clubs' => []], $payload);
+    /** Writing the same tier twice replaces, rather than colliding on uq_world_pack_set_tier. */
+    public function testRewritingATierReplacesIt(): void
+    {
+        $set = $this->makeSet();
+
+        $this->service->replaceWithPayload($set, 2, ['clubs' => ['old']]);
+        $this->service->replaceWithPayload($set, 2, ['clubs' => ['new']]);
+
+        $this->assertSame(['clubs' => ['new']], $this->service->readTier($set, 2));
+        $this->assertCount(1, $this->repository->findTiersForSet($set));
     }
 
     /**
-     * A row stamped with an older payload version is a miss, and must be replaced rather
-     * than served — the cache has no TTL, so a pack built before a snapshot-shape change
-     * would otherwise be handed out forever.
+     * A row stamped with an older payload version is not served — the rows have no TTL, so a
+     * pack built before a snapshot-shape change would otherwise be handed out forever.
      */
-    public function testAStaleShapedRowIsRebuiltRatherThanServed(): void
+    public function testAStaleShapedRowIsNotServed(): void
     {
-        $this->service->getOrBuild($this->country, 5, fn (): array => ['clubs' => ['old']]);
+        $set = $this->makeSet();
+        $this->service->replaceWithPayload($set, 5, ['clubs' => ['old']]);
 
         $this->em->getConnection()->executeStatement(
-            'UPDATE country_world_pack_cache SET payload_version = :v WHERE country = :c AND tier = 5',
-            ['v' => WorldInitializationService::WORLD_PACK_VERSION - 1, 'c' => $this->country],
+            'UPDATE country_world_pack_cache SET payload_version = :v WHERE set_id = :s AND tier = 5',
+            ['v' => WorldInitializationService::WORLD_PACK_VERSION - 1, 's' => $set->getId()->toRfc4122()],
         );
         $this->em->clear();
 
-        $rebuilt = $this->service->getOrBuild($this->country, 5, fn (): array => ['clubs' => ['new']]);
+        $set = $this->em->find(WorldPackSet::class, (string) $set->getId());
 
-        $this->assertSame(['clubs' => ['new']], $rebuilt);
-        $this->assertSame(
+        $this->assertNull($this->service->readTier($set, 5));
+        $this->assertFalse($this->service->hasTier($set, 5));
+    }
+
+    public function testAllTiersPresentAsksAboutThisSetOnly(): void
+    {
+        $a = $this->makeSet();
+        $b = $this->makeSet();
+
+        foreach ([1, 2, 3] as $tier) {
+            $this->service->replaceWithPayload($a, $tier, ['clubs' => []]);
+        }
+        $this->service->replaceWithPayload($b, 1, ['clubs' => []]);
+
+        $this->assertTrue($this->service->allTiersPresent($a, [1, 2, 3]));
+        // The country has all three tiers between its two sets; B still does not have them,
+        // and B is what a club claiming B would be served.
+        $this->assertFalse($this->service->allTiersPresent($b, [1, 2, 3]));
+    }
+
+    public function testDeleteBySetRemovesOnlyThatSetsRows(): void
+    {
+        $a = $this->makeSet();
+        $b = $this->makeSet();
+
+        $this->service->replaceWithPayload($a, 1, ['clubs' => []]);
+        $this->service->replaceWithPayload($b, 1, ['clubs' => []]);
+
+        $this->assertSame(1, $this->service->deleteBySet($a));
+        $this->assertSame([], $this->repository->findTiersForSet($a));
+        $this->assertSame([1], $this->repository->findTiersForSet($b));
+    }
+
+    private function makeSet(): WorldPackSet
+    {
+        $set = new WorldPackSet(
+            $this->country,
             WorldInitializationService::WORLD_PACK_VERSION,
-            $this->repository->findForCountryAndTier($this->country, 5)?->getPayloadVersion(),
+            ['players' => [], 'staff' => [], 'scouts' => []],
+            8,
         );
+        $set->setStatus(WorldPackSetStatus::READY);
+
+        $this->em->persist($set);
+        $this->em->flush();
+
+        $this->sets[] = $set;
+
+        return $set;
     }
 
     private function unusedCountryCode(): string
     {
+        $conn = $this->em->getConnection();
+
         for ($i = 0; $i < 50; $i++) {
             $code = chr(random_int(65, 90)) . chr(random_int(65, 90));
-            if ($this->repository->findCachedTiers($code, WorldInitializationService::WORLD_PACK_VERSION) === []) {
+            $used = (int) $conn->fetchOne('SELECT count(*) FROM world_pack_set WHERE country = :c', ['c' => $code]);
+            if ($used === 0) {
                 return $code;
             }
         }

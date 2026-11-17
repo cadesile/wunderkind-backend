@@ -10,9 +10,17 @@ use Symfony\Component\Uid\UuidV7;
 /**
  * One row per admin-triggered "Regenerate country cache" run — the first-class
  * "run" concept the admin progress UI polls against. Scoped to admin-triggered
- * regenerates only; cron-triggered warms (app:worldpack:warm) call
- * WorldPackCacheService/WorldInitializationService directly and never create a
- * row here, same as before this tracking schema existed.
+ * regenerates only; the unattended top-up that keeps each country's WorldPackSet
+ * buffer stocked calls WorldInitializationService directly and never creates a row
+ * here, same as the cron warms that preceded it and as before this tracking schema
+ * existed.
+ *
+ * A run now covers `setCount` WorldPackSets at once (the admin regenerate builds a
+ * country's whole buffer in one go), so it holds setCount x tiers
+ * WorldPackGenerationTierRun children and the SET each tier belongs to is recorded
+ * on the tier run, not here. That is deliberate: it keeps this table — and its
+ * single-flight index below — the per-COUNTRY unit it has always been, so nothing
+ * about admin concurrency changes.
  *
  * A partial unique index on (country) WHERE status IN ('pending','in_progress')
  * (added via raw SQL in the migration — not expressible as a Doctrine mapping,
@@ -44,6 +52,13 @@ class WorldPackGenerationRun
     #[ORM\Column(type: 'json')]
     private array $requestedTiers;
 
+    /**
+     * How many WorldPackSets this run builds. Default 1 so every row that predates the
+     * buffer reads correctly rather than as zero.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 1])]
+    private int $setCount = 1;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $startedAt = null;
 
@@ -54,14 +69,18 @@ class WorldPackGenerationRun
     private \DateTimeImmutable $createdAt;
 
     /** @param int[] $requestedTiers */
-    public function __construct(string $country, array $requestedTiers)
+    public function __construct(string $country, array $requestedTiers, int $setCount = 1)
     {
         $this->id             = new UuidV7();
         $this->country         = $country;
         $this->requestedTiers  = $requestedTiers;
+        $this->setCount        = $setCount;
         $this->status           = WorldPackGenerationRunStatus::PENDING;
         $this->createdAt        = new \DateTimeImmutable();
     }
+
+    public function getSetCount(): int { return $this->setCount; }
+    public function setSetCount(int $count): static { $this->setCount = $count; return $this; }
 
     public function getId(): UuidV7 { return $this->id; }
 

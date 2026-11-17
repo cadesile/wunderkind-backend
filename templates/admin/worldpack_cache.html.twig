@@ -1,9 +1,19 @@
 {% extends 'admin/bmc_page.html.twig' %}
 {#
   Config → Worldpack cache, on bmc_page + bmc-pages.css/js.
-  Data: DashboardController::worldpackCache() — entries, byCountry, totalEntries,
+  Data: DashboardController::worldpackCache() — entries, byCountry, bySet, totalEntries,
   enabledCountries, countryLabels, packVersion, staleByCountry, freshByCountry,
-  activeStale, activeFresh, orphanPacks.
+  activeStale, activeFresh, orphanPacks, setSummaries, targetSets, liveCountries,
+  belowTarget, readySetTotal.
+
+  A WORLD PACK IS A SET, NOT A (COUNTRY, TIER) ROW. A set is one starter squad plus a payload
+  per tier, claimed whole by exactly one club and never served twice. So the figure that
+  matters on this page is CLAIMABLE SETS PER COUNTRY against its target: a live country at
+  zero means the next player there pays for a live draw instead of getting a pre-built world.
+  The tier tables below are still here, but they describe the inside of a set now.
+
+  COMPLETENESS IS PER SET. `bySet` exists because a country holding two sets has two of every
+  tier, so a per-country tier count reads 16-of-8 and cannot answer "is this world whole".
 
   STALE MEANS "THE CACHE WOULD REBUILD IT", not a separate admin judgement: the controller
   compares each row's payload_version against WorldInitializationService::WORLD_PACK_VERSION,
@@ -23,7 +33,8 @@
 #}
 
 {% set COUNTRIES = countryLabels %}
-{% set fullyCached = byCountry|filter(tiers => tiers|length >= 8)|length %}
+{# Per SET. Counting tiers per country read 16/8 the moment a country held two sets. #}
+{% set fullyCached = bySet|filter(tiers => tiers|length >= 8)|length %}
 
 {% block bmc_strip_right %}
     <a class="bmc-btn bmc-btn--teal" href="{{ path('admin', {routeName: 'admin_npc_clubs_content'}) }}"><span>GENERATE CLUBS</span></a>
@@ -34,19 +45,29 @@
 
 <div class="bmc-stats bmc-stats--card">
     <div class="bmc-stat">
+        <span class="bmc-stat__label">CLAIMABLE SETS</span>
+        <span class="bmc-stat__value {{ readySetTotal > 0 ? 'ink-positive' : 'ink-negative' }}">{{ readySetTotal|number_format }}</span>
+        <span class="bmc-stat__sub">ready, unclaimed, v{{ packVersion }} · live countries</span>
+    </div>
+    <div class="bmc-stat">
+        <span class="bmc-stat__label">BELOW TARGET</span>
+        <span class="bmc-stat__value {{ belowTarget > 0 ? 'ink-negative' : 'ink-positive' }}">{{ belowTarget }}</span>
+        <span class="bmc-stat__sub">of {{ liveCountries|length }} live · target {{ targetSets }} each</span>
+    </div>
+    <div class="bmc-stat">
         <span class="bmc-stat__label">ENTRIES</span>
         <span class="bmc-stat__value">{{ totalEntries|number_format }}</span>
-        <span class="bmc-stat__sub">country × tier packs</span>
+        <span class="bmc-stat__sub">tier payloads, across all sets</span>
     </div>
     <div class="bmc-stat">
-        <span class="bmc-stat__label">COUNTRIES CACHED</span>
+        <span class="bmc-stat__label">COUNTRIES WITH PACKS</span>
         <span class="bmc-stat__value">{{ byCountry|length }}</span>
-        <span class="bmc-stat__sub">of {{ enabledCountries|length }} live</span>
+        <span class="bmc-stat__sub">of {{ enabledCountries|length }} generation-capable</span>
     </div>
     <div class="bmc-stat">
-        <span class="bmc-stat__label">FULL PYRAMIDS</span>
+        <span class="bmc-stat__label">COMPLETE SETS</span>
         <span class="bmc-stat__value {{ fullyCached > 0 ? 'ink-positive' : 'ink-dim' }}">{{ fullyCached }}</span>
-        <span class="bmc-stat__sub">all eight tiers cached</span>
+        <span class="bmc-stat__sub">sets holding all eight tiers</span>
     </div>
     <div class="bmc-stat">
         <span class="bmc-stat__label">WORLDPACK VERSION</span>
@@ -62,6 +83,87 @@
         </span>
     </div>
 </div>
+
+{# ── set stock ───────────────────────────────────────────────────────── #}
+{#
+  The operational view. Every other table on this page describes what has been generated;
+  this one says whether a player starting a game right now gets a pre-built world or waits.
+
+  CLAIMABLE is narrower than READY on purpose, and the three ways a ready set is not
+  claimable are each a different problem with a different fix:
+    · STALE   — built at an older payload shape. A regenerate fixes it; nothing else will,
+                since the claim filters on the version and will never hand it out.
+    · NO SQUAD — a set the introducing migration wrapped around pre-existing tier payloads.
+                Inert by design; the first regenerate for that country clears it.
+    · CLAIMED  — spoken for. Kept, not reclaimable: the club may still be fetching tiers.
+#}
+<section class="bmc-card" data-domain="club">
+    <div class="bmc-card__head">
+        <i data-lucide="layers"></i>
+        <span class="bmc-card__title">SET STOCK</span>
+        <span class="bmc-card__meta">target {{ targetSets }} claimable per live country</span>
+    </div>
+    <div class="bmc-card__body">
+        <p class="bmc-bodytext">
+            A world pack is a <strong>set</strong>: one starter squad plus a payload for every league tier,
+            generated together and claimed whole by exactly one club, so no two players ever get the same
+            world. The squad is <strong>generated</strong> like every NPC club's is, not drawn from the
+            shared player pool, so a set can never be short of players and a new game can never be refused
+            for a thin pool. Each game initialisation claims a set and queues a replacement, and
+            <code>app:worldpack:maintain</code> sweeps hourly as a backstop. A country below target still
+            works — the next player there has their world generated at request time and served uncached —
+            it is just slower for them.
+        </p>
+    </div>
+
+    <div class="bmc-card__band">
+        <table class="bmc-table">
+            <thead>
+                <tr>
+                    <th>COUNTRY</th>
+                    <th class="num">CLAIMABLE</th>
+                    <th class="num">BUILDING</th>
+                    <th class="num">CLAIMED</th>
+                    <th>FLAGS</th>
+                    <th class="num">ACTION</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code in liveCountries %}
+                    {% set sum = setSummaries[code] ?? {'claimable': 0, 'building': 0, 'claimed': 0, 'failed': 0, 'staleReady': 0, 'squadless': 0} %}
+                    {% set short = sum.claimable < targetSets %}
+                    <tr>
+                        <td>
+                            <span class="bmc-vchip__code">{{ code }}</span>
+                            <span class="bmc-pick-row__name">{{ COUNTRIES[code] ?? code }}</span>
+                        </td>
+                        <td class="num {{ short ? 'ink-negative' : 'ink-positive' }}">{{ sum.claimable }}/{{ targetSets }}</td>
+                        <td class="num {{ sum.building > 0 ? 'ink-dim' : '' }}">{{ sum.building ?: '-' }}</td>
+                        <td class="num ink-dim">{{ sum.claimed ?: '-' }}</td>
+                        <td>
+                            {% if sum.failed > 0 %}<span class="bmc-data ink-negative" title="generation failed — see the set's error">FAILED {{ sum.failed }}</span>{% endif %}
+                            {% if sum.staleReady > 0 %}<span class="bmc-data ink-negative" title="ready but built at an older payload shape — never claimable; regenerate">STALE {{ sum.staleReady }}</span>{% endif %}
+                            {% if sum.squadless > 0 %}<span class="bmc-data ink-dim" title="migration-backfilled, no starter squad — inert; a regenerate clears it">NO SQUAD {{ sum.squadless }}</span>{% endif %}
+                            {% if sum.failed == 0 and sum.staleReady == 0 and sum.squadless == 0 %}
+                                <span class="bmc-data {{ short ? 'ink-dim' : 'ink-positive' }}">{{ short ? 'SHORT' : 'OK' }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="num">
+                            <button type="button"
+                                    class="bmc-quick-btn top-up-btn"
+                                    data-country="{{ code }}"
+                                    {{ short ? '' : 'disabled' }}
+                                    title="{{ short ? 'queue one more set for this country' : 'already at target' }}">TOP UP +1</button>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6"><span class="bmc-empty-note">NO LIVE COUNTRIES — set a country profile to LIVE first</span></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <span class="bmc-data" id="top-up-note"></span>
+    </div>
+</section>
 
 {# ── regenerate ──────────────────────────────────────────────────────── #}
 <section class="bmc-card" data-domain="club">
@@ -94,6 +196,7 @@
                 {% for code, name in enabledCountries %}
                     {% set cached = (byCountry[code] ?? [])|length %}
                     {% set stale  = staleByCountry[code] ?? 0 %}
+                    {% set claimableSets = (setSummaries[code] ?? {}).claimable|default(0) %}
                     {#
                       Three states, not two, because "no packs at all" is not the same problem as
                       "packs that need rebuilding" and the fix differs: one is a first warm, the
@@ -105,7 +208,7 @@
                         <span class="bmc-tile"></span>
                         <span class="bmc-vchip__code">{{ code }}</span>
                         <span class="bmc-pick-row__name">{{ name }}</span>
-                        <span class="bmc-pick-row__n">{{ cached }}/8</span>
+                        <span class="bmc-pick-row__n" title="claimable sets / target">{{ claimableSets }}/{{ targetSets }}</span>
                         {% if cached == 0 %}
                             <span class="bmc-data ink-dim" title="nothing cached — needs a first warm">NONE</span>
                         {% elseif stale > 0 %}
@@ -262,6 +365,9 @@
     var RETRY_FAILED_URL_TPL = '{{ path('admin_worldpack_retry_failed_clubs', {tierRunId: '__ID__'}) }}';
     var REGENERATE_TOKEN     = '{{ csrf_token('worldpack_regenerate_country') }}';
     var RETRY_TOKEN          = '{{ csrf_token('worldpack_retry_failed_clubs') }}';
+    var TOP_UP_URL           = '{{ path('admin_worldpack_top_up') }}';
+    var TOP_UP_TOKEN         = '{{ csrf_token('worldpack_top_up') }}';
+    var SET_STATUS_URL_TPL   = '{{ path('admin_worldpack_set_status', {country: '__CC__'}) }}';
     var COUNTRY_NAMES        = {{ enabledCountries|json_encode|raw }};
 
     var TERMINAL_RUN_STATUSES = ['completed', 'completed_with_errors', 'failed'];
@@ -318,6 +424,91 @@
 
         btn.disabled = false;
         $('span', btn).textContent = 'REGENERATE';
+    });
+
+    // -- TOP UP +1 -----------------------------------------------------------------------
+    //
+    // Queues one TopUpWorldPackSetMessage -- the SAME message every game initialisation
+    // dispatches -- rather than building inline, because a set is 20-40s of generation and an
+    // admin request must not hold a worker open for it. The handler re-reads the country's
+    // deficit, so a double-click costs one cheap no-op rather than two countries' worth of
+    // generation.
+    //
+    // It polls set-status, not run-status: a top-up creates no WorldPackGenerationRun (see
+    // WorldPackSetTopUpService), so the regenerate poller below cannot see it at all.
+    async function topUpCountry(btn) {
+        var country = btn.getAttribute('data-country');
+        var note    = $('#top-up-note');
+
+        btn.disabled = true;
+        btn.textContent = 'QUEUEING...';
+
+        var body = new FormData();
+        body.append('_token', TOP_UP_TOKEN);
+        body.append('country', country);
+
+        try {
+            var res  = await fetch(TOP_UP_URL, { method: 'POST', body: body });
+            var data = await res.json();
+
+            if (!data.success) {
+                btn.textContent = 'FAILED';
+                if (note) { note.textContent = country + ': ' + (data.error || 'top-up refused'); }
+                return;
+            }
+
+            if (!data.queued) {
+                btn.textContent = 'AT TARGET';
+                if (note) { note.textContent = country + ' is already at target -- nothing queued.'; }
+                return;
+            }
+
+            btn.textContent = 'QUEUED';
+            if (note) {
+                note.textContent = country + ' queued. The worker picks it up within a minute; '
+                    + 'a country takes 8-18s to build.';
+            }
+            pollSetStatus(country, btn);
+        } catch (e) {
+            btn.textContent = 'FAILED';
+            if (note) { note.textContent = country + ': ' + e.message; }
+        }
+    }
+
+    // Polls until the country reaches target, or gives up. Bounded deliberately: the cron is
+    // per-minute and a build is tens of seconds, so an unbounded poll on a country whose
+    // generation keeps failing would hammer the endpoint for as long as the tab stayed open.
+    async function pollSetStatus(country, btn) {
+        var attempts = 0;
+        var MAX      = 40; // ~100s at 2.5s
+
+        var tick = async function () {
+            attempts++;
+            try {
+                var res  = await fetch(SET_STATUS_URL_TPL.replace('__CC__', country));
+                var data = await res.json();
+
+                if (data.claimable >= data.target) {
+                    btn.textContent = 'AT TARGET';
+                    return;
+                }
+                btn.textContent = 'BUILDING...';
+            } catch (e) {
+                // A failed poll is not a failed build; let the next tick try.
+            }
+
+            if (attempts < MAX) {
+                setTimeout(tick, POLL_INTERVAL_MS);
+            } else {
+                btn.textContent = 'STILL SHORT';
+            }
+        };
+
+        setTimeout(tick, POLL_INTERVAL_MS);
+    }
+
+    $$('.top-up-btn').forEach(function (b) {
+        b.addEventListener('click', function () { topUpCountry(b); });
     });
 
     async function startRunForCountry(country) {

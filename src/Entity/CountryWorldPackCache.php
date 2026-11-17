@@ -4,18 +4,43 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Entity\WorldPack\WorldPackSet;
 use App\Repository\CountryWorldPackCacheRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\UuidV7;
 
+/**
+ * One league tier's generated payload, belonging to exactly one WorldPackSet.
+ *
+ * **The uniqueness key is (set_id, tier), not (country, tier).** It was the latter for
+ * as long as a country had exactly one world; a country now holds a buffer of sets, so
+ * (country, tier) is no longer unique and `findOneBy(['country','tier'])` on this table
+ * would return an arbitrary one of them. Reach a row through its set, never through its
+ * denormalised country.
+ *
+ * `country` and `tier` stay on the row anyway: the admin summaries
+ * (CountryWorldPackCacheRepository::findAllSummaries()) and the dashboard's stale-pack
+ * count read them directly in SQL, and joining through the set to recover a value the
+ * row can carry for two bytes would be worse.
+ */
 #[ORM\Entity(repositoryClass: CountryWorldPackCacheRepository::class)]
 #[ORM\Table(name: 'country_world_pack_cache')]
-#[ORM\UniqueConstraint(name: 'uq_country_tier', columns: ['country', 'tier'])]
+#[ORM\UniqueConstraint(name: 'uq_world_pack_set_tier', columns: ['set_id', 'tier'])]
+#[ORM\Index(columns: ['country', 'tier'], name: 'idx_country_world_pack_cache_country_tier')]
 class CountryWorldPackCache
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private UuidV7 $id;
+
+    /**
+     * CASCADE: the set is the owner. Deleting a set — a regenerate clearing unclaimed
+     * stock, or the prune dropping a long-claimed set's payloads — must take its tier
+     * rows with it, or they become unreachable rows nothing can serve or clean up.
+     */
+    #[ORM\ManyToOne(targetEntity: WorldPackSet::class)]
+    #[ORM\JoinColumn(name: 'set_id', nullable: false, onDelete: 'CASCADE')]
+    private WorldPackSet $set;
 
     #[ORM\Column(length: 2, options: ['fixed' => true])]
     private string $country;
@@ -45,10 +70,11 @@ class CountryWorldPackCache
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $payloadVersion;
 
-    public function __construct(string $country, int $tier, array $payload, int $payloadVersion = 0)
+    public function __construct(WorldPackSet $set, int $tier, array $payload, int $payloadVersion = 0)
     {
         $this->id             = new UuidV7();
-        $this->country        = $country;
+        $this->set            = $set;
+        $this->country        = $set->getCountry();
         $this->tier           = $tier;
         $this->payload        = $payload;
         $this->payloadVersion = $payloadVersion;
@@ -56,6 +82,7 @@ class CountryWorldPackCache
     }
 
     public function getId(): UuidV7 { return $this->id; }
+    public function getSet(): WorldPackSet { return $this->set; }
     public function getCountry(): string { return $this->country; }
     public function getTier(): int { return $this->tier; }
     public function getPayload(): array { return $this->payload; }

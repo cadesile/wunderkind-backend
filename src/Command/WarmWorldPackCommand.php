@@ -4,36 +4,47 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Entity\Club;
-use App\Entity\User;
-use App\Enum\Country;
-use App\Repository\CountryWorldPackCacheRepository;
-use App\Repository\LeagueRepository;
-use App\Service\ClubInitializationService;
-use App\Service\WorldInitializationService;
-use App\Service\WorldPackCacheService;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Enum\WorldPack\WorldPackSetStatus;
+use App\Repository\WorldPack\WorldPackSetRepository;
+use App\Service\WorldPack\WorldPackSetTopUpService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+/**
+ * Rebuilds a country's world pack SET buffer: clears the unclaimed stock and builds a fresh
+ * set per requested slot, each with its own starter squad.
+ *
+ * ── What changed, and why `--tier` is now an error ───────────────────────────────────────
+ *
+ * This command used to warm individual `(country, tier)` cache rows, with `--tier=N`,
+ * `--batch-size` and `--force`. A world pack is now a SET — one starter squad plus a payload
+ * for every tier, claimed whole by one club — and half a set is not servable, so there is no
+ * meaningful "warm tier 3 only" any more. `--tier` is rejected with an explanation rather
+ * than quietly ignored, because silently warming the whole country for someone who asked for
+ * one tier is worse than refusing.
+ *
+ * `--force` is likewise gone: clearing the unclaimed stock is now what this command always
+ * does, and it is safe, because claimed sets are spared. The hazard the old `--force` carried
+ * — a country left with no packs at all for the length of the run — no longer exists either,
+ * since the sets being replaced are the ones nobody has claimed.
+ *
+ * Use `app:worldpack:topup` to top a country up to target without clearing anything, and
+ * `app:worldpack:maintain` to sweep every live country (that is the one on a cron).
+ */
 #[AsCommand(
     name: 'app:worldpack:warm',
-    description: 'Pre-generate and cache the NPC league pack for a country.',
+    description: 'Rebuild a country\'s world pack set buffer (clears unclaimed stock, keeps claimed).',
 )]
 class WarmWorldPackCommand extends Command
 {
     public function __construct(
-        private readonly LeagueRepository                $leagueRepository,
-        private readonly CountryWorldPackCacheRepository $cacheRepository,
-        private readonly WorldInitializationService      $worldInitializationService,
-        private readonly WorldPackCacheService           $worldPackCacheService,
-        private readonly EntityManagerInterface          $entityManager,
+        private readonly WorldPackSetTopUpService $topUpService,
+        private readonly WorldPackSetRepository   $setRepository,
     ) {
         parent::__construct();
     }
@@ -42,213 +53,86 @@ class WarmWorldPackCommand extends Command
     {
         $this
             ->addArgument('country', InputArgument::REQUIRED, 'ISO 3166-1 alpha-2 country code (e.g. EN, ES)')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Regenerate even if already at the current payload version. NOTE: in all-tiers mode this deletes the country\'s entries up front, so the country has no packs until the run finishes — after a WORLD_PACK_VERSION bump you do not need it, since a stale-versioned entry is already rebuilt atomically per tier')
-            ->addOption('tier', null, InputOption::VALUE_REQUIRED, 'Process a single tier only (1–8). Recommended for cron use.')
-            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Tiers per batch when running all tiers (ignored with --tier)', 3)
-            ->addOption('memory-warning', null, InputOption::VALUE_REQUIRED, 'Memory threshold in MB at which to log a warning', 256);
+            ->addOption('count', null, InputOption::VALUE_REQUIRED, 'How many sets to build. Defaults to StarterConfig::worldPackSetTarget.')
+            ->addOption('tier', null, InputOption::VALUE_REQUIRED, 'No longer supported — a set must be whole to be servable. See the class docblock.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io      = new SymfonyStyle($input, $output);
         $country = strtoupper(trim((string) $input->getArgument('country')));
-        $tierOpt = $input->getOption('tier');
 
         if (strlen($country) !== 2) {
             $io->error("Country code must be exactly 2 characters. Got: '{$country}'.");
+
             return Command::FAILURE;
         }
 
-        if (ClubInitializationService::countryToNationality($country) === null) {
-            $supported = implode(' ', array_map(static fn (Country $c) => $c->value, Country::cases()));
-            $io->error("Unknown country code '{$country}'. Supported: {$supported}");
+        if ($input->getOption('tier') !== null) {
+            $io->error([
+                '--tier is no longer supported.',
+                'A world pack is now a SET — a starter squad plus every league tier — claimed whole by one club.',
+                'A set missing a tier is not servable, so there is nothing useful a single-tier warm can produce.',
+                'Run without --tier to rebuild the country, or use app:worldpack:topup to add one set.',
+            ]);
+
             return Command::FAILURE;
         }
 
-        // ── Single-tier mode (used by cron) ──────────────────────────────────
-        if ($tierOpt !== null) {
-            return $this->executeSingleTier($io, $output, $country, (int) $tierOpt, (bool) $input->getOption('force'));
-        }
+        $countOpt = $input->getOption('count');
+        $count    = $countOpt !== null ? (int) $countOpt : null;
 
-        // ── All-tiers batch mode (interactive / admin) ────────────────────────
-        return $this->executeAllTiers($io, $output, $input, $country);
-    }
+        if ($count !== null && $count < 1) {
+            $io->error('--count must be at least 1.');
 
-    private function executeSingleTier(
-        SymfonyStyle    $io,
-        OutputInterface $output,
-        string          $country,
-        int             $tier,
-        bool            $force,
-    ): int {
-        if ($tier < 1 || $tier > 8) {
-            $io->error("Tier must be between 1 and 8. Got: {$tier}.");
             return Command::FAILURE;
         }
 
-        // Silently succeed if this tier has no league (country may have fewer than 8 tiers).
-        $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
-        if ($league === null) {
-            $output->writeln("<comment>[{$country}/T{$tier}] No league — skipping.</comment>");
-            return Command::SUCCESS;
+        $target = $count ?? $this->topUpService->targetSetCount();
+
+        $io->title("Rebuilding world pack sets for {$country}");
+        $io->text("Target: {$target} set(s). Claimed sets are kept; unclaimed stock is replaced.");
+
+        $built = $this->topUpService->rebuild($country, $count);
+
+        if ($built === []) {
+            $io->error([
+                "No sets were built for {$country}.",
+                'Most likely the country has no League rows, or the player pool cannot supply a starter squad.',
+                "Check with: php bin/console app:starter-pack:check {$country}",
+            ]);
+
+            return Command::FAILURE;
         }
 
-        $dummyUser = new User('__warmup__@warmup.local');
-        $dummyClub = new Club('__warmup__', $dummyUser);
-        $dummyClub->setCountry($country);
+        $rows = [];
+        foreach ($built as $set) {
+            $rows[] = [
+                (string) $set->getId(),
+                $set->getStatus()->value,
+                $set->getTierCount(),
+            ];
+        }
+        $io->table(['Set', 'Status', 'Tiers'], $rows);
 
-        $start = microtime(true);
-        try {
-            $builder = fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier);
+        $ready   = $this->setRepository->countByStatus($country, WorldPackSetStatus::READY);
+        $claimed = $this->setRepository->countByStatus($country, WorldPackSetStatus::CLAIMED);
 
-            // forceRebuild generates the payload first, then atomically replaces the old
-            // entry — so a failed build never leaves the cache empty.
-            // getOrBuild skips an entry already at the current WORLD_PACK_VERSION, and
-            // rebuilds one stamped with an older version through that same atomic path —
-            // so after a version bump it regenerates without needing --force.
-            $payload = $force
-                ? $this->worldPackCacheService->forceRebuild($country, $tier, $builder)
-                : $this->worldPackCacheService->getOrBuild($country, $tier, $builder);
-            $clubCount   = count($payload['clubs'] ?? []);
-            $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
-            $duration    = round(microtime(true) - $start, 1);
-            $peakMb      = round(memory_get_peak_usage(true) / 1024 / 1024, 1);
-
-            $io->success(sprintf(
-                '[%s/T%d] generated — %d clubs, %d players | %.1fs | peak %sMB',
-                $country, $tier, $clubCount, $playerCount, $duration, $peakMb
+        if (count($built) < $target) {
+            $io->warning(sprintf(
+                'Built %d of %d requested — the pool ran short. The sets that did build are live.',
+                count($built),
+                $target,
             ));
-            return Command::SUCCESS;
-        } catch (\Throwable $e) {
-            $io->error(sprintf('[%s/T%d] FAILED: %s', $country, $tier, $e->getMessage()));
-            return Command::FAILURE;
-        }
-    }
-
-    private function executeAllTiers(
-        SymfonyStyle    $io,
-        OutputInterface $output,
-        InputInterface  $input,
-        string          $country,
-    ): int {
-        $batchSize       = max(1, (int) $input->getOption('batch-size'));
-        $memWarningBytes = (int) $input->getOption('memory-warning') * 1024 * 1024;
-
-        $leagues = $this->leagueRepository->findByCountry($country);
-        if (empty($leagues)) {
-            $io->error("No leagues found for '{$country}'. Seed leagues first.");
-            return Command::FAILURE;
         }
 
-        if ($input->getOption('force')) {
-            $deleted = $this->worldPackCacheService->deleteByCountry($country);
-            $io->note("--force: deleted {$deleted} existing cache entries for {$country}.");
-        }
+        $io->success(sprintf(
+            '%s now holds %d ready set(s) (%d claimed).',
+            $country,
+            $ready,
+            $claimed,
+        ));
 
-        $dummyUser = new User('__warmup__@warmup.local');
-        $dummyClub = new Club('__warmup__', $dummyUser);
-        $dummyClub->setCountry($country);
-
-        $totalTiers = count($leagues);
-        $batches    = array_chunk($leagues, $batchSize);
-        $batchCount = count($batches);
-        $generated  = 0;
-        $skipped    = 0;
-        $failed     = 0;
-        $startTime  = microtime(true);
-
-        $output->writeln("Warming <info>{$country}</info>: <info>{$totalTiers}</info> tiers in batches of <info>{$batchSize}</info>");
-
-        $progressBar = new ProgressBar($output, $totalTiers);
-        $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %elapsed:6s%/%estimated:-6s%');
-        $progressBar->start();
-
-        foreach ($batches as $batchIndex => $batchLeagues) {
-            $batchGenerated = 0;
-            $batchSkipped   = 0;
-            $batchFailed    = 0;
-
-            foreach ($batchLeagues as $league) {
-                $tier       = $league->getTier();
-                // Version-aware, not merely "a row exists". A row stamped with an older
-                // WORLD_PACK_VERSION is a miss that getOrBuild() rebuilds, so testing for
-                // existence alone reported "skipped (cached)" for tiers it had just
-                // regenerated — misleading in precisely the situation this output matters,
-                // which is the pass right after a version bump.
-                $alreadyHit = $this->worldPackCacheService->isCached($country, $tier);
-
-                try {
-                    $payload = $this->worldPackCacheService->getOrBuild(
-                        $country,
-                        $tier,
-                        fn() => $this->worldInitializationService->buildTierPack($dummyClub, $country, $tier)
-                    );
-
-                    if ($alreadyHit) {
-                        $batchSkipped++;
-                        $skipped++;
-                        $status = 'skipped (cached)';
-                    } else {
-                        $batchGenerated++;
-                        $generated++;
-                        $clubCount   = count($payload['clubs'] ?? []);
-                        $playerCount = array_sum(array_map(fn($c) => count($c['players'] ?? []), $payload['clubs'] ?? []));
-                        $status      = "generated ({$clubCount} clubs, {$playerCount} players)";
-                    }
-                } catch (\Throwable $e) {
-                    $batchFailed++;
-                    $failed++;
-                    $status = 'FAILED: ' . $e->getMessage();
-                }
-
-                $memNow = memory_get_usage(true);
-                $memMb  = round($memNow / 1024 / 1024, 1);
-
-                $progressBar->clear();
-                $output->writeln("  [tier {$tier}] {$status} | mem: {$memMb}MB");
-                if ($memNow > $memWarningBytes) {
-                    $output->writeln(sprintf(
-                        '  <comment>[WARN] tier %d memory (%sMB) exceeds threshold (%dMB)</comment>',
-                        $tier, $memMb, $memWarningBytes / 1024 / 1024
-                    ));
-                }
-                $progressBar->display();
-                $progressBar->advance();
-            }
-
-            $this->entityManager->clear();
-
-            $progressBar->clear();
-            $output->writeln(sprintf(
-                'Batch [%d/%d] complete — %d generated, %d skipped, %d failed',
-                $batchIndex + 1, $batchCount, $batchGenerated, $batchSkipped, $batchFailed
-            ));
-            $progressBar->display();
-        }
-
-        $progressBar->finish();
-        $output->writeln('');
-
-        $duration = round(microtime(true) - $startTime, 1);
-        $peakMb   = round(memory_get_peak_usage(true) / 1024 / 1024, 1);
-
-        $io->table(
-            ['Metric', 'Value'],
-            [
-                ['Generated',   $generated],
-                ['Skipped',     $skipped],
-                ['Failed',      $failed],
-                ['Peak memory', "{$peakMb}MB"],
-                ['Duration',    "{$duration}s"],
-            ]
-        );
-
-        if ($failed > 0) {
-            $io->error("{$failed} tier(s) failed for {$country}.");
-            return Command::FAILURE;
-        }
-
-        $io->success("World pack warmed for {$country}.");
         return Command::SUCCESS;
     }
 }

@@ -299,7 +299,13 @@ So after re-authoring TV, do one of:
 - **Bump `WORLD_PACK_VERSION`** (code change + deploy). Flags every pack stale, and each rebuilds
   atomically per tier with no window where a country has none. Preferred, and you need it for the
   model flip in step 5 anyway — so do it once, after both.
-- **`app:worldpack:warm <COUNTRY> --force`.** Note its own warning: in all-tiers mode it deletes
+- **`app:worldpack:warm <COUNTRY>`.** ⚠️ **Rewritten 2026-11-17 — `--force` and `--tier` are
+  gone.** A world pack is now a SET (starter squad + every tier, claimed whole by one club),
+  so this command always clears the country's UNCLAIMED stock and rebuilds the buffer; claimed
+  sets are spared, which removes the hazard the old `--force` carried. `--tier` is a hard
+  error — half a set is not servable. `app:worldpack:topup <CODE>` adds one set without
+  clearing. The paragraph below describes the retired behaviour and is kept for context:
+  in all-tiers mode it used to delete
   the country's entries up front, so that country has no packs until the run finishes. `--tier N`
   avoids that window.
 
@@ -536,7 +542,8 @@ it with none until the run finishes. The option exists for a different job.
 For a big country, one tier at a time is gentler and is what the cron uses:
 
 ```bash
-php bin/console app:worldpack:warm EN --tier=1
+# --tier is no longer supported (a set must be whole). Rebuild the country's buffer:
+php bin/console app:worldpack:warm EN
 ```
 
 Run it for **every** country that has cached packs, not just the one you re-tuned — the bump

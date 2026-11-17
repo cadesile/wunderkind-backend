@@ -58,10 +58,33 @@ second-source confusion documented in `economy-config.md`.
 ## Server side
 
 `WorldInitializationService::WORLD_PACK_VERSION` is the single source. `buildLeagueSnapshot()`
-stamps it into every pack it builds, and `WorldPackCacheService::readFresh()` treats a row with
-any other version as a miss — so a stale pack is rebuilt synchronously before it is returned, and
-**no path serves a payload without the key.**
+stamps it into every pack it builds, and `WorldPackCacheService::readTier()` (formerly
+`readFresh()`, renamed when it became set-scoped) treats a row with any other version as absent
+— so a stale pack is never served, and **no path serves a payload without the key.** Since
+2026-11-17 a stale row is not rebuilt in place either: the whole SET it belongs to is
+unclaimable, and `app:worldpack:warm`/the admin regenerate replaces it.
 
 Adding a key to the pack is a shape change, which is why introducing this bumped the constant to
 5 and invalidated every cached pack. Packs rebuild on read, one tier at a time, so the first
 initialisation per country after that deploy is slower and the rest are normal.
+
+## Update 2026-11-17 — a pack is now single-use per club
+
+`packVersion` is unchanged and still means what it says. What changed underneath it is that a
+world pack is no longer a shared row: it belongs to a **set** (one starter squad plus a payload
+per league tier) that is claimed by exactly one club at `POST /api/initialize/starter` and
+never served to anyone else. `POST /api/initialize/league/{tier}` reads your club's own set, so
+a retry returns the same bytes.
+
+Two consequences for reading this field:
+
+- **The two figures can still legitimately disagree**, for the same reason as before, and now
+  for one more: `/leagues` reports the version the server BUILDS at, while your tier packs
+  report the version the set you hold was built at. A set built before a bump is never handed
+  out again — the claim filters on the version — so a held set staying on an older number is
+  expected, not a fault.
+- **Two devices in the same country now report different worlds at the same `packVersion`.**
+  The version identifies a payload SHAPE, not a world. It was never safe to compare packs
+  across devices; now it is meaningless.
+
+`WORLD_PACK_VERSION` was not bumped for this change, because no payload shape moved.

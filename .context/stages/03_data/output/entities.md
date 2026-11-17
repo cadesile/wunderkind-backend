@@ -173,10 +173,16 @@ migrations are the change log (see `migrations.md`).
   charged; exists purely to make `app:reputation:decay` idempotent and
   catch-up-safe, see `docs/reputation-decay.md`, `marketPoolSize:int(20)`, `financialYearStart:int(4)`,
   `country`, `abbreviation`, `worldInitializedAt/starterInitializedAt/
-  tutorialCompletedAt`, `starterPackJson:?array` (added by
+  tutorialCompletedAt`, `worldPackSet:?WorldPackSet` (added
+  `Version20261117120000` — which set the club was served, read by
+  `POST /api/initialize/league/{tier}` to decide which payload to serve; that is what makes a
+  retried tier call return the same world rather than a different one from the country's
+  buffer), `starterPackJson:?array` (added by
   `Version20261024140000`) — the `ampStarter` payload `POST /api/initialize/
   starter` first answered with, and **the only copy that exists**: starter
-  players/staff are pool entities, deleted on consume, so before this a lost
+  players/staff WERE pool entities deleted on consume (until 2026-11-17 — they are generated
+  now, and nothing is consumed; the column is still the only copy of the squad, because a
+  generated player exists nowhere else), so before this a lost
   response left the club initialized with no squad and a permanent 409 on
   every retry. Null for clubs initialized before it shipped; those still 409. `paName`, `managerTemperament/managerDiscipline/
   managerAmbition:int(50)`, `balance:int` (the old `managerProfile:?array`
@@ -1503,10 +1509,35 @@ two changes land in the same second.
 
 ## Misc / cache / analytics
 
-- **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory)
-  cache of generated world-pack payloads. `country`, `tier`,
-  `payload:array`, `generatedAt`, `payloadVersion`. No relations. See
-  also `state.md`.
+- **`WorldPackSet`** (table `world_pack_set`, added `Version20261117120000`) — ONE
+  generation of a country's world: the starter squad PLUS a `CountryWorldPackCache` row per
+  league tier, generated together and **claimable by exactly one club**. `country`,
+  `payloadVersion`, `status` (enum `WorldPackSetStatus`: `building|ready|claimed|failed`),
+  `starterPackJson:?array`, `tierCount:int`, `errorMessage:?string`,
+  `generatedAt`, `readyAt:?`, `claimedAt:?`, `claimedByClub:?Club` (SET NULL).
+  Partial unique index `uq_world_pack_set_one_per_club` on `claimed_by_club_id` — one club can
+  never hold two sets; PARTIAL because every unclaimed row is NULL there.
+  **Only READY counts as stock, and three kinds of READY row still do not:** one at a stale
+  `payloadVersion` (the claim filters on it), one already claimed, and one with
+  `starterPackJson IS NULL` — the shape the introducing migration backfilled around each
+  country's pre-existing cache rows so `set_id` could become NOT NULL without discarding a warm
+  payload. Those backfilled sets are inert by design; handing one out would give a club a world
+  with no squad AND consume a buffer slot, which is strictly worse than the live-draw fallback.
+  **The squad is GENERATED, not drawn from the shared pool** (2026-11-17) — through
+  `WorldPackClubGenerationService`, the same generator every NPC club goes through. Two sets of
+  one country therefore cannot share a player for the same reason two NPC clubs cannot: neither
+  takes from a shared population. Verified on dev — generating two full EN sets left `player`
+  and `staff` row counts unchanged. There is correspondingly nothing a set can be SHORT of, which
+  is why it carries no shortfall column: a field that can never be non-zero is a trap.
+- **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory) payload for ONE tier of
+  ONE `WorldPackSet`. `set:WorldPackSet` (NOT NULL, CASCADE), `country`, `tier`,
+  `payload:array`, `generatedAt`, `payloadVersion`. See also `state.md`.
+  **The uniqueness key is `(set_id, tier)`, not `(country, tier)`** — that was a table
+  CONSTRAINT, `uq_country_tier`, dropped in `Version20261117120000`. `(country, tier)` stopped
+  being unique the moment a country held a buffer of sets, so nothing may reach a row through
+  its denormalised country any more; `findForCountryAndTier()` was removed for exactly that
+  reason and must not come back. `country`/`tier` remain on the row only because the admin
+  summaries and the dashboard's stale count read them directly in SQL.
 - **`LiveTelemetrySnapshot`** — singleton-style live-activity feed row
   (per `LiveTelemetrySnapshotRepository::getSnapshot()`) backing the landing
   page's "Boardroom Incident & Consequence Feed" widget. `fixturesSimulated`,

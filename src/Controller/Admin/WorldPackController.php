@@ -8,7 +8,13 @@ use App\Enum\WorldPack\WorldPackGenerationClubRunStatus;
 use App\Enum\WorldPack\WorldPackGenerationRunStatus;
 use App\Enum\WorldPack\WorldPackGenerationTierRunStatus;
 use App\Message\WorldPack\WarmWorldPackClubMessage;
+use App\Enum\WorldPack\WorldPackSetStatus;
+use App\Message\WorldPack\TopUpWorldPackSetMessage;
 use App\Repository\CountryWorldPackCacheRepository;
+use App\Repository\WorldPack\WorldPackSetRepository;
+use App\Service\WorldInitializationService;
+use App\Service\WorldPack\WorldPackSetService;
+use App\Service\WorldPack\WorldPackSetTopUpService;
 use App\Repository\LeagueRepository;
 use App\Repository\WorldPack\WorldPackGenerationClubRunRepository;
 use App\Repository\WorldPack\WorldPackGenerationRunRepository;
@@ -30,6 +36,9 @@ class WorldPackController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface          $em,
         private readonly CountryWorldPackCacheRepository $cacheRepository,
+        private readonly WorldPackSetRepository          $setRepository,
+        private readonly WorldPackSetService             $setService,
+        private readonly WorldPackSetTopUpService        $topUpService,
         private readonly WorldPackCacheService           $worldPackCacheService,
         private readonly LeagueRepository                $leagueRepository,
         private readonly WorldPackGenerationOrchestrator      $orchestrator,
@@ -83,10 +92,128 @@ class WorldPackController extends AbstractController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
-        $deleted = $this->worldPackCacheService->deleteByCountry($country);
-        $this->addFlash('success', "Deleted {$deleted} cache entry/entries for {$country}.");
+        // UNCLAIMED sets only. A claimed set belongs to a device that may still be part-way
+        // through downloading its tiers; deleting it would leave that save with a world it can
+        // never finish and no way to ask for another. The flash says how many were spared so
+        // this does not read as a partial failure.
+        $kept    = $this->setRepository->countByStatus($country, WorldPackSetStatus::CLAIMED);
+        $deleted = $this->setService->deleteUnclaimed($country);
+
+        $this->addFlash('success', $kept > 0
+            ? "Deleted {$deleted} unclaimed set(s) for {$country}. Kept {$kept} claimed set(s) — those belong to clubs still initialising."
+            : "Deleted {$deleted} unclaimed set(s) for {$country}.");
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+    }
+
+    // ── Delete one set ───────────────────────────────────────────────────
+
+    #[Route('/admin/worldpack-cache/delete-set/{id}', name: 'admin_worldpack_delete_set', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function deleteSet(string $id, Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('worldpack_delete_set', $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+        }
+
+        $set = $this->setRepository->find($id);
+
+        if ($set === null) {
+            $this->addFlash('warning', "Set {$id} not found — it may have already been deleted.");
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+        }
+
+        // Refuse a claimed set unless explicitly forced, for the same reason delete-country
+        // spares them: there is a device depending on it. `force` is here because an operator
+        // sometimes genuinely needs to clear a set claimed by an abandoned save, and the
+        // alternative is editing the database by hand.
+        if ($set->getStatus() === WorldPackSetStatus::CLAIMED && !$request->request->getBoolean('force')) {
+            $club = $set->getClaimedByClub();
+            $this->addFlash('warning', sprintf(
+                'Set %s is claimed%s and was NOT deleted — that club may still be fetching its tiers. Re-submit with force to delete it anyway.',
+                $id,
+                $club !== null ? ' by ' . $club->getName() : '',
+            ));
+
+            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+        }
+
+        $label = sprintf('%s / %s', $set->getCountry(), $set->getStatus()->value);
+        // Its tier payload rows go with it via ON DELETE CASCADE.
+        $this->em->remove($set);
+        $this->em->flush();
+
+        $this->addFlash('success', "Deleted set {$label}.");
+
+        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
+    }
+
+    // ── Top one country up (+1 set, clears nothing) ──────────────────────
+
+    #[Route('/admin/worldpack-cache/top-up', name: 'admin_worldpack_top_up', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function topUp(Request $request): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('worldpack_top_up', $request->request->get('_token'))) {
+            return $this->json(['success' => false, 'error' => 'Invalid CSRF token'], 403);
+        }
+
+        $country = strtoupper(trim($request->request->getString('country')));
+        if (strlen($country) !== 2) {
+            return $this->json(['success' => false, 'error' => 'Invalid country code'], 400);
+        }
+
+        // Queued, not built inline: a set is 20-40s of generation and an admin request must
+        // not hold a worker open for it. The same message the init endpoint dispatches, so the
+        // handler's deficit re-read makes a double-click harmless.
+        if (!$this->topUpService->needsTopUp($country)) {
+            return $this->json([
+                'success' => true,
+                'queued'  => false,
+                'country' => $country,
+                'reason'  => 'already at target',
+            ]);
+        }
+
+        $this->messageBus->dispatch(new TopUpWorldPackSetMessage($country));
+
+        return $this->json(['success' => true, 'queued' => true, 'country' => $country]);
+    }
+
+    // ── Set stock per country (AJAX, for the top-up button's poll) ────────
+
+    #[Route('/admin/worldpack-cache/set-status/{country}', name: 'admin_worldpack_set_status', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function setStatus(string $country): JsonResponse
+    {
+        $country = strtoupper(trim($country));
+
+        // A top-up creates no WorldPackGenerationRun (see WorldPackSetTopUpService), so the
+        // existing run-status poll cannot see it. This is the equivalent for that path.
+        $sets = [];
+        foreach ($this->setRepository->findForCountry($country) as $set) {
+            $sets[] = [
+                'id'               => (string) $set->getId(),
+                'status'           => $set->getStatus()->value,
+                'payloadVersion'   => $set->getPayloadVersion(),
+                'stale'            => $set->getPayloadVersion() !== WorldInitializationService::WORLD_PACK_VERSION,
+                'tierCount'        => $set->getTierCount(),
+                'hasStarterSquad'  => $set->getStarterPackJson() !== null,
+                'generatedAt'      => $set->getGeneratedAt()->format('c'),
+                'readyAt'          => $set->getReadyAt()?->format('c'),
+                'claimedAt'        => $set->getClaimedAt()?->format('c'),
+                'claimedBy'        => $set->getClaimedByClub()?->getName(),
+                'errorMessage'     => $set->getErrorMessage(),
+            ];
+        }
+
+        return $this->json([
+            'country'   => $country,
+            'target'    => $this->topUpService->targetSetCount(),
+            'claimable' => $this->setRepository->countReadyUnclaimed($country, WorldInitializationService::WORLD_PACK_VERSION),
+            'sets'      => $sets,
+        ]);
     }
 
     // ── Regenerate country cache (async, per-club progress tracking) ─────
@@ -110,13 +237,29 @@ class WorldPackController extends AbstractController
         }
         $tiers = array_map(static fn ($l) => $l->getTier(), $leagues);
 
+        $setCountRaw = $request->request->get('setCount');
+        $setCount    = $setCountRaw !== null && $setCountRaw !== '' ? max(1, (int) $setCountRaw) : null;
+
         try {
-            $run = $this->orchestrator->startRun($country, $tiers);
+            $result = $this->orchestrator->startRun($country, $tiers, $setCount);
         } catch (WorldPackGenerationAlreadyRunningException $e) {
             return $this->json(['success' => false, 'error' => $e->getMessage()], 409);
         }
 
-        return $this->json(['success' => true, 'country' => $country, 'runId' => $run->getId()->toRfc4122()]);
+        $run         = $result['run'];
+        $startedSets = count($result['sets']);
+
+        return $this->json([
+            'success'       => true,
+            'country'       => $country,
+            'runId'         => $run->getId()->toRfc4122(),
+            'requestedSets' => $result['requestedSets'],
+            'startedSets'   => $startedSets,
+            // Kept, though it can no longer be true: the squads are generated, so a run always
+            // starts every set it was asked for. The key stays because the admin JS reads it and
+            // removing it would be a shape change for no gain.
+            'partial'       => $startedSets < $result['requestedSets'],
+        ]);
     }
 
     // ── Poll current/latest run status for a country (AJAX) ──────────────

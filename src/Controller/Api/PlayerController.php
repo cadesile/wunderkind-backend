@@ -88,6 +88,8 @@ class PlayerController extends AbstractController
         Request $request,
         YouthPoolService $youthPool,
         PlayerSnapshotSerializer $serializer,
+        \App\Service\Economy\ServeTimePlayerPricer $pricer,
+        \App\Service\ClubResolver $clubResolver,
     ): JsonResponse {
         $countryParam = $request->query->get('country');
         if ($countryParam === null || trim($countryParam) === '') {
@@ -107,6 +109,27 @@ class PlayerController extends AbstractController
 
         $result = $youthPool->draw($country->nationality(), $limit);
 
+        // ── Serve-time pricing, which this endpoint was missing ───────────────────────────
+        //
+        // A youth player is a SHARED-POOL row: one row served to every country at every tier,
+        // so its `contractValue` is stored at the legacy figure and has to be priced against
+        // the BROWSING club's economy when it is served. `GET /api/scout/search` and
+        // `GET /api/players/foreign` have done that since 2026-11-12 via
+        // PlayerBrowseSerializer; this endpoint serializes through PlayerSnapshotSerializer
+        // instead, so it never reached the pricing and served the stored legacy number — the
+        // one remaining surface where a pool player escaped the economy.
+        //
+        // The club's own country and tier, NOT the `?country=` filter, which selects which
+        // NATIONALITY of youth to draw. Those are different questions and conflating them would
+        // price a club's wage bill by where it was shopping.
+        //
+        // The pricer is applied over this endpoint's OWN serializer call rather than by
+        // switching to PlayerBrowseSerializer: that class is a `withGuardians: true` preset and
+        // nothing else, and this endpoint already passes `withGuardians: true` plus
+        // `isYouth: true`, which the preset cannot express. Only the wage was missing.
+        $club     = $clubResolver->resolveFromRequest($this->getUser());
+        $clubTier = $club?->getCurrentLeague()?->getTier();
+
         return $this->json([
             'country'      => $country->value,
             'amount'       => count($result['players']),
@@ -119,7 +142,12 @@ class PlayerController extends AbstractController
                 'nationalityMatched' => $result['nationalityMatched'],
             ],
             'players' => array_map(
-                static fn ($p) => $serializer->serialize($p, withGuardians: true, isYouth: true),
+                fn ($p) => $pricer->price(
+                    $serializer->serialize($p, withGuardians: true, isYouth: true),
+                    $p,
+                    $club?->getCountry(),
+                    $clubTier,
+                ),
                 $result['players'],
             ),
         ]);

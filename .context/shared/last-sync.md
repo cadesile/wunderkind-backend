@@ -5,6 +5,168 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **`.context` audit pass over world pack + starter pack generation (2026-11-17), on top of
+  commit `e9d81c2a`** (branch `development`). **Stages touched:** CONTEXT.md, 01_overview
+  (`deployment.md`), 02_architecture (`structure.md`), 03_data (`schema.md`, `entities.md`,
+  `migrations.md`), 04_interfaces (`routes.md`, `services.md`), 07_synthesis
+  (`architecture-notes.md`), shared (this file).
+
+  Asked for explicitly: make `.context` describe exactly how the code behaves, for an agent
+  with none of this session's context. The incremental edits made while building the feature had
+  left real contradictions, so this was an audit rather than more patching.
+
+  **New: `07_synthesis/output/architecture-notes.md`'s "World pack sets" section** — the single
+  end-to-end account (what a set is, the TWO generation paths and why they differ, the claim and
+  why it is per-set, the buffer, five traps, and a file map). `CONTEXT.md` gained a routing row
+  pointing at it, plus one for wage pricing, because a fresh agent reads the routing table first
+  and detail nothing routes to is detail nobody finds.
+
+  **Contradictions found and fixed, all of them introduced by patching rather than by the
+  feature:**
+
+  1. `services.md`'s `StarterPackService` entry had TWO bodies — the new "generated, consumes
+     nothing" text immediately followed by the original "deleted on consume... raises
+     `InsufficientStarterPoolException`" text. A reader would have believed either half.
+  2. The same entry then claimed the service "assembles the club via `ClubInitializationService`".
+     It uses only the static `countryToNationality()`; `POST /api/club/initialize` assembles clubs.
+  3. `services.md` still said "only the STARTER squad consumes pool rows" — true when written,
+     false an hour later. It also described NPC scouts as pool-drawn when they are generated.
+  4. `routes.md` claimed the regenerate endpoint answers `412` on pool supply, which I had
+     written and then made false by deleting that catch; and described the starter fallback as a
+     "live draw" when nothing draws.
+  5. `entities.md` / `migrations.md` described starter pack pool consumption in the present tense.
+
+  **Pre-existing staleness corrected while in there, unrelated to this feature:**
+
+  - `structure.md` said "Messenger now has SIX transports". There are **eleven**, and it had been
+    stale across four separate additions (`friendly`, `suggestion`, `clubsale`, `worldpackset`).
+    Now enumerated with a date and an instruction to count them in the yaml instead.
+  - It stated a crontab job count of 10; there are **27 lines**. Same treatment — the figure has
+    gone stale repeatedly, so the doc now says to `grep -c` it.
+  - It implied every transport has a 1-minute cron drainer. There are **nine drainers against
+    eleven transports**, and both gaps are deliberate: `failed` is the dead-letter store, and
+    **`registration` is drained by a long-running supervisord worker** — the single exception to
+    this codebase's cron-driven-command convention, which nothing had written down.
+  - `deployment.md` described a `WORLD_PACK_VERSION` bump as making packs stale. It now makes
+    every SET unclaimable at once, which is a bigger operational fact; the self-healing path and
+    the figure actually worth watching are both named.
+
+  **Every symbol, file, command and routing entry the new text names was verified to exist, and
+  everything it says was removed was verified gone** — by a script, not by reading, because a doc
+  that names a renamed method is worse than silence. Two apparent failures were my own "REMOVED"
+  comments matching the grep.
+
+- **The starter squad is generated, not drawn — and the last two economy gaps closed
+  (2026-11-17, same session as the sets entry below)**, on top of commit `e9d81c2a` (branch
+  `development`). **Stages touched:** 01_overview (`tribal-knowledge.md`), 03_data
+  (`entities.md`, `migrations.md`), 04_interfaces (`services.md`), 07_synthesis
+  (`current-focus.md`), shared (`api-backwards-compatibility.md`, this file).
+
+  `StarterPackService::generatePack()` builds a founder's players, staff and scouts through
+  `WorldPackClubGenerationService` — the same generator every NPC club uses — and touches no
+  pool table. Applied to both the pre-generated sets and the live fallback, so a starter squad
+  has one provenance. New `Economy\ServeTimePlayerPricer` owns the "shared-pool rows are priced
+  at serve time" rule.
+
+  Four things worth carrying forward:
+
+  1. **A band is a POTENTIAL range, not an ability range**, and the two were being conflated
+     across populations. `PlayerGenerationService::generate()`'s fourth parameter is
+     `$potentialRange`; `currentAbility` is the mean of attributes drawn under
+     `abilityTarget x potential` and lands below the band. The draw that was replaced filtered
+     on `currentAbility BETWEEN band`, so a drawn founder had its ABILITY in the band while
+     every NPC club around it had its POTENTIAL in it — founders were systematically stronger
+     than the division they were placed in. EN tier 8 now measures starter ability 1-3-5 /
+     potential 2-7 against NPC ability 1-3-6 / potential 2-7. **A real balance change, and NOT
+     gated on the wage model**, because it is a generation basis.
+  2. **Two refusals became unreachable, which is the rare direction.**
+     `InsufficientStarterPoolException` and `InitializeController::MIN_POOL_SIZE` both went:
+     generation has no supply to be short of, so a new game can no longer be refused for a thin
+     pool — the one failure in that flow with no client-side escape.
+     `WorldPackSet::$starterShortfall` went with them, because a column that can never be
+     non-zero is a trap.
+  3. **"Price pool rows with country and tier" was asked for and deliberately NOT done that
+     way.** A pool row is one row served to every country at every tier, so a stored country
+     price is wrong for every country but one and would double up with the serve-time pricing —
+     `MarketDataService`'s own docblock already says so. The gaps the request was aiming at were
+     real, though, and both are closed: the founder's squad is priced at GENERATION with country
+     and tier (it previously had neither and was never re-priced, the one squad in the pyramid
+     outside the economy), and `GET /api/players/youth` is now priced at SERVE time (it
+     serializes through `PlayerSnapshotSerializer`, so it never reached
+     `PlayerBrowseSerializer`'s pricing and served the stored legacy figure). Extracting the
+     rule into its own class is what makes "which surfaces price pool rows" answerable — living
+     inside a serializer is precisely why it reached only two endpoints. **The owner was given
+     this reasoning and confirmed the serve-time mechanism**, so it is recorded as a ruling in
+     `01_overview/output/tribal-knowledge.md` rather than left as an implementer's judgement.
+  4. **`StarterPackDiagnosticService`, `StarterPoolAuditService`, `app:starter-pack:check` and
+     `app:starter-pool:audit` were deliberately NOT deleted**, even though all four turn on a
+     starter-pack draw that no longer happens. They are the only SCHEDULED thing that tops the
+     shared pool up at all (`app:pool:warm` is the general warmer and is unscheduled), and the
+     pool still feeds youth, foreign, scout search and market data — deleting them would have
+     quietly starved those four surfaces. Their AIM is what is now wrong: floors and triggers
+     need re-deriving from what actually consumes the pool. They over-queue rather than under-,
+     which is the safe direction.
+
+  Dead code removed with it: `PlayerRepository::findForWorldInitByPositionAndNationality()` /
+  `findForeignForWorldInitByPosition()`, `StaffRepository::findInPoolByRoleRandom()` (zero
+  callers, and the names encoded a story that is now false — a note stands in their place), and
+  the `StarterPoolFixtureTrait` test helper, because the generation tests now run against an
+  EMPTY pool, which is a stronger statement than seeding one.
+
+- **World pack SETS — a world and its starter squad as one single-use unit (2026-11-17), on top
+  of commit `e9d81c2a`** (branch `development`). **Stages touched:** 03_data (`entities.md`,
+  `schema.md`, `state.md`, `migrations.md`), 04_interfaces (`routes.md`, `services.md`,
+  `controllers.md`), 07_synthesis (`current-focus.md`), shared
+  (`api-backwards-compatibility.md`, this file).
+
+  `WorldPackSet` + `Version20261117120000`. A world pack is now one starter squad plus a payload
+  per league tier, generated together, claimed by exactly one club at
+  `POST /api/initialize/starter`, and never served twice; each live country keeps two claimable
+  sets, refilled by a top-up dispatched on every game initialisation plus an hourly
+  `app:worldpack:maintain` sweep. Fixes both the "same world for everyone in a country" and the
+  "warm packs but no drawable squad → 412 at the first step of init" problems at once.
+
+  **Two `.context` entries were found stale and corrected in passing**, both in
+  `04_interfaces/output/services.md`: `WORLD_PACK_VERSION` was documented as 3 when it is 7, and
+  world-pack club generation was documented as pool-deleting on consumption when it has long
+  generated NPC players and staff fresh in memory and never touched the shared pool. Only the
+  STARTER squad consumes pool rows — which is exactly the fact this change is built on.
+
+  Five things worth carrying forward:
+
+  1. **`(country, tier)` is no longer a usable key for a payload row**, and the methods that
+     used it are deleted rather than deprecated. A country holds a buffer of sets, so
+     `findOneBy(['country','tier'])` returns an arbitrary world and the damage is silent — a
+     client served tier 1 of one world and tier 2 of another, every response a 200.
+  2. **A widened unique key can silently drop the guarantee it looks like it keeps.**
+     `(run_id, set_id, tier)` does not constrain set-less rows at all, because Postgres treats
+     NULLs as DISTINCT; it needed a partial companion on `(run_id, tier) WHERE set_id IS NULL`.
+     An existing schema test caught it, which is the only reason it did not ship.
+  3. **A guard can be correct and then become wrong by staying still.** The global
+     `MIN_POOL_SIZE` check ran before the claim; pre-generating a set CONSUMES its squad from
+     the pool, so a healthy box sits with a nearly empty pool and a full buffer — and the guard
+     refused to serve those sets, advising the operator to warm a pool the sets had used. It is
+     now on the live-draw path only.
+  4. **`gen_random_uuid()` in a backfill is a latent bug in this repo.** Every id here is typed
+     `UuidV7` and a v4 cannot hydrate into one. This migration mints UUIDs in PHP;
+     `Version20261027230000` backfills `competition_entrant_squad.id` with `gen_random_uuid()`
+     and is an UNFIXED instance of the pattern. **Checked on dev 2026-11-17: 0 rows in that
+     table, so nothing is affected there and the defect is latent rather than live.** Production
+     is not checked from here — run
+     `SELECT count(*) FROM competition_entrant_squad WHERE id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4'`
+     against it; a non-zero result means those rows throw a TypeError on read.
+  5. **`wunderkind_test` had never received four `game_config` economy columns** from
+     `Version20261116181000`, so every test reading `GameConfig` was failing with
+     `column ... does not exist`. Added by hand with the ENTITY defaults (0 / parity ppm), not
+     the migration's authored ladder — authoring them turns the economy on and breaks
+     `WorldOverviewServiceTest`. The database also held 15,101 leftover clubs, 98 of them
+     referencing leagues, which was failing `LeagueImportExportRoundTripTest` and
+     `SeasonInvestmentControllerTest` on a `club → league` FK; cleared.
+
+  **`down()` is deliberately not lossless** — `uq_country_tier` cannot coexist with a buffer, so
+  the rollback keeps each country's oldest set and drops the rest. That is the rollback, not a
+  side effect.
+
 - **The league payout ladders authored relative to the top tier (2026-11-16), on top of commit
   `d06ebd9c`** (branch `development`). **Stages touched:** 03_data (`entities.md`,
   `migrations.md`), 04_interfaces (`services.md`), shared (this file).

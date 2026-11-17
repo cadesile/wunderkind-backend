@@ -175,9 +175,22 @@ class WorldInitializationService
      * fresh, in memory, directly into the cache — never drawn from or deleted out of the
      * shared pool (see WorldPackClubGenerationService).
      *
+     * **`$club` is nullable because a pre-generated WorldPackSet has no club yet**, and the
+     * only thing the club was ever used for here is adding its own id to the fixture list
+     * when it sits in this tier's league. That is safe to drop, and dropping it finally makes
+     * the two generation paths agree: WorldPackTierAssemblyService has ALWAYS built fixtures
+     * from NPC ids alone, so an admin-regenerated pack and a lazily-built one disagreed about
+     * the player's own division for as long as both have existed.
+     *
+     * Verified not client-visible before relying on it: `wunderkind-app` types the field as
+     * `fixtures: unknown; // delivered by backend, not consumed client-side (generated
+     * locally)` and generates its own schedule in `useInitFlow`'s `fixtures_generated` step
+     * from the league list plus its own club id. Logged as a deliberate value change in
+     * `.context/shared/api-backwards-compatibility.md` with that consumer check.
+     *
      * @return array{id: string, tier: int, name: string, clubs: array, fixtures: array, ...}
      */
-    public function buildTierPack(Club $club, string $country, int $tier): array
+    public function buildTierPack(?Club $club, string $country, int $tier): array
     {
         $starterConfig = $this->starterConfigRepository->getConfig();
         $poolConfig    = $this->poolConfigRepository->getConfig();
@@ -206,7 +219,7 @@ class WorldInitializationService
         $clubsData  = [];
         $allClubIds = [];
 
-        if ($club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
+        if ($club !== null && $club->getCurrentLeague()?->getId()->toBinary() === $league->getId()->toBinary()) {
             $allClubIds[] = (string) $club->getId();
         }
 

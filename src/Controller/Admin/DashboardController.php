@@ -72,6 +72,8 @@ class DashboardController extends AbstractDashboardController
         private LeagueRepository                 $leagueRepository,
         private LeagueService                    $leagueService,
         private CountryWorldPackCacheRepository  $worldPackCacheRepository,
+        private \App\Repository\WorldPack\WorldPackSetRepository $worldPackSetRepository,
+        private \App\Service\WorldPack\WorldPackSetTopUpService $worldPackSetTopUpService,
         private WorldPackCacheService            $worldPackCacheService,
         private \App\Repository\FacilityTemplateRepository $facilityTemplateRepository,
         private SocialAccountConnectionRepository $socialAccountConnectionRepository,
@@ -734,6 +736,14 @@ class DashboardController extends AbstractDashboardController
         // Zero means "no minimum", so zero is the right fallback.
         $config->setClubFundingMinimumPence((int) $request->request->get('clubFundingMinimumPounds', 0) * 100);
         $config->setClubFundingProjectionWeeks((int) $request->request->get('clubFundingProjectionWeeks', 13));
+        // World pack buffer. Both fall back to the shipped default rather than to zero: a
+        // target of 0 would switch the buffer off and a retention of 0 would prune a set's
+        // payloads the moment it was claimed, breaking the retry replay — neither is something
+        // a missing form field should be able to do.
+        $config->setWorldPackSetTarget((int) $request->request->get('worldPackSetTarget', 2));
+        $config->setWorldPackClaimedRetentionDays(
+            max(1, (int) $request->request->get('worldPackClaimedRetentionDays', 7)),
+        );
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
@@ -1530,12 +1540,17 @@ class DashboardController extends AbstractDashboardController
 
         $entries   = [];
         $byCountry = [];
+        $bySet     = [];
         $staleBy   = [];
         $freshBy   = [];
 
         foreach ($summaries as $row) {
             $entries[] = $row;
             $byCountry[$row['country']][$row['tier']] = true;
+            // Keyed by SET as well as country: a country holding two sets has two of every
+            // tier, so a per-country tier count now reads 16-of-8 and cannot answer "is this
+            // world complete". Completeness is a property of a set.
+            $bySet[$row['setId']][$row['tier']] = true;
 
             // THE SAME COMPARISON THE CACHE MAKES. WorldPackCacheService treats any row
             // stamped with a different version as a miss, so "stale" here means exactly
@@ -1561,12 +1576,41 @@ class DashboardController extends AbstractDashboardController
 
         $orphanPacks = count($entries) - $activeStale - $activeFresh;
 
+        // ── Set stock, which is what an operator actually acts on now ────────────────────
+        //
+        // A pack is no longer a thing a country has; it is a thing a CLUB is given. So the
+        // figure that matters is how many claimable sets each live country holds against its
+        // target — a country at zero means the next player there pays for a live draw.
+        //
+        // Live countries come from the country profile's own LIVE flag, the operator's
+        // "this is playable" axis, rather than from the generation-capable list the picker
+        // above uses: a country generation COULD build but nobody can play is not a gap.
+        $setSummaries  = $this->worldPackSetRepository->summariesByCountry($packVersion);
+        $targetSets    = $this->worldPackSetTopUpService->targetSetCount();
+        $liveCountries = $this->countryProfileRepository->liveCountryCodes();
+
+        $belowTarget   = 0;
+        $readySetTotal = 0;
+        foreach ($liveCountries as $code) {
+            $claimable      = $setSummaries[$code]['claimable'] ?? 0;
+            $readySetTotal += $claimable;
+            if ($claimable < $targetSets) {
+                $belowTarget++;
+            }
+        }
+
         return $this->render('admin/worldpack_cache.html.twig', [
             // The page strip's crumb and title, using the LIVE sidebar group label.
             'bmcGroup'         => 'Config',
             'bmcTitle'         => 'Worldpack cache',
             'entries'          => $entries,
             'byCountry'        => $byCountry,
+            'bySet'            => $bySet,
+            'setSummaries'     => $setSummaries,
+            'targetSets'       => $targetSets,
+            'liveCountries'    => $liveCountries,
+            'belowTarget'      => $belowTarget,
+            'readySetTotal'    => $readySetTotal,
             'totalEntries'     => count($entries),
             'enabledCountries' => $enabledCountries,
             'countryLabels'    => Country::labelMap(),

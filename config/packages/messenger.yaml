@@ -31,6 +31,15 @@ framework:
             # docker/pool-consume.sh. StarterPoolAuditService::TRANSPORT_QUEUE must match
             # this queue_name — it counts undrained rows to avoid stacking sweeps.
             pool: 'doctrine://default?queue_name=pool'
+            # World pack set top-ups, dispatched on EVERY game initialisation and by
+            # app:worldpack:maintain. Its own transport for the sharpest version of the reason
+            # `worldpack` and `pool` have theirs: one of these messages builds a whole country
+            # (8 tiers of NPC squads, 20-40s), and they arrive at signup rate. On the
+            # `worldpack` queue a handful of new players would sit in front of an admin waiting
+            # on a regenerate; on `async` they would delay push notifications. Cheap when there
+            # is nothing to do — the handler re-reads the country's deficit and returns.
+            # Drained by docker/worldpackset-consume.sh.
+            worldpackset: 'doctrine://default?queue_name=worldpackset'
             # Competition round processing queued by competition-draw-rounds.sh and
             # competition-resolve-rounds.sh. Its own transport for the same reason `pool` and
             # `worldpack` have theirs: resolving one round runs the match engine and narrative
@@ -143,6 +152,9 @@ framework:
             'App\Message\WorldPack\WarmWorldPackClubMessage': worldpack
             # Cron-queued starter pool top-ups — see StarterPoolAuditService.
             'App\Message\Pool\TopUpStarterPoolMessage': pool
+            # World pack set restocking — see WorldPackSetTopUpService. Carries only a country
+            # code; the handler re-reads the deficit, so duplicates and redeliveries are no-ops.
+            'App\Message\WorldPack\TopUpWorldPackSetMessage': worldpackset
             # Cron-queued competition round processing — see CompetitionDrawService and
             # CompetitionResultsService. Each message carries only a round id; the handler
             # re-reads the round and takes the claim, so a duplicate dispatch is a no-op.
@@ -179,6 +191,7 @@ when@test:
                 async: 'in-memory://'
                 failed: 'in-memory://'
                 worldpack: 'in-memory://'
+                worldpackset: 'in-memory://'
                 pool: 'in-memory://'
                 competition: 'in-memory://'
                 # in-memory, like `competition`: the friendly tests drive resolution through

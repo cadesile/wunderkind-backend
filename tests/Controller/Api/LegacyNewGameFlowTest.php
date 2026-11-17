@@ -246,6 +246,128 @@ class LegacyNewGameFlowTest extends WebTestCase
     // ───────────────────────── helpers ─────────────────────────
 
     /** @param list<array<string, mixed>> $rows */
+    // ── The init flow, which this guard did not previously reach ────────────────────────
+    //
+    // World pack SETS changed what POST /api/initialize/starter and
+    // POST /api/initialize/league/{tier} do internally: the first now claims a pre-generated
+    // set and the second reads tiers out of it. Neither response shape moved, and these three
+    // tests are here to keep it that way — the whole mechanism is only backwards compatible
+    // because a country with no stock falls back to exactly the old behaviour.
+
+    /**
+     * No ready set for the country → the fallback, byte-shape identical to the old behaviour.
+     *
+     * This is the load-bearing compatibility property of the entire change. A shipped build
+     * cannot be taught a new refusal here: the init flow has no client-side escape, so a
+     * `503 world_pack_warming` or a `409 no_set_available` would brick every new game in an
+     * unstocked country. If this test ever starts needing a new status code, the change is
+     * wrong, not the test.
+     */
+    public function testStarterStillWorksWithNoReadySetAndAnEmptyPool(): void
+    {
+        $this->seedUser();
+        $this->clearSetsFor('EN');
+
+        $this->post('/api/club/initialize', [
+            'clubName' => 'Legacy Init FC ' . bin2hex(random_bytes(3)),
+            'country'  => 'EN',
+        ]);
+
+        // EXACTLY the old call: no body, no new parameters.
+        $response = $this->post('/api/initialize/starter', []);
+
+        self::assertSame(
+            200,
+            $response['status'],
+            'a country with no stock must still serve a starter pack — and now with no pool either, '
+            . 'since the squad is generated rather than drawn',
+        );
+        self::assertArrayHasKey('ampStarter', $response['body'], 'initialize/starter lost ampStarter');
+
+        foreach (['players', 'staff', 'scouts'] as $key) {
+            self::assertArrayHasKey($key, $response['body']['ampStarter'], "ampStarter lost $key");
+        }
+        self::assertNotEmpty($response['body']['ampStarter']['players'], 'the live fallback must still fill a squad');
+    }
+
+    /**
+     * The replay contract, which the claim path must not have broken.
+     *
+     * `Club::$starterPackJson` is still the only copy of the squad — the Player rows are
+     * deleted on consume — so a retry has to hand back the same pack rather than draw again.
+     */
+    public function testStarterStillReplaysTheSamePackWithReplayedTrue(): void
+    {
+        $this->seedUser();
+
+        $this->post('/api/club/initialize', [
+            'clubName' => 'Legacy Replay FC ' . bin2hex(random_bytes(3)),
+            'country'  => 'EN',
+        ]);
+
+        $first  = $this->post('/api/initialize/starter', []);
+        $second = $this->post('/api/initialize/starter', []);
+
+        self::assertSame(200, $first['status']);
+        self::assertSame(200, $second['status']);
+        self::assertTrue($second['body']['replayed'] ?? false, 'a retry must still report replayed: true');
+        self::assertSame(
+            $first['body']['ampStarter'],
+            $second['body']['ampStarter'],
+            'a replay must return the same squad, not a fresh draw',
+        );
+    }
+
+    /**
+     * The tier endpoint's envelope is unchanged, and a club with no set still gets a real tier.
+     *
+     * `packVersion` lives INSIDE `data`, which the app had to have pointed out to it once
+     * already — so it is asserted in place here rather than at the response root.
+     */
+    public function testLeagueTierStillReturnsTheSameEnvelopeWithNoSet(): void
+    {
+        $this->seedUser();
+        $this->clearSetsFor('EN');
+
+        $this->post('/api/club/initialize', [
+            'clubName' => 'Legacy Tier FC ' . bin2hex(random_bytes(3)),
+            'country'  => 'EN',
+        ]);
+        $this->post('/api/initialize/starter', []);
+
+        $leagues = $this->get('/api/initialize/leagues');
+        self::assertSame(200, $leagues['status']);
+        self::assertArrayHasKey('leagues', $leagues['body']);
+        self::assertArrayHasKey('packVersion', $leagues['body']);
+
+        if ($leagues['body']['leagues'] === []) {
+            self::markTestSkipped('no EN leagues seeded in this database');
+        }
+
+        $tier     = $leagues['body']['leagues'][0]['tier'];
+        $response = $this->post('/api/initialize/league/' . $tier, []);
+
+        self::assertSame(200, $response['status'], 'a club with no set must still be served its tier');
+        self::assertArrayHasKey('tier', $response['body'], 'league/{tier} lost tier');
+        self::assertArrayHasKey('data', $response['body'], 'league/{tier} lost data');
+
+        foreach (['clubs', 'fixtures', 'packVersion'] as $key) {
+            self::assertArrayHasKey($key, $response['body']['data'], "the tier payload lost $key");
+        }
+    }
+
+    /** Empties a country's set stock, so the fallback path is the one under test. */
+    private function clearSetsFor(string $country): void
+    {
+        self::ensureKernelShutdown();
+        static::createClient();
+
+        self::getContainer()->get(\Doctrine\DBAL\Connection::class)->executeStatement(
+            'DELETE FROM world_pack_set WHERE country = :c AND claimed_by_club_id IS NULL',
+            ['c' => $country],
+        );
+    }
+
     private function rowFor(array $rows, string $code): array
     {
         foreach ($rows as $row) {
@@ -284,6 +406,29 @@ class LegacyNewGameFlowTest extends WebTestCase
         ];
     }
 
+    /**
+     * One authenticated GET. `post()` cannot serve this: /api/initialize/leagues is a GET and
+     * answers 405 to a POST.
+     *
+     * @return array{status: int, body: array<string, mixed>}
+     */
+    private function get(string $uri): array
+    {
+        self::ensureKernelShutdown();
+        $client = static::createClient();
+
+        $em   = self::getContainer()->get(EntityManagerInterface::class);
+        $user = $em->find(User::class, $this->userId);
+        $client->loginUser($user, 'api');
+
+        $client->request('GET', $uri);
+
+        return [
+            'status' => $client->getResponse()->getStatusCode(),
+            'body'   => json_decode($client->getResponse()->getContent(), true) ?? [],
+        ];
+    }
+
     private function seedUser(): void
     {
         self::ensureKernelShutdown();
@@ -310,6 +455,14 @@ class LegacyNewGameFlowTest extends WebTestCase
 
         $connection->executeStatement("DELETE FROM user_ledger WHERE user_id IN (SELECT id FROM \"user\" WHERE $u)");
         $connection->executeStatement("DELETE FROM leaderboard_entry WHERE club_id IN (SELECT c.id FROM club c JOIN \"user\" u ON u.id = c.user_id WHERE u.$u)");
+        // Release any set these clubs claimed first: world_pack_set.claimed_by_club_id is
+        // ON DELETE SET NULL so the delete would succeed either way, but leaving the rows
+        // CLAIMED by a club that no longer exists would quietly shrink the buffer for every
+        // test that runs after this one.
+        $connection->executeStatement(
+            "DELETE FROM world_pack_set WHERE claimed_by_club_id IN (SELECT c.id FROM club c JOIN \"user\" u ON u.id = c.user_id WHERE u.$u)"
+        );
+        $connection->executeStatement("UPDATE club SET world_pack_set_id = NULL WHERE user_id IN (SELECT id FROM \"user\" WHERE $u)");
         $connection->executeStatement("DELETE FROM club WHERE user_id IN (SELECT id FROM \"user\" WHERE $u)");
         $connection->executeStatement("DELETE FROM \"user\" WHERE $u");
 

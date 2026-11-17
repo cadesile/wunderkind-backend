@@ -4,353 +4,271 @@ declare(strict_types=1);
 
 namespace App\Tests\Service;
 
-use App\Entity\Club;
-use App\Entity\Player;
-use App\Entity\Scout;
-use App\Entity\Staff;
-use App\Entity\StarterConfig;
-use App\Enum\PlayerPosition;
-use App\Exception\InsufficientStarterPoolException;
-use App\Repository\PlayerRepository;
+use App\Entity\League;
 use App\Repository\PoolConfigRepository;
-use App\Repository\ScoutRepository;
-use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\StarterPackService;
-use App\Service\WorldPackSnapshotBuilder;
+use App\Service\WorldInitializationService;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use PHPUnit\Framework\TestCase;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
-class StarterPackServiceTest extends TestCase
+/**
+ * The starter squad is GENERATED, not drawn from the shared player pool.
+ *
+ * This file used to be a unit test over stubbed `PlayerRepository`/`StaffRepository`/
+ * `ScoutRepository`, asserting the shape of the pool queries, that the drawn rows were
+ * `em->remove()`d, and that an empty pool threw `InsufficientStarterPoolException`. None of
+ * that exists any more: `generatePack()` builds the squad through
+ * `WorldPackClubGenerationService`, the same generator every NPC club goes through, and
+ * touches no pool table.
+ *
+ * So the tests are integration tests now, against the real container with the pool left
+ * EMPTY — which is both simpler and a stronger statement than the stubs were, because an
+ * empty pool used to be the one condition that made game init fail outright.
+ *
+ * The four domain properties the old file protected are all still protected here, because
+ * each was a real regression once:
+ *
+ *   1. first-team ages, not children (the pool spans youth ages for `/api/players/youth`);
+ *   2. the age floor comes from `PoolConfig`, not a constant;
+ *   3. the band is the country's REAL bottom tier (assuming 8 put founders ~45 ability
+ *      points below their opponents in any shallower pyramid);
+ *   4. `DEFAULT_STARTER_TIER` only when the country has no pyramid at all.
+ */
+class StarterPackServiceTest extends KernelTestCase
 {
+    private const COUNTRY = 'QZ'; // no Country case, no fixtures, no leagues unless we add them
+
+    private EntityManagerInterface $em;
+    private StarterPackService $service;
+    private array $cleanup = [];
+
+    protected function setUp(): void
+    {
+        self::bootKernel();
+        $this->em      = self::getContainer()->get(EntityManagerInterface::class);
+        $this->service = self::getContainer()->get(StarterPackService::class);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->cleanup as $entity) {
+            $managed = $this->em->find($entity::class, $entity->getId());
+            if ($managed !== null) {
+                $this->em->remove($managed);
+            }
+        }
+        $this->em->flush();
+        $this->cleanup = [];
+
+        parent::tearDown();
+    }
+
+    /**
+     * The headline property, and the inverse of the test it replaced.
+     *
+     * An empty pool used to mean `InsufficientStarterPoolException` and a `412` at the first
+     * step of game init, with no client-side escape. It now means nothing at all.
+     */
+    public function testAFullSquadIsGeneratedWithAnEmptyPool(): void
+    {
+        $poolCount = (int) $this->em->getConnection()->fetchOne('SELECT count(*) FROM player');
+
+        $pack = $this->service->generatePack(self::COUNTRY, 8);
+
+        $expected = self::getContainer()->get(StarterConfigRepository::class)->getConfig();
+
+        $this->assertCount(
+            $expected->getStarterPlayerCount(),
+            $pack['players'],
+            'the squad is the authored size exactly — generation has no shortfall to report',
+        );
+        $this->assertCount(
+            $expected->getStarterManagerCount()
+                + $expected->getStarterCoachCount()
+                + $expected->getStarterChairmanCount()
+                + $expected->getStarterDirectorOfFootballCount()
+                + $expected->getStarterFacilityManagerCount(),
+            $pack['staff'],
+        );
+        $this->assertCount($expected->getStarterScoutCount(), $pack['scouts']);
+
+        // Nothing taken, nothing added: the pool is exactly as it was.
+        $this->assertSame(
+            $poolCount,
+            (int) $this->em->getConnection()->fetchOne('SELECT count(*) FROM player'),
+            'generatePack() must neither consume nor persist pool rows',
+        );
+    }
+
+    /** Generated, so the ids cannot collide with a shared population — or with each other. */
+    public function testTwoSquadsForOneCountryShareNoPlayers(): void
+    {
+        $a = $this->service->generatePack(self::COUNTRY, 8);
+        $b = $this->service->generatePack(self::COUNTRY, 8);
+
+        $idsA = array_column($a['players'], 'id');
+        $idsB = array_column($b['players'], 'id');
+
+        $this->assertNotEmpty($idsA);
+        $this->assertSame([], array_intersect($idsA, $idsB));
+    }
+
     /**
      * Regression: starter packs were handing new clubs 11 and 12 year olds.
      *
-     * The pool deliberately spans youth ages so it can also supply GET /api/players/youth,
-     * and the squad draw filtered on ability, position and nationality with no age
-     * condition at all — so it took whatever the ability band matched. Both pool queries
-     * must now carry a date_of_birth cutoff derived from the configured first-team floor.
+     * The pool deliberately spans youth ages so it can also supply `GET /api/players/youth`.
+     * The draw that used to be here filtered on ability, position and nationality with no age
+     * condition, so it took whatever the band matched. Generation has the same hazard from the
+     * other direction — `PoolConfig`'s range is pool-wide — which is why
+     * `WorldPackClubGenerationService` generates a squad inside `firstTeamAgeRange()`.
      *
-     * Asserts the cutoff date itself, not merely that an argument was passed: an off-by-one
-     * here is invisible in the response and only shows up as a 17 year old in a squad.
+     * Asserted as an age against the configured floor rather than "an argument was passed":
+     * an off-by-one here is invisible in the response and surfaces only as a 17 year old.
      */
-    public function testPlayerDrawIsGatedOnTheFirstTeamAgeFloor(): void
+    public function testEveryGeneratedPlayerClearsTheFirstTeamAgeFloor(): void
     {
-        $captured = [];
+        $poolConfig = self::getContainer()->get(PoolConfigRepository::class)->getConfig();
+        $floor      = $poolConfig->getPlayerFirstTeamAgeMin();
+        $today      = new \DateTimeImmutable('today');
 
-        // First position returns nothing so the foreign top-up also fires; the second
-        // returns a player so the run completes — StarterPackService throws
-        // InsufficientStarterPoolException when a draw yields no players at all, which is
-        // itself the right behaviour for an under-age pool, just not what this test is for.
-        $calls = 0;
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerRepo->method('findForWorldInitByPositionAndNationality')
-            ->willReturnCallback(function (...$args) use (&$captured, &$calls) {
-                $captured['native'][] = $args[6] ?? null;
-                return ++$calls === 1 ? [] : [$this->createStub(Player::class)];
-            });
-        $playerRepo->method('findForeignForWorldInitByPosition')
-            ->willReturnCallback(function (...$args) use (&$captured) {
-                $captured['foreign'][] = $args[6] ?? null;
-                return [];
-            });
+        $pack = $this->service->generatePack(self::COUNTRY, 8);
 
-        $this->runInitialize($playerRepo, firstTeamAgeMin: 19);
-
-        $expected = (new \DateTimeImmutable('today'))->modify('-19 years');
-
-        $this->assertNotEmpty($captured['native'] ?? [], 'the native draw should have run');
-        $this->assertNotEmpty($captured['foreign'] ?? [], 'the foreign top-up should have run');
-
-        foreach (array_merge($captured['native'], $captured['foreign']) as $cutoff) {
-            $this->assertInstanceOf(\DateTimeImmutable::class, $cutoff, 'every draw must carry an age cutoff');
-            $this->assertSame(
-                $expected->format('Y-m-d'),
-                $cutoff->format('Y-m-d'),
-                'cutoff must be today minus the configured first-team floor',
+        $this->assertNotEmpty($pack['players']);
+        foreach ($pack['players'] as $player) {
+            $age = (new \DateTimeImmutable($player['dateOfBirth']))->diff($today)->y;
+            $this->assertGreaterThanOrEqual(
+                $floor,
+                $age,
+                sprintf('generated a %d year old against a first-team floor of %d', $age, $floor),
             );
         }
     }
 
-    /** The floor is config, not a constant — changing it must move the cutoff. */
-    public function testAgeFloorIsReadFromPoolConfig(): void
+    /**
+     * Regression: a founder's squad built at the tier-8 band and then placed in tier 3.
+     *
+     * In a 3-tier country that put the player roughly 45 points below every opponent, with
+     * nothing logged and the diagnostic reporting it as correct. The band must come from the
+     * country's REAL bottom tier.
+     *
+     * ── THE BAND IS A POTENTIAL RANGE, NOT AN ABILITY RANGE ──────────────────────────────
+     *
+     * Worth stating because the name says otherwise and the distinction changed what a
+     * founder's squad is. `PlayerGenerationService::generate()`'s fourth parameter is
+     * `$potentialRange`; `currentAbility` is then the mean of attributes drawn under
+     * `abilityTarget x potential`, so it lands BELOW the band. Measured on EN, whose bands are
+     * authored far lower than the consts: tier 3 is potential 20-40 and ability 2-34, tier 8 is
+     * potential 2-7 and ability 1-5.
+     *
+     * The draw this replaced filtered on `currentAbility BETWEEN min AND max`, so a drawn
+     * starter player had its ABILITY in the band while every NPC club around it had its
+     * POTENTIAL in the band — two different bases for the same number, which made a founder's
+     * squad systematically stronger than the division it was placed in. Generating it puts both
+     * on one basis. That is a deliberate balance change, not an accident of the refactor.
+     */
+    public function testTheSquadIsGeneratedAtTheCountrysRealBottomTierBand(): void
     {
-        $captured = [];
+        $league = new League(self::COUNTRY, 3, 'StarterPackServiceTest League 3');
+        $this->em->persist($league);
+        $this->em->flush();
+        $this->cleanup[] = $league;
 
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerRepo->method('findForWorldInitByPositionAndNationality')
-            ->willReturnCallback(function (...$args) use (&$captured) {
-                $captured[] = $args[6] ?? null;
-                return [$this->createStub(Player::class)];
-            });
-        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+        $tier = $this->service->resolveStarterTier(self::COUNTRY);
+        $this->assertSame(3, $tier, 'the bottom tier of this country is 3, not 8');
 
-        $this->runInitialize($playerRepo, firstTeamAgeMin: 24);
+        $pack = $this->service->generatePack(self::COUNTRY, $tier);
+        $band = $this->service->resolveAbilityRange(self::COUNTRY, $tier);
 
-        $this->assertSame(
-            (new \DateTimeImmutable('today'))->modify('-24 years')->format('Y-m-d'),
-            $captured[0]->format('Y-m-d'),
-        );
+        $this->assertNotEmpty($pack['players']);
+        foreach ($pack['players'] as $player) {
+            $this->assertGreaterThanOrEqual(
+                $band['min'],
+                $player['potential'],
+                'the tier band is applied to POTENTIAL, exactly as it is for an NPC club',
+            );
+            $this->assertLessThanOrEqual($band['max'], $player['potential']);
+
+            // And ability sits under it, never above — the derived-from-potential property.
+            $this->assertLessThanOrEqual($player['potential'], $player['currentAbility']);
+        }
+
+        // Tier 3's band, not tier 8's: the whole point of the regression.
+        $this->assertSame(WorldInitializationService::ABILITY_RANGES[3]['min'], $band['min']);
     }
 
     /**
-     * Regression: a founder in a short pyramid got a squad drawn at the wrong level.
-     *
-     * A new club has no league when its pack is built, so the tier used to be assumed to
-     * be 8 — the 10–25 ability band. The club is then placed in the country's real bottom
-     * division, which in a 3-tier country is tier 3, whose NPCs were generated at 55–75.
-     * That is a ~45 point gap the founder can never close, and nothing reports it: the
-     * starter-pack diagnostic re-derives the same wrong tier and calls it correct.
+     * The founder's squad and its NPC opponents are built from the same band on the same
+     * basis — which is the substance of "generate it like an NPC club does".
      */
-    public function testTheSquadIsDrawnAtTheCountrysRealBottomTier(): void
+    public function testTheFoundersSquadUsesTheSameBandAsItsDivisionsNpcClubs(): void
     {
-        $bands = [];
+        $league = new League(self::COUNTRY, 3, 'StarterPackServiceTest Shared Band');
+        $this->em->persist($league);
+        $this->em->flush();
+        $this->cleanup[] = $league;
 
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerRepo->method('findForWorldInitByPositionAndNationality')
-            ->willReturnCallback(function (...$args) use (&$bands) {
-                $bands[] = [$args[0], $args[1]];
-                return [$this->createStub(Player::class)];
-            });
-        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
+        $starterBand = $this->service->resolveAbilityRange(self::COUNTRY, 3);
+        $worldBand   = self::getContainer()->get(WorldInitializationService::class)
+            ->resolveAbilityRange(self::COUNTRY, 3);
 
-        $leagueRepo = $this->createStub(\App\Repository\LeagueRepository::class);
-        $leagueRepo->method('findLowestTierForCountry')->willReturn(new \App\Entity\League('EN', 3, 'League 3'));
-
-        $this->runInitialize($playerRepo, firstTeamAgeMin: 19, leagueRepo: $leagueRepo);
-
-        $this->assertNotEmpty($bands, 'the native draw should have run');
-        // WorldInitializationService::ABILITY_RANGES[3], not [8].
-        $this->assertSame([55, 75], $bands[0]);
+        $this->assertSame(
+            [$worldBand['min'], $worldBand['max']],
+            [$starterBand['min'], $starterBand['max']],
+            'a founder and the clubs it plays must be generated from one band',
+        );
     }
 
     /** With no pyramid at all there is nothing to resolve, so the old default stands. */
     public function testWithNoLeaguesAtAllTheDefaultStarterTierIsUsed(): void
     {
-        $bands = [];
-
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerRepo->method('findForWorldInitByPositionAndNationality')
-            ->willReturnCallback(function (...$args) use (&$bands) {
-                $bands[] = [$args[0], $args[1]];
-                return [$this->createStub(Player::class)];
-            });
-        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
-
-        $this->runInitialize($playerRepo, firstTeamAgeMin: 19);
-
-        $this->assertSame([10, 25], $bands[0]);
-    }
-
-    /** Minimal wiring for a starter-pack run; the draws themselves return nothing. */
-    private function runInitialize(
-        PlayerRepository $playerRepo,
-        int $firstTeamAgeMin,
-        ?\App\Repository\LeagueRepository $leagueRepo = null,
-    ): void
-    {
-        $config = $this->createStub(StarterConfig::class);
-        $config->method('getStarterPlayerCount')->willReturn(2);
-        $config->method('getStarterCoachCount')->willReturn(0);
-        $config->method('getStarterManagerCount')->willReturn(0);
-        $config->method('getStarterChairmanCount')->willReturn(0);
-        $config->method('getStarterDirectorOfFootballCount')->willReturn(0);
-        $config->method('getStarterFacilityManagerCount')->willReturn(0);
-        $config->method('getStarterScoutCount')->willReturn(0);
-        $config->method('getLeagueAbilityRanges')->willReturn([]);
-
-        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
-        $starterConfigRepo->method('getConfig')->willReturn($config);
-
-        $club = $this->createStub(Club::class);
-        $club->method('getCountry')->willReturn('EN');
-        $club->method('getCurrentLeague')->willReturn(null);
-        $club->method('isStarterInitialized')->willReturn(false);
-
-        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
-        $poolConfig->method('getPlayerFirstTeamAgeMin')->willReturn($firstTeamAgeMin);
-        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
-        $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
-
-        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
-        $snapshotBuilder->method('distributeByPosition')->willReturn(['GK' => 1, 'DEF' => 1]);
-
-        $staffRepo = $this->createStub(StaffRepository::class);
-        $staffRepo->method('findInPoolByRoleRandom')->willReturn([]);
-        $scoutRepo = $this->createStub(ScoutRepository::class);
-        $scoutRepo->method('findInPool')->willReturn([]);
-
-        (new StarterPackService(
-            $playerRepo,
-            $staffRepo,
-            $scoutRepo,
-            $starterConfigRepo,
-            $poolConfigRepo,
-            $snapshotBuilder,
-            $this->createStub(EntityManagerInterface::class),
-            $this->createStub(\Psr\Log\LoggerInterface::class),
-            // Defaults to a stub returning null, so the tier falls back to
-            // DEFAULT_STARTER_TIER — the assumption most of these cases were written against.
-            $leagueRepo ?? $this->createStub(\App\Repository\LeagueRepository::class),
-        ))->initialize($club);
-    }
-
-    public function testInitializeDeletesConsumedPlayersAndStaff(): void
-    {
-        $config = $this->createStub(StarterConfig::class);
-        $config->method('getStarterPlayerCount')->willReturn(2);
-        $config->method('getStarterCoachCount')->willReturn(1);
-        $config->method('getStarterManagerCount')->willReturn(0);
-        $config->method('getStarterChairmanCount')->willReturn(0);
-        $config->method('getStarterDirectorOfFootballCount')->willReturn(0);
-        $config->method('getStarterFacilityManagerCount')->willReturn(0);
-        $config->method('getStarterScoutCount')->willReturn(1);
-        $config->method('getLeagueAbilityRanges')->willReturn([]);
-
-        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
-        $starterConfigRepo->method('getConfig')->willReturn($config);
-
-        // A mock, not a stub: the pack must be written onto the club in the same run that
-        // consumes the pool. These snapshots are the only remaining copy of the squad — the
-        // Player/Staff rows are deleted below — so a club left with
-        // starterInitializedAt set and starterPackJson null can never be served its squad
-        // again. See Club::$starterPackJson.
-        $storedPack = null;
-        $club = $this->createMock(Club::class);
-        $club->method('getCountry')->willReturn('EN');
-        $club->method('getCurrentLeague')->willReturn(null);
-        $club->method('isStarterInitialized')->willReturn(false);
-        $club->expects($this->once())
-            ->method('setStarterPackJson')
-            ->willReturnCallback(function (?array $pack) use (&$storedPack, $club) {
-                $storedPack = $pack;
-
-                return $club;
-            });
-
-        // Two mock Player entities in the pool
-        $player1 = $this->createStub(Player::class);
-        $player2 = $this->createStub(Player::class);
-
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerCallCount = 0;
-        $playerRepo->method('findForWorldInitByPositionAndNationality')
-            ->willReturnCallback(function () use (&$playerCallCount, $player1, $player2) {
-                $playerCallCount++;
-                return $playerCallCount === 1 ? [$player1] : [$player2];
-            });
-        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
-
-        $staff1 = $this->createStub(Staff::class);
-        $staffRepo = $this->createStub(StaffRepository::class);
-        $staffRepo->method('findInPoolByRoleRandom')->willReturn([$staff1]);
-
-        $scout1 = $this->createStub(Scout::class);
-        $scoutRepo = $this->createStub(ScoutRepository::class);
-        $scoutRepo->method('findInPool')->willReturn([$scout1]);
-
-        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
-        $poolConfig->method('getPositionWeightGk')->willReturn(1);
-        $poolConfig->method('getPositionWeightDef')->willReturn(1);
-        $poolConfig->method('getPositionWeightMid')->willReturn(0);
-        $poolConfig->method('getPositionWeightAtt')->willReturn(0);
-        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
-        $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
-
-        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
-        $snapshotBuilder->method('distributeByPosition')->willReturn([
-            'GK'  => 1,
-            'DEF' => 1,
-        ]);
-        $snapshotBuilder->method('buildPlayerSnapshot')->willReturn(['id' => 'player-uuid']);
-        $snapshotBuilder->method('buildStaffSnapshot')->willReturn(['id' => 'staff-uuid']);
-        $snapshotBuilder->method('buildScoutSnapshot')->willReturn(['id' => 'scout-uuid']);
-
-        // Key assertion: em->remove() must be called for each consumed Player and Staff
-        $em = $this->createMock(EntityManagerInterface::class);
-        $em->expects($this->exactly(3)) // 2 players + 1 staff
-            ->method('remove')
-            ->with($this->logicalOr(
-                $this->identicalTo($player1),
-                $this->identicalTo($player2),
-                $this->identicalTo($staff1),
-            ));
-        $em->expects($this->atLeastOnce())->method('flush');
-
-        $service = new StarterPackService(
-            $playerRepo,
-            $staffRepo,
-            $scoutRepo,
-            $starterConfigRepo,
-            $poolConfigRepo,
-            $snapshotBuilder,
-            $em,
-            $this->createStub(\Psr\Log\LoggerInterface::class),
-            $this->createStub(\App\Repository\LeagueRepository::class),
+        $this->assertSame(
+            StarterPackService::DEFAULT_STARTER_TIER,
+            $this->service->resolveStarterTier('ZQ'),
         );
-
-        $result = $service->initialize($club);
-        $this->assertArrayHasKey('players', $result);
-        $this->assertArrayHasKey('staff', $result);
-        $this->assertArrayHasKey('scouts', $result);
-
-        $this->assertSame($result, $storedPack, 'the stored pack must be the body the client is handed');
     }
 
     /**
-     * Regression test: a club whose nationality (and the foreign fallback) has zero players
-     * in the pool used to still get Club::$starterInitializedAt set and the pool entities it
-     * did find consumed, permanently stranding the club with an empty squad and no way to
-     * retry once the pool was warmed. Must now throw before touching the pool or the club at
-     * all.
+     * The band precedence, unchanged by the move to generation and shared with
+     * StarterPackDiagnosticService so an operator-facing check cannot drift from the real
+     * thing.
      */
-    public function testInitializeThrowsAndTouchesNothingWhenPlayerPoolIsEmpty(): void
+    public function testAbilityRangeFallsBackThroughItsThreeSources(): void
     {
-        $config = $this->createStub(StarterConfig::class);
-        $config->method('getStarterPlayerCount')->willReturn(2);
-        $config->method('getLeagueAbilityRanges')->willReturn([]);
+        // No authored band for this country, but tier 3 exists as a const.
+        $fromConst = $this->service->resolveAbilityRange(self::COUNTRY, 3);
+        $this->assertSame('WorldInitializationService::ABILITY_RANGES', $fromConst['source']);
+        $this->assertSame(WorldInitializationService::ABILITY_RANGES[3]['min'], $fromConst['min']);
 
-        $starterConfigRepo = $this->createStub(StarterConfigRepository::class);
-        $starterConfigRepo->method('getConfig')->willReturn($config);
+        // No const for tier 99 either, so the hardcoded floor is the last resort.
+        $fallback = $this->service->resolveAbilityRange(self::COUNTRY, 99);
+        $this->assertSame('hardcoded_fallback_5_35', $fallback['source']);
+        $this->assertSame(5, $fallback['min']);
+        $this->assertSame(35, $fallback['max']);
+    }
 
-        $club = $this->createStub(Club::class);
-        $club->method('getCountry')->willReturn('US');
-        $club->method('getCurrentLeague')->willReturn(null);
+    /**
+     * Priced with the country and tier, like an NPC club, so a founder's squad follows the
+     * same economic model as the division it plays in.
+     *
+     * A pool-DRAWN starter player never did: `MarketPoolService` prices pool rows with no
+     * country or tier, and the starter pack reaches the client through
+     * `PlayerSnapshotSerializer`, which deliberately does not re-price. The founder's squad was
+     * the one squad in the pyramid outside the economy.
+     *
+     * Asserts only that a wage is set and positive. The FIGURE is the wage model's business and
+     * is covered by its own tests; under the shipped `legacy` model country and tier are
+     * ignored, so asserting a turnover number here would pin behaviour that is switched off.
+     */
+    public function testGeneratedPlayersCarryAWage(): void
+    {
+        $pack = $this->service->generatePack(self::COUNTRY, 8);
 
-        $playerRepo = $this->createStub(PlayerRepository::class);
-        $playerRepo->method('findForWorldInitByPositionAndNationality')->willReturn([]);
-        $playerRepo->method('findForeignForWorldInitByPosition')->willReturn([]);
-
-        $staffRepo = $this->createMock(StaffRepository::class);
-        $staffRepo->expects($this->never())->method('findInPoolByRoleRandom');
-
-        $scoutRepo = $this->createMock(ScoutRepository::class);
-        $scoutRepo->expects($this->never())->method('findInPool');
-
-        $poolConfig = $this->createStub(\App\Entity\PoolConfig::class);
-        $poolConfigRepo = $this->createStub(PoolConfigRepository::class);
-        $poolConfigRepo->method('getConfig')->willReturn($poolConfig);
-
-        $snapshotBuilder = $this->createStub(WorldPackSnapshotBuilder::class);
-        $snapshotBuilder->method('distributeByPosition')->willReturn(['GK' => 1, 'DEF' => 1]);
-
-        $em = $this->createMock(EntityManagerInterface::class);
-        $em->expects($this->never())->method('remove');
-        $em->expects($this->never())->method('flush');
-
-        $service = new StarterPackService(
-            $playerRepo,
-            $staffRepo,
-            $scoutRepo,
-            $starterConfigRepo,
-            $poolConfigRepo,
-            $snapshotBuilder,
-            $em,
-            $this->createStub(\Psr\Log\LoggerInterface::class),
-            $this->createStub(\App\Repository\LeagueRepository::class),
-        );
-
-        $this->expectException(InsufficientStarterPoolException::class);
-        $service->initialize($club);
+        $this->assertNotEmpty($pack['players']);
+        foreach ($pack['players'] as $player) {
+            $this->assertArrayHasKey('contractValue', $player);
+            $this->assertGreaterThan(0, $player['contractValue'], 'a generated player must be priced');
+        }
     }
 }

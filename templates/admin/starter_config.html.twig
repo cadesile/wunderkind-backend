@@ -224,6 +224,61 @@
             {% endfor %}
         </section>
 
+        {#
+          World pack buffer. Two knobs, both operational rather than game-balance, which is why
+          they sit here beside the squad sizes rather than on the Worldpack cache screen: that
+          page is actions and read-only tables, with no save bar to hang a setting off.
+        #}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="layers"></i>
+                <span class="bmc-card__title">WORLD PACK BUFFER</span>
+                <span class="bmc-card__meta">how much pre-built world each live country keeps</span>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">CLAIMABLE SETS PER COUNTRY</span>
+                    <span class="bmc-setting__help">
+                        A set is one starter squad plus a payload for every league tier, claimed whole by
+                        exactly one club, so no two players get the same world. Two means a player claiming
+                        a set never leaves the next one waiting on a build. Raise it for a country taking a
+                        lot of sign-ups. 0 falls back to 2 rather than switching the buffer off.
+                    </span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 2"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--60">
+                        <input name="worldPackSetTarget" inputmode="numeric"
+                               value="{{ config.worldPackSetTarget }}" data-saved="{{ config.worldPackSetTarget }}"
+                               data-min="0" data-max="20" aria-label="claimable world pack sets per country">
+                    </label>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">CLAIMED SET RETENTION (DAYS)</span>
+                    <span class="bmc-setting__help">
+                        How long a claimed set keeps its tier payloads before the hourly sweep drops them.
+                        The device already holds everything, but a retried tier call replays from the server
+                        copy and an initialisation can span an app kill, so they cannot go immediately. The
+                        set row itself is kept either way as the record of which club got which world.
+                    </span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 7"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--60">
+                        <input name="worldPackClaimedRetentionDays" inputmode="numeric"
+                               value="{{ config.worldPackClaimedRetentionDays }}" data-saved="{{ config.worldPackClaimedRetentionDays }}"
+                               data-min="1" data-max="365" aria-label="claimed set retention in days">
+                    </label>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+        </section>
+
         {# ── the bands a new club is created into ───────────────────────── #}
         <section class="bmc-card" data-domain="club">
             <div class="bmc-card__head">

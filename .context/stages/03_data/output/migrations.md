@@ -380,7 +380,10 @@ was not safe to retry:
   Applied clean against the local prod restore; verify on prod before deploying.
 - `Version20261024140000` — `club.starter_pack_json`, so an already-initialized club can
   be served its starter pack again instead of a 409. Deliberately left null for existing
-  clubs: their pool entities were deleted on consume, so those squads really are gone.
+  clubs: their pool entities were deleted on consume, so those squads really are gone. (Starter
+  squads stopped being drawn from the pool on 2026-11-17 and are generated instead, so nothing
+  is consumed any more — but the column is still the only copy, since a generated player exists
+  nowhere else.)
 - `Version20261024222441` — `user.debug_logging_enabled`, the per-account override for the
   in-app debug log panel (see `entities.md`'s `User` entry). Defaults false on every
   existing row, so it changes nothing on its own, and the flag is additive to the global
@@ -747,3 +750,72 @@ so the mapping owns the default afterwards. Reversible: three drops.
 `doctrine:schema:update --dump-sql --env=test` reported zero drift afterwards. The local dev
 database carries one pre-existing, unrelated drift statement (`COMMENT ON COLUMN
 npc_club.land_plot_id IS ''`) which predates this change.
+
+## `Version20261117120000` — world pack SETS (2026-11-17)
+
+A world pack becomes a **set**: one starter squad plus a payload per league tier, generated
+together and claimed by exactly one club, held two-deep per live country. Fixes two things at
+once — a country could have warm packs and a pool too thin to draw a starter squad from (a
+`412` at the very first step of game init, with no client-side escape), and every player in a
+country was served the same byte-identical world.
+
+New `world_pack_set`. `country_world_pack_cache` gains `set_id`; `club` gains
+`world_pack_set_id`; `world_pack_generation_run` gains `set_count`;
+`world_pack_generation_tier_run` gains `set_id`; `starter_config` gains
+`world_pack_set_target` (2) and `world_pack_claimed_retention_days` (7).
+
+The set's squad is **generated**, not drawn from the shared pool, so there is no
+`starter_shortfall` column: generation produces the authored count exactly and a column that
+can never be non-zero is a trap. See `04_interfaces/output/services.md`'s
+`StarterPackService` entry.
+
+Four things worth knowing before touching it:
+
+1. **`set_id` is on the TIER RUN, not the run.** One admin regenerate builds a country's whole
+   buffer, so a run covers `set_count` sets and its tier runs carry which set each belongs to.
+   That leaves `world_pack_generation_run` the per-country unit it has always been, so
+   `uq_world_pack_generation_run_one_active_per_country` is untouched.
+2. **The tier run's widened key needs a PARTIAL COMPANION, and that forces its FK to
+   CASCADE.** `(run_id, set_id, tier)` does not constrain set-less rows at all, because
+   Postgres treats NULLs as DISTINCT — so `uq_..._run_tier_no_set` on
+   `(run_id, tier) WHERE set_id IS NULL` restores the one-tier-run-per-(run, tier) guarantee
+   that widening the key silently dropped. `WorldPackGenerationRunSchemaTest` caught that.
+   **The companion index then rules out `ON DELETE SET NULL` on `set_id`:** one run covers
+   several sets, so deleting a country's stock would null several tier runs sharing a
+   `(run_id, tier)` and they would all collide — making an ordinary admin "delete this
+   country's sets" fail with a unique violation raised from inside the FK. `ON DELETE CASCADE`
+   resolves the conflict instead of hiding it; the cost is the per-tier detail of a set an
+   operator chose to delete, which no longer describes anything reachable, and the run row
+   itself survives. The two choices are load-bearing on each other — changing either one back
+   reintroduces the other's failure. Caught by `WorldPackGenerationEndToEndTest`, which does a
+   regenerate (and therefore a delete-unclaimed) over a country that already had sets.
+3. **`uq_country_tier` was a table CONSTRAINT**, not an index (created as `CONSTRAINT
+   uq_country_tier UNIQUE (country, tier)` in `Version20260512000001`), so it needs
+   `ALTER TABLE ... DROP CONSTRAINT`; `DROP INDEX` fails on it.
+4. **The backfill mints UUIDs in PHP, never `gen_random_uuid()`.** Every id in this schema is
+   typed `UuidV7`; `gen_random_uuid()` returns a v4, which Doctrine's `UuidType` hydrates into a
+   `UuidV4` that then cannot be assigned to a `UuidV7` property — a TypeError on read, long
+   after the migration passed. `Version20261027230000` backfills `competition_entrant_squad.id`
+   that way and is an unfixed instance of it.
+
+`postUp()` wraps each country's existing cache rows in one `ready` set so `set_id` can become
+NOT NULL without discarding a single warm payload, taking `MIN(payload_version)` (not MAX, so a
+mixed-version country still presents as stale and is rebuilt). Those sets carry
+`starter_pack_json = NULL` and the claim predicate excludes exactly that, which is what makes
+the deploy a provable no-op: nothing is deleted, nothing starts failing, and the live draw keeps
+serving until real sets exist.
+
+**`down()` IS NOT LOSSLESS, and cannot be.** `uq_country_tier` means one payload per
+(country, tier) and the whole point of the migration is that a country holds several, so the
+rollback keeps each country's OLDEST set and deletes the rest (payloads follow via CASCADE).
+That is the substance of the rollback, not a side effect — going back to the old schema IS going
+back to one world per country. Oldest rather than newest so a country whose only surviving set
+is CLAIMED does not have a device's world pulled out from under it.
+
+**`wunderkind_test` needed the hand treatment** (it is not migration-tracked): the new columns
+and indexes applied directly, plus four `game_config` economy columns from
+`Version20261116181000` that the test database had never received at all — which had been
+failing every test that reads `GameConfig` with `column ... does not exist`. Added with
+defaults, then the defaults dropped, and the values set to the ENTITY defaults (0 / parity ppm),
+not the migration's authored ladder, since authoring them turns the economy on and breaks
+`WorldOverviewServiceTest`'s "an unset tier must stay null".

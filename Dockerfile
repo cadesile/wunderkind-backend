@@ -56,6 +56,8 @@ COPY docker/competition-send-round-reminders.sh /usr/local/bin/competition-send-
 COPY docker/competition-auto-fill-spoof-entrants.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh
 COPY docker/messenger-consume.sh /usr/local/bin/messenger-consume.sh
 COPY docker/worldpack-consume.sh /usr/local/bin/worldpack-consume.sh
+COPY docker/worldpackset-consume.sh /usr/local/bin/worldpackset-consume.sh
+COPY docker/worldpack-maintain.sh /usr/local/bin/worldpack-maintain.sh
 COPY docker/pool-consume.sh /usr/local/bin/pool-consume.sh
 COPY docker/competition-consume.sh /usr/local/bin/competition-consume.sh
 COPY docker/competition-health.sh /usr/local/bin/competition-health.sh
@@ -158,6 +160,24 @@ COPY docker/friendly-consume.sh /usr/local/bin/friendly-consume.sh
 #     messenger-consume.sh's `async` transport deliberately — a country
 #     regenerate can queue 100+ DB-heavy club-generation messages, and sharing
 #     one queue with push notifications meant each delayed the other. Own
+#   every 1 min — worldpackset-consume: drains the `worldpackset` transport, which
+#     carries the world pack SET top-ups dispatched on every game initialisation
+#     and by worldpack-maintain. A third transport rather than a second use of
+#     `worldpack`, because ONE of these messages builds a whole country (8 tiers
+#     of NPC squads, 8-18s) and they arrive at signup rate — on the `worldpack`
+#     queue a handful of new players would sit in front of an admin waiting on a
+#     regenerate. --limit is 3, not 200: each message is tens of seconds, so a
+#     high limit would hold the worker past its own --time-limit, and the handler
+#     re-reads each country's deficit so anything left for the next tick is cheap.
+#   hourly at :20 — worldpack-maintain: tops every LIVE country up to its set
+#     target and prunes the payloads of long-claimed sets. A BACKSTOP: the per-init
+#     dispatch above covers the normal case, but it is deliberately best-effort
+#     (wrapped so a transport failure cannot fail an initialisation), so without
+#     this a lost message is a country quietly one set short. It is also the only
+#     thing that restocks after a deploy or a WORLD_PACK_VERSION bump, which makes
+#     every existing set unclaimable at once. Queues rather than generates, so one
+#     slow country cannot stall the sweep. :20 keeps it clear of the :00 cluster and
+#     of starter-pool-audit at :35, which queues the POOL work it depends on.
 #     lockfile/log, so a slow generation batch never blocks push delivery.
 #   every 1 min — pool-consume: drains the separate `pool` Messenger transport
 #     (starter-pool top-up chunks). Third transport rather than a third user of
@@ -249,6 +269,8 @@ RUN mkdir -p /var/spool/cron/crontabs \
     '* * * * *    /usr/local/bin/competition-auto-fill-spoof-entrants.sh >> /var/log/competition-auto-fill-cron.log 2>&1' \
     '* * * * *    /usr/local/bin/messenger-consume.sh               >> /var/log/messenger-consume-cron.log     2>&1' \
     '* * * * *    /usr/local/bin/worldpack-consume.sh                >> /var/log/worldpack-consume-cron.log    2>&1' \
+    '* * * * *    /usr/local/bin/worldpackset-consume.sh             >> /var/log/worldpackset-consume-cron.log 2>&1' \
+    '20 * * * *   /usr/local/bin/worldpack-maintain.sh               >> /var/log/worldpack-maintain-cron.log   2>&1' \
     '* * * * *    /usr/local/bin/pool-consume.sh                     >> /var/log/pool-consume-cron.log         2>&1' \
     '* * * * *    /usr/local/bin/competition-consume.sh              >> /var/log/competition-consume-cron.log  2>&1' \
     '*/5 * * * *  /usr/local/bin/competition-health.sh               >> /var/log/competition-health-cron.log   2>&1' \
@@ -265,7 +287,7 @@ RUN mkdir -p /var/spool/cron/crontabs \
     > /var/spool/cron/crontabs/root \
  && chmod 0600 /var/spool/cron/crontabs/root
 
-RUN chmod +x /usr/local/bin/friendly-consume.sh /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/enrichment-consume.sh /usr/local/bin/suggestion-consume.sh /usr/local/bin/clubsale-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
+RUN chmod +x /usr/local/bin/friendly-consume.sh /usr/local/bin/friendly-resolve-matches.sh /usr/local/bin/friendly-expire-challenges.sh /usr/local/bin/enrichment-consume.sh /usr/local/bin/suggestion-consume.sh /usr/local/bin/clubsale-consume.sh /usr/local/bin/plots-dormancy-warn.sh /usr/local/bin/plots-dormancy-reclaim.sh /usr/local/bin/jwt-entrypoint.sh /usr/local/bin/leaderboards-generate.sh /usr/local/bin/post-community-stat.sh /usr/local/bin/post-community-stat-tick.sh /usr/local/bin/telemetry-generate.sh /usr/local/bin/spotlight-generate.sh /usr/local/bin/reputation-decay.sh /usr/local/bin/competition-provision-instances.sh /usr/local/bin/competition-draw-rounds.sh /usr/local/bin/competition-resolve-rounds.sh /usr/local/bin/competition-send-round-reminders.sh /usr/local/bin/competition-auto-fill-spoof-entrants.sh /usr/local/bin/messenger-consume.sh /usr/local/bin/worldpack-consume.sh /usr/local/bin/worldpackset-consume.sh /usr/local/bin/worldpack-maintain.sh /usr/local/bin/pool-consume.sh /usr/local/bin/competition-consume.sh /usr/local/bin/competition-health.sh /usr/local/bin/starter-pool-audit.sh /usr/local/bin/leaderboards-close-periods.sh
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/
 RUN mkdir -p public/uploads/facilities && chown -R www-data:www-data public/uploads
 

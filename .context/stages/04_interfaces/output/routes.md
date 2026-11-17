@@ -260,9 +260,23 @@ so a token minted before the fix starts working without re-authentication. See
   `GET /twitter/callback`.
 - **`WorldPackController`** —
   `POST /admin/worldpack-cache/delete/{id}`,
-  `POST /admin/worldpack-cache/delete-country`,
-  `GET /admin/worldpack-cache/tiers/{country}`,
-  `POST /admin/worldpack-cache/warm-tier`.
+  `POST /admin/worldpack-cache/delete-country` (now deletes **unclaimed sets only**; the
+  flash says how many claimed ones were kept, because a claimed set belongs to a device
+  that may still be fetching tiers),
+  `POST /admin/worldpack-cache/delete-set/{id}` (refuses a CLAIMED set unless `force`),
+  `POST /admin/worldpack-cache/regenerate-country` (takes `setCount`, default the configured
+  target; `409` while a run is already active for the country, `404` with no leagues seeded.
+  **It has no pool-supply failure**: starter squads are generated, so a run always starts every
+  set it was asked for — the `startedSets`/`partial` keys in the response can no longer disagree
+  and are kept only because the admin JS reads them),
+  `POST /admin/worldpack-cache/top-up` (queues one `TopUpWorldPackSetMessage` — the same
+  message every game init dispatches — and answers `queued: false` when already at target),
+  `GET /admin/worldpack-cache/set-status/{country}` (the poll the TOP UP button needs: a
+  top-up creates no `WorldPackGenerationRun`, so `run-status` cannot see it at all),
+  `GET /admin/worldpack-cache/run-status/{country}`,
+  `POST /admin/worldpack-cache/retry-failed-clubs/{tierRunId}`.
+  The two routes this entry used to list, `GET /admin/worldpack-cache/tiers/{country}` and
+  `POST /admin/worldpack-cache/warm-tier`, have not existed for some time.
 - **`PoolConfigController`** —
   `/admin/{player,staff,investor}-pool-config[/save|/generate-chunk|/counts|/clear]`.
 - **`StarterPackCheckController`** — `GET /admin/starter-pack-check`
@@ -392,8 +406,8 @@ body-hash check could only ever fire as a false positive, and the client drops a
 | Route | Behaviour on retry |
 |---|---|
 | `POST /api/league/conclude-season` | Idempotent per club + season **for a retry**; replays the first response, writes nothing. A resubmission whose result figures *differ* is a **correction**: it overwrites `season_record` + `season_snapshot.snapshot_data`, bumps `overwrite_count` and audits the superseded position/W-D-L, while still replaying the first response and touching no club or derived state. Takes a new optional `season` in the payload — keying on the club's *current* season is unsafe for a late retry. Order-independent: a season *ahead* of the server's count is archived and pulls `currentSeason` up to it, deliberately **not** rejected — the client's outbox drops a 4xx, so a 422 there would silently lose that season and cascade into every one queued behind it |
-| `POST /api/initialize/starter` | Replays the stored starter pack as `200` + `replayed: true`. Clubs predating `club.starter_pack_json` still get `409 starter_already_initialized` |
-| `POST /api/initialize/league/{tier}` | Cache-backed and now race-safe; concurrent calls for one country+tier are serialized and share one build |
+| `POST /api/initialize/starter` | Replays the stored starter pack as `200` + `replayed: true`. Clubs predating `club.starter_pack_json` still get `409 starter_already_initialized`. **Two `412`s that used to live here are gone (2026-11-17)** — the global `MIN_POOL_SIZE` guard and `InsufficientStarterPoolException` — because the squad is generated rather than drawn, so this endpoint can no longer refuse on player supply at all. **Also claims a `WorldPackSet`** (the club's whole world) in the same flush as the pack, so a retry replays and claims nothing new; a country with no stock has its squad GENERATED on the spot (not drawn — nothing draws any more) and its tiers built inline and uncached, with `club.world_pack_set_id` left null |
+| `POST /api/initialize/league/{tier}` | **Served from the club's own claimed set**, which is what makes a retry return the same payload — and why the set is claimed at `/starter` rather than per tier: claiming per tier would satisfy "unique" and still mix a device's eight tiers across two generation runs. A club with no set (legacy, or the live-draw fallback) gets its tier built inline and **uncached**, so a retry rebuilds (~2-4s) rather than replaying; nothing is written, which is why the advisory lock that used to serialise cold builds is gone — there is no insert left to race on |
 | `POST /api/club/initialize` | **Not** idempotent alone — creates an additional club. Does *not* collide on the club name (the duplicate check is against `NpcClub` only). Use an `Idempotency-Key` |
 
 Client-facing detail: **Retries and idempotency** in
