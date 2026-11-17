@@ -276,20 +276,35 @@ class SyncServiceLeagueTest extends TestCase
     }
 
     /**
-     * `buildLeagueSnapshot()` now resolves a club count, so the size resolver has to be
-     * present even though these tests construct SyncService with its constructor disabled.
+     * `buildLeagueSnapshot()` now resolves a club count AND the two league payout figures, so
+     * both resolvers have to be present even though these tests construct SyncService with its
+     * constructor disabled.
      *
-     * A REAL resolver over stubbed repositories rather than a double: it is final and cannot be
-     * mocked, and with stubbed repositories it answers 0 NPC clubs — so `clubCount` comes out as
-     * the bottom-tier slot alone, which is a correct answer for a league whose only member in
-     * this fixture is the player's own club.
+     * REAL resolvers over stubbed repositories rather than doubles: both are final and cannot be
+     * mocked. The size resolver answers 0 NPC clubs over stubs — so `clubCount` comes out as the
+     * bottom-tier slot alone, which is correct for a league whose only member in this fixture is
+     * the player's own club. The payout resolver sees no tier-1 base on the stubbed config and
+     * no country profile rows, so every figure resolves to the league's OWN COLUMN at parity —
+     * which is why the prize and pot assertions in this file are unchanged by the ladder.
      */
     private function injectSizeResolver(object $service): void
     {
         $npcRepo    = $this->createStub(NpcClubRepository::class);
         $leagueRepo = $this->createStub(LeagueRepository::class);
+        $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
+        $configRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
 
         $prop = new \ReflectionProperty(\App\Service\SyncService::class, 'leagueSizeResolver');
         $prop->setValue($service, new \App\Service\Economy\LeagueSizeResolver($npcRepo, $leagueRepo));
+
+        $payouts = new \ReflectionProperty(\App\Service\SyncService::class, 'leaguePayoutResolver');
+        $payouts->setValue($service, new \App\Service\Economy\LeaguePayoutResolver(
+            $configRepo,
+            new \App\Service\Economy\EconomyScaleResolver(
+                $configRepo,
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+                $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+            ),
+        ));
     }
 }

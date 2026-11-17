@@ -5,6 +5,77 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **The league payout ladders authored relative to the top tier (2026-11-16), on top of commit
+  `d06ebd9c`** (branch `development`). **Stages touched:** 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`services.md`), shared (this file).
+
+  Acts on the finding the entry below recorded and left as an authoring decision.
+  `LeaguePayoutResolver` + two migrations + gate check 8 + `WORLD_PACK_VERSION` 6 → 7. Both
+  ladders now sit at a flat **0.2573× of each tier's own authored turnover** (tier 1's existing
+  ratio), so EN tier 8 goes £5,000,000 → £42,400 and its division's total payout 5.42× → 0.12× of
+  combined authored turnover. The `entities.md` warning is marked resolved in place rather than
+  deleted, with the original finding kept under it.
+
+  Three things worth carrying forward:
+
+  - **Parts per million, not basis points.** Tier 8 is 4.24 bp, where one integer step is 23.6%
+    of the figure. The entity now carries `GameConfig::TIER_RATIO_PPM_PARITY` beside the bp
+    tables, and the admin grid labels the unit per column because the two now sit side by side.
+  - **The sibling resolvers' single-`intdiv` chain overflows at this unit** and the obvious fix
+    (pre-combining the dimensionless factors) is wrong by 0.94% at tier 8. See `services.md`.
+    Caught by a test asserting a 20% country resolves to exactly one fifth — the kind of defect
+    that reads as a rounding quirk.
+  - **NULL now means inherit** on `league.prize_money` / `league.league_position_pot`, and the
+    tier-defaults row's own prize/pot cells were cleared too, because that row is what
+    `generateLeaguesForCountry()` writes onto a new league — leave it populated and the next
+    country added silently opts out of the ladder.
+
+  **Environmental, not ours:** `wunderkind_test` is ~64 schema statements behind this branch, so
+  a full-suite run reports 873 errors BEFORE this change (3181 tests) and 877 after (3207). The
+  four extra are three new `EconomyAdminTest` cases in a class whose 23 existing tests already
+  error on a kernel-boot problem here, plus one order-dependent flake that passes in isolation.
+  `tests/Controller/Admin` + `tests/Service` is at exact parity: 527 errors / 88 failures both
+  ways, with zero tests newly broken.
+
+- **Economy findings from the app's income-truth batch (2026-11-16), on top of commit
+  `5caa68d1`** (branch `development`). **Stages touched:** 03_data (`entities.md`),
+  04_interfaces (`services.md`, `routes.md`), shared (this file).
+
+  **No backend code changed.** These are facts about backend-AUTHORED data and the published
+  config contract, found while correcting three income defects in the app
+  (`economy-income-truth`, app repo @ `4d75a15e`). Recorded here because each one is either a
+  backend authoring decision or a contract the client now depends on more heavily than before.
+
+  - **`League::$prizeMoney` / `$leaguePositionPot` look pool-sized but are consumed per club.**
+    `tvDeal` has `tvPoolPence` beside it and `pool / slots === tvDeal` holds on all eight EN
+    tiers; these two have no such pair and no divisor anywhere in the app. Against authored
+    turnover the EN ladder **inverts at tier 3** — a tier-8 champion receives **£5,000,000
+    against £164,852 (30.3×)**, where tier 1 is 0.26×. Nothing rescales it. **An authoring
+    decision, named and left**; the app's own forecast bug (it paid the flat prize to every
+    club) is fixed separately.
+
+  - **`wageModel` is three switches, not one.** The app derives both `incomeAnchoredWages` and
+    `ticketPriceElasticity` from `baseline?.wageModel === 'turnover'` when no explicit key is
+    published — and neither IS published, so both resolve TRUE on the live export. The app had
+    recorded the opposite and read its release gate's two arms the wrong way round for a while.
+    Worth knowing before anyone publishes a standalone key for either.
+
+  - **`tiers[].ticketPricePence` now drives shirt income too.** The app replaced a flat £45
+    shirt price (compiled in, every division in the world) with `ticketPrice × 0.5625`. So
+    re-authoring a division's ticket price moves two revenue lines now. Tier 1 is unchanged by
+    construction; tier 8 goes £45 → £7.88. Nothing is published for shirts.
+
+  - **`fanBaseRanges` and `leagueAbilityRanges` are keyed differently on the same payload** —
+    the first by tier alone, the second by country then tier. A `[country][tier]` read of the
+    first type-checks, misses every time and returns a plausible zero.
+
+  - **`wageScaleMicroPence` is calibrated against the tier's authored ability band**
+    (`referenceSquadAbilitySum`, EN tier 8 spans **2–7**), so it is only meaningful inside it.
+    With `k = 2.5` an ability-20 reading extrapolates ~115× past an ability-3 one. The app's
+    debug table samples a fixed `[10,20,40,60,80,95]` ladder at every tier and so shows £3,200
+    for a tier-8 "ability 20". **That is an app display fix, not an authoring error** — recorded
+    so nobody re-authors the scale to make that table look sane and breaks every real squad.
+
 - **Backlog review (2026-11-15), on top of commit `c057106`** (uncommitted, branch
   `development`). **Stages touched:** 04_interfaces (`routes.md`, `controllers.md`),
   06_documentation (`index.md`), shared (this file, `token-savings.md`).

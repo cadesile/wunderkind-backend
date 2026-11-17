@@ -33,6 +33,7 @@ class LeagueService
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
         private readonly \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
         private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
+        private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
     ) {}
 
     /** The deepest pyramid the per-tier config tables describe. */
@@ -282,8 +283,10 @@ class LeagueService
                 'reputationTier'                => $league->getLeagueReputationTier()?->value,
                 'tvDeal'                        => $league->getTvDeal(),
                 'sponsorPot'                    => $sponsorPot,
-                'prizeMoney'                    => $league->getPrizeMoney(),
-                'leaguePositionPot'             => $league->getLeaguePositionPot(),
+                // RESOLVED, as the sync snapshot and the world pack now do — a null column
+                // inherits the authored tier-1 base x this tier's ratio x the country factor.
+                'prizeMoney'                    => $this->leaguePayoutResolver->prizeFor($league, $gameConfig),
+                'leaguePositionPot'             => $this->leaguePayoutResolver->positionPotFor($league, $gameConfig),
                 // RESOLVED `league ?? gameConfig`. The key keeps its name, its type and — for
                 // every league with no override, which is all of them until an operator sets
                 // one — its exact value.

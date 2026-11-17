@@ -272,6 +272,66 @@ class EconomyAdminTest extends WebTestCase
         self::assertSame(0, $this->config()->getEconomyTicketPriceTier1Pence());
     }
 
+    public function testTheLeaguePayoutLaddersSaveByIndexInPartsPerMillion(): void
+    {
+        // THE SAME INDEX-SAFETY CONTRACT as the two bp tables, on the pair whose unit differs.
+        // A sparse post must not slide tier 8's ratio up the table, and parity here is 1000000
+        // rather than 10000 — a normaliser padding with the wrong constant would make every
+        // untouched tier pay a hundredth of what it should.
+        $this->submitSave([
+            'prizeTierRatioPpm'       => [1 => '309000', 7 => '424'],
+            'positionPotTierRatioPpm' => [7 => '424'],
+        ]);
+
+        $prize = $this->config()->getEconomyPrizeTierRatioPpm();
+        $pot   = $this->config()->getEconomyPositionPotTierRatioPpm();
+
+        self::assertCount(8, $prize);
+        self::assertCount(8, $pot);
+        self::assertSame(309000, $prize[1]);
+        self::assertSame(424, $prize[7]);
+        self::assertSame(424, $pot[7]);
+        self::assertSame(1000000, $prize[4], 'an untouched tier keeps PPM parity, not bp parity');
+        self::assertSame(1000000, $pot[4]);
+    }
+
+    public function testTheTwoPayoutBasesAreTypedInPoundsAndClearToUnauthored(): void
+    {
+        $this->submitSave([
+            'leaguePrizeTier1Pounds'       => '100,000,000',
+            'leaguePositionPotTier1Pounds' => '100000000',
+        ]);
+
+        self::assertSame(10_000_000_000, $this->config()->getEconomyLeaguePrizeTier1Pence());
+        self::assertSame(10_000_000_000, $this->config()->getEconomyLeaguePositionPotTier1Pence());
+
+        // Blank means 0 — the off switch, after which every division falls back to its own
+        // stored column whatever the ratios say.
+        $this->submitSave(['leaguePrizeTier1Pounds' => '']);
+        self::assertSame(0, $this->config()->getEconomyLeaguePrizeTier1Pence());
+        self::assertSame(10_000_000_000, $this->config()->getEconomyLeaguePositionPotTier1Pence(), 'the other base is untouched');
+    }
+
+    public function testTheResolvedPayoutCardShowsTheLeagueTotalAndWarnsOnAnInvertedLadder(): void
+    {
+        // The card exists because the authored figures are PER CLUB while the cost is per
+        // division. An inverted ladder is warned about, never refused.
+        $this->submitSave([
+            'leaguePrizeTier1Pounds' => '100000000',
+            'prizeTierRatioPpm'      => [1 => '2000000'],
+        ]);
+
+        self::assertSame(2000000, $this->config()->getEconomyPrizeTierRatioPpm()[1], 'stored exactly as typed');
+
+        $this->client->request('GET', '/admin?routeName=admin_economy&preview=EN');
+
+        self::assertResponseIsSuccessful();
+        $html = (string) $this->client->getResponse()->getContent();
+
+        self::assertStringContainsString('RESOLVED LEAGUE PAYOUTS', $html);
+        self::assertStringContainsString('is HIGHER than tier', $html);
+    }
+
     public function testTheResolvedTableNamesWhereEachFigureCameFrom(): void
     {
         // The screen's actual job: two of the three sources produce the same number, so the

@@ -104,6 +104,18 @@ final class LeagueTierDefaultDiff
                 continue;
             }
 
+            // prizeMoney AND leaguePositionPot ARE INHERITED WHEN NULL, so a null column is the
+            // league agreeing with the ladder rather than drifting from anything. Since
+            // Version20261116181000 the authored figure lives on `economyPrizeTierRatioPpm` /
+            // `economyPositionPotTierRatioPpm` and the tier-default entry is cleared, so both
+            // sides are null and `same()` already answers correctly. The skip is for the case
+            // where somebody re-authors a tier default afterwards: the league would then read
+            // as permanently drifted on a field no "apply defaults" could reconcile, which the
+            // tvDeal note above calls the one way this class can be wrong and look right.
+            if (($field === 'prizeMoney' || $field === 'leaguePositionPot') && $actual[$field] === null) {
+                continue;
+            }
+
             if (self::same($actual[$field], $defaults[$field] ?? null)) {
                 continue;
             }

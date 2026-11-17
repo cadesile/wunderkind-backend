@@ -190,7 +190,8 @@ deferral ends, the dependency is not rediscovered the hard way.)
 php bin/console app:economy:wage-table EN SC
 ```
 
-It reads the **live config rows** — not arguments — and exits non-zero on five checks:
+It reads the **live config rows** — not arguments — and exits non-zero on eight checks (this
+list said "five" until 2026-11-16; checks 6, 7 and 8 were added after it was written):
 
 1. `S_tier` strictly decreasing with tier number.
 2. No ability paid more at a lower tier than the one above (checked across each adjacent band
@@ -234,6 +235,11 @@ its five rows cannot fire under the documented resolution. Full analysis and the
 discover it either.
 
 **`tier N has no baseline turnover authored`** — you have not finished step 2.
+
+**`TV + position + prize is N% of authored turnover for an average club`**, **`a champion banks
+… over the 100% ceiling`**, **`prize + position money is N pp of turnover at its lowest tier`**,
+or **`economyPrizeTierRatioPpm: tier N is higher than tier M`** — check 8, the league payout
+ladders. See step 4c.
 
 The same breakdown is on **World → Economy → Resolver preview**, which runs the real resolver
 rather than a copy, so the screen and the command cannot disagree. Use the screen to iterate and
@@ -328,6 +334,113 @@ reports drift rather than correcting it.
 **Optional follow-up, not built:** a "suggest from turnover" button on the league screen that
 fills the pool field with `turnover × tvShare` and leaves the write to a human. Worth doing if
 re-authoring 196 leagues by hand becomes the bottleneck.
+
+---
+
+## 4c. The prize and position-pot ladders — authored, not a step you repeat
+
+**Already done on dev, by migration, on 2026-11-16.** `Version20261116181000` authored both
+ladders and cleared the per-league figures they supersede, so there is nothing to type here on a
+box that has run it. This section is what to do if the turnover table is ever re-authored, and
+why the figures are what they are.
+
+### What was wrong
+
+`league.prize_money` and `league.league_position_pot` are **per-club figures that read like
+pools**, and the England ladder was sized as though they were pools. Against the turnover table
+in step 2 it **inverted at tier 3**:
+
+| tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| prize ÷ turnover | 0.26× | 0.62× | 1.41× | 1.53× | 3.61× | 6.41× | 17.16× | **30.33×** |
+| pot ÷ turnover | 0.26× | 0.67× | 1.41× | 1.51× | 1.41× | 3.72× | 8.58× | **12.13×** |
+
+A tier-8 champion was paid **£5,000,000 against £164,852** of authored annual turnover, so a
+bottom-tier club had more financial reason to win its division than to be promoted out of it, and
+the division as a whole paid out **5.42× its combined authored turnover** across 18 clubs. The
+same ladder was cascaded byte-identically to all 24 eight-tier countries.
+
+### What is authored now
+
+**World → Economy.** Two bases and two eight-entry ratio tables, the same shape as sponsors and
+tickets. Tier 1 did not move — it was already correct.
+
+| field | value |
+|---|---|
+| TIER-1 CHAMPION PRIZE | £100,000,000 |
+| TIER-1 POSITION POT | £100,000,000 |
+| PRIZE RATIO (ppm) | `[1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424]` |
+| POSITION RATIO (ppm) | `[1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424]` |
+
+⚠️ **PARTS PER MILLION, not basis points.** Parity is `1000000`. Tier 8 is 424 ppm, which is
+4.24 bp — in integer basis points that rounds to `4`, a 5.7% error, and one bp step would be
+23.6% of the figure. The sponsor and ticket tables beside them on the same screen are still bp;
+the column headers name the unit for that reason.
+
+Resolved, that puts both figures at a flat **0.2573× of each tier's own authored turnover** —
+tier 1's existing ratio, applied all the way down:
+
+| tier | turnover | prize & pot | × own turnover |
+|---|---|---|---|
+| 1 | £388,661,540 | £100,000,000 | 0.2573 |
+| 2 | £120,049,757 | £30,900,000 | 0.2574 |
+| 3 | £35,576,602 | £9,150,000 | 0.2572 |
+| 4 | £19,909,009 | £5,120,000 | 0.2572 |
+| 5 | £7,071,796 | £1,820,000 | 0.2574 |
+| 6 | £2,339,899 | £602,000 | 0.2573 |
+| 7 | £582,785 | £150,000 | 0.2574 |
+| 8 | £164,852 | £42,400 | 0.2572 |
+
+Rounded to three significant figures so they read as authored numbers rather than derived ones,
+as the TV table is. Every row lands within 0.05% of the target.
+
+### ⚠️ A blank per-league figure now INHERITS
+
+`null` on `league.prize_money` or `league.league_position_pot` means "use the base × this tier's
+ratio × the country factor". A non-null value is an **override**, used verbatim — no ratio, no
+country factor. That is why the migration cleared all of them: measured first, every league in
+the world held a cascaded tier default and **not one was a genuine override**, so leaving them
+populated would have made the ladder authored, correct and ignored.
+
+The tier-defaults grid's own prize/pot cells were cleared for the same reason: that row is what
+`LeagueService::generateLeaguesForCountry()` writes onto a brand-new league, so a populated row
+would mean the next country you add is born holding eight overrides and silently opts out.
+
+### ⚠️ Re-authoring turnover means re-deriving these, by hand
+
+The ratio tables are **decoupled from `economyBaselineTurnoverPence` on purpose** — the same
+decision, for the same reason, as the sponsor ratios in step 2's warning: a turnover retune must
+not silently re-price a prize. The cost is that it does not carry either, and nothing but the
+gate will notice. Check 8's flatness constraint is what catches it: it asserts that prize +
+position money is the same share of turnover at every tier (9.29pp on these figures, spread
+0.008pp), and it is the one check in that group the TV ladder cannot mask.
+
+To re-derive: divide each tier's new turnover by tier 1's, multiply by 1,000,000, round to three
+significant figures. Then re-run the gate.
+
+### What the division pays, before and after
+
+TV pool + pot × 5.5 + prize, against combined authored turnover across 18 clubs:
+
+| tier | league turnover | total before | × | total after | × |
+|---|---|---|---|---|---|
+| 1 | £6,995,907,711 | £3,098,000,000 | 0.44 | £3,098,000,000 | 0.44 |
+| 2 | £2,160,895,621 | £1,119,800,000 | 0.52 | £805,650,000 | 0.37 |
+| 3 | £640,378,840 | £453,160,000 | 0.71 | £187,635,000 | 0.29 |
+| 4 | £358,362,169 | £249,320,000 | 0.70 | £87,100,000 | 0.24 |
+| 5 | £127,292,324 | £94,504,000 | 0.74 | £25,834,000 | 0.20 |
+| 6 | £42,118,178 | £66,216,000 | 1.57 | £7,279,000 | 0.17 |
+| 7 | £10,490,123 | £38,023,800 | 3.62 | £1,498,800 | 0.14 |
+| 8 | £2,967,328 | £16,089,100 | **5.42** | £364,700 | **0.12** |
+
+A champion's own take (prize + first place) goes from 42.46× its turnover at tier 8 to 0.514×,
+and is 0.514× at every tier.
+
+### ⚠️ And it needs the pack bump
+
+Both figures are baked into the cached league block, so this needed `WORLD_PACK_VERSION` 6 → 7 —
+done in the same release as the resolver, deliberately not left to the authoring step. Re-warm as
+step 6 describes.
 
 ---
 

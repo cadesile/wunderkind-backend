@@ -657,6 +657,63 @@ Two details that are deliberate and should not be "tidied":
 drift afterwards. A suite run before that step fails with `relation "club_sale" does not
 exist` on every new test, which looks nothing like the change.
 
+## `Version20261116180000` + `Version20261116181000` — the league payout ladders (2026-11-16)
+
+**A pair, and the split is the point.** The first adds schema and cannot move a figure; the
+second is the re-pricing. Running only the first is a valid, inert state.
+
+### `…180000` — four additive `game_config` columns, inert
+
+- `economy_prize_tier_ratio_ppm` — json, eight `1000000`s (parity)
+- `economy_position_pot_tier_ratio_ppm` — json, eight `1000000`s (parity)
+- `economy_league_prize_tier1_pence` — bigint, `0` (unauthored)
+- `economy_league_position_pot_tier1_pence` — bigint, `0` (unauthored)
+
+Add-with-default then `DROP DEFAULT` on all four, so the mapping owns the default. Inert on two
+independent counts: a `0` base propagates to null through `LeaguePayoutResolver` whatever the
+ratios say, **and** every league held a non-null column, which the resolver returns verbatim as
+an override.
+
+⚠️ **PARTS PER MILLION, not basis points** — the one thing here not copied from
+`Version20261115190000`. Tier 8 over tier 1 is 424 ppm = **4.24 bp**, so an integer bp table
+would store `4` (a 5.7% error) and one bp step would be 23.6% of the figure. The sponsor ratios
+bottom out at 96 bp, where bp is still fine.
+
+### `…181000` — the re-pricing, which DOES move published money
+
+One transaction, four steps, in this order:
+
+1. `CREATE TABLE league_payout_pre_ratio_backup` and stash every league's two figures plus the
+   old `league_tier_defaults` JSON and the two bases;
+2. author both bases at `10000000000` (£100,000,000 — tier 1 unchanged) and both ratio tables at
+   `[1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424]`;
+3. clear `prizeMoney`/`leaguePositionPot` **key by key** from each of the eight
+   `league_tier_defaults` rows, so trophies, parachutes, TV and sponsor counts survive;
+4. `UPDATE league SET prize_money = NULL, league_position_pot = NULL` — unconditional, because
+   the stash makes `down()` exact and a `WHERE value = tier default` guard would skip exactly the
+   rows whose default had already drifted.
+
+**Why it is safe to clear all of them:** measured on the live export first — all 24 eight-tier
+countries held a byte-identical prize/pot ladder and SC held rows 1-4 of the same one, so there
+was not a single genuine per-league override anywhere in the world.
+
+**`down()` is exact, not approximate.** A null does not record what it replaced, so the stash
+table is the mechanism: `down()` restores leagues and `game_config` from it, resets both ratio
+tables to parity and drops the table. Without it a rollback would reset to the shipped constants,
+which differ from the authored England ladder at every tier.
+
+⚠️ **`jsonb_exists(col, key)` RATHER THAN THE `?` OPERATOR** in step 3. DBAL parses `?` in
+migration SQL as a positional placeholder and dies with `syntax error at or near $1` before
+Postgres sees it. Cost one failed run to find.
+
+⚠️ **Needs `WORLD_PACK_VERSION` 6 → 7**, landed with the code in the same release. Both figures
+are baked into the cached league block, so without the bump packs keep serving the old ladder
+with nothing about the payload looking different — the `tvDeal` incident of 2026-11-13 exactly.
+
+⚠️ **`wunderkind_test` is not migration-tracked.** The four columns were added there by hand
+(`ALTER TABLE game_config ADD COLUMN IF NOT EXISTS …`); without them 268 tests error on a missing
+column, which looks nothing like the change.
+
 ## `Version20261115190000` — sponsor and ticket ratio tables (2026-11-15)
 
 Three additive `game_config` columns, all shipping inert:

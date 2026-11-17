@@ -235,6 +235,52 @@ migrations are the change log (see `migrations.md`).
 - **`League`** — a competitive tier. `country`, `tier`, `name`,
   `promotionSpots`, `tvDeal`, `leagueReputationTier:?ReputationTier(enum)`,
   `prizeMoney`, `leaguePositionPot`, `sponsorCount`,
+
+  > ✅ **RESOLVED 2026-11-16 by `Version20261116180000` + `Version20261116181000`.** Both are now
+  > read through `LeaguePayoutResolver` — the league's own column when set (an override, verbatim),
+  > else a tier-1 base × an eight-entry per-tier ratio table in PARTS PER MILLION × the country
+  > factor, applied once and last. A **null column now means INHERIT**, which is why the second
+  > migration cleared all of them (measured first: every league in the world held a cascaded tier
+  > default and not one was a genuine override) along with the tier-defaults row's own prize/pot
+  > cells, which is what `generateLeaguesForCountry()` writes onto a new league. Both ladders are
+  > authored at `[1000000, 309000, 91500, 51200, 18200, 6020, 1500, 424]` over a £100,000,000
+  > tier-1 base, putting both at a flat **0.2573× of each tier's own authored turnover** — tier 1's
+  > existing ratio, all the way down. Tier 8 goes £5,000,000 → £42,400 and the division's total
+  > payout 5.42× → 0.12× of its combined authored turnover. Gate check 8 holds it there, and
+  > `WORLD_PACK_VERSION` went 6 → 7 because both figures are in the cached league block. The
+  > original finding is kept below.
+  >
+  > ⚠️ **`prizeMoney` and `leaguePositionPot` are PER-CLUB figures, not pools, and the authored
+  > EN ladder appears to have been sized as if they were pools (measured 2026-11-16).** `tvDeal`
+  > has a pool beside it (`tvPoolPence`, and `tvPoolPence / slots === tvDeal` holds on all eight
+  > EN tiers), so it is unambiguous. These two have no such pair and no divisor anywhere in the
+  > app, so the authored number **is** what one club receives: `prizeMoney` goes whole to the
+  > champion (`finalPosition === LEAGUE_PRIZE_POSITION`), and `leaguePositionPot` is the base
+  > each club's taper is applied to.
+  >
+  > Against authored `turnoverPence`, the EN ladder **inverts at tier 3**:
+  >
+  > | tier | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  > |---|---|---|---|---|---|---|---|---|
+  > | `prizeMoney` ÷ turnover | 0.26× | 0.62× | 1.41× | 1.53× | 3.61× | 6.41× | 17.16× | **30.33×** |
+  > | `leaguePositionPot` ÷ turnover | 0.26× | 0.67× | 1.41× | 1.51× | 1.41× | 3.72× | 8.58× | **12.13×** |
+  >
+  > while `tvDeal` runs monotone the other way (0.350× → 0.030×). A tier-8 champion receives
+  > **£5,000,000 against £164,852** of authored annual turnover. The app's variant gate hides it
+  > because it models a mid-table finish, and the NPC path never reads the forecast at all — but
+  > **the player can win their division**, and until 2026-11-16 the app's own projection credited
+  > the flat prize to every club unconditionally, so the figure was reaching live budgets.
+  >
+  > Nothing in the app rescales either value (`inflate()` is a no-op at
+  > `inflationRatePerSeasonBp = 0`; the gate's `RESCALE` is harness-only). **Correcting the
+  > shape is a backend authoring decision.** One candidate, not chosen: express the champion's
+  > prize as a fixed fraction of that tier's turnover at tier 1's current 0.2573×, which leaves
+  > tier 1 untouched and puts tier 8 at ~£42,415. Full trace in the app repo's
+  > `docs/economy-loose-ends/REMAINING-WORK.md` §3, and in the app's `game-mechanics.md` §13.5.
+  >
+  > *(That candidate is what shipped — see the resolution note above. The resolved tier-8 figure is
+  > £42,400 rather than £42,415 because the ratio table is authored to three significant figures,
+  > as the TV table is.)*
   `trophy:?array` (json, nullable — the 16-bit trophy sprite's own
   `TrophyConfig`: `{style, finish, ribbons, ribbonPrimary, ribbonSecondary}`,
   stored and served verbatim like `Player::$appearance`. Replaced the retired

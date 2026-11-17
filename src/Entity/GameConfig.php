@@ -21,6 +21,14 @@ class GameConfig
      */
     public const DEFAULT_YOUTH_SCHOLARSHIP_WAGE_PENCE = 25000;
 
+    /**
+     * Parity for a per-tier ratio table held in PARTS PER MILLION, as the league-payout
+     * ladders are. The basis-point tables (`economySponsorTierRatioBp`,
+     * `economyTicketPriceTierRatioBp`) use 10000 and are deliberately a different unit — see
+     * `economyPrizeTierRatioPpm` for why bp cannot hold a ladder this steep.
+     */
+    public const TIER_RATIO_PPM_PARITY = 1000000;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -2041,6 +2049,140 @@ class GameConfig
 
     public function getEconomyTicketPriceTier1Pence(): int { return $this->economyTicketPriceTier1Pence; }
     public function setEconomyTicketPriceTier1Pence(int $v): static { $this->economyTicketPriceTier1Pence = max(0, $v); return $this; }
+
+    /**
+     * Tier-1 base champion's prize, in BASE-YEAR pence. 0 = unauthored, and that is the
+     * shipped state.
+     *
+     * Held here rather than as `leagueTierDefaults['1']['prizeMoney']` for exactly the reason
+     * `economyTicketPriceTier1Pence` is held apart from `economyTicketPricePerTierPence[0]`:
+     * the ratio table needs a base that is not itself a resolved row. The tier-defaults row is
+     * what the bulk-apply screen WRITES ONTO LEAGUES, so reading the base out of it would mean
+     * clearing tier 1's default silently unprices every division in the world, and authoring
+     * tier 1's default would create an override on every tier-1 league as a side effect.
+     *
+     * 0 PROPAGATES. `LeaguePayoutResolver` returns null for every tier while this is 0,
+     * whatever the ratios say — so the ratio ladder is safe to author before the base figure is
+     * agreed, and the shipped state publishes exactly what it published before.
+     *
+     * BASE-YEAR, like every money figure here: the app compounds `inflationRatePerSeasonBp`.
+     */
+    #[ORM\Column(type: 'bigint')]
+    private int $economyLeaguePrizeTier1Pence = 0;
+
+    public function getEconomyLeaguePrizeTier1Pence(): int { return $this->economyLeaguePrizeTier1Pence; }
+    public function setEconomyLeaguePrizeTier1Pence(int $v): static { $this->economyLeaguePrizeTier1Pence = max(0, $v); return $this; }
+
+    /**
+     * Tier-1 base FIRST-PLACE position amount, in BASE-YEAR pence. 0 = unauthored.
+     *
+     * The base of the position ladder, held apart from the tier-defaults row for the reason
+     * `economyLeaguePrizeTier1Pence` gives. Note what this figure IS: not a pool, but what the
+     * club finishing FIRST is paid. The division's whole position bill is this times the sum of
+     * the taper multipliers — 5.5x at the authored 10% taper, for any league of 11 clubs or
+     * more. So a change here moves five and a half times as much money as it looks like it does.
+     */
+    #[ORM\Column(type: 'bigint')]
+    private int $economyLeaguePositionPotTier1Pence = 0;
+
+    public function getEconomyLeaguePositionPotTier1Pence(): int { return $this->economyLeaguePositionPotTier1Pence; }
+    public function setEconomyLeaguePositionPotTier1Pence(int $v): static { $this->economyLeaguePositionPotTier1Pence = max(0, $v); return $this; }
+
+    /**
+     * Champion prize ratio per tier, in PARTS PER MILLION of the tier-1 prize. 1000000 = parity.
+     *
+     * ── WHY THIS LADDER EXISTS ────────────────────────────────────────────────────────────
+     *
+     * `League::$prizeMoney` is a per-club figure sized as though it were a pool. Measured
+     * against the turnover ladder authored on dev 2026-11-13, the EN ladder INVERTED at tier 3:
+     * tier 1 paid its champion 0.2573x that tier's authored turnover, tier 7 paid 17.16x and
+     * tier 8 paid 30.33x (£5,000,000 against £164,852). A tier-8 club therefore had more
+     * financial reason to win its division than to be promoted out of it. The same figure was
+     * cascaded byte-identically to all 24 eight-tier countries, so nothing about it was ever
+     * country-specific either.
+     *
+     * This is the sponsor/ticket shape applied to the prize: one tier-1 base plus eight ratios,
+     * so the ladder is nine figures rather than eight hand-derived absolutes per country.
+     *
+     * ── PARTS PER MILLION, NOT BASIS POINTS ───────────────────────────────────────────────
+     *
+     * This ladder is far steeper than the sponsor one, and bp cannot hold it. Tier 8 over
+     * tier 1 is 424 ppm — 4.24 bp — so an integer bp table would store 4, a 5.7% error, and
+     * ONE BP STEP WOULD BE 23.6% OF THE VALUE: the bottom of the ladder could not be nudged at
+     * all. ppm gives a 0.236% step and keeps every row inside 0.036% of its target. (The
+     * authored sponsor ratios bottom out at 96 bp, where bp is still fine — this ladder is 23x
+     * steeper.)
+     *
+     * ── DELIBERATELY NOT `economyBaselineTurnoverPence`, AND NOT `economyTierFactorsBp` ────
+     *
+     * The proposed values were DERIVED from the turnover ladder once and then stand alone, for
+     * the reason `economySponsorTierRatioBp` already gives: a later turnover or wage retune
+     * must not silently re-price a prize. The cost is that re-authoring turnover means
+     * re-deriving this table by hand — which `docs/deploy/economy-rollout.md` says in terms.
+     *
+     * SEPARATE FROM `economyPositionPotTierRatioPpm` even though the two ship with identical
+     * values. A champion's prize and a league-wide placement pot are two design dials; one
+     * shared column would mean retuning either one retuned both, and no reading of the data
+     * would tell you that had happened.
+     *
+     * INDEX 0 IS TIER 1, so index 0 is the base and is 1000000 by construction — a value other
+     * than parity there scales the base against itself, which the gate and the admin preview
+     * report rather than the setter forbidding it.
+     *
+     * RAW ROW INDEXING: tier t reads index t-1, with no stretching for a shallow pyramid. A
+     * 4-tier country uses rows 1-4 and never reads rows 5-8.
+     *
+     * SHIPS AT PARITY, which is inert: every tier resolves the tier-1 base exactly as the
+     * cascaded column did before this table existed.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyPrizeTierRatioPpm = [1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000];
+
+    /** @return list<int> */
+    public function getEconomyPrizeTierRatioPpm(): array { return $this->economyPrizeTierRatioPpm; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomyPrizeTierRatioPpm(array $v): static
+    {
+        $this->economyPrizeTierRatioPpm = self::normaliseTierBpList($v, self::TIER_RATIO_PPM_PARITY);
+
+        return $this;
+    }
+
+    /**
+     * Position-pot ratio per tier, in PARTS PER MILLION of the tier-1 pot. 1000000 = parity.
+     *
+     * `League::$leaguePositionPot` is read by the app as the FIRST-PLACE amount: a club
+     * finishing position p is paid `pot x (1 - decreasePercent/100 x (p - 1))`, floored at 0.
+     * At the authored 10% taper that pays the top half of the division and the league as a
+     * whole is paid 5.5x the pot, whatever its size above 11 clubs.
+     *
+     * So this table is the steepest lever in the league economy, and it had the same inversion
+     * as the prize: tier 8's pot was 12.13x its authored turnover (about £2.0m), which paid out
+     * about £11m a year against £2,967,328 of combined authored turnover across 18 clubs.
+     *
+     * Parts per million and raw row indexing for the reasons `economyPrizeTierRatioPpm` gives
+     * at length, and a SEPARATE table from it for the reason stated there.
+     *
+     * SHIPS AT PARITY, which is inert.
+     *
+     * @var list<int>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $economyPositionPotTierRatioPpm = [1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000];
+
+    /** @return list<int> */
+    public function getEconomyPositionPotTierRatioPpm(): array { return $this->economyPositionPotTierRatioPpm; }
+
+    /** @param array<array-key, mixed> $v */
+    public function setEconomyPositionPotTierRatioPpm(array $v): static
+    {
+        $this->economyPositionPotTierRatioPpm = self::normaliseTierBpList($v, self::TIER_RATIO_PPM_PARITY);
+
+        return $this;
+    }
 
     public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
     public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }

@@ -174,6 +174,7 @@ class InitializeController extends AbstractController
     #[Route('/leagues', name: 'api_initialize_leagues', methods: ['GET'])]
     public function leagues(
         \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
+        \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
         \App\Repository\GameConfigRepository $gameConfigRepository,
     ): JsonResponse {
         /** @var User $user */
@@ -202,8 +203,10 @@ class InitializeController extends AbstractController
             'promotionSpots'    => $league->getPromotionSpots(),
             'reputationTier'    => $league->getLeagueReputationTier()?->value,
             'tvDeal'            => $league->getTvDeal(),
-            'prizeMoney'        => $league->getPrizeMoney(),
-            'leaguePositionPot' => $league->getLeaguePositionPot(),
+            // RESOLVED, the same chain the sync snapshot and the world pack use: a null
+            // column inherits the tier-1 base x this tier's ratio x the country factor.
+            'prizeMoney'        => $leaguePayoutResolver->prizeFor($league, $gameConfig),
+            'leaguePositionPot' => $leaguePayoutResolver->positionPotFor($league, $gameConfig),
             // ADDITIVE. This endpoint is uncached, so unlike the world pack it can carry the
             // two new keys without a WORLD_PACK_VERSION bump.
             'tvPoolPence'       => $league->getTvPoolPence(),
