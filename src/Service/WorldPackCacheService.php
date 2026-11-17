@@ -5,10 +5,36 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\CountryWorldPackCache;
-use App\Service\WorldInitializationService;
+use App\Entity\WorldPack\WorldPackSet;
 use App\Repository\CountryWorldPackCacheRepository;
+use App\Service\WorldInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
 
+/**
+ * Reads and writes the per-tier payload rows that make up a WorldPackSet.
+ *
+ * ── Why every method here is set-scoped, and must stay that way ──────────────────────────
+ *
+ * This class used to be keyed `(country, tier)`: `getOrBuild()`, `isCached()`,
+ * `forceRebuild()` and `allTiersCached()` all resolved a row through
+ * `findOneBy(['country','tier'])`, which was correct for exactly as long as a country had one
+ * world. A country now holds a buffer of sets, so that lookup would return an arbitrary one of
+ * them — and the damage would be silent: a client would be served tier 1 of one world and tier
+ * 2 of another, with every call returning 200 and nothing to see in a log.
+ *
+ * So those methods are gone rather than patched with an `ORDER BY`. An ordering would make the
+ * ambiguity deterministic without making it correct, and would leave the next reader a
+ * plausible-looking helper that quietly picks a world.
+ *
+ * **The cold-build path is gone too.** A device with no claimed set now has its tier built
+ * inline by the controller and NOT written here, so there is no insert to race on. That is
+ * why the `pg_advisory_lock(hashtext('worldpack:{country}:{tier}'))` serialization this class
+ * used to carry has been removed: it existed solely so two concurrent cold callers could not
+ * both run the generator and then collide on `uq_country_tier`. With nothing inserted on that
+ * path, and with writes now happening only inside a single-flight generation run, there is no
+ * longer a race for it to guard — and keeping a lock whose reason has evaporated is how the
+ * next person concludes it must still be load-bearing.
+ */
 class WorldPackCacheService
 {
     public function __construct(
@@ -17,186 +43,78 @@ class WorldPackCacheService
     ) {}
 
     /**
-     * Returns the cached payload for (country, tier).
+     * The stored payload for one tier of $set, or null if that tier is absent or was stamped
+     * at a payload version this code no longer serves.
      *
-     * A row stamped with a payload version other than the current
-     * WorldInitializationService::WORLD_PACK_VERSION counts as a miss and is
-     * rebuilt. The cache has no TTL, so without that check a pack built before a
-     * snapshot-shape change would be served verbatim forever — which is how packs
-     * predating the personality work kept handing out all-10s matrices.
-     *
-     * **A miss is serialized across callers** by a Postgres advisory lock on
-     * (country, tier), and the cache is re-checked once the lock is held. Without that,
-     * two concurrent `POST /api/initialize/league/{tier}` requests for the same tier both
-     * miss, both run the generator — which creates and then DQL-deletes a full tier of
-     * Player/Staff rows — and both try to insert, so one of them dies on
-     * `uq_country_tier` with a 500 after doing all that work. This went from theoretical
-     * to likely when the client started treating an empty or truncated 2xx as a retryable
-     * network failure: a backgrounded request is now retried while the first may still be
-     * running. The second caller waits, then gets the first one's payload for free.
-     *
-     * @param callable(): array $generator
+     * The version check is kept even though the set carries its own `payloadVersion`: the two
+     * are written at different moments (the set at creation, each row at assembly), so a
+     * version bump landing mid-run can leave them disagreeing, and the row's own stamp is the
+     * fact about the bytes in hand.
      */
-    public function getOrBuild(string $country, int $tier, callable $generator): array
+    public function readTier(WorldPackSet $set, int $tier): ?array
     {
-        $cached = $this->readFresh($country, $tier);
-        if ($cached !== null) {
-            return $cached;
-        }
+        $row = $this->cacheRepository->findForSetAndTier($set, $tier);
 
-        return $this->withTierLock($country, $tier, function () use ($country, $tier, $generator): array {
-            // Re-check under the lock: whoever held it before us may have just built this.
-            $cached = $this->readFresh($country, $tier);
-            if ($cached !== null) {
-                return $cached;
-            }
-
-            $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
-            if ($existing !== null) {
-                // Present but stale-shaped — rebuild through the atomic replace path so a
-                // failed generator never leaves the cache empty.
-                return $this->forceRebuild($country, $tier, $generator);
-            }
-
-            $payload = $generator();
-
-            // buildTierPack deletes player/staff entities via DQL, which bypasses Doctrine's
-            // UnitOfWork. Those entities remain ghost-managed; clearing the map before flush
-            // prevents Doctrine from trying to re-process them when persisting the cache entry.
-            $this->em->clear();
-
-            $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
-            $this->em->persist($entry);
-            $this->em->flush();
-
-            return $payload;
-        });
-    }
-
-    /**
-     * Whether (country, tier) is already cached at the current shape version — i.e. whether
-     * a getOrBuild() call would be served from cache or pay for a build. Read before the
-     * call, for logging that distinguishes the two.
-     */
-    public function isCached(string $country, int $tier): bool
-    {
-        return $this->readFresh($country, $tier) !== null;
-    }
-
-    /** The cached payload for (country, tier) if one exists at the current shape version, else null. */
-    private function readFresh(string $country, int $tier): ?array
-    {
-        $cached = $this->cacheRepository->findForCountryAndTier($country, $tier);
-
-        return $cached !== null && $cached->getPayloadVersion() === WorldInitializationService::WORLD_PACK_VERSION
-            ? $cached->getPayload()
+        return $row !== null && $row->getPayloadVersion() === WorldInitializationService::WORLD_PACK_VERSION
+            ? $row->getPayload()
             : null;
     }
 
-    /**
-     * Runs $work holding a Postgres session-level advisory lock for (country, tier).
-     *
-     * Session-level rather than transaction-level (`pg_advisory_xact_lock`) because the
-     * generator flushes and clears the EntityManager several times and must not be wrapped
-     * in one long transaction. The lock is released in a `finally`, and Postgres drops any
-     * that survive when the connection closes at the end of the request.
-     *
-     * Degrades to running unlocked if the lock cannot be taken at all — a world pack is
-     * worth more than the race guard, and the unique index is still there to catch the
-     * collision.
-     *
-     * @template T
-     * @param  callable(): T $work
-     * @return T
-     */
-    private function withTierLock(string $country, int $tier, callable $work): mixed
+    /** Whether $set already holds a servable payload for $tier. */
+    public function hasTier(WorldPackSet $set, int $tier): bool
     {
-        $connection = $this->em->getConnection();
-        $key        = sprintf('worldpack:%s:%d', $country, $tier);
-        $locked     = false;
-
-        try {
-            $connection->executeStatement('SELECT pg_advisory_lock(hashtext(:key))', ['key' => $key]);
-            $locked = true;
-        } catch (\Throwable) {
-            // Fall through unlocked.
-        }
-
-        try {
-            return $work();
-        } finally {
-            if ($locked) {
-                try {
-                    $connection->executeStatement('SELECT pg_advisory_unlock(hashtext(:key))', ['key' => $key]);
-                } catch (\Throwable) {
-                    // Released with the connection at the latest.
-                }
-            }
-        }
+        return $this->readTier($set, $tier) !== null;
     }
 
     /**
-     * Returns true when every tier in $tierNumbers has a cache entry for $country.
+     * Whether $set holds every tier in $tierNumbers at the current payload version — i.e.
+     * whether it is a complete world.
+     *
+     * This replaced `allTiersCached($country, $tiers)`, and the difference is a correctness
+     * fix rather than a rename: the old question was "is this COUNTRY fully cached", so a club
+     * could be flagged world-initialized on the strength of packs generated for somebody else.
      *
      * @param int[] $tierNumbers
      */
-    public function allTiersCached(string $country, array $tierNumbers): bool
+    public function allTiersPresent(WorldPackSet $set, array $tierNumbers): bool
     {
-        $cached = $this->cacheRepository->findCachedTiers($country, WorldInitializationService::WORLD_PACK_VERSION);
-        return count(array_diff($tierNumbers, $cached)) === 0;
+        $present = $this->cacheRepository->findTiersForSet($set, WorldInitializationService::WORLD_PACK_VERSION);
+
+        return count(array_diff($tierNumbers, $present)) === 0;
     }
 
     /**
-     * Generates a fresh payload for (country, tier) and atomically replaces any
-     * existing cache entry. The old entry is only removed AFTER the generator
-     * succeeds — so a failed build never leaves the cache empty.
+     * Writes $payload as $set's row for $tier, atomically replacing any row already there.
      *
-     * @param callable(): array $generator
+     * The old row is removed only once the new one is ready to persist, so a failure here can
+     * never leave the set with a hole. Callers that build the payload themselves
+     * (WorldPackTierAssemblyService, the top-up generator) use this; nothing else writes rows.
      */
-    public function forceRebuild(string $country, int $tier, callable $generator): array
+    public function replaceWithPayload(WorldPackSet $set, int $tier, array $payload): void
     {
-        $payload = $generator();
-
-        $this->em->clear();
-
-        $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
+        $existing = $this->cacheRepository->findForSetAndTier($set, $tier);
         if ($existing !== null) {
             $this->em->remove($existing);
             $this->em->flush();
         }
 
-        $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
+        $entry = new CountryWorldPackCache($set, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
         $this->em->persist($entry);
         $this->em->flush();
+    }
 
-        return $payload;
+    /** Drops every payload row belonging to $set. The set row itself is left alone. */
+    public function deleteBySet(WorldPackSet $set): int
+    {
+        return $this->cacheRepository->deleteBySet($set);
     }
 
     /**
-     * Deletes all cached tiers for $country.
+     * Drops the payload rows of every set claimed before $before — the retention sweep.
+     * See CountryWorldPackCacheRepository::deletePayloadsForSetsClaimedBefore().
      */
-    public function deleteByCountry(string $country): int
+    public function prunePayloadsClaimedBefore(\DateTimeImmutable $before): int
     {
-        return $this->cacheRepository->deleteByCountry($country);
-    }
-
-    /**
-     * Atomically replaces the cache entry for (country, tier) with an already-built
-     * payload — a thin variant of forceRebuild() for callers (WorldPackTierAssemblyService)
-     * that assembled the payload themselves rather than handing over a generator closure.
-     * Same guarantee: the old entry is only removed after the new one is ready to persist,
-     * so a failure here never leaves the cache empty.
-     */
-    public function replaceWithPayload(string $country, int $tier, array $payload): void
-    {
-        $existing = $this->cacheRepository->findForCountryAndTier($country, $tier);
-        if ($existing !== null) {
-            $this->em->remove($existing);
-            $this->em->flush();
-        }
-
-        $entry = new CountryWorldPackCache($country, $tier, $payload, WorldInitializationService::WORLD_PACK_VERSION);
-        $this->em->persist($entry);
-        $this->em->flush();
+        return $this->cacheRepository->deletePayloadsForSetsClaimedBefore($before);
     }
 }

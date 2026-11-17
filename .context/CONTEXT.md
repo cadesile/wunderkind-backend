@@ -16,6 +16,8 @@ back office. Full plain-language summary:
 | Migration history | `stages/03_data/output/migrations.md` |
 | Client/in-memory state (there mostly isn't any — backend-only) | `stages/03_data/output/state.md` |
 | **Changing ANY API response, request DTO or generated payload — read before writing the change** | `shared/api-backwards-compatibility.md` |
+| **World packs, starter packs, `/api/initialize/*`, anything named `WorldPack*` or `StarterPack*` — read before touching any of it** | `stages/07_synthesis/output/architecture-notes.md`'s "World pack sets" section (the end-to-end account: what a set is, the TWO different generation paths and why, the claim, the buffer, and five traps) |
+| How a player, staff member or scout gets a WAGE — and which population is priced when | `stages/01_overview/output/tribal-knowledge.md`'s "A shared-pool row is priced at SERVE time" ruling, then `stages/04_interfaces/output/services.md`'s "TWO POPULATIONS, TWO TREATMENTS" |
 | Routes/endpoints (`/api/*` and `/admin/*`) | `stages/04_interfaces/output/routes.md` |
 | What each controller does | `stages/04_interfaces/output/controllers.md` |
 | What each service does | `stages/04_interfaces/output/services.md` |

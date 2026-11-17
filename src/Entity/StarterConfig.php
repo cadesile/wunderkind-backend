@@ -132,6 +132,37 @@ class StarterConfig
     #[ORM\Column(type: 'integer', options: ['default' => 12])]
     private int $worldPackPlayersPerAgent = 12;
 
+    /**
+     * How many claimable WorldPackSets each live country should hold.
+     *
+     * A set is one world plus the starter squad drawn for it, claimed by exactly one club and
+     * never served twice, so the buffer is what stops a new player waiting on a build: the
+     * claim consumes one and the top-up refills behind it, which takes 8-18s across a
+     * one-minute cron. Two is the floor that makes that work — with one spare, any two signups
+     * inside that window race for a single set and the loser pays for a cold build.
+     *
+     * Authored rather than a const so a busy country can be raised without a deploy.
+     * 0 falls back to WorldPackSetService::DEFAULT_TARGET_SETS rather than meaning "none",
+     * because a target of zero would switch the whole mechanism off by accident.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $worldPackSetTarget = 2;
+
+    /**
+     * How many days a claimed set keeps its tier payloads before the maintain sweep drops them.
+     *
+     * The payloads are dead weight the moment the device has them — the client writes every
+     * tier into its own SQLite and `Club::$starterPackJson` holds the squad — but they cannot
+     * go at serve time, because a retried tier call replays from them and a client's
+     * initialisation can span an app kill and resume. Without the sweep the table grows by a
+     * whole country's worth of large JSON per new game, forever.
+     *
+     * Seven days is far beyond any plausible resume window. The set row itself is kept either
+     * way, as the record of which club was served which generation.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 7])]
+    private int $worldPackClaimedRetentionDays = 7;
+
     /** Number of coaches assigned to a starter club. Default: 1 */
     #[ORM\Column(type: 'integer')]
     private int $starterCoachCount = 1;
@@ -621,6 +652,12 @@ class StarterConfig
     }
 
     public function getStarterPlayerCount(): int { return $this->starterPlayerCount; }
+
+    public function getWorldPackSetTarget(): int { return $this->worldPackSetTarget; }
+    public function setWorldPackSetTarget(int $v): static { $this->worldPackSetTarget = $v; return $this; }
+
+    public function getWorldPackClaimedRetentionDays(): int { return $this->worldPackClaimedRetentionDays; }
+    public function setWorldPackClaimedRetentionDays(int $v): static { $this->worldPackClaimedRetentionDays = $v; return $this; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
 
     public function getWorldPackPlayersPerAgent(): int { return $this->worldPackPlayersPerAgent; }

@@ -8,14 +8,9 @@ use App\Entity\Club;
 use App\Entity\Player;
 use App\Entity\Scout;
 use App\Entity\Staff;
-use App\Enum\PlayerPosition;
-use App\Enum\StaffRole;
-use App\Exception\InsufficientStarterPoolException;
+use App\Repository\AgentRepository;
 use App\Repository\LeagueRepository;
-use App\Repository\PlayerRepository;
 use App\Repository\PoolConfigRepository;
-use App\Repository\ScoutRepository;
-use App\Repository\StaffRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\ClubInitializationService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -39,15 +34,14 @@ class StarterPackService
     public const DEFAULT_STARTER_TIER = 8;
 
     public function __construct(
-        private readonly PlayerRepository           $playerRepository,
-        private readonly StaffRepository            $staffRepository,
-        private readonly ScoutRepository            $scoutRepository,
-        private readonly StarterConfigRepository    $starterConfigRepository,
-        private readonly PoolConfigRepository       $poolConfigRepository,
-        private readonly WorldPackSnapshotBuilder   $snapshotBuilder,
-        private readonly EntityManagerInterface     $em,
-        private readonly LoggerInterface            $logger,
-        private readonly LeagueRepository           $leagueRepository,
+        private readonly StarterConfigRepository       $starterConfigRepository,
+        private readonly PoolConfigRepository          $poolConfigRepository,
+        private readonly WorldPackSnapshotBuilder      $snapshotBuilder,
+        private readonly WorldPackClubGenerationService $clubGenerator,
+        private readonly AgentRepository                $agentRepository,
+        private readonly EntityManagerInterface        $em,
+        private readonly LoggerInterface               $logger,
+        private readonly LeagueRepository              $leagueRepository,
     ) {}
 
     /**
@@ -76,195 +70,177 @@ class StarterPackService
         return ['min' => (int) $raw['min'], 'max' => (int) $raw['max'], 'source' => $source];
     }
 
-    public function initialize(Club $club): array
+    /**
+     * Generates one starter squad for ($country, $tier): players, staff and scouts, fresh and
+     * in memory, and returns their snapshots.
+     *
+     * ── IT GENERATES. IT DOES NOT DRAW FROM THE POOL ─────────────────────────────────────
+     *
+     * This used to be a draw: it queried the shared `player`/`staff` tables by ability band,
+     * position, age floor and nationality, then `em->remove()`d what it took. That made a
+     * founder's squad depend on a population it had nothing to do with, and the dependency
+     * only ever failed in one direction — a country could have warm world packs and a pool too
+     * thin to furnish a squad, so game init refused at its first step with a `412` and no
+     * client-side escape. Pre-generating sets made it worse, because a thin draw then sat in
+     * READY stock waiting for a real player rather than failing in front of the one person who
+     * triggered it.
+     *
+     * NPC clubs have never had that problem: WorldPackClubGenerationService builds every
+     * player, coach, chairman, DoF, facility manager and scout a club needs from tier config,
+     * with no pool-table dependency at all. This now does the same thing through that same
+     * service, so there is ONE implementation of "generate a squad" and the founder's club is
+     * built the way every club around it is.
+     *
+     * **Nothing is persisted and nothing is consumed**, so this cannot fail on supply, there is
+     * no longer anything to flush atomically with it, and it is safe to call speculatively.
+     *
+     * ── PRICED WITH COUNTRY AND TIER, LIKE AN NPC CLUB ───────────────────────────────────
+     *
+     * The country and tier are passed through to the wage model, so a founder's squad follows
+     * the turnover model exactly as its division does. A pool-DRAWN starter player never did:
+     * MarketPoolService prices pool rows with no country or tier (they are one row served to
+     * every country, so there is nothing to price them against), and the starter pack reached
+     * the client through PlayerSnapshotSerializer, which deliberately does not re-price. So a
+     * founder's squad was the one squad in the pyramid outside the economy — that gap closes
+     * here. It is inert until `economyWageModel` is flipped to `turnover`; under `legacy` the
+     * country and tier are ignored and the figure is the same expression as before.
+     *
+     * `$clubReputation` is 0 for a brand-new club, which is what `Club::$reputation` defaults
+     * to and the honest value for a club with no history. At the shipped reputation spread of 0
+     * it has no effect at all; once a spread is authored it redistributes a tier's wage bill
+     * DOWNWARD for a founder, which is the intended direction.
+     *
+     * @return array{players: array, staff: array, scouts: array}
+     */
+    public function generatePack(string $country, int $tier, int $clubReputation = 0): array
     {
-        $starterConfig  = $this->starterConfigRepository->getConfig();
-        $country        = $club->getCountry();
-        // The club's own league if it has one (re-initialisation), otherwise the country's
-        // real bottom division — which is where maybeAutoAssignLeague() is about to put it.
-        // Assuming 8 here is what produced squads 45 ability points below their opponents
-        // in any country with a shallower pyramid.
-        $ampLeagueTier  = $club->getCurrentLeague()?->getTier()
-            ?? $this->leagueRepository->findLowestTierForCountry((string) $country)?->getTier()
-            ?? self::DEFAULT_STARTER_TIER;
-        $ampRange       = $this->resolveAbilityRange($country, $ampLeagueTier);
-        $ampNationality = ClubInitializationService::countryToNationality($country) ?? $country;
+        $starterConfig = $this->starterConfigRepository->getConfig();
+        $poolConfig     = $this->poolConfigRepository->getConfig();
+        $abilityRange   = $this->resolveAbilityRange($country, $tier);
+        $nationality    = ClubInitializationService::countryToNationality($country) ?? $country;
 
-        $this->logger->info('starter_pack.initialize.start', [
-            'clubId'           => (string) $club->getId(),
-            'country'          => $country,
-            'ampLeagueTier'    => $ampLeagueTier,
-            'ampRangeSource'   => $ampRange['source'],
-            'ampRangeMin'      => $ampRange['min'],
-            'ampRangeMax'      => $ampRange['max'],
-            'ampNationality'   => $ampNationality,
-            'countryResolvedToNationality' => ClubInitializationService::countryToNationality($country) !== null,
+        $squadConf = $this->starterSquadConfig($starterConfig);
+
+        $this->logger->info('starter_pack.generate.start', [
+            'country'            => $country,
+            'ampLeagueTier'      => $tier,
+            'ampRangeSource'     => $abilityRange['source'],
+            'ampRangeMin'        => $abilityRange['min'],
+            'ampRangeMax'        => $abilityRange['max'],
+            'ampNationality'     => $nationality,
             'starterPlayerCount' => $starterConfig->getStarterPlayerCount(),
+            'clubReputation'     => $clubReputation,
         ]);
 
-        $poolConfig = $this->poolConfigRepository->getConfig();
-        $posCounts  = $this->snapshotBuilder->distributeByPosition(
-            $starterConfig->getStarterPlayerCount(),
-            $poolConfig
-        );
-        $ampPlayers = [];
+        // Every agent, as the tier build does. selectBoundedAgentPool() exists to stop the
+        // DISTINCT agents in a pack scaling with the pool, and a starter squad of a handful of
+        // players can surface at most that handful, so there is nothing here for it to bound.
+        $agents = $this->agentRepository->findAll();
 
-        // First-team age gate. The pool deliberately spans youth ages so it can also
-        // supply GET /api/players/youth, so without this a starter squad drew whatever
-        // the ability band matched — which, with a youth-aged pool, was 12 year olds.
-        //
-        // A date rather than an age because date_of_birth is what the column holds and
-        // what an index can serve. Note the floor defaults to 19, not 18: the client
-        // derives age against the in-game clock, which runs slightly behind real time,
-        // so a backend-exact 18 can display as 17. See PoolConfig::$playerFirstTeamAgeMin.
-        $firstTeamAgeMin = $poolConfig->getPlayerFirstTeamAgeMin();
-        $bornOnOrBefore  = (new \DateTimeImmutable('today'))->modify("-{$firstTeamAgeMin} years");
-
-        foreach ($posCounts as $posValue => $count) {
-            $position    = PlayerPosition::from($posValue);
-            $posPlayers  = $this->playerRepository->findForWorldInitByPositionAndNationality(
-                $ampRange['min'], $ampRange['max'], $position, $ampNationality, $count, [], $bornOnOrBefore
-            );
-            $nativeFound = count($posPlayers);
-            $foreignFound = 0;
-            if (count($posPlayers) < $count) {
-                $deficit    = $count - count($posPlayers);
-                $extra      = $this->playerRepository->findForeignForWorldInitByPosition(
-                    $ampRange['min'], $ampRange['max'], '__none__', $position, $deficit, [], $bornOnOrBefore
-                );
-                $foreignFound = count($extra);
-                $posPlayers = array_merge($posPlayers, $extra);
-            }
-            $this->logger->info('starter_pack.initialize.position_draw', [
-                'clubId'       => (string) $club->getId(),
-                'position'     => $posValue,
-                'requested'    => $count,
-                'nativeFound'  => $nativeFound,
-                'foreignFound' => $foreignFound,
-                'totalFound'   => count($posPlayers),
-                'firstTeamAgeMin' => $firstTeamAgeMin,
-            ]);
-
-            // A short draw now has a second possible cause beyond "pool too small": the
-            // pool may hold plenty of players in the ability band and none of them old
-            // enough. Warn explicitly, because the symptom (a thin squad) looks identical
-            // either way and the fix is different — widen PoolConfig's age range and
-            // re-warm the pool, rather than generate more of the same.
-            if (count($posPlayers) < $count) {
-                $this->logger->warning('starter_pack.initialize.position_underfilled', [
-                    'clubId'          => (string) $club->getId(),
-                    'position'        => $posValue,
-                    'requested'       => $count,
-                    'found'           => count($posPlayers),
-                    'firstTeamAgeMin' => $firstTeamAgeMin,
-                    'hint'            => 'pool may hold no players at or above the first-team age floor',
-                ]);
-            }
-            $ampPlayers = array_merge($ampPlayers, $posPlayers);
-        }
-
-        // Deduplicate using identity: Doctrine returns same PHP object for same row,
-        // and mock objects have unique spl_object_id values. Without dedup, double-remove throws.
-        $seen = [];
-        $ampPlayers = array_values(array_filter($ampPlayers, function(Player $p) use (&$seen) {
-            $id = spl_object_id($p);
-            if (isset($seen[$id])) return false;
-            $seen[$id] = true;
-            return true;
-        }));
-
-        if ($ampPlayers === []) {
-            $this->logger->error('starter_pack.initialize.empty_player_draw', [
-                'clubId'         => (string) $club->getId(),
-                'country'        => $country,
-                'ampNationality' => $ampNationality,
-                'ampRangeMin'    => $ampRange['min'],
-                'ampRangeMax'    => $ampRange['max'],
-            ]);
-            // Bail before touching staff/scouts or the pool at all — nothing consumed, nothing
-            // flushed, Club::$starterInitializedAt untouched, so this is safely retriable. See
-            // InsufficientStarterPoolException's own docblock for why this matters.
-            throw new InsufficientStarterPoolException($ampNationality);
-        }
-
-        $ampStaff = array_merge(
-            $this->fillStaffRole(StaffRole::MANAGER,              $starterConfig->getStarterManagerCount(),            $ampNationality),
-            $this->fillStaffRole(StaffRole::COACH,                $starterConfig->getStarterCoachCount(),              $ampNationality),
-            $this->fillStaffRole(StaffRole::DIRECTOR_OF_FOOTBALL, $starterConfig->getStarterDirectorOfFootballCount(), $ampNationality),
-            $this->fillStaffRole(StaffRole::FACILITY_MANAGER,     $starterConfig->getStarterFacilityManagerCount(),    $ampNationality),
-            $this->fillStaffRole(StaffRole::CHAIRMAN,             $starterConfig->getStarterChairmanCount(),           $ampNationality),
+        $players = $this->clubGenerator->generatePlayers(
+            $squadConf,
+            $abilityRange,
+            $nationality,
+            $poolConfig,
+            $agents,
+            $country,
+            $tier,
+            $clubReputation,
         );
 
-        $ampScouts = $this->scoutRepository->findInPool($starterConfig->getStarterScoutCount(), nationality: $ampNationality);
-        if (count($ampScouts) < $starterConfig->getStarterScoutCount()) {
-            $deficit   = $starterConfig->getStarterScoutCount() - count($ampScouts);
-            $ampScouts = array_merge($ampScouts, $this->scoutRepository->findInPool($deficit));
-        }
-
-        // Deduplicate using identity: Doctrine returns same PHP object for same row,
-        // and mock objects have unique spl_object_id values.
-        $seen = [];
-        $ampScouts = array_values(array_filter($ampScouts, function(Scout $s) use (&$seen) {
-            $id = spl_object_id($s);
-            if (isset($seen[$id])) return false;
-            $seen[$id] = true;
-            return true;
-        }));
-
-        // Build snapshots before deletion (entities must exist to serialise)
-        $playerSnapshots = array_map(
-            fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p),
-            $ampPlayers
-        );
-        $staffSnapshots = array_map(
-            fn(Staff $s) => $this->snapshotBuilder->buildStaffSnapshot($s),
-            $ampStaff
-        );
-        $scoutSnapshots = array_map(
-            fn(Scout $s) => $this->snapshotBuilder->buildScoutSnapshot($s),
-            $ampScouts
-        );
-
-        // Consume pool entities — delete from DB, frontend stores snapshots locally
-        foreach ($ampPlayers as $p) { $this->em->remove($p); }
-        foreach ($ampStaff   as $s) { $this->em->remove($s); }
+        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier);
+        $scouts = $this->clubGenerator->generateScouts($squadConf, $nationality);
 
         $pack = [
-            'players' => $playerSnapshots,
-            'staff'   => $staffSnapshots,
-            'scouts'  => $scoutSnapshots,
+            'players' => array_map(fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p), $players),
+            'staff'   => array_map(fn(Staff $s) => $this->snapshotBuilder->buildStaffSnapshot($s), $staff),
+            'scouts'  => array_map(fn(Scout $sc) => $this->snapshotBuilder->buildScoutSnapshot($sc), $scouts),
         ];
 
-        // Stored in the same flush that consumes the pool, so the pack can never be
-        // deleted-but-unrecorded. These snapshots are the only remaining copy of the squad
-        // — the Player/Staff rows are being removed on the lines above — so if the response
-        // is lost in transit the player has no other way back to it. See
-        // Club::$starterPackJson.
+        $this->logger->info('starter_pack.generate.done', [
+            'country'     => $country,
+            'playerCount' => count($pack['players']),
+            'staffCount'  => count($pack['staff']),
+            'scoutCount'  => count($pack['scouts']),
+        ]);
+
+        return $pack;
+    }
+
+    /**
+     * StarterConfig's starter counts in the `npcSquadConfig` tier shape
+     * WorldPackClubGenerationService takes, so the founder's club goes through the same
+     * generator as every NPC club around it rather than a parallel implementation.
+     *
+     * Two mappings are decisions rather than transcription:
+     *
+     * - **`playerMin` = `playerMax` = `starterPlayerCount`.** An NPC squad size is ROLLED
+     *   between a min and a max; a starter squad is an authored, exact number an operator sets
+     *   on the Starter config screen and expects to get.
+     * - **`foreignPercent` = 0.** The draw this replaced asked for home-nationality players and
+     *   reached for foreigners only to cover a SHORTFALL. Generation has no shortfall, so the
+     *   faithful equivalent of "natives, then foreigners if you must" is all natives. A founder
+     *   fielding an all-home squad is also the intended starting position; signing abroad is
+     *   something the player does later.
+     *
+     * @return array<string, int>
+     */
+    private function starterSquadConfig(\App\Entity\StarterConfig $config): array
+    {
+        $players = $config->getStarterPlayerCount();
+
+        return [
+            'playerMin'               => $players,
+            'playerMax'               => $players,
+            'foreignPercent'          => 0,
+            'managerCount'            => $config->getStarterManagerCount(),
+            'coachCount'              => $config->getStarterCoachCount(),
+            'chairmanCount'           => $config->getStarterChairmanCount(),
+            'directorOfFootballCount' => $config->getStarterDirectorOfFootballCount(),
+            'facilityManagerCount'    => $config->getStarterFacilityManagerCount(),
+            'scoutCount'              => $config->getStarterScoutCount(),
+        ];
+    }
+
+    /**
+     * Resolves the tier a brand-new club in $country should be drawn at: its own league if
+     * it has one, else the country's real bottom division — which is where
+     * maybeAutoAssignLeague() is about to put it.
+     *
+     * Assuming 8 here is what produced squads 45 ability points below their opponents in any
+     * country with a shallower pyramid; see DEFAULT_STARTER_TIER.
+     */
+    public function resolveStarterTier(?string $country, ?Club $club = null): int
+    {
+        return $club?->getCurrentLeague()?->getTier()
+            ?? $this->leagueRepository->findLowestTierForCountry((string) $country)?->getTier()
+            ?? self::DEFAULT_STARTER_TIER;
+    }
+
+    public function initialize(Club $club): array
+    {
+        $country       = $club->getCountry();
+        $ampLeagueTier = $this->resolveStarterTier($country, $club);
+
+        $pack = $this->generatePack((string) $country, $ampLeagueTier, $club->getReputation());
+
+        // Still stored on the club, and still the only copy — the snapshots are generated in
+        // memory and nothing else holds them, so a response lost in transit would otherwise
+        // leave the club initialised with nothing and a permanent 409 on every retry. What has
+        // changed is that this is no longer racing a pool consume: nothing was removed, so the
+        // flush has only the club's own two writes to land.
         $club->setStarterPackJson($pack);
         $club->setStarterInitializedAt(new \DateTimeImmutable());
         $this->em->flush();
 
         $this->logger->info('starter_pack.initialize.success', [
             'clubId'      => (string) $club->getId(),
-            'playerCount' => count($ampPlayers),
-            'staffCount'  => count($ampStaff),
-            'scoutCount'  => count($ampScouts),
+            'playerCount' => count($pack['players']),
+            'staffCount'  => count($pack['staff']),
+            'scoutCount'  => count($pack['scouts']),
         ]);
 
         return $pack;
     }
 
-    private function fillStaffRole(StaffRole $role, int $limit, string $nationality): array
-    {
-        if ($limit <= 0) return [];
-        $results = $this->staffRepository->findInPoolByRoleRandom($role, $limit, $nationality);
-        if (count($results) < $limit) {
-            $deficit = $limit - count($results);
-            $results = array_merge(
-                $results,
-                $this->staffRepository->findInPoolByRoleRandom($role, $deficit)
-            );
-        }
-        return $results;
-    }
 }

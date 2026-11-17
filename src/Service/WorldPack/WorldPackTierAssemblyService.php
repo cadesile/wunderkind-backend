@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Service\WorldPack;
 
 use App\Entity\WorldPack\WorldPackGenerationRun;
+use App\Entity\WorldPack\WorldPackSet;
 use App\Entity\WorldPack\WorldPackGenerationTierRun;
 use App\Enum\WorldPack\WorldPackGenerationClubRunStatus;
+use App\Enum\WorldPack\WorldPackSetStatus;
 use App\Enum\WorldPack\WorldPackGenerationRunStatus;
 use App\Enum\WorldPack\WorldPackGenerationTierRunStatus;
 use App\Repository\GameConfigRepository;
@@ -27,6 +29,12 @@ use Doctrine\ORM\EntityManagerInterface;
  * tier is marked FAILED instead), so a country's cache never silently ships an
  * incomplete league. Completed clubs' snapshots stay on their rows for a "retry failed
  * clubs" action to reuse without redoing already-succeeded work.
+ *
+ * It also owns the step after that: deciding when a whole WorldPackSet becomes READY.
+ * **That hangs off the SET, not the run**, because one admin regenerate builds a country's
+ * entire buffer and the sets in it succeed or fail independently — one can go READY while
+ * the other is still missing a tier. A run-level check would either hold a finished set back
+ * or publish an unfinished one.
  */
 class WorldPackTierAssemblyService
 {
@@ -114,6 +122,14 @@ class WorldPackTierAssemblyService
         $this->em->flush();
 
         $this->maybeCompleteRun($tierRun->getRun());
+
+        $set = $tierRun->getSet();
+        if ($set !== null) {
+            // A failed tier is terminal for its set — reconsider it now rather than leaving it
+            // BUILDING until the stale window expires, so the admin screen says FAILED and the
+            // top-up stops counting it as stock within the minute.
+            $this->maybeReadySet($set);
+        }
     }
 
     private function assemble(WorldPackGenerationTierRun $tierRun): void
@@ -155,7 +171,18 @@ class WorldPackTierAssemblyService
         $sponsorPot = $this->worldInitializationService->rollLeagueSponsors($league, $gameConfig);
         $payload    = $this->worldInitializationService->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
 
-        $this->worldPackCacheService->replaceWithPayload($tierRun->getCountry(), $tierRun->getTier(), $payload);
+        $set = $tierRun->getSet();
+        if ($set === null) {
+            // Defensive: every tier run created by current code carries its set, and the FK is
+            // ON DELETE SET NULL, so this means the set was deleted under us (a regenerate, or
+            // an admin per-set delete) while this tier was in flight. There is nowhere to put
+            // the payload, so fail the tier rather than discard it silently.
+            $this->markTierFailed($tierRun, 'Set no longer exists — deleted while this tier was generating');
+
+            return;
+        }
+
+        $this->worldPackCacheService->replaceWithPayload($set, $tierRun->getTier(), $payload);
 
         foreach ($completedRuns as $clubRun) {
             $clubRun->setSnapshotJson(null);
@@ -165,6 +192,76 @@ class WorldPackTierAssemblyService
         $this->em->flush();
 
         $this->maybeCompleteRun($tierRun->getRun());
+        $this->maybeReadySet($set);
+    }
+
+    /**
+     * Recounts $set's tier runs and, when they are all terminal, flips the set to READY or
+     * FAILED. Safe to call repeatedly — both transitions are atomic conditional UPDATEs from
+     * 'building', so whichever delivery gets there first wins and the rest are no-ops.
+     *
+     * A set goes READY only when EVERY tier completed AND it carries a starter squad. The
+     * squad is drawn up front by the orchestrator, so in practice the second half of that is
+     * already true; it is asserted anyway because a READY set with no squad is exactly the
+     * half-built state the whole buffer exists to prevent, and it would be claimed by a real
+     * player before anyone noticed.
+     */
+    public function maybeReadySet(WorldPackSet $set): void
+    {
+        $tierRuns = $this->tierRunRepository->findBySet($set);
+        if ($tierRuns === []) {
+            return;
+        }
+
+        $anyFailed = false;
+        foreach ($tierRuns as $tierRun) {
+            if (!in_array($tierRun->getStatus(), [WorldPackGenerationTierRunStatus::COMPLETED, WorldPackGenerationTierRunStatus::FAILED], true)) {
+                return; // still a tier in flight
+            }
+            if ($tierRun->getStatus() === WorldPackGenerationTierRunStatus::FAILED) {
+                $anyFailed = true;
+            }
+        }
+
+        if ($anyFailed) {
+            $this->flipSet($set, WorldPackSetStatus::FAILED, 'One or more tiers failed to generate');
+
+            return;
+        }
+
+        if ($set->getStarterPackJson() === null) {
+            $this->flipSet($set, WorldPackSetStatus::FAILED, 'Every tier generated but the set carries no starter squad');
+
+            return;
+        }
+
+        $this->flipSet($set, WorldPackSetStatus::READY, null);
+    }
+
+    /** Atomic conditional flip out of 'building' — 0 rows affected means somebody else got there. */
+    private function flipSet(WorldPackSet $set, WorldPackSetStatus $to, ?string $error): void
+    {
+        $affected = $this->em->getConnection()->executeStatement(
+            <<<'SQL'
+            UPDATE world_pack_set
+               SET status        = :to,
+                   error_message = :error,
+                   ready_at      = CASE WHEN :to = 'ready' THEN :now ELSE ready_at END
+             WHERE id     = :id
+               AND status = :building
+            SQL,
+            [
+                'to'       => $to->value,
+                'error'    => $error,
+                'now'      => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'id'       => $set->getId()->toRfc4122(),
+                'building' => WorldPackSetStatus::BUILDING->value,
+            ],
+        );
+
+        if ($affected > 0) {
+            $this->em->refresh($set);
+        }
     }
 
     /**

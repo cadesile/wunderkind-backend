@@ -158,40 +158,21 @@ class PlayerRepository extends ServiceEntityRepository
      * @param string[] $excludeIds UUID strings of players already assigned in this build pass.
      * @return Player[]
      */
-    /**
-     * $bornOnOrBefore is the first-team age gate: the pool deliberately spans youth ages
-     * (GET /api/players/youth draws 12-14 from it), so a squad draw that filtered only on
-     * ability and position handed new clubs 12 year olds. Expressed as a date_of_birth
-     * cutoff rather than a computed age because that is the only form an index can serve.
+    /*
+     * REMOVED 2026-11-17: findForWorldInitByPositionAndNationality() and
+     * findForeignForWorldInitByPosition().
+     *
+     * They were the starter squad's pool draw — ability band + position + nationality + a
+     * first-team age floor, natives first with a foreign fallback for the shortfall. Nothing
+     * draws a squad from the pool any more: StarterPackService::generatePack() generates one
+     * through WorldPackClubGenerationService, the same generator every NPC club goes through,
+     * so a founder's club is built on the same basis as its opponents and cannot be short.
+     *
+     * Noted rather than silently deleted because the names encoded a story — "this is how world
+     * init gets its players" — that is now false, and because `countPoolMatching()` below still
+     * exists for StarterPackDiagnosticService, which can look like the draw's surviving half.
+     * It is not: that service counts, and what it counts no longer gates anything.
      */
-    public function findForWorldInitByPositionAndNationality(int $abilityMin, int $abilityMax, PlayerPosition $position, string $nationality, int $limit, array $excludeIds = [], ?\DateTimeImmutable $bornOnOrBefore = null): array
-    {
-        if ($limit <= 0) return [];
-
-        $qb = $this->createQueryBuilder('p')
-            ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.currentAbility BETWEEN :min AND :max')
-            ->andWhere('p.position = :position')
-            ->andWhere('p.nationality = :nationality')
-            ->setParameter('min', $abilityMin)
-            ->setParameter('max', $abilityMax)
-            ->setParameter('position', $position)
-            ->setParameter('nationality', $nationality)
-            ->setMaxResults($limit)
-            ->orderBy('rand_order');
-
-        if ($bornOnOrBefore !== null) {
-            $qb->andWhere('p.dateOfBirth <= :bornOnOrBefore')
-               ->setParameter('bornOnOrBefore', $bornOnOrBefore);
-        }
-
-        if (!empty($excludeIds)) {
-            $qb->andWhere('p.id NOT IN (:excludeIds)')
-               ->setParameter('excludeIds', $excludeIds);
-        }
-
-        return $qb->getQuery()->getResult();
-    }
 
     /**
      * Random pool draw filtered by ability range, position, excluding a nationality (foreign slot per position).
@@ -200,35 +181,6 @@ class PlayerRepository extends ServiceEntityRepository
      * @param string[] $excludeIds UUID strings of players already assigned in this build pass.
      * @return Player[]
      */
-    /** $bornOnOrBefore: same first-team age gate as findForWorldInitByPositionAndNationality(). */
-    public function findForeignForWorldInitByPosition(int $abilityMin, int $abilityMax, string $excludeNationality, PlayerPosition $position, int $limit, array $excludeIds = [], ?\DateTimeImmutable $bornOnOrBefore = null): array
-    {
-        if ($limit <= 0) return [];
-
-        $qb = $this->createQueryBuilder('p')
-            ->addSelect('RAND() AS HIDDEN rand_order')
-            ->where('p.currentAbility BETWEEN :min AND :max')
-            ->andWhere('p.position = :position')
-            ->andWhere('p.nationality != :nationality')
-            ->setParameter('min', $abilityMin)
-            ->setParameter('max', $abilityMax)
-            ->setParameter('position', $position)
-            ->setParameter('nationality', $excludeNationality)
-            ->setMaxResults($limit)
-            ->orderBy('rand_order');
-
-        if ($bornOnOrBefore !== null) {
-            $qb->andWhere('p.dateOfBirth <= :bornOnOrBefore')
-               ->setParameter('bornOnOrBefore', $bornOnOrBefore);
-        }
-
-        if (!empty($excludeIds)) {
-            $qb->andWhere('p.id NOT IN (:excludeIds)')
-               ->setParameter('excludeIds', $excludeIds);
-        }
-
-        return $qb->getQuery()->getResult();
-    }
 
     /**
      * Random pool draw filtered by ability range, excluding a nationality (for foreign players).

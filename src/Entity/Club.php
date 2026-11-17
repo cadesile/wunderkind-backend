@@ -13,6 +13,9 @@ use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity(repositoryClass: ClubRepository::class)]
 #[ORM\Index(name: 'idx_club_created_at', columns: ['created_at'])]
+// Declared rather than left to Doctrine's auto-named join-column index, so the
+// migration's CREATE INDEX and the mapping agree and schema:update stays clean.
+#[ORM\Index(name: 'idx_club_world_pack_set', columns: ['world_pack_set_id'])]
 // One club of a given name per town.
 //
 // PARTIAL, and it has to be: home_location_id is NULL for every club founded before the land
@@ -159,6 +162,25 @@ class Club
      */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $starterPackJson = null;
+
+    /**
+     * The WorldPackSet this club was served — its starter squad and every league tier
+     * came from this one generation, and no other club can be given it.
+     *
+     * Claimed in the same flush as $starterPackJson at POST /api/initialize/starter, and
+     * read by POST /api/initialize/league/{tier} to decide which payload to serve. That
+     * is what makes a retried tier call return the same world: without it the tier
+     * endpoint would have to pick from the country's buffer again and could hand the
+     * second attempt a different one, mixing fixtures and NPC ids across two worlds.
+     *
+     * Null for clubs initialised before sets existed, and for one served by the live
+     * fallback draw when its country had no ready set — both fall back to building the
+     * tier inline, uncached. SET NULL on the far side, so pruning a long-claimed set's
+     * audit row could never delete a club.
+     */
+    #[ORM\ManyToOne(targetEntity: \App\Entity\WorldPack\WorldPackSet::class)]
+    #[ORM\JoinColumn(name: 'world_pack_set_id', nullable: true, onDelete: 'SET NULL')]
+    private ?\App\Entity\WorldPack\WorldPackSet $worldPackSet = null;
 
     /**
      * Set once when the client completes new-game SETUP. Survives reinstalls.
@@ -364,6 +386,9 @@ class Club
 
     /** @return array{players: array, staff: array, scouts: array}|null */
     public function getStarterPackJson(): ?array { return $this->starterPackJson; }
+
+    public function getWorldPackSet(): ?\App\Entity\WorldPack\WorldPackSet { return $this->worldPackSet; }
+    public function setWorldPackSet(?\App\Entity\WorldPack\WorldPackSet $set): static { $this->worldPackSet = $set; return $this; }
 
     /** @param array{players: array, staff: array, scouts: array}|null $pack */
     public function setStarterPackJson(?array $pack): static { $this->starterPackJson = $pack; return $this; }

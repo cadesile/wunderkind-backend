@@ -129,6 +129,44 @@ Two consequences worth holding onto:
 See `03_data/output/entities.md`'s `UserLedger` and `StadiumEstimate` entries, and
 `src/Service/Location/StadiumEstimateService.php`'s `COST_PER_SEAT_PENCE` docblock.
 
+### A shared-pool row is priced at SERVE time, never stored (owner ruling, 2026-11-17)
+
+Asked for directly: *"update pool players how they are priced so that they use the new economy
+priced with country and tier to follow the turnover model... all NPC, whether it's staff,
+whether it's individual players, are all following the same economic model. There should be no
+gaps."*
+
+The goal was accepted; the mechanism was not. **Pool rows keep a stored LEGACY figure and are
+priced on the way out, and the owner confirmed that after the reasoning was put to them.** The
+reason is structural rather than a preference: a pool row is ONE row served to every country at
+every tier, so a stored country price is correct for exactly one country and wrong for all the
+others — and it would then be re-priced on top at serve time, doubling the factor. Both
+`MarketDataService` and `Economy\ServeTimePlayerPricer` carry the same statement in their own
+docblocks.
+
+**"No gaps" was still a real finding, and two gaps existed.** Closing them is what the ruling
+amounts to in practice:
+
+- a **founder's starter squad** had no price at generation (pool-drawn, and `MarketPoolService`
+  prices with neither country nor tier) and was never re-priced on the way out, because the
+  starter pack goes through `PlayerSnapshotSerializer`, which deliberately does not re-price. It
+  was the one squad in the pyramid outside the economy. It is now GENERATED and priced at
+  generation with country and tier, like an NPC club;
+- **`GET /api/players/youth`** served the stored legacy figure for the same serializer reason. It
+  is now priced at serve time.
+
+So the rule to carry forward is two-sided, and which side applies is decided by the POPULATION,
+not by the endpoint: **generated, per-country populations are priced once at generation and
+stored** (world-pack NPC clubs, the founder's squad — which is why a model flip needs a
+`WORLD_PACK_VERSION` bump); **shared-pool populations are stored legacy and priced at serve time
+from the BROWSING club's country and tier** (youth, foreign, scout search, market data). If a new
+endpoint serves pool rows, it calls `Economy\ServeTimePlayerPricer` — that class exists because
+the rule previously lived inside `PlayerBrowseSerializer` and therefore reached only the two
+endpoints that happened to use it.
+
+Never put the pricing in `PlayerSnapshotSerializer`: `WorldPackSnapshotBuilder` delegates to it,
+and re-pricing there would change cached pack content on every read with no version bump.
+
 ## Canonical existing docs (Q5)
 
 `README.md` and everything under `docs/` are canonical — index them as-is

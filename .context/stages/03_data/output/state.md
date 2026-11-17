@@ -17,9 +17,12 @@ its own state layer, lives in a separate repo — see
    `src/Service/WorldOverviewService.php`,
    `src/Service/Admin/DashboardStatsService.php`,
    `src/Service/YouTubeFeedService.php`.
-2. **`CountryWorldPackCache`** (an actual Doctrine entity/table, see
-   `entities.md`) — a **persisted**, database-backed cache of generated
-   world-pack payloads keyed by country/tier/version. Not in-memory.
+2. **`WorldPackSet` + `CountryWorldPackCache`** (actual Doctrine entities/tables, see
+   `entities.md`) — **persisted**, database-backed generated world-pack payloads, keyed by
+   SET and tier. Not in-memory, and no longer a cache in the usual sense: a set is claimed by
+   exactly one club and never served twice, so these are single-use pre-built worlds held two
+   deep per live country rather than shared rows anybody can hit. They were keyed
+   country/tier/version until `Version20261117120000`.
 
 Neither of these is "client/in-memory state" in the frontend sense — they
 answer a caching question, not a state-management one. No further state

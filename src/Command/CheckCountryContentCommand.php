@@ -6,6 +6,8 @@ namespace App\Command;
 
 use App\Enum\Country;
 use App\Repository\CountryWorldPackCacheRepository;
+use App\Repository\WorldPack\WorldPackSetRepository;
+use App\Service\WorldInitializationService;
 use App\Repository\LeagueRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Repository\NpcClubRepository;
@@ -36,6 +38,7 @@ class CheckCountryContentCommand extends Command
         private readonly LeagueRepository                $leagueRepository,
         private readonly NpcClubRepository                $npcClubRepository,
         private readonly CountryWorldPackCacheRepository  $cacheRepository,
+        private readonly WorldPackSetRepository           $worldPackSetRepository,
         private readonly StarterConfigRepository          $starterConfigRepository,
         private readonly CountryProfileRepository         $countryProfileRepository,
         private readonly LocationCatalogueService         $locationCatalogue,
@@ -147,9 +150,32 @@ class CheckCountryContentCommand extends Command
         }
         $io->table(['Tier', 'NPC clubs'], $clubRows);
 
-        $io->section('World pack cache');
-        $cachedTiers = $this->cacheRepository->findCachedTiers($countryCode);
-        $io->text(sprintf('Cached tiers: %s', $cachedTiers === [] ? 'none' : implode(', ', $cachedTiers)));
+        $io->section('World pack sets');
+        // Per-SET, not per-country: a country holds a buffer of whole worlds now, and "which
+        // tiers are cached for this country" no longer identifies anything a client can be
+        // served. What matters operationally is how many claimable sets it has.
+        $setRows = [];
+        foreach ($this->worldPackSetRepository->findForCountry($countryCode) as $set) {
+            $setRows[] = [
+                substr((string) $set->getId(), 0, 8),
+                $set->getStatus()->value,
+                $set->getPayloadVersion() === WorldInitializationService::WORLD_PACK_VERSION ? 'current' : 'STALE',
+                count($this->cacheRepository->findTiersForSet($set)),
+                $set->getStarterPackJson() === null ? 'MISSING' : 'yes',
+            ];
+        }
+
+        if ($setRows === []) {
+            $io->text('No sets. Run: php bin/console app:worldpack:warm ' . $countryCode);
+        } else {
+            $io->table(['Set', 'Status', 'Shape', 'Tiers', 'Squad'], $setRows);
+        }
+
+        $claimable = $this->worldPackSetRepository->countReadyUnclaimed(
+            $countryCode,
+            WorldInitializationService::WORLD_PACK_VERSION,
+        );
+        $io->text(sprintf('Claimable right now: %d', $claimable));
 
         $io->section('Starter config');
         $config = $this->starterConfigRepository->getConfig();

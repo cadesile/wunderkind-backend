@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Player;
-use App\Service\Economy\WageModelResolver;
+use App\Service\Economy\ServeTimePlayerPricer;
 
 /**
  * Pool-browsing player shape (GET /api/scout/search, GET /api/players/foreign).
@@ -34,12 +34,17 @@ use App\Service\Economy\WageModelResolver;
  *
  * With no country and tier — or in `legacy` mode — the stored value is served untouched, which
  * is byte-identical to what these two endpoints have always returned.
+ *
+ * **The rule itself now lives in `ServeTimePlayerPricer`**, because it belongs to every surface
+ * that serves a pool row rather than to these two endpoints. It used to live here, which is how
+ * `GET /api/players/youth` ended up serving the stored legacy figure: it serializes pool players
+ * without going through this class, so it never reached the pricing at all.
  */
 class PlayerBrowseSerializer
 {
     public function __construct(
         private readonly PlayerSnapshotSerializer $snapshots = new PlayerSnapshotSerializer(),
-        private readonly ?WageModelResolver $wageModel = null,
+        private readonly ?ServeTimePlayerPricer $pricer = null,
     ) {}
 
     /**
@@ -50,7 +55,7 @@ class PlayerBrowseSerializer
     {
         $row = $this->snapshots->serialize($p, withGuardians: true);
 
-        return $this->withServeTimeWage($row, $p, $country, $tier);
+        return $this->pricer?->price($row, $p, $country, $tier) ?? $row;
     }
 
     /**
@@ -62,31 +67,5 @@ class PlayerBrowseSerializer
     public function serializerFor(?string $country, ?int $tier): callable
     {
         return fn (Player $p): array => $this->serialize($p, $country, $tier);
-    }
-
-    /**
-     * THE PAYING CLUB'S COUNTRY, NOT THE PLAYER'S NATIONALITY, and that is the decision worth
-     * naming. A wage demand is what this club has to pay, so it is anchored to the economy the
-     * club plays in; a Brazilian at an English tier-1 club is paid English tier-1 money. Pricing
-     * by nationality would make a squad's wage bill depend on where its players were born.
-     *
-     * @param array<string, mixed> $row
-     * @return array<string, mixed>
-     */
-    private function withServeTimeWage(array $row, Player $p, ?string $country, ?int $tier): array
-    {
-        if ($this->wageModel === null || $country === null || $country === '' || $tier === null || $tier < 1) {
-            return $row;
-        }
-
-        $priced = $this->wageModel->turnoverPlayerPence($p->getCurrentAbility(), $country, $tier);
-
-        // Null in `legacy` mode or for a tier whose turnover nobody has authored — the stored
-        // figure stands, which is what every shipped build has always received.
-        if ($priced !== null && $this->wageModel->model() === \App\Enum\EconomyWageModel::TURNOVER) {
-            $row['contractValue'] = $priced;
-        }
-
-        return $row;
     }
 }

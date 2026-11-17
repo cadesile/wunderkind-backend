@@ -162,7 +162,9 @@ actually *does* (which service/repo it calls), not restated route paths.
   `SocialAccountConnectionRepository`, `TokenEncryptionService`,
   `HttpClientInterface`, injected platform client id/secret/redirect-uri
   params.
-- **`WorldPackController`** — world-pack cache admin (delete/warm tiers)
+- **`WorldPackController`** — world-pack SET admin: per-set delete (refusing a claimed
+  set unless forced), per-country top-up, set-status poll, regenerate with a set count, and
+  delete-unclaimed-for-country. Formerly world-pack cache admin (delete/warm tiers)
   via `CountryWorldPackCacheRepository`, `WorldPackCacheService`,
   `WorldInitializationService`, `LeagueRepository`.
 - **`PoolConfigController`** — player/staff/investor pool config screens

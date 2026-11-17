@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\CountryWorldPackCache;
+use App\Entity\WorldPack\WorldPackSet;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -18,25 +19,31 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         parent::__construct($registry, CountryWorldPackCache::class);
     }
 
-    public function findForCountryAndTier(string $country, int $tier): ?CountryWorldPackCache
+    /**
+     * The cached payload row for one tier OF ONE SET.
+     *
+     * This replaced `findForCountryAndTier()`, and the old signature must not come back.
+     * `(country, tier)` stopped being unique the moment a country began holding a buffer of
+     * sets, so `findOneBy(['country','tier'])` would quietly return an arbitrary one of them —
+     * a "which world did that client actually get?" bug with no symptom at the call site.
+     * Reach a row through its set.
+     */
+    public function findForSetAndTier(WorldPackSet $set, int $tier): ?CountryWorldPackCache
     {
-        return $this->findOneBy(['country' => $country, 'tier' => $tier]);
+        return $this->findOneBy(['set' => $set, 'tier' => $tier]);
     }
 
     /**
-     * Returns the list of tier numbers already cached for a country at the given
-     * payload version. A row stamped with an older version is deliberately not
-     * counted — getOrBuild would rebuild it anyway, so reporting it as cached
-     * would let a caller skip warming and then pay the rebuild on a user request.
+     * Tier numbers present in $set, optionally restricted to one payload version.
      *
      * @return int[]
      */
-    public function findCachedTiers(string $country, ?int $payloadVersion = null): array
+    public function findTiersForSet(WorldPackSet $set, ?int $payloadVersion = null): array
     {
         $qb = $this->createQueryBuilder('c')
             ->select('c.tier')
-            ->where('c.country = :country')
-            ->setParameter('country', $country);
+            ->where('c.set = :set')
+            ->setParameter('set', $set);
 
         if ($payloadVersion !== null) {
             $qb->andWhere('c.payloadVersion = :version')
@@ -46,14 +53,40 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         return array_column($qb->getQuery()->getArrayResult(), 'tier');
     }
 
-    public function deleteByCountry(string $country): int
+    public function deleteBySet(WorldPackSet $set): int
     {
         return (int) $this->createQueryBuilder('c')
             ->delete()
-            ->where('c.country = :country')
-            ->setParameter('country', $country)
+            ->where('c.set = :set')
+            ->setParameter('set', $set)
             ->getQuery()
             ->execute();
+    }
+
+    /**
+     * Drops the payload rows of every set claimed before $before, leaving the set rows
+     * themselves as the audit trail of which club was served which generation.
+     *
+     * This is what stops the table growing by a whole country's worth of large JSON per new
+     * game, forever. The payloads are dead the moment the device has them — the client writes
+     * every tier into its own SQLite and `Club::$starterPackJson` holds the squad — but they
+     * cannot be dropped at serve time, because a retried tier call replays from them and a
+     * client's initialisation can span an app kill and resume.
+     */
+    public function deletePayloadsForSetsClaimedBefore(\DateTimeImmutable $before): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            <<<'SQL'
+            DELETE FROM country_world_pack_cache
+             WHERE set_id IN (
+                     SELECT id FROM world_pack_set
+                      WHERE status = 'claimed'
+                        AND claimed_at IS NOT NULL
+                        AND claimed_at < :before
+                   )
+            SQL,
+            ['before' => $before->format('Y-m-d H:i:s')],
+        );
     }
 
     /**
@@ -80,13 +113,19 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      * query: a row whose version differs from `WorldInitializationService::WORLD_PACK_VERSION`
      * is what the cache treats as a miss, so it is the same comparison the rebuild path makes.
      *
-     * @return array<array{id:string, country:string, tier:int, clubCount:int, playerCount:int, payloadVersion:int, generatedAt:\DateTimeImmutable}>
+     * `set_id` is selected because this is raw DBAL with a hardcoded column list, which a new
+     * mapped property is invisible to until it is named here — the trap
+     * `.context/shared/api-backwards-compatibility.md` point 3 records against
+     * NpcClubRepository::findForeignClubs(). The admin screen groups on it.
+     *
+     * @return array<array{id:string, setId:string, country:string, tier:int, clubCount:int, playerCount:int, payloadVersion:int, generatedAt:\DateTimeImmutable}>
      */
     public function findAllSummaries(): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
             "SELECT
                 id::text                                        AS id,
+                set_id::text                                    AS set_id,
                 country,
                 tier,
                 payload_version,
@@ -103,6 +142,7 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         return array_map(static function (array $row): array {
             return [
                 'id'          => $row['id'],
+                'setId'       => $row['set_id'],
                 'country'     => $row['country'],
                 'tier'        => (int) $row['tier'],
                 'clubCount'      => (int) $row['club_count'],

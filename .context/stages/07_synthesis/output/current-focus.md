@@ -1,5 +1,76 @@
 # Current Focus
 
+## Landed 2026-11-17 — world packs become single-use SETS
+
+**Every world a player is given is now unique, and it can no longer exist without a squad.**
+A `WorldPackSet` is one starter squad plus a payload per league tier, generated together,
+claimed by exactly one club at `POST /api/initialize/starter`, and never served twice. Each
+live country keeps **two** claimable sets (`StarterConfig::$worldPackSetTarget`); every game
+initialisation claims one and queues a replacement, with `app:worldpack:maintain` sweeping
+hourly as a backstop.
+
+What it fixes, both of which were real rather than theoretical:
+
+- `country_world_pack_cache` was keyed `(country, tier)` with no owner, so every player in a
+  country got the byte-identical world.
+- The starter squad was a separate live draw that could fail `412` against a country whose
+  packs were perfectly warm — a gap between "the world exists" and "a squad to play it with
+  exists", at the first step of game init, with no client-side escape.
+
+**No API shape changed and `WORLD_PACK_VERSION` stays 7.** Two values moved under unchanged
+keys (packs are now per-device-distinct, and a player's own tier's `fixtures` no longer carries
+their club id); both are logged in `shared/api-backwards-compatibility.md` with their consumer
+checks, the second one definitive — the app types that field as not consumed and generates its
+own schedule. The compatibility property the whole change rests on is the **fallback**: a
+country with no stock behaves exactly as before, live draw and an uncached inline tier build.
+No new error codes, deliberately.
+
+Three things to know before working on it:
+
+- **`WorldPackCacheService` is entirely set-scoped and the old `(country, tier)` lookups are
+  deleted, not deprecated.** `findOneBy(['country','tier'])` would return an arbitrary one of a
+  country's sets, and the damage would be silent — tier 1 of one world and tier 2 of another,
+  every response a 200.
+- **Top-ups do not go through `WorldPackGenerationRun`.** That table is single-flight per
+  country and a top-up fires on every init, so they build inline on their own `worldpackset`
+  transport instead. Guards: a dispatch-side gate, a deficit re-read on drain, and a
+  per-country `pg_try_advisory_lock`.
+- **`app:worldpack:warm` now means "rebuild this country's buffer"** and `--tier` is a hard
+  error: a set has to be whole to be servable. `app:worldpack:topup` adds one without clearing.
+
+**And the squad is GENERATED, not drawn from the pool** — the change that removed the pool
+from this picture entirely. `StarterPackService::generatePack()` builds the founder's players,
+staff and scouts through `WorldPackClubGenerationService`, the same generator every NPC club
+goes through, so a set consumes nothing (verified: two full EN sets left `player`/`staff`
+counts unchanged) and can never be short. `InsufficientStarterPoolException` and the
+`MIN_POOL_SIZE` 412 are both unreachable — **a new game can no longer be refused for a thin
+pool**, which was the one failure in that flow with no client-side escape.
+
+**One deliberate balance change rides with it, and it is not gated on the wage model.** The
+tier band is a POTENTIAL range (`PlayerGenerationService::generate()`'s parameter is
+`$potentialRange`; ability is derived below it). The old draw filtered on `currentAbility`, so a
+drawn founder had its ABILITY in the band while its opponents had their POTENTIAL in it —
+founders were systematically stronger than the tier they were placed in. EN tier 8 now reads
+starter ability 1-3-5 / potential 2-7 against NPC ability 1-3-6 / potential 2-7. Logged in
+`shared/api-backwards-compatibility.md`.
+
+**Economy coverage closed at the same time.** `Economy\ServeTimePlayerPricer` now owns the
+"shared-pool rows are priced at serve time" rule, which previously lived inside
+`PlayerBrowseSerializer` and so reached only the two endpoints using it —
+`GET /api/players/youth` serialized through `PlayerSnapshotSerializer` and served the stored
+legacy figure. With the founder's squad priced at generation and youth priced at serve, no
+player surface is outside the model.
+
+**Still open — and the aim is now wrong rather than the code:**
+`StarterPackDiagnosticService`, `StarterPoolAuditService`, `app:starter-pack:check` and
+`app:starter-pool:audit` all turn on "can a starter pack be drawn for this country", which is
+now always yes. They were **deliberately not deleted**: they are the only SCHEDULED thing that
+tops the shared pool up at all (`app:pool:warm` is the general warmer and remains unscheduled),
+and the pool still feeds youth, foreign, scout search and market data. Deleting them would have
+quietly starved those four. Their floors and triggers need re-deriving from what actually
+consumes the pool now. Until then they over-queue rather than under-, which is the safe
+direction.
+
 ## Shipped inert, 2026-11-12 — the economy overhaul
 
 **Deployed is not live.** Eight migrations landed (`Version20261112160000` through `...210000`)

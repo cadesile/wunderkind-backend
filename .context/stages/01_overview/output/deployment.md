@@ -99,6 +99,16 @@ is a code change shipping through a normal deploy, sequenced between two admin a
 cache has no TTL, so skipping it leaves every already-cached country serving pre-flip wages
 indefinitely. `staleWorldPacks` on the admin dashboard is the completion signal.
 
+**Since 2026-11-17 a `WORLD_PACK_VERSION` bump does more than mark packs stale: it makes every
+existing `WorldPackSet` UNCLAIMABLE at once**, because the claim filters on the version. Until
+each live country is rebuilt, every new game there falls back to generating its world at request
+time — correct and complete, just slower for that player, and uncached. Two things make this
+self-healing rather than an outage: the hourly `app:worldpack:maintain` sweep restocks every
+live country without an operator, and the fallback needs no pool (squads are generated), so it
+cannot fail on supply. The figure to watch is **COUNTRIES BELOW TARGET** on the Worldpack cache
+screen, not `staleWorldPacks`, which counts payload rows rather than servable sets. Full
+mechanics: `07_synthesis/output/architecture-notes.md`'s "World pack sets".
+
 ## Rules
 
 1. Do most work directly on `development`, after confirming it's up to date

@@ -898,27 +898,64 @@ filename alone.
   is served by `idx_player_youth_draw`. Non-consuming by design. The per-tier
   home-nationality mix is read from `PoolConfig` rather than a const, so it is
   admin-tunable; `TIER_WEIGHTS` stays a const deliberately.
+- **`Economy\ServeTimePlayerPricer`** (added 2026-11-17) — the one place a SHARED-POOL player
+  is priced, from the browsing club's country and tier. Pool rows are stored at the legacy
+  figure because one row is served to every country at every tier, so there is nothing to price
+  them against at generation; generated per-country populations (world-pack NPC clubs, and since
+  2026-11-17 the founder's starter squad) are priced once at generation instead. Used by
+  `PlayerBrowseSerializer` (`/api/scout/search`, `/api/players/foreign`) and directly by
+  `/api/players/youth`. **It exists as its own class because the rule previously lived inside
+  `PlayerBrowseSerializer` and therefore reached only the endpoints using that serializer** —
+  `/api/players/youth` serializes through `PlayerSnapshotSerializer` and so served the stored
+  legacy figure, the last surface where a pool player escaped the economy. Returns the row
+  untouched in `legacy` mode, with no country/tier, and for an unauthored tier, which is what
+  lets it ship inert. **Never call it from inside `PlayerSnapshotSerializer`**:
+  `WorldPackSnapshotBuilder` delegates to that class and the pack is a frozen cached surface
+  gated by `WORLD_PACK_VERSION`. Owner ruling behind all of this:
+  `01_overview/output/tribal-knowledge.md`.
 - **`SocialPostRenderer`** — renders `SocialPostTemplate` content with
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
-- **`StarterPackService`** — assembles/grants a new club's starter pack
-  (players/staff/scouts) via `ClubInitializationService`. **Player draws are
-  gated on a `date_of_birth` cutoff** derived from
-  `PoolConfig::$playerFirstTeamAgeMin`: the pool deliberately spans youth ages
-  to supply `GET /api/players/youth`, so a draw filtered only on ability,
-  position and nationality handed new clubs 11-12 year olds. An under-age pool
-  now under-fills loudly (`starter_pack.initialize.position_underfilled`) and,
-  if nothing at all qualifies, raises `InsufficientStarterPoolException` —
-  a visible failure rather than a squad of children. **The assembled pack is
-  stored on `Club::$starterPackJson` in the same flush that consumes the pool**
-  — those snapshots are the only remaining copy of the squad, since the
-  `Player`/`Staff` rows are deleted on consume, so a response lost in transit
-  used to leave the club initialized with nothing and a permanent 409 on every
-  retry. `POST /api/initialize/starter` now replays that stored pack with
-  `replayed: true`.
-  `resolveAbilityRange(country, tier)` is public so the diagnostic below reports
-  the exact band the real draw will use.
+- **`StarterPackService`** — builds a new club's starter pack. **`generatePack(country, tier)`
+  GENERATES the squad through `WorldPackClubGenerationService` and touches no pool table**, so
+  a founder's club is built by the same generator as every NPC club around it. It was a DRAW
+  until 2026-11-17: it queried `player`/`staff` by ability band, position, age floor and
+  nationality and `em->remove()`d what it took. Three consequences of the change, each of which
+  removed a whole class of failure:
+    1. **Nothing can be short.** `InsufficientStarterPoolException` is no longer thrown from
+       here and `InitializeController::MIN_POOL_SIZE` is gone, so game init can no longer be
+       refused at its first step for a thin pool — the one failure in that flow with no
+       client-side escape. `WorldPackSet::$starterShortfall` was dropped for the same reason: a
+       column that can never be non-zero is a trap.
+    2. **Nothing is consumed or persisted**, so there is no longer anything to flush atomically
+       with the pack, and the method is safe to call speculatively. Verified on dev: generating
+       two full EN sets left `player` and `staff` counts unchanged at 6,482 / 9,784.
+    3. **A founder's squad is now on the SAME BASIS as its division.** The band
+       (`resolveAbilityRange()`) is applied to POTENTIAL by
+       `PlayerGenerationService::generate()` — its parameter is `$potentialRange`, and
+       `currentAbility` is the mean of attributes drawn under `abilityTarget x potential`, so it
+       lands below the band. The old draw filtered on `currentAbility BETWEEN band`, so a drawn
+       starter had its ABILITY in the band while its opponents had their POTENTIAL in it, which
+       made founders systematically stronger than the tier they were placed in. Measured on EN
+       tier 8 after the change: starter ability 1-3-5 / potential 2-7 against NPC ability 1-3-6
+       / potential 2-7. **This is a deliberate balance change and it is NOT gated on the wage
+       model** — see `shared/api-backwards-compatibility.md`.
+  Priced with the club's country and tier like an NPC club, where a pool-drawn starter player
+  was priced with neither and never re-priced on the way out (the starter pack goes through
+  `PlayerSnapshotSerializer`, which deliberately does not re-price). That closed the last
+  per-club gap in the economy. `generatePack()` stayed on this class rather than moving to a
+  service of its own because `StarterPackDiagnosticService` borrows `resolveAbilityRange()` from
+  it so the checker cannot drift from the code it checks.
+  Its only use of `ClubInitializationService` is the static
+  `countryToNationality()` — it does not assemble the club; `POST /api/club/initialize` does
+  that. The pack is still stored on `Club::$starterPackJson`, and those snapshots remain the
+  only copy of the squad (a generated player exists nowhere else), so a response lost in
+  transit would otherwise leave the club initialized with nothing and a permanent 409 on every
+  retry;
+  `POST /api/initialize/starter` replays the stored pack with `replayed: true`.
+  `resolveAbilityRange(country, tier)` is public so the diagnostic below reports the exact band
+  the real generation will use.
 - **`StarterPackDiagnosticService`** — read-only "can a starter pack be built
   for country X right now?" check, behind both `app:starter-pack:check <CODE>`
   and the admin screen `admin_starter_pack_check`. Counts only; creates and
@@ -935,6 +972,21 @@ filename alone.
   which exists for `StarterPoolAuditService` below — telling a band that is
   merely under-stocked from one whose every member is too young is the
   difference between "queue a top-up" and "an operator has to widen the band".
+> ⚠️ **`StarterPackDiagnosticService`, `StarterPoolAuditService`, `app:starter-pack:check` and
+> `app:starter-pool:audit` NO LONGER GOVERN STARTER PACKS (2026-11-17).** A starter squad is
+> generated, so "can a starter pack be built for this country?" is now always yes and the
+> verdict these four turn on means nothing for that question. **They were deliberately NOT
+> deleted**, because they are the only SCHEDULED thing that tops the shared pool up at all
+> (`app:pool:warm` remains the general warmer and is still unscheduled), and the pool still
+> feeds `GET /api/players/youth`, `GET /api/players/foreign`, `GET /api/scout/search` and market
+> data. Deleting them would have quietly starved those four surfaces. What is now wrong is their
+> AIM: the floors and the trigger are derived from a starter-pack draw that no longer happens,
+> so they should be re-derived from what actually consumes the pool. Until then they over-report
+> and over-queue rather than under-, which is the safe direction.
+>
+> The entries below describe them as they still behave; read the starter-pack framing in them as
+> historical.
+
 - **`StarterPoolAuditService`** — the unattended counterpart to an admin
   reading the check screen above and pressing **Warm**. Sweeps every country in
   `StarterConfig::enabledCountries`, runs the same diagnostic, and for any whose
@@ -1004,21 +1056,23 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 3 and must be bumped for *any* payload shape change,
+  **`WORLD_PACK_VERSION` is 7 and must be bumped for *any* payload shape change,
   not just the three snapshot builders.** It was missed when the trophy-sprite
   work (`Version20261018202041`, 2026-10-18) replaced the league block's
   `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
   cached packs went on serving the retired asset-slug shape — the cache has no
   TTL and this constant is the only thing that invalidates it. Second time that
   has happened (version 1's note records the all-10s personality matrices).
-  Bumping makes every cached row a miss. **`--force` is not the command for
-  that** — plain `app:worldpack:warm <CODE>` already rebuilds a stale-versioned
-  row, through `forceRebuild`'s atomic path (old entry dropped only once the new
-  payload is built), whereas `--force` in all-tiers mode calls
-  `deleteByCountry()` up front and leaves the country with no packs at all until
-  the run finishes. Warming is a **manual** process here, not part of the deploy;
-  the admin dashboard's `stalePacks` figure (`DashboardStatsService`, counting
-  `payload_version <> WORLD_PACK_VERSION`) is the signal for what still needs it.
+  **A bump now makes every existing SET unclaimable at once** (the claim filters on the
+  version), not merely a miss, so every live country needs rebuilding before it can serve a
+  pre-built world again — until then each falls back to the live draw. `app:worldpack:warm
+  <CODE>` is the rebuild, and `app:worldpack:maintain` restocks every live country
+  unattended, which is the one thing that makes a bump self-healing without an operator.
+  `--force` and `--tier` no longer exist: clearing the unclaimed stock is what warm always
+  does now (claimed sets are spared, so the old "country has no packs mid-run" hazard is
+  gone), and half a set is not servable. The admin dashboard's `stalePacks` figure
+  (`DashboardStatsService`, counting `payload_version <> WORLD_PACK_VERSION`) still counts
+  rows; the figure to watch is COUNTRIES BELOW TARGET on the Worldpack cache screen.
   Nothing breaks if it is never run — a stale pack is a miss, so it self-heals on
   the next request, and that one client pays the rebuild (measured: ~8s for all 8
   tiers of an 8-club country, ~18s for an 18-club one).
@@ -1026,25 +1080,70 @@ filename alone.
   Manager/Coach/Chairman (unfiltered draw) plus Director of Football/Facility
   Manager/Scouts (nationality-filtered with backfill, via `fillStaffRole()`/
   `fillScouts()`) — sized per league tier by
-  `StarterConfig::$npcSquadConfig`. Staff (all 5 roles) are pool-deleted on
-  consumption like players; Scouts are not (shared pool, like Agent) and are
-  surfaced in a new `scouts[]` array on each NPC club snapshot
-  (`buildClubSnapshot()`). See `docs/api/npc-club-staff-scouts.md`.
+  `StarterConfig::$npcSquadConfig`. **NPC players, staff AND scouts are all generated FRESH IN
+  MEMORY and never drawn from or deleted out of the shared pool** — this entry used to say
+  they were pool-deleted on consumption, which has not been true since
+  `WorldPackClubGenerationService` took the work over. **Since 2026-11-17 nothing in world
+  generation touches the pool at all**: the starter squad was the last thing that did, and it
+  is generated now too.
+
+  **`Agent` is the one shared population a pack still READS.** `agentRepository->findAll()`
+  feeds `selectBoundedAgentPool()`, and the chosen subset is referenced by the generated
+  players (`assignAgents()`) — referenced, never consumed or deleted, so one agent legitimately
+  represents players across many clubs and many packs. `worldPackPlayersPerAgent` is what stops
+  the DISTINCT agents in a pack scaling with the whole agent table.
+
+  Scouts are surfaced in a `scouts[]` array on each NPC club snapshot (`buildClubSnapshot()`).
+  See `docs/api/npc-club-staff-scouts.md`.
 - **`WorldOverviewService`** — builds world overview figures, consumed
   both by `GET /api/world/overview` and directly by `LandingController`
   for server-rendering.
-- **`WorldPackCacheService`** — caches per-country/tier "world pack" data
-  (`CountryWorldPackCache`). **`getOrBuild()` serializes a cache miss behind a
-  Postgres advisory lock on (country, tier) and re-checks under it.** Without
-  that, two concurrent `POST /api/initialize/league/{tier}` calls for the same
-  tier both missed, both ran the generator — which creates and then DQL-deletes
-  a whole tier of `Player`/`Staff` rows — and both inserted, so one died on
-  `uq_country_tier` with a 500 after doing all that work. The lock is
-  session-level (the generator flushes and clears several times and must not sit
-  in one long transaction), released in a `finally`, and degrades to running
-  unlocked if it cannot be taken, with the unique index as the backstop.
-  `isCached()` exposes whether a call would hit or build, for the per-response
-  logging on the tier endpoint.
+- **`WorldPackSetService`** — the reader's half of the world-pack buffer: claims a
+  `WorldPackSet` for a club, reads a tier out of one, counts a country's stock.
+  **`claimForClub()` returns null as a NORMAL answer**, meaning "this country has no stock",
+  and the caller falls back to the old live draw — that fallback is what keeps the whole
+  change backwards compatible, because a new refusal at the first step of game init is
+  unrecognisable to a shipped build and the init flow has no client-side escape. It does a
+  **reconcile read first**, not for tidiness: the claim is a raw UPDATE that commits on its
+  own and the club-side write is a separate flush, so a failure between the two would
+  otherwise have the retry claim a SECOND set and leak the first. `deficit()` counts
+  ready-and-claimable plus recently-BUILDING, the second half **time-bounded**
+  (`BUILD_STALE_AFTER`) because one worker killed mid-build would otherwise leave a row that
+  suppresses every future top-up for its country permanently. `deleteUnclaimed()` spares
+  CLAIMED sets — a device mid-initialisation still has tiers to fetch.
+- **`WorldPackSetTopUpService`** — adds ONE set, clears nothing; the unattended counterpart
+  of the admin regenerate. Dispatched on every game initialisation and by
+  `app:worldpack:maintain`. **Deliberately does not go through `WorldPackGenerationRun`**:
+  that table is single-flight per country, and a top-up fires on every init, so the collision
+  would be the common case rather than a race — and it would queue ~160 club messages of
+  routine restocking in front of an admin who just pressed Regenerate. It builds one whole set
+  inline on its own `worldpackset` transport instead, the same work `app:worldpack:warm` did in
+  one process, with `em->clear()` between tiers. Three guards, all needed: a cheap gate at the
+  dispatcher, a deficit **re-read on drain** (the clamp that makes the pipeline safe to re-run,
+  same reasoning as `TopUpStarterPoolMessageHandler`'s), and a per-country
+  `pg_try_advisory_lock` so a burst of 50 inits costs 49 instant no-ops. `rebuild()` is the
+  `app:worldpack:warm` path: clear unclaimed, then build N unconditionally.
+- **`WorldPackCacheService`** — **now entirely set-scoped**, and that is a correctness
+  requirement rather than a rename. It used to resolve rows through
+  `findOneBy(['country','tier'])`, correct for exactly as long as a country had one world; a
+  country now holds a buffer of sets, so that lookup would return an arbitrary one of them and
+  the damage would be silent — a client served tier 1 of one world and tier 2 of another, every
+  response a 200. `getOrBuild()`, `isCached()`, `forceRebuild()`, `allTiersCached()` and the
+  `pg_advisory_lock` that serialised cold builds are all **gone, not patched**: the lock existed
+  only so two cold callers could not both insert and collide on `uq_country_tier`, and the
+  no-set path now builds inline and writes nothing, so there is no insert left to race on.
+  What remains is `readTier()`, `hasTier()`, `allTiersPresent()`, `replaceWithPayload()`,
+  `deleteBySet()` and `prunePayloadsClaimedBefore()`.
+  **RETIRED, 2026-11-17 — do not reintroduce.** Until sets, a cache miss was serialized
+  behind a session-level `pg_advisory_lock` on (country, tier) and re-checked under it,
+  because two concurrent `POST /api/initialize/league/{tier}` calls for one tier both missed,
+  both ran the generator, and both inserted — one dying on `uq_country_tier` with a 500 after
+  doing all the work. That is gone because **the race is gone, not because it stopped
+  mattering**: payload rows are now written only inside a generation run (single-flight per
+  country) or a top-up (single-flight per country via its own advisory lock), and the no-set
+  request path builds its tier inline and writes nothing, so there is no insert left to
+  collide. A lock whose reason has evaporated is how the next reader concludes it must still
+  be load-bearing.
 - **`YouTubeFeedService`** — fetches/filters the YouTube channel feed
   (drops entries with an empty `<media:title>`).
 
@@ -1366,14 +1465,21 @@ and is not: re-authoring `wageScaleMicroPence` to make that table look sane woul
 real squad the band actually produces.
 
 **TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
-all. Per-country rows (world-pack clubs) are generated for a known country and tier, so they are
-priced at generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION`
-bump. Shared-pool rows are ONE row served to every country at every tier, so they are stored
-legacy and priced at serve time — in `PlayerBrowseSerializer` (re-priced from the ability curve)
-and `MarketDataService` (country x tier factor only, since a scout's pay comes from bands the
-model has no opinion about). **The pricing is deliberately NOT in `PlayerSnapshotSerializer`**,
-which `WorldPackSnapshotBuilder` also delegates to: re-pricing there would change cached pack
-content on every read with no version bump.
+all. Per-country rows are generated for a known country and tier, so they are priced at
+generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That
+population is world-pack NPC clubs **and, since 2026-11-17, the founder's own starter squad**,
+which used to be drawn from the pool and priced by neither mechanism — the last per-club gap.
+Shared-pool rows are ONE row served to every country at every tier, so they are stored legacy
+and priced at serve time, which is now **`Economy\ServeTimePlayerPricer`**: used by
+`PlayerBrowseSerializer` (`/api/scout/search`, `/api/players/foreign`) and by
+`/api/players/youth`, plus `MarketDataService` for staff and scouts (country factor only, since
+a scout's pay comes from bands the model has no opinion about). **The rule was extracted into
+its own class because living inside `PlayerBrowseSerializer` meant it reached only the endpoints
+that happened to use that serializer** — `/api/players/youth` serializes through
+`PlayerSnapshotSerializer` and so served the stored legacy figure, outside the economy and
+named by nothing. **The pricing is deliberately NOT in `PlayerSnapshotSerializer`**, which
+`WorldPackSnapshotBuilder` also delegates to: re-pricing there would change cached pack content
+on every read with no version bump.
 
 Staff pay under `turnover` reuses `GameConfig::$economyStaffRoleBandsPence` for BOTH jobs — the
 midpoint is the role's weight, the spread is how ability moves pay within the role — scaled so

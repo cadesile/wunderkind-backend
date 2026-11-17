@@ -16,7 +16,7 @@ constraints. Don't restate field lists here.
 - **Config/singleton:** `game_config`, `pool_config`, `starter_config`
 - **New-game setup:** `setup_quiz_question`, `setup_quiz_answer` (the onboarding quiz, which pays a `quiz_bonus` ledger entry)
 - **Location / land economy:** `country_profile` (natural PK `code`), `location`, `location_rival`, `land_plot`, `plot_hold`, `plot_claim`, `plot_claim_valuation`, `stadium_estimate`, `stadium_estimate_input`, `location_enrichment_run`, `location_enrichment_attempt`
-- **Misc/cache/analytics:** `country_world_pack_cache`, `live_telemetry_snapshot`
+- **Misc/cache/analytics:** `world_pack_set`, `country_world_pack_cache` (a child of it — keyed `(set_id, tier)`, NOT `(country, tier)`; see `07_synthesis/output/architecture-notes.md`'s "World pack sets"), `live_telemetry_snapshot`
 - **Messenger (infra, not domain):** `messenger_messages` — Symfony Messenger's Doctrine transport table, shared by the `async` and `failed` transports (differentiated by `queue_name`, not by table — see `config/packages/messenger.yaml`); first use of Messenger in this codebase, see `02_architecture/output/structure.md`
 
 ## The split rows (`*_squad`, `*_submission`, `*_audit`, `*_response_cache`)
@@ -352,9 +352,17 @@ one exception, and it is a real, confirmed bug, not a false lead:**
   Batch finders (`findActiveByPlots()`, `findClaimedByNames()`, `findByLocations()`,
   `findCurrentByLocations()`, `findByEstimates()`, `findByClaims()`) exist so the split
   rows do not trade a hydration cost for an N+1.
-- **`CountryWorldPackCacheRepository`** — `findForCountryAndTier`,
-  `findCachedTiers(..., payloadVersion)`, `deleteByCountry`,
-  `findAllSummaries` — cache invalidation/versioning.
+- **`CountryWorldPackCacheRepository`** — `findForSetAndTier`,
+  `findTiersForSet(..., payloadVersion)`, `deleteBySet`,
+  `deletePayloadsForSetsClaimedBefore`, `findAllSummaries` — all SET-scoped since
+  `Version20261117120000`. `findForCountryAndTier`/`findCachedTiers`/`deleteByCountry` are
+  gone and must not come back: `(country, tier)` stopped being unique when a country began
+  holding a buffer of sets, so a `findOneBy` on it returns an arbitrary world.
+- **`WorldPack\WorldPackSetRepository`** — `claimForClub` (one atomic
+  `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING id`, which is what
+  stops two devices being handed the same set), `findClaimedByClub` (the reconcile read),
+  `countReadyUnclaimed`, `countBuildingSince` (time-bounded), `deleteUnclaimed`,
+  `findClaimedBefore`, `summariesByCountry`.
 - **`Competition\ActiveCompetitionRepository`** — `findOpenForTemplate`
   (enforces the one-open-per-template invariant at the app layer too).
 - **`Competition\CompetitionRoundRepository`** — `findDueForDraw`/

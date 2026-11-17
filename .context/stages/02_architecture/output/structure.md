@@ -37,12 +37,22 @@ restated here.
   (`MESSENGER_TRANSPORT_DSN`, `auto_setup=1` so its table self-creates,
   though the migration already creates it), `in-memory://` under
   `when@test` so functional tests can assert dispatched envelopes
-  without a real consumer. Since then two more sub-namespaces have been
-  added, each with its own transport: `WorldPack/` (`worldpack`, added
-  2026-09-28) and `Pool/` (`pool`, added 2026-10-26 —
+  without a real consumer. Since then several sub-namespaces have been
+  added. `WorldPack/` carries **three** messages across **two** transports:
+  `WarmWorldPackTierMessage` + `WarmWorldPackClubMessage` on `worldpack`
+  (added 2026-09-28 — the admin regenerate's per-tier/per-club fan-out),
+  and `TopUpWorldPackSetMessage` on `worldpackset` (added 2026-11-17 —
+  one message restocks a country's world-pack-set buffer by building a
+  whole set inline, dispatched on EVERY game initialisation). The two are
+  split because the run table enforces one active run per country while a
+  top-up fires per signup, so sharing would reject the common case; the
+  full account is in `07_synthesis/output/architecture-notes.md`'s
+  "World pack sets". `Pool/` (`pool`, added 2026-10-26) carries
   `TopUpStarterPoolMessage`, one bounded chunk of pool generation for one
   nationality, queued by `app:starter-pool:audit`; see
-  `StarterPoolAuditService` in `04_interfaces/output/services.md`).
+  `StarterPoolAuditService` in `04_interfaces/output/services.md` — and
+  note that since 2026-11-17 the pool no longer supplies squads at all,
+  so that sweep's starter-pack framing is historical.
   Drained by `docker/messenger-consume.sh`
   every 1 minute (see Deployment wiring below) — not a long-running
   worker, matching this codebase's existing cron-driven-command
@@ -115,12 +125,19 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `devwithlando` image, not this one);
   `ENTRYPOINT ["/usr/local/bin/jwt-entrypoint.sh"]`,
   `CMD ["/usr/bin/supervisord", ...]`. Bakes a busybox cron table into the
-  image (`/var/spool/cron/crontabs/root`) with 10 scheduled jobs
-  (`pool-warm.sh`/`worldpack-warm.sh`, every 6h, removed 2026-09-28 — World
-  Pack Cache generation no longer draws from the shared pool, so there's
-  nothing left for a scheduled top-up to feed; `app:pool:warm`/
-  `app:worldpack:warm` remain real, manually-runnable commands, just no
-  longer scheduled — see `docs/deploy/hetzner.md`'s Cron section):
+  image (`/var/spool/cron/crontabs/root`). **Counted 2026-11-17: 27 crontab
+  lines.** This paragraph has stated a job COUNT since it was written and the
+  figure went stale repeatedly; prefer `grep -cE "^    '[0-9*]" Dockerfile`
+  over trusting a number here.
+  (`pool-warm.sh`/`worldpack-warm.sh`, every 6h, removed 2026-09-28 — world
+  pack generation does not draw from the shared pool, and since 2026-11-17
+  neither does the starter squad, so nothing in world generation feeds off
+  a scheduled pool warm. **The pool itself is still real and still used** —
+  `GET /api/players/youth`, `/api/players/foreign`, `/api/scout/search` and
+  market data all serve it, which is why `starter-pool-audit.sh` below is
+  still scheduled; `app:pool:warm`/`app:worldpack:warm` remain real,
+  manually-runnable commands — see `docs/deploy/hetzner.md`'s Cron
+  section):
   `leaderboards-generate.sh` and `competition-send-round-reminders.sh`
   (every 5 min — the latter pushes `ROUND_RESOLVING_SOON` to `DRAWN`
   rounds nearing `matchesResolveAt`, see `CompetitionRoundReminderService`),
@@ -135,23 +152,46 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   `CompetitionResultsService` in `04_interfaces/output/services.md`),
   `competition-auto-fill-spoof-entrants.sh`
   (dev/testing convenience added 2026-09-20 — see
-  `CompetitionAutoFillService`), `messenger-consume.sh`,
-  `worldpack-consume.sh`, and `pool-consume.sh` (all six every 1 min — the
-  finest auto-fill delay is 5 min; the last three drain separate Messenger
-  transports, `async` for push notifications (added 2026-09-19), `worldpack`
-  for World Pack Cache tier/club generation (added 2026-09-28, split out
-  from `async` once a country regenerate's 100+ DB-heavy club-generation
-  messages started delaying push delivery by sharing one queue) and `pool`
-  for starter-pool top-up chunks (added 2026-10-26, split off for the same
-  reason — see `config/packages/messenger.yaml`)), plus
-  `starter-pool-audit.sh` (hourly at :35, added 2026-10-26 — runs
-  `app:starter-pool:audit`, which sweeps every enabled country's
-  starter-pack verdict and queues `pool` chunks for any that fall short;
-  queue-only, so the tick itself is cheap. Note this is a deliberate,
-  narrow exception to "pool warming is no longer cron-scheduled" — it acts
-  only on a country that cannot currently serve a starter pack, never as a
-  blanket warm; see `01_overview/output/deployment.md` and
-  `docs/deploy/hetzner.md`).
+  `CompetitionAutoFillService`), and **nine `*-consume.sh` drainers, all every
+  1 min**: `messenger-consume.sh` (`async`,
+  push notifications, added 2026-09-19), `worldpack-consume.sh` (added
+  2026-09-28, split out from `async` once a country regenerate's 100+
+  DB-heavy club-generation messages started delaying push delivery by
+  sharing one queue), **`worldpackset-consume.sh`** (added 2026-11-17 —
+  world-pack-SET top-ups; `--limit=3`, not 200, because one message builds a
+  whole country in 8-18s, so a high limit would hold the worker past its own
+  `--time-limit`; its `flock` is load-bearing rather than belt-and-braces,
+  since without it a build outrunning the minute gets a second full country
+  generation stacked on it every minute), `pool-consume.sh` (added
+  2026-10-26), plus `competition-`, `enrichment-`, `friendly-`, `suggestion-`
+  and `clubsale-consume.sh`. See `config/packages/messenger.yaml` for why
+  each transport is separate.
+  **Nine drainers against eleven transports, and the two gaps are both
+  deliberate** — worth knowing before concluding a queue is unprocessed:
+  `failed` is never drained (it is the dead-letter store), and
+  **`registration` is drained by a long-running supervisord worker rather
+  than a cron** (`docker/supervisord.conf`:
+  `messenger:consume registration --time-limit=3600 --memory-limit=256M`).
+  That worker is the SINGLE exception to this codebase's
+  cron-driven-command convention, so "every transport has a `docker/*.sh`
+  wrapper on a 1-minute cron" is nearly true and misleading in exactly one
+  place. `StoreEntrantSubmissionMessage` is what routes there.
+  Then two hourly sweeps: `starter-pool-audit.sh` (at :35, added 2026-10-26 —
+  runs `app:starter-pool:audit`, which queues `pool` chunks for any country
+  whose starter-pack verdict falls short; queue-only, so the tick is cheap.
+  **Its starter-pack framing is historical since 2026-11-17**: starter squads
+  are generated, so that verdict is always "yes" and no longer governs
+  anything. It is kept because it is the only SCHEDULED thing that tops the
+  pool up at all, and the pool still feeds youth/foreign/scout-search/market
+  data; its floors need re-deriving from those consumers) and
+  **`worldpack-maintain.sh`** (at :20, added 2026-11-17 — runs
+  `app:worldpack:maintain`, which tops every LIVE country up to its
+  world-pack-set target and prunes the payloads of long-claimed sets. The
+  per-init dispatch is deliberately best-effort, so this is its backstop, and
+  it is the only thing that restocks after a deploy or a `WORLD_PACK_VERSION`
+  bump — which makes every existing set unclaimable at once. Offset to :20 to
+  stay clear of both the :00 cluster and :35, which queues the pool work).
+  See `01_overview/output/deployment.md` and `docs/deploy/hetzner.md`.
 - **`docker/supervisord.conf`** — runs `php-fpm`, `nginx`, and `crond`
   together inside the container, all logging to stdout/stderr.
 - **`docker-compose.dev.yml` / `docker-compose.prod.yml`** — near-identical
@@ -249,9 +289,13 @@ the rest small**: it relocated 2,415 lines with zero test edits, which decoupled
 diff from every design decision after it. `NamePoolProvider` is the one memoised provider in
 the codebase and its docblock says why — see the services stage.
 
-**Messenger now has SIX transports.** `enrichment` was added alongside `async`,
-`worldpack`, `pool`, `competition` and `registration`, with the same justification each
-of those carries: a sweep is up to 865 external API calls of unpredictable latency and
+**Messenger has ELEVEN transports, enumerated 2026-11-17**: `async`, `failed`, `worldpack`,
+`worldpackset`, `pool`, `competition`, `registration`, `enrichment`, `friendly`, `suggestion`,
+`clubsale`. This sentence read "SIX" until then and had been stale across four separate
+additions — `friendly`, `suggestion`, `clubsale` and `worldpackset` — so **count them in
+`config/packages/messenger.yaml` rather than trusting a figure here**. The pattern every one of
+them follows is the point: a new transport exists whenever a workload's latency profile would
+otherwise damage an unrelated one. `enrichment` carries the same justification: a sweep is up to 865 external API calls of unpredictable latency and
 must not get in front of latency-sensitive competition rounds. It is the only queue whose
 work costs money per message, which is why
 `LocationEnrichmentOrchestrator::TRANSPORT_QUEUE` counts undrained rows before allowing

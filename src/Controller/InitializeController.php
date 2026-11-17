@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
-use App\Exception\InsufficientStarterPoolException;
 use App\Repository\LeagueRepository;
-use App\Repository\PlayerRepository;
 use App\Service\ClubInitializationService;
 use App\Service\StarterPackService;
 use App\Service\WorldInitializationService;
 use App\Service\WorldPackCacheService;
+use App\Message\WorldPack\TopUpWorldPackSetMessage;
+use App\Service\WorldPack\WorldPackSetService;
+use App\Service\WorldPack\WorldPackSetTopUpService;
+use Symfony\Component\Messenger\MessageBusInterface;
 use App\Service\ClubResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -24,15 +26,15 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/initialize')]
 class InitializeController extends AbstractController
 {
-    private const MIN_POOL_SIZE = 500;
-
     public function __construct(
         private readonly ClubResolver               $clubResolver,
-        private readonly PlayerRepository           $playerRepository,
         private readonly LeagueRepository           $leagueRepository,
         private readonly StarterPackService         $starterPackService,
         private readonly WorldInitializationService $worldInitializationService,
         private readonly WorldPackCacheService      $worldPackCacheService,
+        private readonly WorldPackSetService        $worldPackSetService,
+        private readonly WorldPackSetTopUpService   $worldPackSetTopUpService,
+        private readonly MessageBusInterface        $messageBus,
         private readonly EntityManagerInterface     $em,
         private readonly LoggerInterface            $logger,
     ) {}
@@ -136,31 +138,67 @@ class InitializeController extends AbstractController
             );
         }
 
-        $poolCount = $this->playerRepository->countInPool();
-        if ($poolCount < self::MIN_POOL_SIZE) {
-            $this->logger->error('initialize.starter.global_pool_too_small', [
-                'clubId' => (string) $club->getId(),
-                'poolCount' => $poolCount,
-                'minPoolSize' => self::MIN_POOL_SIZE,
+        // ── Claim a pre-generated set, and fall back to the live draw if there is none ────
+        //
+        // A set is a whole world — the starter squad below PLUS a payload for every league
+        // tier — generated as one unit and claimable by exactly one club. Claiming it here
+        // rather than at the first tier call is what makes the rest of initialisation
+        // coherent and retry-safe: `tier()` reads from the club's claimed set, so a retried
+        // tier call returns the same payload and a device's tiers can never be mixed across
+        // two generation runs.
+        //
+        // A null claim is a NORMAL answer, not an error. It means this country has no stock
+        // right now, and the club gets exactly what every club got before sets existed: a
+        // live draw here, and tiers built inline. **This fallback must stay.** A new refusal
+        // at the first step of game init is unrecognisable to an already-shipped build and
+        // there is no client-side escape — see
+        // .context/shared/api-backwards-compatibility.md point 6.
+        //
+        // Claimed on $club->getCountry() AFTER the ?country= override above has been applied,
+        // because that override is the client's authority on which country this save is in.
+        $country = (string) $club->getCountry();
+        $set     = $this->worldPackSetService->claimForClub($club, $country);
+
+        if ($set !== null) {
+            // One flush for all three writes, preserving the guarantee
+            // Club::$starterPackJson was introduced for: the pack is recorded at the same
+            // moment the club is marked initialised, so a response lost in transit can always
+            // be replayed and never leaves the club initialised with nothing.
+            $ampStarter = $set->getStarterPackJson();
+            $club->setStarterPackJson($ampStarter);
+            $club->setStarterInitializedAt(new \DateTimeImmutable());
+            $this->em->flush();
+
+            $this->logger->info('initialize.starter.served_from_set', [
+                'clubId'  => (string) $club->getId(),
+                'country' => $country,
+                'setId'   => (string) $set->getId(),
             ]);
-            return $this->json(
-                ['error' => "Player pool too small ({$poolCount} players). Run GenerateMarketDataCommand first."],
-                Response::HTTP_PRECONDITION_FAILED
-            );
+
+            $this->dispatchTopUp($country);
+
+            return $this->json(['ampStarter' => $ampStarter]);
         }
 
-        try {
-            $ampStarter = $this->starterPackService->initialize($club);
-        } catch (InsufficientStarterPoolException $e) {
-            // Club::$starterInitializedAt was deliberately left untouched on this path, so the
-            // client can safely retry once the pool has been warmed for this country.
-            $this->logger->error('initialize.starter.insufficient_pool', [
-                'clubId' => (string) $club->getId(),
-                'country' => $club->getCountry(),
-                'message' => $e->getMessage(),
-            ]);
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_PRECONDITION_FAILED);
-        }
+        // ── The live fallback ─────────────────────────────────────────────────────────────
+        //
+        // Reached when the country has no ready set. It GENERATES the squad rather than drawing
+        // it from the shared pool, exactly as the pre-generated sets do, so the two paths differ
+        // only in when the work happens and never in where the players came from.
+        //
+        // There is nothing left to refuse on. The `MIN_POOL_SIZE` guard and the
+        // `412 InsufficientStarterPoolException` that used to sit here are both gone, because
+        // generation has no supply to be short of — a new game can no longer be refused for a
+        // thin pool, which was the one failure in this flow with no client-side escape.
+        $ampStarter = $this->starterPackService->initialize($club);
+
+        $this->logger->info('initialize.starter.served_from_live_generation', [
+            'clubId'  => (string) $club->getId(),
+            'country' => $country,
+            'hint'    => 'no ready set for this country; squad generated now, tiers built inline and uncached',
+        ]);
+
+        $this->dispatchTopUp($country);
 
         return $this->json(['ampStarter' => $ampStarter]);
     }
@@ -275,14 +313,33 @@ class InitializeController extends AbstractController
             );
         }
 
-        $cacheHit = $this->worldPackCacheService->isCached($country, $tier);
         $startedAt = microtime(true);
+        $set       = $club->getWorldPackSet();
 
-        $payload = $this->worldPackCacheService->getOrBuild(
-            $country,
-            $tier,
-            fn() => $this->worldInitializationService->buildTierPack($club, $country, $tier)
-        );
+        // Served from the club's own set: the ordinary path, and the one that makes a retry
+        // safe. The payload is whatever that set was built with, so re-POSTing this tier
+        // returns the same bytes and the device's tiers all come from one generation.
+        $payload = $set !== null
+            ? $this->worldPackSetService->tierPayload($set, $tier)
+            : null;
+
+        $servedFromSet = $payload !== null;
+
+        if (!$servedFromSet) {
+            // Built inline and DELIBERATELY NOT CACHED.
+            //
+            // Two clubs reach this: one that predates sets, and one whose country had no stock
+            // when it claimed. Writing the result to the cache would need a row keyed on
+            // (country, tier) — which is exactly the ambiguity sets removed, since a country
+            // now holds several worlds and nothing could say which this row belonged to.
+            //
+            // The cost is that a retry rebuilds rather than replaying: ~2-4s, the same as any
+            // cold tier before this change, and the client's retry is idempotent in the only
+            // sense that matters here — it gets a valid, complete tier. Not writing anything
+            // is also why the advisory lock that used to serialise cold builds is gone: there
+            // is no insert left to race on.
+            $payload = $this->worldInitializationService->buildTierPack($club, $country, $tier);
+        }
 
         // What this tier actually weighs, per response.
         //
@@ -298,7 +355,12 @@ class InitializeController extends AbstractController
             'clubId'       => (string) $club->getId(),
             'country'      => $country,
             'tier'         => $tier,
-            'cacheHit'     => $cacheHit,
+            // Kept under its original key: `cacheHit` has always meant "did this response
+            // avoid a build", and being served from a set is exactly that. `servedFromSet`
+            // and `setId` are additive, so existing log queries keep working.
+            'cacheHit'     => $servedFromSet,
+            'servedFromSet' => $servedFromSet,
+            'setId'        => $set !== null ? (string) $set->getId() : null,
             'durationMs'   => (int) round((microtime(true) - $startedAt) * 1000),
             'clubs'        => count($payload['clubs'] ?? []),
             'players'      => $this->countNested($payload, 'players'),
@@ -307,19 +369,49 @@ class InitializeController extends AbstractController
             'payloadBytes' => strlen((string) json_encode($payload)),
         ]);
 
-        // Check if all tiers are now cached → mark world as fully initialized
-        if (!$club->isWorldInitialized()) {
+        // Mark the world fully initialized once THIS CLUB'S set holds every tier.
+        //
+        // It used to ask whether the COUNTRY was fully cached, which a club could satisfy on
+        // the strength of packs generated for somebody else — so the flag could be set before
+        // this device had fetched anything. Asking about the club's own set is the question
+        // the field's name always implied. A club with no set (the inline path above) never
+        // gets it set, which is correct: there is no stored world to be complete.
+        if (!$club->isWorldInitialized() && $set !== null) {
             $allTiers = array_map(
                 fn($l) => $l->getTier(),
                 $this->leagueRepository->findByCountry($country)
             );
-            if ($this->worldPackCacheService->allTiersCached($country, $allTiers)) {
+            if ($this->worldPackCacheService->allTiersPresent($set, $allTiers)) {
                 $club->setWorldInitializedAt(new \DateTimeImmutable());
                 $this->em->flush();
             }
         }
 
         return $this->json(['tier' => $tier, 'data' => $payload]);
+    }
+
+    /**
+     * Asks for $country to be restocked, if it is short.
+     *
+     * Gated on `needsTopUp()` so the common path — a healthy country — writes nothing to the
+     * queue at all. Wrapped, because a transport failure must never turn a successful
+     * initialisation into an error response: the hourly `app:worldpack:maintain` sweep is the
+     * backstop for exactly this, so a lost message costs at most one slow init later.
+     */
+    private function dispatchTopUp(string $country): void
+    {
+        try {
+            if (!$this->worldPackSetTopUpService->needsTopUp($country)) {
+                return;
+            }
+
+            $this->messageBus->dispatch(new TopUpWorldPackSetMessage($country));
+        } catch (\Throwable $e) {
+            $this->logger->error('initialize.starter.topup_dispatch_failed', [
+                'country' => $country,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** Total entries in `$key` across every club in a tier payload. */

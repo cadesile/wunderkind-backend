@@ -27,4 +27,15 @@ class WorldPackGenerationTierRunRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** @return \App\Entity\WorldPack\WorldPackGenerationTierRun[] Every tier run building one set. */
+    public function findBySet(\App\Entity\WorldPack\WorldPackSet $set): array
+    {
+        return $this->createQueryBuilder('t')
+            ->where('t.set = :set')
+            ->setParameter('set', $set)
+            ->orderBy('t.tier', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }
