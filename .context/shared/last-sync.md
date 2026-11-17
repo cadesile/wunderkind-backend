@@ -5,6 +5,51 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Staff pay gets a tier dimension; WORLD_PACK_VERSION 7 -> 8 (2026-11-17)**, on top of commit
+  `8ff2e5fd` (branch `development`). **Stages touched:** 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`services.md`), 07_synthesis (`architecture-notes.md`,
+  `current-focus.md`), shared (`api-backwards-compatibility.md`, this file).
+
+  Reported from a tier-8 save: staff -£1,000/wk against -£165/wk for the whole squad. Two
+  pre-existing causes, neither from the world-pack work — that change only made them visible by
+  moving the squad onto the tier band.
+
+  1. **Staff ability was never tier-banded.** `StaffGenerationService::build()` rolled
+     `random_int(4, 75)` globally while already RECEIVING `$country` and `$tier` — it just never
+     used them for the ability roll. Ability drives `staffMultiplier` (2.0-12.0 on dev), so that
+     alone was a 6x swing. Now every per-club caller passes the same band its players came from.
+  2. **Legacy staff pay had no tier dimension at all.** The role bands are single absolutes, so
+     they can only be right at one tier, while a legacy player's wage scales with a per-tier
+     ability. New `Economy\TierBandScaleResolver` scales the band by
+     `midpoint(tier) / midpoint(tier 1)` from the already-authored `league_ability_ranges`.
+
+  Five things worth carrying forward:
+
+  1. **`EconomyScaleResolver` cannot be used under `legacy`** — it resolves from authored
+     turnover and returns `isResolvable === false` on every deployed box. Anything that needs a
+     tier scalar under the model actually running has to use the ability ladder instead, which
+     is also the axis players scale on, so the two move together by construction.
+  2. **The scaling goes on the BAND, never inside `legacyStaffPence()`.**
+     `WageModelLegacyParityTest` pins that method byte-for-byte by passing a base straight in;
+     scaling beforehand left it untouched and that file passes with only a constructor argument
+     added. Moving it inside is the refactor its docblock forbids.
+  3. **It needed a `WORLD_PACK_VERSION` bump (7 -> 8)**, because `buildStaffSnapshot()` bakes
+     `weeklySalary` into cached packs — a CONTENT change at an unchanged shape. Every
+     `WorldPackSet` became unclaimable at once; `app:worldpack:maintain` restocks unattended.
+  4. **The kill switch ships ON**, deliberately against this repo's ship-inert habit: that habit
+     is for changes which are untuned, and this one is wrong. It stays a column because the
+     figure is cached and therefore has to be reversible.
+  5. **A constructor argument on a widely-constructed service costs nine test files.**
+     `WageModelResolver` is final and cannot be doubled, so every test builds a real one; adding
+     the resolver broke 22 tests across files that had nothing to do with staff pay. Grep for
+     `WageModelResolver(` — not `new WageModelResolver(` — before assuming the list is complete,
+     because several sites use a leading FQCN or split the call across lines.
+
+  Verified: EN staff average £1,116/wk at tier 1, £240 at tier 4, £18.88 at tier 8; a founder's
+  staff total £233/wk against £4,852/wk of players. `app:economy:wage-table` reports **18
+  findings both with and without the change** (all pre-existing: unauthored turnover, plus the
+  two `bankruptcyDeductionTiers` rows already recorded as open), so it gained no new finding.
+
 - **`.context` audit pass over world pack + starter pack generation (2026-11-17), on top of
   commit `e9d81c2a`** (branch `development`). **Stages touched:** CONTEXT.md, 01_overview
   (`deployment.md`), 02_architecture (`structure.md`), 03_data (`schema.md`, `entities.md`,

@@ -71,6 +71,7 @@ final class WageModelResolver
     public function __construct(
         private readonly GameConfigRepository $gameConfigRepository,
         private readonly EconomyScaleResolver $scaleResolver,
+        private readonly TierBandScaleResolver $tierBandScale,
     ) {}
 
     public function model(?GameConfig $config = null): EconomyWageModel
@@ -224,6 +225,36 @@ final class WageModelResolver
         }
 
         [$min, $max] = $this->staffRoleBand($role, $config);
+
+        // ── The tier ladder, applied to the BAND and not inside legacyStaffPence() ────────
+        //
+        // The role bands are single absolute figures, so they can only be right at one tier.
+        // Left flat, a tier-8 chairman costs £400-1,200/wk against a whole squad on ~£165 —
+        // because a legacy PLAYER's wage scales with ability and ability is per-tier, while a
+        // legacy staff wage had no tier dimension at all.
+        //
+        // WHY HERE AND NOT INSIDE legacyStaffPence(): that method is pinned byte-for-byte by
+        // WageModelLegacyParityTest, which passes a base in directly. Scaling the band before
+        // it leaves the pinned arithmetic untouched, so the parity test keeps passing
+        // unmodified — which is the proof that `legacy` still means what it meant. Moving this
+        // inside that method is the refactor its own docblock forbids.
+        //
+        // The scalar is the tier's authored ability-band midpoint over the top tier's, so
+        // staff and players move on the SAME axis by construction. See TierBandScaleResolver
+        // for why EconomyScaleResolver cannot be used (it needs turnover nobody has authored).
+        if ($config->isEconomyStaffTierScalingEnabled() && $country !== '' && $tier > 0) {
+            $scale = $this->tierBandScale->scaleFor($country, $tier);
+
+            // Floor each END of the band rather than the drawn figure, so the band stays
+            // ordered and `random_int` cannot be handed min > max.
+            $floor = $config->getEconomyStaffTierFloorPence();
+            $min   = max($floor, (int) round($min * $scale));
+            $max   = max($floor, (int) round($max * $scale));
+
+            if ($min > $max) {
+                [$min, $max] = [$max, $min];
+            }
+        }
 
         return $this->legacyStaffPence(random_int($min, $max), $ability, $config);
     }

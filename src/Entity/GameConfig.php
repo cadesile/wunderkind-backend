@@ -2303,6 +2303,46 @@ class GameConfig
         'chairman'             => [20000, 60000],
     ];
 
+    /**
+     * Whether a staff member's pay is scaled DOWN by how far below the top tier their club is.
+     *
+     * The role bands above are a single absolute figure per role, which can only ever be right
+     * at one tier — the same defect the youth scholarship had, where a flat £250 was 1.97x an
+     * average tier-8 wage AND 0.19% of an average tier-1 wage. For staff it surfaced as a
+     * tier-8 club paying ~£1,000/wk in staff against ~£165/wk for its entire squad: players are
+     * priced off an ability band that IS per-tier, staff were not priced by tier at all.
+     *
+     * ON by default, because the un-scaled behaviour is agreed to be wrong rather than merely
+     * un-tuned. It is a column rather than a constant so it can be switched off on a box that
+     * needs the old figures back without a deploy — and the switch is what keeps this
+     * reversible, since the scaling is baked into cached world packs.
+     *
+     * Applies to the LEGACY model only. Under `turnover`, `turnoverStaffPence()` already scales
+     * the band by the tier's real turnover, which is strictly better; this is the ladder that
+     * lets `legacy` behave sanely until that model is switched on.
+     */
+    #[ORM\Column(options: ['default' => true])]
+    private bool $economyStaffTierScalingEnabled = true;
+
+    public function isEconomyStaffTierScalingEnabled(): bool { return $this->economyStaffTierScalingEnabled; }
+    public function setEconomyStaffTierScalingEnabled(bool $v): static { $this->economyStaffTierScalingEnabled = $v; return $this; }
+
+    /**
+     * The least a staff member may be paid per week once the tier ladder has been applied, in
+     * pence. Default £5/week.
+     *
+     * Without it the bottom of the coach band at tier 8 lands near £1.38/week, which reads as
+     * broken rather than as cheap. Floor before cap, for the reason the youth scholarship
+     * records: the floor is a preference and the cap is the invariant.
+     *
+     * 0 disables the floor rather than flooring at nothing.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 500])]
+    private int $economyStaffTierFloorPence = 500;
+
+    public function getEconomyStaffTierFloorPence(): int { return $this->economyStaffTierFloorPence; }
+    public function setEconomyStaffTierFloorPence(int $v): static { $this->economyStaffTierFloorPence = max(0, $v); return $this; }
+
     /** @return array<string, array{int, int}> */
     public function getEconomyStaffRoleBandsPence(): array { return $this->economyStaffRoleBandsPence; }
 

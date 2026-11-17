@@ -1507,6 +1507,16 @@ history would make a club's ceiling depend on when an operator clicked save.
 row, because reconstructing it from a timestamp ordering breaks the first time
 two changes land in the same second.
 
+**`GameConfig` gained two staff-pay columns on 2026-11-17** (`Version20261117150000`):
+`economyStaffTierScalingEnabled` (bool, **default true**) and `economyStaffTierFloorPence`
+(int, default 500). Together they give `legacy` staff pay a tier dimension it never had — the
+role bands are single absolutes and could only be right at one tier, so a tier-8 club paid
+~£1,000/wk in staff against ~£165/wk for its squad. The switch ships ON, which is NOT this
+repo's usual ship-inert pattern: that pattern is for changes which are merely untuned, and this
+one is agreed to be wrong. It stays a column rather than a constant because the figure is baked
+into cached packs and therefore has to be reversible. See
+`04_interfaces/output/services.md`'s `WageModelResolver` and `TierBandScaleResolver` entries.
+
 ## Misc / cache / analytics
 
 - **`WorldPackSet`** (table `world_pack_set`, added `Version20261117120000`) — ONE

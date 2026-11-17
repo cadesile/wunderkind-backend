@@ -898,6 +898,20 @@ filename alone.
   is served by `idx_player_youth_draw`. Non-consuming by design. The per-tier
   home-nationality mix is read from `PoolConfig` rather than a const, so it is
   admin-tunable; `TIER_WEIGHTS` stays a const deliberately.
+- **`Economy\TierBandScaleResolver`** (added 2026-11-17) — how far below the top of the
+  pyramid a tier sits, as a fraction: `midpoint(tier) / midpoint(tier 1)` over
+  `starter_config.league_ability_ranges`. **It exists because `EconomyScaleResolver` cannot be
+  used under `legacy`** — that one resolves from authored TURNOVER and returns
+  `isResolvable === false` on every deployed box, so everything depending on it is inert under
+  the model every box is actually running. The ability ladder is authored everywhere, because
+  it is what generates players, and it is **the same axis a legacy player's wage scales on** —
+  so scaling staff by it makes staff and players move together by construction rather than via
+  a second table someone has to keep in step. Returns 1.0 (no scaling) for tier 1, an unknown
+  tier, or an unresolvable anchor; never above 1.0, because the anchor is the top tier and a
+  mistake should read as "no discount", not "a premium". Its midpoint follows
+  `WorldInitializationService::resolveAbilityRange()`'s precedence (`min > 0`, not `isset`) —
+  `StarterPackService`'s copy disagrees on a zeroed row, a pre-existing divergence noted in the
+  class.
 - **`Economy\ServeTimePlayerPricer`** (added 2026-11-17) — the one place a SHARED-POOL player
   is priced, from the browsing club's country and tier. Pool rows are stored at the legacy
   figure because one row is served to every country at every tier, so there is nothing to price
@@ -917,6 +931,18 @@ filename alone.
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
+- **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
+  `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
+  Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,
+  4-75 on dev) whatever the tier, so the bottom of the pyramid drew managers from the same
+  distribution as the top — and since ability drives `staffMultiplier` (2.0 up to 12.0 on dev)
+  that was also a 6x swing in pay. Players never had this problem; their band has always been
+  per-tier. Every per-club caller now passes the SAME band its players were generated from
+  (`WorldPackClubGenerationService::generateStaff()`, and through it
+  `WorldInitializationService`, `WarmWorldPackClubMessageHandler` and `StarterPackService`).
+  Absent, the global range still applies, which is correct for the shared pool: a market coach
+  has no tier to be banded against. Measured effect on EN tier 8: average staff ability fell
+  from a 4-75 draw to 4.
 - **`StarterPackService`** — builds a new club's starter pack. **`generatePack(country, tier)`
   GENERATES the squad through `WorldPackClubGenerationService` and touches no pool table**, so
   a founder's club is built by the same generator as every NPC club around it. It was a DRAW
@@ -1056,7 +1082,7 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 7 and must be bumped for *any* payload shape change,
+  **`WORLD_PACK_VERSION` is 8 and must be bumped for *any* payload shape change,
   not just the three snapshot builders.** It was missed when the trophy-sprite
   work (`Version20261018202041`, 2026-10-18) replaced the league block's
   `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
@@ -1480,6 +1506,24 @@ that happened to use that serializer** — `/api/players/youth` serializes throu
 named by nothing. **The pricing is deliberately NOT in `PlayerSnapshotSerializer`**, which
 `WorldPackSnapshotBuilder` also delegates to: re-pricing there would change cached pack content
 on every read with no version bump.
+
+**Under `legacy`, staff pay gained a tier ladder on 2026-11-17, and the reason is the defect
+it fixes.** The role bands are single absolutes, so they can only be right at ONE tier — while
+a legacy PLAYER's wage scales with ability and ability is per-tier. A tier-8 club was therefore
+paying ~£1,000/wk in staff against ~£165/wk for its entire squad. `staffWeeklyPence()` now
+scales the band by `TierBandScaleResolver` before drawing from it, with a floor
+(`economyStaffTierFloorPence`, £5/wk) so the bottom of the coach band does not land near
+£1.38/wk and read as broken. Measured on EN after the change: staff average £1,116/wk at tier 1,
+£240 at tier 4, £18.88 at tier 8 — and a founder's starter staff now total £233/wk against
+£4,852/wk of players, where they were six times the squad.
+
+**The scaling is applied to the BAND, deliberately, not inside `legacyStaffPence()`.** That
+method is pinned byte-for-byte by `WageModelLegacyParityTest`, which passes a base straight in;
+scaling beforehand leaves the pinned arithmetic untouched and that test passes unmodified.
+Moving it inside is the refactor that file's docblock forbids. `economyStaffTierScalingEnabled`
+is the kill switch and ships **ON** — unusually for this repo, because the unscaled behaviour is
+agreed to be wrong rather than merely untuned, and because the figure is baked into cached packs
+so it has to be reversible.
 
 Staff pay under `turnover` reuses `GameConfig::$economyStaffRoleBandsPence` for BOTH jobs — the
 midpoint is the role's weight, the spread is how ability moves pay within the role — scaled so

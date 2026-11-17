@@ -96,7 +96,11 @@ class WarmWorldPackClubMessageHandler
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_STAFF);
         $this->em->flush();
-        $staff = $this->clubGenerator->generateStaff($tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier());
+        // The SAME $abilityRange the players above were generated from, so a club's staff
+        // sit at its own level rather than at a pyramid-wide average.
+        $staff = $this->clubGenerator->generateStaff(
+            $tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier(), $abilityRange,
+        );
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_SCOUTS);
         $this->em->flush();

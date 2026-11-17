@@ -305,6 +305,11 @@ class WageModelLegacyParityTest extends TestCase
         $starterRepo = $this->createStub(StarterConfigRepository::class);
         $starterRepo->method('getConfig')->willReturn(new StarterConfig());
 
+        // The tier-band scalar reads the SAME stubbed StarterConfig, which carries no authored
+        // league_ability_ranges — so every scaleFor() here resolves through the const ladder.
+        // That is deliberate: this file's job is the legacy ARITHMETIC, and these tests pass a
+        // base salary straight into legacyStaffPence(), which the ladder never touches. The
+        // ladder is covered by StaffTierWageTest instead.
         return new WageModelResolver(
             $gameConfigRepo,
             new EconomyScaleResolver(
@@ -312,6 +317,7 @@ class WageModelLegacyParityTest extends TestCase
                 $starterRepo,
                 $this->createStub(CountryProfileRepository::class),
             ),
+            new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );
     }
 }

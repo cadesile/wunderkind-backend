@@ -148,7 +148,8 @@ class StarterPackService
             $clubReputation,
         );
 
-        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier);
+        // Same $abilityRange as the squad above — a founder's staff are at the founder's level.
+        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier, $abilityRange);
         $scouts = $this->clubGenerator->generateScouts($squadConf, $nationality);
 
         $pack = [

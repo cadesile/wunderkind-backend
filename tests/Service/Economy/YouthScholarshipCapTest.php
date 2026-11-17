@@ -514,6 +514,7 @@ class YouthScholarshipCapTest extends TestCase
                 $starterRepo,
                 $this->createStub(CountryProfileRepository::class),
             ),
+            new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );
     }
 }

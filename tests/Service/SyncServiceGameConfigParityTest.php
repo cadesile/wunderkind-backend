@@ -284,7 +284,13 @@ class SyncServiceGameConfigParityTest extends TestCase
             $scaleResolver,
             // A REAL WageModelResolver over the same stubs, because it is final. The publisher
             // needs it for the per-tier youth-scholarship figure.
-            new \App\Service\Economy\WageModelResolver($gameConfigRepo, $scaleResolver),
+            new \App\Service\Economy\WageModelResolver(
+            $gameConfigRepo,
+            $scaleResolver,
+            new \App\Service\Economy\TierBandScaleResolver(
+                $this->createStub(\App\Repository\StarterConfigRepository::class),
+            ),
+        ),
             new \App\Service\Economy\SponsorBandResolver($gameConfigRepo, $scaleResolver),
             new \App\Service\Economy\TicketPriceResolver($gameConfigRepo, $scaleResolver),
         );
