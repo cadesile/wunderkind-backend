@@ -5,6 +5,69 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Check 8's two TV-dependent bounds amended (2026-11-18)**, no commit — still on `development`
+  @ `740f2c8e`. **Stages touched:** 04_interfaces (`services.md`), 07_synthesis
+  (`current-focus.md`), shared (this file). `PAYOUT_SHARE_MAX_PCT` 50 → 55 and
+  `PAYOUT_SHARE_SPREAD` 4 → 5 in `EconomyWageTableCommand`, on the owner's ruling, with the
+  reasoning and the costed alternatives in the constants' docblocks; `CHAMPION_SHARE_MAX_PCT` and
+  the flatness tolerance untouched. The by-design failing test was renamed to
+  `testR2SitsInsideCheck8sAmendedBoundsAndWouldHaveBreachedTheOldOnes()` and now pins the figures
+  against BOTH sets of bounds, so reverting either one fails rather than passing silently.
+
+  ⚠️ **NEW FINDING: `bankruptcyDeductionTiers` has no tier dimension** and its harshest band
+  (a flat £40,000.01) is reached in 0.01 weeks at tier 1, where the weekly wage bill is £3,238,043
+  — ten gate lines at EN and SC tiers 1–5. The bill is `turnover x 0.45 / 46`, so this depends on
+  nothing but the turnover row: it is NOT a local divergence, it will read identically on dev, and
+  it already reads worse there before R2. Same shape as the flat youth scholarship and staff
+  bands. **Nobody's action yet.**
+
+- **R2 authored (2026-11-18)**, no commit — working tree on `development` @ `740f2c8e`.
+  **Stages touched:** 03_data (`migrations.md`), 07_synthesis (`current-focus.md`), shared (this
+  file). `Version20261118120000` writes the R2 turnover ladder, both payout ratio tables and their
+  tier-1 bases, and band 3 of `npc_facility_level_ranges`; `WORLD_PACK_VERSION` 9 → 10;
+  `LeaguePayoutResolverTest` re-pointed off the superseded ladder and
+  `EconomyBaselineTurnoverAuthoringTest` added.
+
+  Three findings, all about INPUTS rather than the authoring, are written up in `current-focus.md`:
+  the local Lando box diverges from dev in four economy inputs (turnover, squad sizes, TV, sponsor
+  bands) so its gate output is not a verdict; `S_tier` depends on `npcSquadConfig`'s midpoints as
+  well as the ability bands, which nothing had recorded; and R2 breaches check 8's TV-dependent
+  constraint at tier 1 (50.4% against a 50% ceiling, spread 4.34x against 4x) because turnover
+  falls 15% at tier 1 while TV deliberately does not move. **Not committed** — the brief makes that
+  conditional on `app:economy:wage-table` exiting 0.
+
+- **The coverage dials re-derived; candidate C chosen (2026-11-18)**, no commit — working tree on
+  `development` @ `740f2c8e`. **Stages touched:** 07_synthesis (`current-focus.md`), shared (this
+  file). **No backend code changed**: the deliverable is an authoring run, specified in
+  `docs/economy-loose-ends/candidate-c-rollout.md` (outside both repos), and the derivation plus
+  its tooling are in `REMAINING-WORK.md` §2 beside it.
+
+  Three findings that belong here rather than in the app's record, because they are about this
+  repo's data:
+
+  1. ⚠️ **`5dc3f51b` takes the app's variant gate from PASS to FAIL on today's other inputs** —
+     tier 8 insolvent in season 1, tiers 2 and 3 out of the coverage band. Measured by patching the
+     landed ladder into the Nov-15 `world.json`, which is the only place that gate reads league
+     money. The fix is right; it needs the facility exclusion beside it.
+  2. **Its ppm ladder is the current turnover ladder normalised to tier 1**, so re-authoring
+     turnover invalidates it — and `wageScaleMicroPence` is DERIVED from the turnover row, so that
+     one moves by itself. Three "pays MORE per unit of ability" warnings on the Economy screen are
+     expected under the new ladder (tiers 2, 6, 8).
+  3. ⚠️ **`app:economy:wage-table`'s check 1 is the constraint the whole derivation missed, and it
+     refuses the candidate.** `S_tier` must fall strictly down the pyramid, it is DERIVED from the
+     turnover row, and no turnover ladder satisfies both it and the app gate's 85-110% coverage band
+     while `league_ability_ranges` flattens at the bottom (`10-25` → `10-15` → `5-10` → `2-7`).
+     Lowering `economyWageCurveExponentBp` cannot close tier 7→8 even at k = 1.0. The checks are
+     right — tiers 5/6 overlap at 10-15 and 7/8 at 5-7, so check 2's "a promoted player takes a pay
+     cut" would be a real defect — so what gives is either the bottom ability bands (a squad-quality
+     change, and it moves staff pay through `TierBandScaleResolver`) or the coverage band at tiers 6
+     and 8. **Two invariants, and this repo's gate holds the one the app's does not.**
+  4. ⚠️ **`npcFacilityLevelRanges` is keyed by BAND, not tier, and has no country dimension**, so
+     the bottom-tier facility set is every 8-tier country's tiers 7–8 at once. It is also not
+     published to the app, and the world export disagrees with
+     `NpcClubGenerationService::FACILITY_LEVELS`' band-3 defaults — read the admin screen before
+     editing it.
+
 - **Scouts get the tier band the staff fix skipped; WORLD_PACK_VERSION 8 -> 9 (2026-11-18)**, on
   top of commit `5157fbfb` (branch `development`). **Stages touched:** 01_overview
   (`tribal-knowledge.md`), 04_interfaces (`services.md`), 07_synthesis (`architecture-notes.md`,

@@ -1,5 +1,188 @@
 # Current Focus
 
+## DONE in the working tree, 2026-11-18 — R2 is AUTHORED (not committed, not pushed)
+
+`Version20261118120000` authors resolution R2 end to end, `WORLD_PACK_VERSION` goes 9 → 10,
+check 8's two TV-dependent bounds are amended per the owner's ruling (finding 3), and
+`LeaguePayoutResolverTest` plus a new `EconomyBaselineTurnoverAuthoringTest` pin it. The briefs are
+`docs/economy-loose-ends/r2-economy-authoring-brief.md` and `r2-finish-and-commit-brief.md` (outside
+both repos); the migration's own docblock and `03_data/output/migrations.md` carry the detail.
+
+✅ **COMMITTED in this commit, after the owner amended two of the three commit conditions
+(review, 2026-11-18).** The brief asked for the full suite passing, the bounds amended, and every
+remaining gate failure attributed to a named input divergence. The middle one was done; the other
+two were unmeetable **as written** on any box without dev's data, and the implementing session
+stopped and reported rather than improvising around them, which was the right call and is why the
+amendment is recorded rather than assumed:
+
+- **condition 1 becomes "no regression against a full-suite baseline at `740f2c8e`"**, which the
+  artefacts in `docs/economy-loose-ends/r2-run-2026-11-18/` demonstrate: the baseline and the
+  post-change run fail in the SAME five classes, and the only asymmetry is a second method of the
+  one class shown to be non-deterministic;
+- **condition 3 gains "or to a named pre-existing defect shown independent of R2"**, which the ten
+  `bankruptcyDeductionTiers` lines are — finding 4 below, already documented in this file and in
+  `docs/economy-threshold-review.md` §1, and provably a function of the turnover row alone.
+
+⚠️ **`NpcClubForeignClubsCitySizeTest` is a KNOWN FLAKE and should be treated as one until someone
+fixes it** — three identical isolated runs gave 1, 1 and 2 failures with the failing method
+alternating. Recorded here because an intermittent failure that nobody has written down is
+indistinguishable from a regression the next time it fires, and it was within one test of masking
+this one.
+
+The two conditions as originally written, and what they ran into:
+
+- **The full suite does not pass, and does not at `740f2c8e` either** — 5 failures on a clean tree
+  (`NotificationLogCrudControllerTest`, `CompetitionControllerTest`, `FriendlyResolveSingleMatchTest`,
+  `WorldOverviewServiceTest`, and `NpcClubForeignClubsCitySizeTest`, which is **non-deterministic**:
+  three identical isolated runs gave 1, 1 and 2 failures with the failing method alternating). The
+  economy suites are green (30 + 20 tests). Tests run against `wunderkind_test`, a different
+  database from the one the migration touched, so the migration cannot have influenced any of them.
+- **10 of the 31 gate failure lines cannot be tied to an input divergence** — they are finding 4
+  below, and they would read identically on dev.
+
+Four findings, the first three about INPUTS this authoring does not own.
+
+⚠️ **1. The local Lando box is not the dev box, and four of its economy inputs diverge.** This is
+the first thing to re-check before reading any local gate output as a verdict:
+
+| input | local box | dev / the derivation |
+|---|---|---|
+| `economy_baseline_turnover_pence` | `[0,0,0,0,0,0,0,0]` (unauthored) | £388.7m … £164,852 |
+| `starter_config.npc_squad_config` midpoints | 33, 30, 28, 26, 26, 26, 23, 22 | **26, 23, 21, 20, 19, 18, 17, 17** |
+| `league.tv_deal` tier 1 | £10,000,000 (3.0% of turnover) | £136,000,000 (35.0%) |
+| sponsor bands | tier 1 0.7%, tier 8 53.8% | inside the agreed 8–30% |
+
+The squad row is not a guess: it is the ONLY row that reproduces the live published scale
+(`390404650 … 178885951`, recorded in `REMAINING-WORK.md` §2f.1 against `game-config-en.LIVE.json`)
+from the live authored turnover, to the integer. `scripts/pull-prod-db.sh` is forbidden by the
+brief, so the local gate cannot be made to exit 0 whatever is authored.
+
+⚠️ **2. `S_tier` depends on the SQUAD ROW as well as the ability bands, and that was not on
+anyone's list.** `referenceSquadAbilitySum()` sums `ability^k` over a reference squad whose SIZE is
+`npcSquadConfig`'s midpoint, so the turnover ladder, `league_ability_ranges` AND the squad sizes
+decide check 1 jointly. On the dev squad row R2 publishes
+`332484503 · 331618346 · 303799192 · 290519761 · 258711870 · 257021938 · 235402484 · 233303081` —
+strictly decreasing, exactly as the brief asserts, which `EconomyBaselineTurnoverAuthoringTest`
+pins through the real resolver. On the LOCAL row the same authored turnover yields tier 8 at
+179.3699 against tier 7's 173.6417 and check 1 fails. **If the dev row is ever changed, check 1 is
+back in play with no turnover edit at all.**
+
+✅ **3. RULED 2026-11-18 (owner): check 8's two TV-dependent bounds are amended.** R2 put EN
+tier 1 at **50.38%** against constraint (b)'s 50% ceiling and the tier-1/tier-8 spread at **4.34x**
+against its 4x cap, so `PAYOUT_SHARE_MAX_PCT` went **50 → 55** and `PAYOUT_SHARE_SPREAD`
+**4 → 5** in `EconomyWageTableCommand`. `CHAMPION_SHARE_MAX_PCT` stays 100 and nothing else in
+that file moved.
+
+The reasoning, which the constants' own docblocks now carry: the payout half is innocent and
+provably so — prize and pot are a flat **9.29% of turnover at BOTH ends**, and the flatness check
+passes with 0.0065pp against its 0.5pp tolerance — while the whole breach is TV's SHARE of a
+turnover figure that moved beneath it. `league.tv_deal` is an authored absolute, R2 cuts tier-1
+turnover 15% and deliberately does not re-derive TV, so TV goes 35.0% → 41.1% with no TV figure
+changing. The spread cap was additionally measuring the pyramid rather than a mis-authoring, since
+EN tier 8's TV deal is £4,950 a year. Every alternative was costed and is worse: £334.1m clears the
+ceiling but still fails the spread at 4.31x and drops tier-1 coverage to 84.5%; £366.8m clears the
+spread at 77.2% coverage; re-deriving tier-1 TV clears both but drops coverage to 79.2%, and
+holding coverage forces T1 ≈ £290m, which tightens the check-1 chain to T2 ≤ £100.2m and re-opens
+every tier.
+
+⚠️ **This is the one place the "do not relax any check" rule was deliberately set aside**, by the
+owner and for these two constants only. `LeaguePayoutResolverTest::testR2SitsInsideCheck8sAmendedBoundsAndWouldHaveBreachedTheOldOnes()` pins the two FIGURES and BOTH sets of bounds, so moving
+either bound back fails rather than passing silently.
+
+⚠️ **4. `bankruptcyDeductionTiers` has no tier dimension and collapses at tiers 1–5 under ANY
+authored turnover.** Not R2's doing, and R2 slightly improves it.
+
+**NOT a new finding — corrected in review, 2026-11-18.** This file already carried it, in the
+2026-11-12 overhaul section's "Still open" paragraph below ("two rows that cannot fire … the ladder
+is traversed in under half a week at the top five tiers"), with the analysis and a weeks-of-wages
+proposal in `docs/economy-threshold-review.md` §1. It was labelled NEW here, which would have
+grown the backlog a duplicate. **What this pass genuinely adds** is the measurement and the
+attribution: the tier-1 figure (£40,000.01 against a £3,238,043/wk bill), and the proof that the
+bill depends on nothing but the turnover row — which is what makes these ten gate lines a
+pre-existing defect rather than a local-box divergence, and that is the part that mattered for the
+commit decision. The harshest band
+begins at a flat **£40,000.01** of deficit while a tier-1 weekly wage bill is **£3,238,043**, so
+the gate reports the band "reached in 0.01 weeks of unpaid wages — the ladder has no range left
+here" at EN and SC tiers 1–5, ten lines in all.
+
+The bill is `turnover x 0.45 / 46` and so depends on NOTHING but the turnover row — not on the
+squad midpoints, not on TV, not on the sponsor bands. It is therefore **not** a local-box
+divergence: it will read identically on dev after R2, and it already reads WORSE there before R2
+(£388.7m gives £3,801,742/wk). The same column also has rows 4 and 5 unreachable behind row 3's
+null `deficitMax`, which the gate has been reporting all along.
+
+This is the same shape of defect as the flat youth scholarship and the flat staff role bands, both
+already fixed by giving them a tier dimension. **It is not in any R2 brief and is nobody's action
+yet.**
+
+**Still to do, and deliberately not done here:** regenerate the bottom two tiers (band 3 reaches no
+existing NPC club until then), `app:worldpack:maintain`, and hand back
+`GET /api/game-config?country=EN`, `GET /api/starter-config` and a world export from a box whose
+inputs are dev's. None of those is meaningful against the local box above.
+
+## Superseded 2026-11-18 by the entry above — the derivation record
+
+**Kept for the reasoning, not the figures. The authored figures are R2's, above:** turnover
+£331m · £114m · £34.6m · £20.7m · £7.32m · £2.69m · £686k · £215k, tier-1 payout base
+**£85,166,300**, both ladders `[1000000, 344411, 104532, 62538, 22115, 8127, 2073, 650]`.
+
+⚠️ **The tables in the section below are candidate C's, which R2 replaced** — C was the derivation's
+first answer and failed `app:economy:wage-table` check 1 at tiers 2, 6 and 8. Nothing below is an
+instruction; read it as the record of how the dials were derived and what was ruled out. This
+header replaces a warning label that left both sets of numbers standing in one file
+(review, 2026-11-18).
+
+
+**The next economy deliverable here is authoring, not code**, and it is specified end to end in
+`wunderkind-app/../docs/economy-loose-ends/candidate-c-rollout.md` (outside both repos, beside
+`REMAINING-WORK.md` §2, which carries the derivation and the tooling that reproduces it). The
+implementation prompt is `candidate-c-authoring-prompt.md` beside them.
+
+⚠️ **ONE DECISION BLOCKS IT, and it is this repo's gate that says so.** The candidate's turnover
+ladder **fails `app:economy:wage-table` check 1 at tiers 2, 6 and 8** — `S_tier` is derived from the
+turnover row, so the ladder and `starter_config.league_ability_ranges` decide jointly whether it
+falls, and **no turnover ladder satisfies both check 1/2 and the app gate's 85-110% COVERAGE band**
+while the EN bands flatten at the bottom (`10-25` → `10-15` → `5-10` → `2-7`) faster than the
+grounds' income does. Lowering `economyWageCurveExponentBp` is ruled out: it cannot close tier 7→8
+even at k = 1.0. Either the bottom bands are re-authored (tier 6 → 10–20, tier 8 → 4–9 — a
+squad-quality change that also moves staff and scout pay, since `TierBandScaleResolver` reads those
+midpoints) or tiers 6 and 8 stay out of the coverage band on a chain-maximal ladder (£331m, £114m,
+£34.6m, £20.7m, £7.32m, £2.69m, £686k, £215k — verified PASS, check 1 clean, no tier insolvent).
+✅ **The owner ruled on 2026-11-18: the second (R2).** The implementation brief, self-contained with
+R2's tables substituted throughout, is `r2-economy-authoring-brief.md` beside the other two; the
+ability-band question stays open as a BALANCE decision, not an economy one. Checks 1 and 2 are
+correct and must not be relaxed: tiers 5/6 overlap at 10–15 and 7/8 at 5–7, so "a promoted player
+takes a pay cut" would be real.
+
+What it asks for: a new EN turnover table (tier 1 £388.7m → £288m, tier 8 £164,852 → **£361,000**,
+spread 2,357× → 798×); the prize and position ppm ladders re-derived onto it (tier-1 base
+£100,000,000 → **£74,102,400**, ladder `[1000000, 345486, 104514, 62500, 22083, 13264, 2069,
+1253]`); band 3 of `npcFacilityLevelRanges` set to stands `0–1` and **nine exclusions**; then
+regenerate the bottom two tiers, `WORLD_PACK_VERSION` 9 → 10 and re-warm.
+
+Four things to know before touching it:
+
+- ⚠️ **`5dc3f51b` — the prize ladder, landed 2026-11-17 — takes the app's variant gate from PASS to
+  FAIL on today's other inputs.** Measured 2026-11-18, not predicted: tier 8 insolvent in season 1
+  (bill 100.7% of modelled income) because the fix removed 118 points of income while upkeep stayed
+  put, and tiers 2 and 3 fall OUT of the 85–110% coverage band they were inside. The facility
+  exclusion is what repairs it. Not an argument for reverting; an argument for finishing.
+- ⚠️ **The ppm ladder authored by that commit IS the current turnover ladder normalised to tier 1**,
+  so re-authoring turnover silently invalidates it. They move together or not at all.
+- **`wageScaleMicroPence` and the youth scholarship need no authoring** —
+  `EconomyScaleResolver::wageScaleMicroPence()` derives the scale from the turnover row, so step 1
+  moves both. Expect `EconomyAdminController::buildPreview()` to warn three times ("Tier N pays MORE
+  per unit of ability than tier N−1", at tiers 2, 6 and 8): correct and deliberate, because the new
+  turnover ladder is far flatter than the ability bands it is divided by. Average authored wage per
+  player still falls monotonically, £144,482/wk at tier 1 to £277/wk at tier 8.
+- ⚠️ **`npcFacilityLevelRanges` is keyed by BAND (tiers 7–8 together) and has no country
+  dimension**, so band 3 is every 8-tier country's bottom two divisions, and the candidate was
+  re-solved in that form. The one input nobody has is what the column holds TODAY: it is not
+  published to the app, and the Nov-15 world export disagrees with
+  `NpcClubGenerationService::FACILITY_LEVELS`' own band-3 defaults (4.89 total stand levels against
+  a `0–1` band that would give 2.0). Either overrides are authored or it is the NPC upgrade drift
+  §13.3 describes — **read `/admin?routeName=admin_npc_clubs_content` before editing it.**
+
 ## Fixed 2026-11-18 — the staff fix below had skipped scouts
 
 Reported from a fresh tier-8 Workington save, the day after the staff fix deployed: staff wages
