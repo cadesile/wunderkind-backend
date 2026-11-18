@@ -104,7 +104,8 @@ class WarmWorldPackClubMessageHandler
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_SCOUTS);
         $this->em->flush();
-        $scouts = $this->clubGenerator->generateScouts($tierConf, $nationality);
+        // Same $abilityRange as the players and staff: one band per club, scouts included.
+        $scouts = $this->clubGenerator->generateScouts($tierConf, $nationality, $abilityRange);
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::ASSIGNING);
         $this->em->flush();

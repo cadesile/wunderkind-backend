@@ -69,6 +69,52 @@ class ScoutGenerationServiceTest extends TestCase
         $this->assertSame('Brazilian', $scout->getNationality());
     }
 
+    /**
+     * A club's tier band wins over the global pool range.
+     *
+     * The defect this pins: scout experience came from one global range (4-34 on dev) whatever
+     * the club, so a tier-8 side got a scout rated 33 beside coaches rated 2-7 — and the app,
+     * which splits a club's wage reservation in proportion to ability, paid that one scout
+     * £2,230/wk of a £4,308 staff bill. The pool range here is set deliberately DISJOINT from
+     * the band, so a draw from the wrong source cannot pass by luck.
+     */
+    public function testATierBandOverridesTheGlobalExperienceRange(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutExperienceMin(60);
+        $config->setScoutExperienceMax(90);
+
+        $service = $this->makeService($config);
+
+        for ($i = 0; $i < 50; $i++) {
+            $scout = $service->build('English', ['min' => 2, 'max' => 7]);
+            $this->assertGreaterThanOrEqual(2, $scout->getExperience());
+            $this->assertLessThanOrEqual(7, $scout->getExperience());
+        }
+    }
+
+    /** The wage follows the banded experience, since it is interpolated on the same number. */
+    public function testTheWageIsDerivedFromTheBandedExperience(): void
+    {
+        $config = new PoolConfig();
+        $service = $this->makeService($config);
+        $calculator = new ScoutWageCalculator($this->makePoolConfigRepo($config));
+
+        $scout = $service->build('English', ['min' => 5, 'max' => 5]);
+
+        $this->assertSame(5, $scout->getExperience());
+        $this->assertSame($calculator->weeklyWageFor(5, $config), $scout->getWeeklySalary());
+    }
+
+    /** A transposed band is a real state of a hand-edited admin grid, and must not throw. */
+    public function testATransposedBandIsNormalised(): void
+    {
+        $scout = $this->makeService()->build('English', ['min' => 7, 'max' => 2]);
+
+        $this->assertGreaterThanOrEqual(2, $scout->getExperience());
+        $this->assertLessThanOrEqual(7, $scout->getExperience());
+    }
+
     public function testBuildRespectsExperienceRangeFromPoolConfig(): void
     {
         $config = new PoolConfig();

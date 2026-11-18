@@ -124,14 +124,21 @@ class WorldPackClubGenerationService
     }
 
     /**
+     * `$abilityRange` is the club's tier band — the same array its players and staff came from.
+     *
+     * Scouts were missed when staff ability was banded, because a Scout is its own entity and
+     * never goes through `staffWeeklyPence()`. The result was a rating-33 scout in a tier-8
+     * squad of rating-2-7 coaches, which the app's proportional wage split then paid £2,230/wk.
+     *
      * @param array<string, mixed> $tierConf
+     * @param array{min: int, max: int}|null $abilityRange
      * @return Scout[]
      */
-    public function generateScouts(array $tierConf, string $nationality): array
+    public function generateScouts(array $tierConf, string $nationality, ?array $abilityRange = null): array
     {
         $scouts = [];
         for ($i = 0; $i < (int) ($tierConf['scoutCount'] ?? 0); $i++) {
-            $scouts[] = $this->scoutGen->build($nationality);
+            $scouts[] = $this->scoutGen->build($nationality, $abilityRange);
         }
         return $scouts;
     }
