@@ -129,6 +129,33 @@ Two consequences worth holding onto:
 See `03_data/output/entities.md`'s `UserLedger` and `StadiumEstimate` entries, and
 `src/Service/Location/StadiumEstimateService.php`'s `COST_PER_SEAT_PENCE` docblock.
 
+### "Staff" means every staff type AND scouts (owner ruling, 2026-11-18)
+
+Stated directly, after a fix that covered only half of them: *"It's scouts. When we say 'staff'
+generally that is all staff types and scouts."*
+
+**This is not how the code is shaped, which is exactly why it needs writing down.** A `Scout` is
+its own entity with its own generator (`ScoutGenerationService`), its own wage path
+(`ScoutWageCalculator`) and its own snapshot (`buildScoutSnapshot()`); it is not a `StaffRole`
+and never passes through `WageModelResolver::staffWeeklyPence()`. So a change described as
+"staff" that is implemented by following `StaffRole` silently skips scouts. That happened on
+2026-11-17: staff ability and pay were banded by tier, scouts were not, and a tier-8 club was
+left with a scout rated 33 beside coaches rated 2-7.
+
+**Any rule about staff level, staff pay or staff generation applies to scouts unless the owner
+says otherwise.** Check both entities. The app already treats them as one population — its
+finances panel reports a single STAFF WAGES line covering coaches and scouts together.
+
+**And know how the app pays them, because it is why ABILITY matters more than the backend's
+wage figure.** `wunderkind-app/src/engine/ClubWageScaleService.ts` (`ampStaffWagePence()`,
+added 2026-11-15) divides the club's `seasonBudget.wageReservationPence` across its staff **in
+proportion to ability**, and `resolveWorldStaffWagePence()` ranks that income-anchored figure
+ABOVE the backend's `weeklySalary`. So for a club's own staff the backend's stored wage is only
+a fallback; what the backend really controls is the ability distribution the split is computed
+over. One out-of-band member takes most of the budget: the rating-33 scout was paid £2,230/wk
+of a £4,308 bill while eight coaches shared the rest at £13-266. **A wrong ABILITY is therefore
+a wrong WAGE in the app, even when every backend wage figure is correct.**
+
 ### A shared-pool row is priced at SERVE time, never stored (owner ruling, 2026-11-17)
 
 Asked for directly: *"update pool players how they are priced so that they use the new economy

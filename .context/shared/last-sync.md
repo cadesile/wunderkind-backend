@@ -5,6 +5,29 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **Scouts get the tier band the staff fix skipped; WORLD_PACK_VERSION 8 -> 9 (2026-11-18)**, on
+  top of commit `5157fbfb` (branch `development`). **Stages touched:** 01_overview
+  (`tribal-knowledge.md`), 04_interfaces (`services.md`), 07_synthesis (`architecture-notes.md`,
+  `current-focus.md`), shared (`api-backwards-compatibility.md`, this file).
+
+  The 2026-11-17 staff fix followed `StaffRole` and so never reached `Scout`, a separate entity
+  with its own generator. A fresh tier-8 save still showed £4,308/wk of staff against £443 of
+  players; one scout rated 33 accounted for £2,230 of it.
+
+  Three things worth carrying forward:
+
+  1. **"Staff" means every staff type AND scouts** — an owner ruling, now in
+     `tribal-knowledge.md`. The code is not shaped that way, so any staff rule has to be applied
+     to both entities deliberately.
+  2. **In the app, a wrong ABILITY is a wrong WAGE.** `ClubWageScaleService` splits a club's
+     wage reservation in proportion to ability and ranks that above the backend's
+     `weeklySalary`, so for a club's own staff the backend controls the DISTRIBUTION, not the
+     figure. The £2,230 was never a backend number — the backend prices experience 33 at £39.85
+     and ships no scout wage in a pack at all.
+  3. **Ask for the per-row breakdown before theorising from a total.** Two theories were raised
+     and withdrawn (a stale claimed set — impossible, the claim filters on version; a replayed
+     app cache — real mechanism, not the cause). One screenshot of the staff list settled it.
+
 - **Staff pay gets a tier dimension; WORLD_PACK_VERSION 7 -> 8 (2026-11-17)**, on top of commit
   `8ff2e5fd` (branch `development`). **Stages touched:** 03_data (`entities.md`,
   `migrations.md`), 04_interfaces (`services.md`), 07_synthesis (`architecture-notes.md`,

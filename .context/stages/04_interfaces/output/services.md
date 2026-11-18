@@ -931,6 +931,21 @@ filename alone.
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
+- **`ScoutGenerationService`** — generates one scout. **`build()` takes an optional
+  `$abilityRange`, used for EXPERIENCE, for the same reason `StaffGenerationService` does.**
+  Without it experience comes from one global range (`PoolConfig::$scoutExperienceMin/Max`,
+  4-34 on dev) whatever the club. Scouts were missed when staff were banded on 2026-11-17 —
+  a `Scout` is its own entity and never passes through `staffWeeklyPence()` — and were fixed
+  the next day after a tier-8 club showed a scout rated 33 beside coaches rated 2-7. Every
+  per-club caller passes the SAME band as its players and staff
+  (`WorldPackClubGenerationService::generateScouts()`, and through it
+  `WorldInitializationService`, `WarmWorldPackClubMessageHandler` and `StarterPackService`);
+  the pool generators (`MarketPoolService::generateScouts()`) deliberately do not, because a
+  market scout has no tier. The wage needs no ladder of its own: `ScoutWageCalculator`
+  interpolates on experience, so banding the experience moves it too. Measured on EN after the
+  fix: scout experience 44-88 at tier 1, 15-35 at tier 4, 2-7 at tier 8. **"Staff" includes
+  scouts** — see the owner ruling in `01_overview/output/tribal-knowledge.md`, which also
+  records why a wrong ability becomes a wrong wage in the app.
 - **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
   `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
   Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,
@@ -1082,7 +1097,7 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 8 and must be bumped for *any* payload shape change,
+  **`WORLD_PACK_VERSION` is 9 and must be bumped for *any* payload shape change,
   not just the three snapshot builders.** It was missed when the trophy-sprite
   work (`Version20261018202041`, 2026-10-18) replaced the league block's
   `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85

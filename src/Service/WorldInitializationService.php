@@ -148,8 +148,16 @@ class WorldInitializationService
      *     pack, so this is a CONTENT change at an unchanged shape — the case this constant
      *     exists for. Every WorldPackSet became unclaimable on the bump;
      *     `app:worldpack:maintain` restocks live countries without an operator.
+     *
+     *   - **9 (2026-11-18)** — scout EXPERIENCE gained the tier band that version 8 gave staff
+     *     ability. Scouts were missed then because a Scout is its own entity and never passes
+     *     through `staffWeeklyPence()`: a tier-8 club still got a scout rated 33 beside
+     *     coaches rated 2-7, and the app — which splits a club's wage reservation in
+     *     proportion to ability — paid that one scout £2,230/wk of a £4,308 staff bill.
+     *     `buildScoutSnapshot()` carries `experience` and the `tier` derived from it, so this
+     *     is again a CONTENT change at an unchanged shape.
      */
-    public const WORLD_PACK_VERSION = 8;
+    public const WORLD_PACK_VERSION = 9;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -243,7 +251,7 @@ class WorldInitializationService
             );
             // Same $abilityRange as the players: one band per club, staff included.
             $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier, $abilityRange);
-            $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality);
+            $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality, $abilityRange);
 
             $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);
         }

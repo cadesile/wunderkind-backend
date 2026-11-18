@@ -229,7 +229,13 @@ client-side escape.
    stock nulls several tier runs sharing a `(run_id, tier)` and they collide on that partial
    index — so an ordinary admin "delete this country's sets" fails with a unique violation
    raised from inside the FK. Changing either choice back reintroduces the other's failure.
-3b. **Staff are priced and generated per tier too, since 2026-11-17.** Ability comes from
+3b. **Staff AND SCOUTS are generated per tier (staff 2026-11-17, scouts 2026-11-18).**
+   "Staff" means both — an owner ruling, recorded in `tribal-knowledge.md` — but a `Scout` is a
+   separate entity with its own generator, so a fix that follows `StaffRole` skips it. That
+   happened once already. Scout EXPERIENCE now takes the club's band through
+   `ScoutGenerationService::build()`. It matters more than it looks because the app splits a
+   club's wage reservation in proportion to ability, so one out-of-band member takes most of
+   the budget. For staff, ability comes from
    the club's band (`StaffGenerationService::build()`'s `$abilityRange`) and the legacy role
    band is scaled by `Economy\TierBandScaleResolver`. Before that a tier-8 club paid ~£1,000/wk
    in staff against ~£165/wk for its whole squad. The scaling is applied to the BAND, never

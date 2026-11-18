@@ -1,5 +1,35 @@
 # Current Focus
 
+## Fixed 2026-11-18 — the staff fix below had skipped scouts
+
+Reported from a fresh tier-8 Workington save, the day after the staff fix deployed: staff wages
+still £4,308/wk against £443 of players. The screenshot was decisive — twelve coaches were
+correctly scaled at £13-266 and rated 2-7, and **one scout was £2,230/wk, rated 33**.
+
+`ScoutGenerationService::build()` rolled experience from a single global range (4-34 on dev)
+with no tier input, exactly the defect staff ability had. It was missed because the staff fix
+followed `StaffRole` through `staffWeeklyPence()`, and a `Scout` is a separate entity that never
+goes near either. The owner's ruling, now in `tribal-knowledge.md`: **"staff" means every staff
+type and scouts.**
+
+**The £2,230 was never a backend figure.** `buildScoutSnapshot()` deliberately ships no wage,
+and the backend's own formula prices experience 33 at £39.85. The app computed it:
+`ClubWageScaleService` divides a club's wage reservation across its staff in proportion to
+ability, so a rating-33 scout among rating-2-7 coaches takes most of the budget. A wrong
+ability is a wrong wage in the app even when every backend wage is right — which is why the fix
+is to band the experience, not to touch a wage.
+
+Scout experience now takes the club's tier band at all three per-club call sites. EN after the
+fix: 44-88 at tier 1, 15-35 at tier 4, 2-7 at tier 8. `WORLD_PACK_VERSION` 8 → 9, because
+`buildScoutSnapshot()` bakes `experience` and its derived `tier` into cached packs.
+
+**Two wrong theories were raised and withdrawn on the way, and both are worth not repeating:**
+that the game had claimed a stale pre-fix set (impossible — the claim filters on
+`payload_version`), and that the app was replaying a cached starter pack (it is account-scoped
+and does survive a new game, but was not the cause here). The screenshot of the actual staff
+list settled in one look what three rounds of reasoning from totals had not. **Ask for the
+per-row breakdown before theorising from an aggregate.**
+
 ## Fixed 2026-11-17 — staff cost more than the players they coached
 
 Reported from a tier-8 Clydebank save: **staff −£1,000/week against −£165/week for the entire
