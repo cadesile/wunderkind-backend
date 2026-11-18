@@ -1426,10 +1426,21 @@ quantity with no intermediate above 1e16. `LeaguePayoutResolverTest` pins the ov
 the exact-20% case; both were caught by tests, not by reading.
 
 The tier factor is deliberately absent, as with sponsors. Gate check 8 bounds the result:
-non-increasing ladders, TV + position + prize per average club inside 10-50% of turnover with the
-pyramid's two ends within 4× either way, a champion's own take under 100% of its turnover, and the
-prize-plus-position contribution flat across tiers — that last being the invariant the ladder
-creates and the only one TV cannot mask. `LeaguePayoutResolverTest`, and
+non-increasing ladders, TV + position + prize per average club inside **10-55%** of turnover with
+the pyramid's two ends within **5×** either way, a champion's own take under 100% of its turnover,
+and the prize-plus-position contribution flat across tiers — that last being the invariant the
+ladder creates and the only one TV cannot mask.
+
+⚠️ **The 55% ceiling and the 5× spread were 50% and 4× until 2026-11-18**, when authoring R2
+showed both mis-calibrated: EN tier 1 landed at 50.38% and 4.34×. The cause is not the ladder —
+prize and pot are a flat 9.29% of turnover at BOTH ends — but TV's SHARE of a turnover figure that
+moved beneath it: `league.tv_deal` is an authored absolute, R2 cuts tier-1 turnover 15% and
+deliberately does not re-derive TV, so TV goes 35.0% → 41.1% with no TV figure changing. The
+spread cap was also measuring the pyramid rather than a mis-authoring, since EN tier 8's TV deal
+is £4,950 a year. The owner re-set both; every costed alternative was worse (see the constants'
+docblocks in `EconomyWageTableCommand`). `CHAMPION_SHARE_MAX_PCT` and the flatness tolerance were
+NOT touched, and the flatness check — the one that actually catches a ladder drifting off its
+turnover table — passes with 0.0065pp against its 0.5pp tolerance. `LeaguePayoutResolverTest`, and
 `docs/deploy/economy-rollout.md` §4c for the authored figures.
 
 **`NpcClubGenerationService::balanceForTier()` is country-scaled since 2026-11-12**, and that

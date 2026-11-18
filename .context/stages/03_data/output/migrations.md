@@ -844,3 +844,57 @@ generate their world live.
 
 A second, code-only half went with it: staff ABILITY is now drawn from the club's tier band
 rather than a single global range, so a tier-8 side can no longer field a world-class manager.
+
+## `Version20261118120000` — the re-derived economy, resolution R2 (2026-11-18)
+
+**Authoring, not schema.** Six figures on `game_config`, in one transaction, in
+`Version20261116181000`'s shape: stash everything replaced into `economy_r2_pre_authoring_backup`
+(one row, plain columns), write the new values, and have `down()` restore from the stash and drop
+the table. Verified as an exact round-trip on a clone: `down()` puts back the turnover row, both
+ratio tables, both tier-1 bases and the whole facility column — including REMOVING the six band-3
+slug keys `up()` created — and drops the backup table.
+
+What it authors:
+
+1. `economy_baseline_turnover_pence` → `[£331m, £114m, £34.6m, £20.7m, £7.32m, £2.69m, £686k,
+   £215k]`. ⚠️ **This is the BASELINE country's table, not England's** — every country is this row
+   times its `economy_factor_bp`, all at parity today, so it moves all 24 eight-tier countries at
+   once while only EN and SC have been gated.
+2. Both ratio tables → `[1000000, 344411, 104532, 62538, 22115, 8127, 2073, 650]` and both tier-1
+   bases → `8516630000` (£85,166,300 = 0.2573x the new T1). The ladder `5dc3f51b` authored IS the
+   OLD turnover ladder normalised to tier 1, so re-authoring turnover silently invalidates it —
+   they move together or not at all. The per-league columns and `league_tier_defaults` are NOT
+   re-nulled: `Version20261116181000` already cleared them and NULL = inherit picks the new ladder
+   up by itself.
+3. `npc_facility_level_ranges` band 3 (tiers 7 AND 8, no country dimension) → four stands at
+   `0-1`, nine slugs excluded at `0-0`.
+
+**Nothing is authored for wages, deliberately.** `EconomyScaleResolver::wageScaleMicroPence()`
+derives `S_tier` from the turnover row, and the youth scholarship anchor follows the average wage,
+so (1) moves both with no second action. Writing either by hand gives the chain two sources of
+truth. Staff and scout pay do NOT move — `TierBandScaleResolver` reads the ability bands.
+
+**One `addSql` per key, and `create_missing = true` on every `jsonb_set`.** The facility column is
+written one SLUG at a time, never as a whole-row or whole-band overwrite, for the reason
+`Version20261116181000` gives about `league_tier_defaults`. The `create_missing` flag is the subtle
+half: six of the nine exclusions (`scout_fleet`, `imaging_suite`, `player_wellbeing`,
+`nutrition_centre`, `trial_pitch`, `car_park`) had NO band-3 entry, and `buildFacilities()` falls
+back to `FACILITY_LEVELS` band 3's `other` range of `0-1` for a slug with no override — so omitting
+them would have left all six still built.
+
+**What band 3 held before, which settles an open question.** Overrides WERE authored per slug —
+stands `north 1-1, south 1-1, east 1-2, west 1-2` (mean total **5.0**), `scouting_center 1-1`,
+`club_shop 1-1`, `training_pitch 1-1`, `physio_clinic 1-1`, `youth_academy 0-1`,
+`technical_zone 0-1`, `tactical_room 0-1`, `kinetic_lab 0-1`, the rest `0-0`. The 5.0 matches the
+Nov-15 world export's measured 4.89–5.05 against a code default that would give 2.0, so the
+discrepancy `candidate-c-rollout.md` §0 flagged was **authored overrides, not the NPC upgrade
+drift** `game-mechanics.md` §13.3 describes. The stand half of the change is therefore real, not a
+no-op. Afterwards the active templates leave a bottom-division club exactly EIGHT facilities: four
+small stands, a training pitch, a physio clinic, a club shop and a tactical room. (`kinetic_lab`,
+`zenith_sanctuary` and `neuro_shed` are keys with no active `facility_template` row — inert, and
+left exactly as found.)
+
+**Paired with `WORLD_PACK_VERSION` 9 → 10.** Packs bake facilities, wages, `tvDeal` and both payout
+figures. ⚠️ The bump is NOT enough on its own here: existing NPC clubs keep the facilities they
+were generated with, so the band-3 change reaches nothing until the bottom two tiers are
+REGENERATED.

@@ -156,8 +156,26 @@ class WorldInitializationService
      *     proportion to ability — paid that one scout £2,230/wk of a £4,308 staff bill.
      *     `buildScoutSnapshot()` carries `experience` and the `tier` derived from it, so this
      *     is again a CONTENT change at an unchanged shape.
+     *
+     *   - **10 (2026-11-18)** — the re-derived economy (resolution R2) is AUTHORED:
+     *     `Version20261118120000` rewrites the baseline turnover ladder, both payout ratio
+     *     tables and their tier-1 bases, and band 3 of `npcFacilityLevelRanges`. A pack bakes
+     *     facilities, wages, `tvDeal` and both payout figures, so every one of those moves
+     *     under an unchanged shape — the case this constant exists for, and the fourth content
+     *     bump in a row.
+     *
+     *     Turnover goes to `[£331m, £114m, £34.6m, £20.7m, £7.32m, £2.69m, £686k, £215k]` for
+     *     the BASELINE country (so every country moves, all being at parity today), both
+     *     ladders to `[1000000, 344411, 104532, 62538, 22115, 8127, 2073, 650]` on a tier-1
+     *     base of £85,166,300, and band 3 to a bottom-division ground of eight facilities.
+     *
+     *     ⚠️ THE BUMP IS NOT ENOUGH ON ITS OWN HERE. Existing NPC clubs keep the facilities
+     *     they were generated with, so the band-3 change reaches nothing until the bottom two
+     *     tiers are REGENERATED; the bump and `app:worldpack:maintain` only restock what is
+     *     generated after that. Wages and the payout figures do move on the bump alone, since
+     *     the resolvers read `GameConfig` at pack-build time.
      */
-    public const WORLD_PACK_VERSION = 9;
+    public const WORLD_PACK_VERSION = 10;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [

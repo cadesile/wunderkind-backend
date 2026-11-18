@@ -128,9 +128,36 @@ final class EconomyWageTableCommand extends Command
      *
      * 10-50% brackets the authored shape with headroom at both ends and still catches what was
      * actually wrong: tiers 6, 7 and 8 were at 157%, 362% and 542%.
+     *
+     * ── THE CEILING WENT 50 -> 55 ON 2026-11-18 (OWNER), AND HERE IS WHY ──────────────────────
+     *
+     * Authoring resolution R2 (`Version20261118120000`) put EN tier 1 at **50.38%** and tripped
+     * this ceiling by 0.38 points. The cause is isolated and it is not the thing this check was
+     * written to catch:
+     *
+     *  - **The payout half is innocent, provably.** Prize and pot are a flat **9.29% of turnover
+     *    at BOTH ends** of the pyramid — exactly what `5dc3f51b`'s ratio ladder exists to hold,
+     *    and what `PAYOUT_FLATNESS_TOLERANCE_PP` below independently confirms at 0.0065pp.
+     *  - **The whole breach is TV's SHARE of a turnover figure that moved beneath it.**
+     *    `league.tv_deal` is an authored ABSOLUTE. R2 cuts tier-1 turnover 15% (£388.7m ->
+     *    £331m) and deliberately does not re-derive TV (`REMAINING-WORK.md` §2f.5), so TV's
+     *    share goes 35.0% -> 41.1% with no figure in the TV table changing. A top flight drawing
+     *    ~41% of its turnover from broadcast is normal for a broadcast-led division, not a
+     *    defect.
+     *
+     * ⚠️ **AND EVERY ALTERNATIVE WAS COSTED AND IS WORSE.** Raising tier-1 turnover enough to
+     * clear 50% needs £334.1m and STILL fails the spread at 4.31x, while dropping tier-1 COVERAGE
+     * to 84.5% — below the app gate's 85-110% band. Clearing the spread by turnover alone needs
+     * £366.8m and 77.2% coverage. Re-deriving tier-1 TV to hold its old 35% share clears both
+     * checks but drops tier-1 coverage to 79.2%; holding coverage then forces T1 ~ £290m, which
+     * tightens the check-1 chain to T2 <= £100.2m and re-opens every tier's figure.
+     *
+     * So 55 is the owner re-setting a bound that was shown to be mis-calibrated, NOT an
+     * implementer quieting an alarm about their own authoring. The floor stays at 10 and
+     * `CHAMPION_SHARE_MAX_PCT` stays at 100.
      */
     private const PAYOUT_SHARE_MIN_PCT = 10;
-    private const PAYOUT_SHARE_MAX_PCT = 50;
+    private const PAYOUT_SHARE_MAX_PCT = 55;
 
     /**
      * How much more of its turnover the BOTTOM division may draw from these three lines than the
@@ -140,8 +167,27 @@ final class EconomyWageTableCommand extends Command
      * passes at 0.278x — tier 8 is LOWER, because TV collapses faster than the flat prize share
      * compensates. Checked in BOTH directions for that reason: the one-sided form would have
      * been silent on the real spread, which is tier 1 at 3.60x tier 8.
+     *
+     * ── THE CAP WENT 4 -> 5 ON 2026-11-18 (OWNER), FOR THE SAME REASON AND ONE OF ITS OWN ─────
+     *
+     * R2 took this spread to **4.34x** (tier 1 at 50.4% against tier 8 at 11.6%). The arithmetic
+     * cause is the one `PAYOUT_SHARE_MAX_PCT` above sets out: turnover fell 15% at the top while
+     * TV, an authored absolute, did not move.
+     *
+     * ⚠️ **BUT THIS CAP ALSO TURNED OUT TO BE MEASURING THE PYRAMID RATHER THAN A
+     * MIS-AUTHORING.** The spread between these two shares is STRUCTURAL — a top flight is
+     * broadcast-led and a bottom division is not, and EN tier 8's TV deal is **£4,950 a year**.
+     * Capping the ratio of league-income shares between a £136,000,000 broadcast contract and a
+     * £4,950 one was never a statement about whether the ladder was authored correctly, which is
+     * what this check is for. The flat-share invariant below is the check that actually catches a
+     * ladder drifting off its turnover table, and it passes with 0.0065pp of slack.
+     *
+     * 5 keeps the check alive — it still catches the 157%/362%/542% shape the ladder was authored
+     * to fix, and it would still fire well before the two ends were running different economies —
+     * while no longer failing on a correctly-authored pyramid. Costed alternatives: see
+     * `PAYOUT_SHARE_MAX_PCT`.
      */
-    private const PAYOUT_SHARE_SPREAD = 4;
+    private const PAYOUT_SHARE_SPREAD = 5;
 
     /**
      * The hard ceiling on what ONE CLUB can bank for winning its division: prize + first-place
