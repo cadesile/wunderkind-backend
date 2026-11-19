@@ -156,6 +156,24 @@ hunting:
    tree before suspecting your change; that alone distinguishes this from a real break, and it is
    cheaper than the stash that was needed to establish it.
 
+5. `NpcClubPlaceWeightingTest::testTheLargestTownOutdrawsTheSmallestInItsOwnBand` —
+   **composition-dependent in the same way as #4, added 2026-11-19.** Seen as "70 is greater than
+   72" on the merged `dev` tree (`gh run 44516901111`) and in **no** `development` run; isolated it
+   passes 3/3, and a second full run on the identical tree had it pass while the other three still
+   failed. The plausible trigger is the `npc_club` fixtures that landed with `LeagueSlotsAuthoringTest`
+   and `LeagueSlotsCorrectionTest` — i.e. **probably ours**, unlike #4 — so it is listed rather than
+   hunted. Do not treat its appearing or disappearing as a regression; re-run before suspecting a
+   change, as with #4.
+
+   It did **not** fire in the A7 full run of 2026-11-19 (3,294 tests, **3** failures: items #1, #2
+   and #3 only), which is consistent with the range below rather than evidence it is fixed.
+
+⚠️ **THE RANGE IS THEREFORE THREE TO FIVE**, because #4 and #5 each join and leave the list on their
+own. ⚠️ **It is NOT "~31".** That figure is `app:economy:wage-table`'s own `31 check(s) failed`
+output on the development clone — a gate result, not a test result — and it reached at least one
+agent brief as a test baseline. Judging a suite run against 31 would silently absorb about 27 real
+regressions.
+
 ⚠️ **Check a failure against this list before treating it as yours, and check it the way #4 was
 checked** — stash the change and re-run the one test. Both are one command, and today a
 template-and-CSS change was briefly suspected of breaking #1 for want of doing it.

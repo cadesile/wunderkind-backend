@@ -521,6 +521,16 @@ filename alone.
   The command is therefore blind to the exact defect that zeroed a division's TV income. Do not
   take an unchanged gate as evidence that nothing moved here.
 
+  ✅ **RESOLVED 2026-11-19 (A7). The paragraph above is kept because its reasoning was right and
+  its consequence arrived.** That blindness is exactly what went wrong next:
+  `Version20261119120000` corrected `slots` and nothing resynced `tv_deal`, so the gate paired a
+  pool-over-18 cache with a corrected size of 16 and read England's TV income **12.5% low**,
+  printing a row where `perClub x size != pool`. **Both of the gate's raw reads now resolve** —
+  check 3 and check 8's `$tvPerClub`, each `derivedTvDealPence($league) ?? getTvDeal()` — which
+  takes the command out of this class of defect rather than fixing one instance of it. ⚠️ **The
+  paragraph above counted ONE raw read; there were two.** `Version20261119150000` additionally
+  resyncs the column itself, only where `tv_pool_pence IS NOT NULL`.
+
   The RAW columns are exported as **`prizeMoneyOverride`** and
   **`leaguePositionPotOverride`**, and ⚠️ **those two are the only ones `import()` reads.**
   Writing a resolved figure back into the columns would convert every inherit (NULL) into a
@@ -1652,13 +1662,30 @@ authored and both new columns default to 0 (= off, the old flat-plus-cap behavio
 £127. Floor before cap, because the floor is a preference and the cap is the invariant.
 
 **`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
-exits non-zero on SIX checks. Check 6 is the newest and the only guard on **`league.tv_deal`,
+exits non-zero on NINE checks. (⚠️ This sentence read SIX while the command already had eight;
+corrected to nine when check 9 was added, 2026-11-19.) Check 6 is the newest and the only guard on **`league.tv_deal`,
 the one money figure the country factor never reaches** — it is a stored absolute an operator
 types in, so a factored country would pay a fifth of the wages and bank full baseline TV. Check 3
 cannot see it (TV at 5x its intended share still passes a 100%-of-turnover bound), so check 6
 compares against the BASELINE country's own figure times the factor and reports what to author.
 Needed `EconomyScaleResolver::baselineCountryCode()`, since comparing against the base year needs
-the code rather than just the factor. The other five are (S_tier monotonic; no cross-tier ability inversion; TV a sane
+the code rather than just the factor.
+
+**Check 9 (added 2026-11-19) is the only thing that compares the AUTHORED division size against
+the clubs that actually exist**, and it exists because that is the one weak point of authoring
+the size: regenerate a tier at 20 clubs against `slots = 16` and the world pays 16-club money to
+a 20-club division with no error, no warning and no log line. ⚠️ **It compares against the
+reserved-place rule, not against the bare row count** — the generator leaves one place open for
+the player's club at a country's deepest tier, so a correct bottom tier holds `slots - 1` rows
+and a naive `slots == rows` check fires on every bottom tier in the world. The reservation is
+**detected** (deepest tier holding exactly one fewer row than the tier above), never assumed,
+because it is absent in CA, JP, NG, PL, US and SC — the same rule as
+`Version20261119120000::CORRECT_SQL`. Rows outnumbering the size **fails** (money is provably
+split too few ways); the size outnumbering the rows **warns** (a half-filled tier is the normal
+mid-bootstrap state, so failing would redden a box doing nothing wrong). The drift table prints
+either way, because on an agreeing box an empty finding list is indistinguishable from a check
+that never ran. ⚠️ **It never writes `slots`, and must not be "fixed" to make `sizeOf()` prefer
+the row count** — that is the defect `LeagueSizeResolver`'s docblock exists to prevent. The other five are (S_tier monotonic; no cross-tier ability inversion; TV a sane
 fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
 immediately by catching the reference squad being summed over continuous abilities when
 `Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
@@ -1674,6 +1701,14 @@ on 2026-11-12. The table a player sees is assembled on their device.
 plus one for the country's bottom division) is the fallback. The reason the size is stored is not
 the arithmetic — it is that a derived divisor would move whenever an operator clicked Generate,
 silently re-pricing a tier's TV money for every shipped build.
+
+⚠️ **The derive branch's `+1` at the bottom tier is UNCONDITIONAL, where the migration's rule
+detects the reservation** — so on a country whose deepest tier was never reserved, `sizeOf()`
+claims one more club than the division can field. Latent today (nothing on the deployed box is
+at `slots = 0` except SC tiers 5-8, which do reserve) and **deliberately not fixed in A7**:
+changing the resolver is wider than a check. Check 9 surfaces it as an under-filled tier rather
+than being broken by it, and `EconomyAuthoredSizeDriftTest` pins that behaviour so the defect
+cannot go quiet again.
 
 `derivedTvDealPence()` returns **null** for a league with no pool (every league, until somebody
 authors one) and also for a pooled league with no resolvable size — rather than dividing by a

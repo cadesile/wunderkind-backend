@@ -5,6 +5,47 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A7: authored-size drift made loud, and the `tv_deal` cache unstuck (2026-11-19)**, committed
+  on `development` on top of `52c8b3bf`. **Stages touched:** 04_interfaces (`services.md`),
+  03_data (`migrations.md`), shared (this file). `Version20261119150000`, a ninth check in
+  `app:economy:wage-table`, plus `LeagueTvDealResyncTest` and `EconomyAuthoredSizeDriftTest`.
+
+  **Part one — the gate was the last reader of a stale cache.** `league.tv_deal` caches
+  `tvPoolPence / slots` and `syncTvDeal()` runs on an admin save only, so `Version20261119120000`
+  moved `slots` and left the cache on the old divisor. Every publication site already resolved
+  `derivedTvDealPence() ?? getTvDeal()`, so no client saw it; the gate read the raw column while
+  reading the corrected `sizeOf()`, so **England's TV income read 12.5% low** and its row was
+  internally inconsistent (`perClub x size != pool`). ⚠️ **The brief said there was ONE raw read;
+  there were TWO** — check 3's `$perClub` (`:460`) and check 8's `$tvPerClub` (`:952`), which is
+  paired with a `sizeOf()` read eight lines above it. Both now resolve: fixing only one would have
+  left the command in the exact cache-staleness class the change exists to remove it from. The
+  migration resyncs the column itself, **only where `tv_pool_pence IS NOT NULL`**.
+
+  **Part two — nothing compared the authored size against reality.** New check 9: resolved size
+  against the real NPC rows, per league. ⚠️ **It reuses `Version20261119120000::CORRECT_SQL`'s
+  reservation DETECTION rather than assuming a universal `+1`** — the generator leaves a place for
+  the player's club at a country's deepest tier, so a correct bottom tier holds `slots - 1` rows
+  and a naive `slots == rows` check fires on every bottom tier in the world; and the reservation is
+  absent in CA, JP, NG, PL, US and SC, where an unconditional `+1` claims a club the division
+  cannot field. **Rows over the size FAILS** (money is provably split too few ways, and no benign
+  state produces it); **size over the rows WARNS** (a half-filled tier is the normal mid-bootstrap
+  state, and a gate that reddens a correct box is a gate nobody reads). The drift table prints
+  either way, because on an agreeing box an empty finding list cannot be told apart from a check
+  that never ran. **It writes nothing** — pinned by a test — and `sizeOf()` was not changed to
+  prefer the row count.
+
+  ⚠️ **TWO CLONE READINGS THAT MUST NOT BE GENERALISED.** The local clone is far behind the
+  deployed box: it holds EN `slots = 18` against 18 NPC rows and SC `slots = 3` against 3, and its
+  `tv_deal` already equals `pool / slots` everywhere. So **(a)** check 9 is silent on EN and SC
+  here, which says nothing about the deployed box, and **(b)** the migration is a verified no-op
+  here, which is why `up()` had to be exercised against a temporarily staled copy. The deployed
+  gate movement was measured that way: EN TV per club £10,000,000 -> £11,250,000 (+12.5%, and
+  `perClub x 16 = pool` exactly), SC £1,666,666.66 -> £2,142,857.14 (+28.57%, `x 14 = pool`).
+
+  **Latent defect reported, deliberately not fixed:** `LeagueSizeResolver::sizeOf()`'s derive
+  branch still adds `+1` at the deepest tier unconditionally. Check 9 surfaces it as an
+  under-filled tier instead of being broken by it, and that behaviour is pinned.
+
 - **B3: `slots` corrected where an authored value disagrees with the real size (2026-11-19)**,
   committed on `development` on top of `e2c855c6`. **Stages touched:** 03_data (`migrations.md`),
   shared (this file). `Version20261119120000`, plus `LeagueSlotsCorrectionTest`. Carries the
