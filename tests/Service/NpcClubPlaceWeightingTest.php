@@ -19,6 +19,7 @@ use App\Service\NpcClubGenerationService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 /**
  * WHICH town a generated club plays in — the half of generation that used to be a coin toss.
@@ -87,6 +88,8 @@ class NpcClubPlaceWeightingTest extends TestCase
                 $gameConfigRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a
@@ -142,6 +145,8 @@ class NpcClubPlaceWeightingTest extends TestCase
                 $gameConfigRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled. Seating is a post-flush SQL pass over rows that exist, so against a

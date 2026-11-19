@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Service\Economy;
 
 use App\Entity\GameConfig;
+use App\Enum\PlayerPosition;
 use App\Repository\GameConfigRepository;
 use App\Repository\Location\CountryProfileRepository;
+use App\Repository\PoolConfigRepository;
 use App\Repository\StarterConfigRepository;
+use App\Service\PlayerGenerationService;
 
 /**
  * THE only place country and tier compose into a money figure.
@@ -95,6 +98,8 @@ final class EconomyScaleResolver
         private readonly GameConfigRepository     $gameConfigRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
         private readonly CountryProfileRepository $countryProfileRepository,
+        private readonly PoolConfigRepository     $poolConfigRepository,
+        private readonly PlayerGenerationService  $playerGeneration,
     ) {}
 
     /**
@@ -263,10 +268,13 @@ final class EconomyScaleResolver
      *   playerBudget = turnover x wageToTurnoverRatio x (1 - staffShare)
      *   S_tier       = playerBudget / (weeksPerSeason x SUM(ability_i ^ k))
      *
-     * The sum runs over N evenly spaced abilities across the tier's band, where N is the
-     * midpoint of the tier's playerMin/playerMax. Evenly spaced rather than sampled: a
-     * reference squad is a definition, and a random one would make S_tier differ between two
-     * calls for no reason.
+     * The sum runs over N reference-squad members, where N is the midpoint of the tier's
+     * playerMin/playerMax. Each member is an evenly spaced POTENTIAL across the tier's band
+     * — evenly spaced rather than sampled, because a reference squad is a definition and a
+     * random one would make S_tier differ between two calls for no reason — mapped to the
+     * CURRENT ability the generator would actually give it. See referenceSquadAbilitySum():
+     * the band is a potential range, and pricing it as current ability is what left real
+     * squads paying a third of this budget.
      *
      * Returns 0 when the turnover row is unauthored — the caller checks `isResolvable` rather
      * than dividing by a zero scale.
@@ -293,32 +301,171 @@ final class EconomyScaleResolver
         return (int) round(($playerBudget * self::WAGE_SCALE_UNIT) / ($weeks * $sigma));
     }
 
-    /** SUM over the reference squad of ability^k. */
+    /**
+     * SUM over the reference squad of (EXPECTED CURRENT ability)^k.
+     *
+     * ── WHY THE BAND IS NOT THE ANSWER ────────────────────────────────────────────────────
+     *
+     * `abilityBand()` is a POTENTIAL range: it is what gets handed to
+     * `PlayerGenerationService::generate()` as `$potentialRange`, and current ability is
+     * derived strictly BELOW it — `abilityTarget x potential` becomes the cap on six
+     * attributes and current ability is their mean. A wage, meanwhile, is
+     * `S_tier x currentAbility^k`. So until 2026-11-19 this sum was built from potentials
+     * while every wage it priced was paid on current ability, and both halves of that
+     * mismatch pushed the same way: a larger sigma makes S_tier smaller, and an ability below
+     * potential makes the wage smaller again. Measured against real generated squads the
+     * season bill came out at 21-35% of the player budget it is nominally calibrated against
+     * — the single largest calibration error in the economy, and a textbook instance of two
+     * places computing what should be one quantity.
+     *
+     * The fix is to ask the generator what it would actually make. Each member is still a rung
+     * on an even spread of POTENTIALS across the authored band — a reference squad is a
+     * definition, and a sampled one would make S_tier differ between two calls for no reason
+     * — and is then mapped through `PlayerGenerationService::expectedCurrentAbility()` before
+     * being raised to k. Nothing about the maturation curve, the youth ceiling, the position
+     * fractions or the personality matrix is restated here; change any of them and this moves.
+     *
+     * ── THE AGE AND POSITION PROFILE, AND WHY IT IS AVERAGED RATHER THAN PAIRED ───────────
+     *
+     * Expected ability depends on age and position, and the reference squad had neither — it
+     * has only a size. Both are taken from the generator rather than authored: ages are every
+     * integer in `PoolConfig::firstTeamAgeRange()`, weighted equally because
+     * `PlayerGenerationService::buildAnchors()` draws age with `random_int()` over exactly
+     * that range, so a uniform weighting IS the generator's own distribution; positions are
+     * weighted by PoolConfig's own position weights, the same four numbers
+     * `WorldPackSnapshotBuilder::distributeByPosition()` divides a squad by.
+     *
+     * AVERAGED PER RUNG RATHER THAN PAIRED WITH IT, deliberately. Spreading ages across the
+     * squad the way potentials are spread would make the oldest member always the most
+     * talented, a correlation the generator does not have — age and potential are independent
+     * draws — and `ability^k` is convex enough that the spurious correlation would inflate
+     * sigma on its own. So each potential rung costs the MEAN of what it would cost across
+     * the age and position profile, which is the independent joint the generator actually
+     * produces.
+     *
+     * ── WHAT IS STILL APPROXIMATE ─────────────────────────────────────────────────────────
+     *
+     * This prices a squad of EXPECTED players, not the expected cost of a real squad: `x^k` is
+     * convex, so a real draw costs somewhat more than its own mean does, most visibly where a
+     * band is a handful of integers. That residual is left in rather than corrected, because
+     * correcting it needs the variance of the draw and that is a different model from the one
+     * a reference squad is defined to be. Measured per tier in
+     * `docs/economy-loose-ends/a10-wage-scale-report.md`.
+     *
+     * INTEGER vs CONTINUOUS, retained from the previous implementation: the POTENTIAL rungs
+     * are still rounded to integers before being mapped, because `Player::$potential` is an
+     * int and a rung of 6.4 calibrates against a player who cannot exist. The expected
+     * CURRENT ability that comes back is deliberately NOT rounded — it is the mean of a
+     * distribution, not a player's attribute, and rounding a mean of 3.33 to 3 at England
+     * tier 8 would move S_tier by 13%.
+     */
     private function referenceSquadAbilitySum(GameConfig $config, string $country, int $tier): float
     {
-        $band = $this->abilityBand($country, $tier);
-        $size = $this->referenceSquadSize($tier);
-        $k    = $config->getEconomyWageCurveExponentBp() / self::BP;
+        $k   = $config->getEconomyWageCurveExponentBp() / self::BP;
+        $sum = 0.0;
 
-        // INTEGER ABILITIES, NOT CONTINUOUS ONES, and that is a correctness fix rather than a
-        // detail. `Player::$currentAbility` is an int, so a reference squad of continuous
-        // abilities calibrates S_tier against players who cannot exist. The error is invisible
-        // on a wide band and severe on a narrow one: England tier 8 spans 2-7, so 22 players
-        // land on six distinct integers, and summing the continuous spread instead left the
-        // real squad bill 2.5% over the budget it was supposedly calibrated to — caught by
-        // `app:economy:wage-table`'s own self-consistency check rather than by inspection.
-        if ($size <= 1) {
-            return ((int) round(($band['min'] + $band['max']) / 2)) ** $k;
-        }
-
-        $sum  = 0.0;
-        $span = $band['max'] - $band['min'];
-
-        for ($i = 0; $i < $size; $i++) {
-            $sum += ((int) round($band['min'] + $span * $i / ($size - 1))) ** $k;
+        foreach ($this->referenceSquadAbilities($country, $tier, $k) as $ability) {
+            $sum += $ability > 0.0 ? $ability ** $k : 0.0;
         }
 
         return $sum;
+    }
+
+    /**
+     * The reference squad itself: one EXPECTED CURRENT ABILITY per member, in band order.
+     *
+     * PUBLIC BECAUSE THE GATE HAD ITS OWN COPY. `app:economy:wage-table`'s check 4 prices the
+     * reference squad player by player and compares the total against the configured share of
+     * turnover, which is the one check that catches a rounding error anywhere in the chain —
+     * and it was rebuilding the squad from the ability band itself, a THIRD statement of what
+     * a reference squad is after this class and `wunderkind-app`'s harness. That was survivable
+     * while the definition was "an even spread of the band", because all three copies could
+     * write the same two lines. It is not survivable now: the squad is the band mapped through
+     * the generator's maturation curve, and a copy of that would be the same drift this change
+     * exists to remove, one level up.
+     *
+     * Floats, deliberately not rounded: each member's figure is an AVERAGE over the age and
+     * position profile, not an attribute a player carries. Rounding an average of 1.4 to 1 at
+     * England tier 8 would move S_tier by a third.
+     *
+     * @param  float|null $k the wage curve exponent; read from config when omitted
+     * @return list<float>
+     */
+    public function referenceSquadAbilities(string $country, int $tier, ?float $k = null): array
+    {
+        $k  ??= $this->gameConfigRepository->getConfig()->getEconomyWageCurveExponentBp() / self::BP;
+        $band = $this->abilityBand($country, $tier);
+        $size = $this->referenceSquadSize($tier);
+
+        if ($size <= 1) {
+            return [$this->expectedMemberAbility((int) round(($band['min'] + $band['max']) / 2), $k)];
+        }
+
+        $squad = [];
+        $span  = $band['max'] - $band['min'];
+
+        for ($i = 0; $i < $size; $i++) {
+            $squad[] = $this->expectedMemberAbility((int) round($band['min'] + $span * $i / ($size - 1)), $k);
+        }
+
+        return $squad;
+    }
+
+    /**
+     * The CURRENT ABILITY a reference-squad member of this POTENTIAL would have, averaged over
+     * the generator's own first-team age range and position weights.
+     *
+     * Deterministic by construction: every input is a config row or a const, and the one thing
+     * that could have made it otherwise — the generator's 5% prodigy branch — is weighted
+     * inside `expectedAbilityTargetForAge()` rather than rolled. No `random_int()` is reachable
+     * from here, which is what lets `S_tier` be a figure an operator can reproduce by hand.
+     */
+    private function expectedMemberAbility(int $potential, float $k): float
+    {
+        $pool     = $this->poolConfigRepository->getConfig();
+        $ageRange = $pool->firstTeamAgeRange();
+
+        $positionWeights = [
+            PlayerPosition::GOALKEEPER->value => $pool->getPositionWeightGk(),
+            PlayerPosition::DEFENDER->value   => $pool->getPositionWeightDef(),
+            PlayerPosition::MIDFIELDER->value => $pool->getPositionWeightMid(),
+            PlayerPosition::ATTACKER->value   => $pool->getPositionWeightAtt(),
+        ];
+
+        $weighted    = 0.0;
+        $weightTotal = 0;
+
+        for ($age = $ageRange['min']; $age <= $ageRange['max']; $age++) {
+            foreach ($positionWeights as $position => $weight) {
+                if ($weight <= 0) {
+                    continue;
+                }
+
+                $ability      = $this->playerGeneration->expectedCurrentAbility($potential, $age, PlayerPosition::from($position));
+                $weighted    += $weight * ($ability > 0.0 ? $ability ** $k : 0.0);
+                $weightTotal += $weight;
+            }
+        }
+
+        // No usable age range or every position weighted zero: fall back to the member's own
+        // potential, which is the pre-2026-11-19 behaviour and keeps a misconfigured pool
+        // resolving to a scale rather than to a division by zero.
+        if ($weightTotal <= 0 || $k <= 0.0) {
+            return (float) $potential;
+        }
+
+        // THE k-POWER MEAN, NOT THE ARITHMETIC ONE, and the difference is the whole point.
+        // What the scale needs is the member's expected COST, and cost is `ability^k` with k at
+        // 2.5 — a convex function, so the mean of the costs is strictly above the cost of the
+        // mean. Averaging the abilities first and raising once would quietly price every member
+        // below what his own age-and-position profile costs, and would do it worst where the
+        // profile is widest: a 19 year old sits near 15% of his potential and a 30 year old
+        // near 66%, so the spread this averages over is not a rounding detail.
+        //
+        // Inverting the power mean back into an ability, rather than returning the cost
+        // directly, is what lets `referenceSquadAbilities()` hand the gate a squad it can price
+        // through the real pricing function instead of through a second copy of this formula.
+        return ($weighted / $weightTotal) ** (1 / $k);
     }
 
     /**

@@ -26,6 +26,7 @@ use App\Service\StaffGenerationService;
 use App\Service\WorldPackSnapshotBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class MarketPoolAssignTest extends TestCase
 {
@@ -54,6 +55,8 @@ class MarketPoolAssignTest extends TestCase
                     $this->createStub(GameConfigRepository::class),
                     $this->createStub(\App\Repository\StarterConfigRepository::class),
                     $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                    ReferenceSquadDoubles::poolConfigRepository(),
+                    ReferenceSquadDoubles::playerGeneration(),
                 ),
                 new \App\Service\Economy\TierBandScaleResolver(
                     $this->createStub(\App\Repository\StarterConfigRepository::class),

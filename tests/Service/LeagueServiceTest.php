@@ -10,6 +10,7 @@ use App\Repository\LeagueRepository;
 use App\Service\LeagueService;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class LeagueServiceTest extends TestCase
 {
@@ -49,6 +50,8 @@ class LeagueServiceTest extends TestCase
                     $configRepo,
                     $this->createStub(\App\Repository\StarterConfigRepository::class),
                     $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                    ReferenceSquadDoubles::poolConfigRepository(),
+                    ReferenceSquadDoubles::playerGeneration(),
                 ),
             ),
             // A REAL LeaguePayoutResolver, for the same reason as the two above: it is final.
@@ -62,6 +65,8 @@ class LeagueServiceTest extends TestCase
                     $configRepo,
                     $this->createStub(\App\Repository\StarterConfigRepository::class),
                     $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                    ReferenceSquadDoubles::poolConfigRepository(),
+                    ReferenceSquadDoubles::playerGeneration(),
                 ),
             ),
             // A REAL StarterAbilityRangeService over stubbed repositories, because it is

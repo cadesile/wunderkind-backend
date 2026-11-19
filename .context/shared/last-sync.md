@@ -5,6 +5,176 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A18: the catchment fan-base share ladder is published (2026-11-19)**, committed on
+  `development` as the single commit directly on top of `b82540d7` (its own hash is not quoted
+  here because it moved on an amend; the report has the final one). **Stages touched:** 03_data (`entities.md`,
+  `migrations.md`), 04_interfaces (`routes.md`), shared (this file). Report and verbatim
+  evidence: `wunderkind-docs/economy-loose-ends/a18-fanbase-backend-report.md` and
+  `a18-run-2026-11-19/`.
+
+  **What landed.** A NEW `starter_config.fan_base_share_percent` column
+  (`Version20261119190000`), `Record<tier-string, {min,max}>` of whole percentages, seeded
+  60-70% at tier 1 down to 15-20% at tier 8, admin-editable per tier at `/admin/starter-config`
+  and clamped 0-100 on save, published as `fanBaseSharePercent` on `GET /api/starter-config`.
+  It completes the app half committed as `0964fedc` on `new-game-save`, which computes
+  `fanCount = floor(catchment x share / 100)` and was inert without it.
+
+  **Four things worth carrying forward.**
+
+  1. 🔴 **`fanBaseRanges` is NOT superseded and was not touched.** Two keys, two units, 1,000x
+     apart: that one is an absolute headcount, this one a percent of the plot population a club
+     sits on. The app falls back to the absolute band whenever the ladder OR a club's catchment
+     is missing, so it is live behaviour. Reading the absolute key as a share would publish a
+     tier-1 fan base of 700,000% of the catchment. ⚠️ **Its ENTITY default (50,000-150,000 at
+     tier 1) is nothing like the deployed row (700,000-1,500,000)** — read it from an export,
+     never from the PHP default. Three tests pin that it did not move, one of them as a
+     relationship (every absolute band > 100) rather than as literals.
+
+  2. 🔴 **NO `WORLD_PACK_VERSION` BUMP WAS NEEDED, AND THE BRIEF ASKED FOR ONE.** The brief and
+     the app's own `WorldClub.populationSize` docblock both say the pack does not carry
+     `populationSize`. It has carried it since `WorldPackSnapshotBuilder` was written — verified
+     against cached payloads at versions 8 and 9, with both generation paths delegating to that
+     one builder and `InitializeController::tier()` serving the stored payload whole. Bumping
+     11 -> 12 would have invalidated **107 cached tier payloads** and forced a manual
+     regeneration to publish a field that was already there. The version stays at **11**. The
+     app's docblock is wrong and is flagged for the app session, not fixed here.
+
+  3. ⚠️ **The ladder reproduces the England SPREAD but NOT the "uniform x0.47-0.49 offset" the
+     plan predicted**, and the reason is the deployed data, not the numbers. England comes out at
+     **68.4:1** against today's 73.3:1 (so the rejected 5-10% / 164:1 variant was definitely not
+     applied), but the per-tier multiplier runs **x0.057 to x1.92** in England and **x0.010 to
+     x0.100** in Scotland. Two causes: (a) **three separate clubs sit in London on the deployed
+     export, at tiers 1, 3 AND 6**, so mean catchment is non-monotonic across tiers and a tier-6
+     club lands at 2,290,410 fans — above today's tier-1 maximum; (b) `fanBaseRanges` is
+     country-blind while Scotland's largest catchment is 635,640 against England's 8,982,000.
+     ⚠️ The plan's claim that double-counting a shared city is "invisible to the engine because
+     nothing aggregates fan bases" is **true for aggregation and false for the gradient** — the
+     pyramid still inverts at that one club. Neither is fixable with a share percentage.
+
+  4. 🟢 **The 42,500 demand ceiling stops being dead code, which is the real result.** Today
+     every tier-1-to-6 absolute band has its MINIMUM above 42,500, so the cap binds on no club
+     above tier 6 in either country. After the ladder it binds on all but 27 of England's 127
+     clubs and all but 6 of Scotland's 111.
+
+  `app:economy:wage-table` is byte-identical before and after for both EN and SC (verified by
+  diff across a stash) — this touched no economy dial.
+
+- **A10: the wage scale calibrated against the ability players ACTUALLY have (2026-11-19)**,
+  committed on `development` on top of `0e68d6ac`. **Stages touched:** 04_interfaces
+  (`services.md`), shared (this file). Report and verbatim evidence:
+  `docs/economy-loose-ends/a10-wage-scale-report.md` and `a10-run-2026-11-19/`.
+
+  **The defect, in one sentence.** `EconomyScaleResolver::referenceSquadAbilitySum()` built sigma
+  by spreading the tier's authored ability band across the reference squad — but that band is the
+  **potential** range handed to `PlayerGenerationService::generate()` as `$potentialRange`, while
+  a wage is `S_tier x CURRENT ability^k`. Denominator in potentials, numerator in current ability,
+  both errors pushing the same way. Measured against real generated squads, a season bill came to
+  **21-35%** of the player budget it was nominally calibrated against. Each member is now a
+  potential rung mapped through a new `PlayerGenerationService::expectedCurrentAbility()`;
+  coverage lands at **94-124%** and every `S_tier` rose **3.18x to 4.66x**.
+
+  **Four things worth carrying forward.**
+
+  1. ⚠️ **The owner's recorded formula was not the generator's, and implementing it literally
+     overshoots by 1.3-2.5x.** `next-work-plan.md`'s OWNER CHOSE (b) gives
+     `potential x abilityTarget x mean(position attribute fractions)` and predicts bills near
+     70-85%. That covers three of the six attributes: `power`, `stamina` and `heart` are NOT drawn
+     from the cap at position fractions — they are computed from height, weight and the
+     personality matrix, land at 54/53/61 regardless of potential, and are merely `min($cap, ...)`,
+     so below about ability 55 they sit AT the cap. Both models were implemented and measured: the
+     literal one gives **128-247%** coverage, the faithful one 94-124%. **So §4's "if you land on
+     ~100%, suspect you fitted it" warning was aimed at the wrong model** — ~100% is what the
+     turnover model means, and the predicted 70-85% was unreachable by any faithful derivation.
+     The residual above 100% at narrow bands is Jensen: `x^2.5` is convex, so a real draw costs
+     more than a squad of expected players, worst where a band is five integers wide.
+
+  2. **Nothing was copied into the economy service, and that cost a refactor of the generator.**
+     §3.4 of the brief forbade re-deriving the tables. So `PlayerGenerationService` grew
+     `ABILITY_TARGET_BANDS` (lifted out of `buildAbilityTarget()`'s if/elseif), `capBounds()`
+     (out of `randInCap()`), `weightFor()` and `powerFor()/staminaFor()/heartFor()` (out of
+     `buildAttributes()`) — each now called by BOTH the random path and the deterministic
+     expectation, so there is one implementation of each formula rather than a mirror. Personality
+     needed `PersonalityGeneratorService::expectedTraits()`, a mould-weighted expectation pushed
+     through the REAL `applyCorrelations()`; it agrees with 40,000 rolls to within 4.4% on all
+     eight traits. ⚠️ **`expectedTraits()` must never build an entity** — a squad of average
+     personalities is what the Personality Matrix exists to prevent.
+
+  3. ⚠️ **THE REFERENCE SQUAD HAD THREE DEFINITIONS AND NOW HAS ONE.**
+     `EconomyWageTableCommand::squadBillPence()` was spreading the band itself, which passed only
+     while the resolver said the same two lines — with the resolver's squad no longer the band it
+     reported **143-182%**, a drift that was its own and nothing else's. It now reads the new
+     public `EconomyScaleResolver::referenceSquadAbilities()`. **The third copy is app-side and
+     was NOT touched** (no cross-repo work): `wunderkind-app/src/economy/harness/loadExport.ts:89`
+     `referenceSquad()` still mirrors the old spread, its comment "matching the backend's
+     reference squad" is now false, and the `9782.608696` cross-tier invariant that file documents
+     **will break** — it becomes `9782.608696 x sigma_old/sigma_new`, which runs 3.18-4.66.
+     Flagged for an app-side task. The shipped runtime needs nothing: `clubBudget.ts:226` already
+     sums real current abilities.
+
+  4. **An integer overflow the change made reachable, fixed.**
+     `WageModelResolver::turnoverPlayerPence()` did `intdiv((int) round(S x shape) x repBp, BP)`;
+     `(int) round(S x shape)` reaches 2.8e15 on a steep tier, x 10000 is past `PHP_INT_MAX`, so
+     the product became a float and `intdiv()` raised a TypeError. It was always within ~1.3x of
+     that ceiling and the fourfold `S_tier` rise pushed it over. The modifier is now folded into
+     the same rounding step — exactly equal at the shipped reputation spread of 0. `$ability` also
+     widened to `int|float`, because a reference member's figure is an average over sixty
+     age-and-position cells and rounding 1.4 to 1 at EN tier 8 would move sigma by a third.
+
+  **Gate:** EN/SC `S_tier` up 3.18-4.66x, `bill % turnover` still 45.0% (check 4 is a definition
+  and both sides moved), failed checks 31 -> 37. ⚠️ **The six new findings are checks 1 and 2 at
+  EN tiers 4, 7 and 8 — real, not a regression.** `S_tier` stops being monotonic because sigma no
+  longer scales smoothly with the band once the generator's `max(1, floor(cap x minFrac))` floor
+  bites at small caps; EN 3->4 is 20-40 -> 15-35 while the squad drops 28 -> 26, and EN 6->7->8 is
+  10-15 -> 5-10 -> 2-7. EN tier 8 ALREADY failed check 1 before this change. **It is the authored
+  band ladder, not the scale** — Tranche D's "ability bands (R1)" decision. Nothing was tuned.
+
+  Tests: three new in `EconomyScaleResolverTest` (an `S_tier` pin whose whole derivation is
+  arithmetic in its docblock and is hand-checkable to 37.11 pence against the old 9.78; a
+  determinism pin over 40 fresh resolvers with `mt_srand` re-seeded, since the chain now walks a
+  service whose every other path draws; and a pin that no member sits at or above its potential
+  rung). New `tests/Support/ReferenceSquadDoubles.php`, because fifteen unit tests construct the
+  resolver directly and all of them want the shipped pool defaults and a real generator. ⚠️ **Two
+  existing assertions were pinning the OLD calibration and were corrected, with the reason written
+  into each:** `testTheWageScaleMakesTheReferenceSquadCostItsShareOfTurnover` reconstructed sigma
+  from the band (it now reads the resolver's squad, so it asserts the definition rather than the
+  implementation), and `testTheWageScaleCarriesSubPennyPrecision` asserted `S_tier < 1000` pence,
+  an upper bound that was a proxy for "small" and not the precision the test is named after.
+  `AbilityRangeParityTest` did NOT move, contrary to the brief's expectation — it asserts the
+  published and pricing bands are one table, which this does not touch.
+
+  **Suite, reconciled rather than summarised (amended 2026-11-19 after review).** The suite is
+  **3,297** tests with this change — A7's 3,294 plus the three added here, confirmed by
+  `--list-tests`, not inferred. **3,225 executed: 4 failures, 0 errors.** The missing 72 are
+  `AdminShellCoverageTest` alone, which is OOM-killed on its own **identically on a clean tree**;
+  `3,225 + 72 = 3,297` exactly. Every batch reported exactly its planned count except the one
+  that exited 137, whose 20 files were re-run split and recovered all but that file. File
+  coverage was checked, not assumed: 386 files on disk, 386 across the batches, none duplicated,
+  none missed, no `*Test.php` with zero tests listed. Skipped totals **13** across batches —
+  A7's single-run figure to the test, which closes the "batched totals count skips differently"
+  hypothesis. Working in `docs/economy-loose-ends/a10-run-2026-11-19/suite-batches/_reconciliation.txt`.
+
+  ⚠️ **A SIXTH KNOWN FAILURE, AND IT IS DETERMINISTIC — not a composition flake.**
+  `LegacyNewGameFlowTest::testTheEconomyBlockShipsSwitchedOff` ("the turnover table must be
+  unauthored") fails because `EconomyAuthoredSizeDriftTest:156` and
+  `EconomyTvCountryScalingGuardTest:113` — **both landed today with A7** — write
+  `38_866_153_952` into the SHARED `game_config` row inside their own `seed()` and never restore
+  it. Default order is alphabetical and `tests/Command/Economy*` sorts before
+  `tests/Controller/Api/Legacy*`, so **it will now fail in every full run.** ⚠️ **It is NOT a
+  stale test**, which is the tempting reading given R2 authored the turnover table: `wunderkind_test`
+  is not migration-tracked, so R2 never reaches it, and `GameConfig::$economyBaselineTurnoverPence`
+  still ships as `[0, ...]` with a docblock saying so. Proved three ways — reader alone OK,
+  polluter-then-reader FAILS, reader-then-polluter OK — in
+  `a10-run-2026-11-19/legacy-newgame-flake-attribution.txt`. **The fix belongs in the two
+  polluters, not in the reader**, whose docblock names the real mistake it exists to catch.
+
+  ⚠️ **Two things for the PM.** `last-sync.md`'s R2-era line *"wageScaleMicroPence is calibrated
+  against the tier's authored ability band ... so it is only meaningful inside it"* is superseded
+  and was left in place as a historical record. And the full suite is being **OOM-killed** on this
+  box (`docker inspect ... OOMKilled: true`, 3.83 GiB VM, exit 137) **identically on a clean
+  tree** — verified by stash-and-rerun — so it was run in 20-file batches instead;
+  `environment.md`'s known-failures section should say a `137` is an environment result, and
+  should carry the sixth failure above.
+
 - **A7: authored-size drift made loud, and the `tv_deal` cache unstuck (2026-11-19)**, committed
   on `development` on top of `52c8b3bf`. **Stages touched:** 04_interfaces (`services.md`),
   03_data (`migrations.md`), shared (this file). `Version20261119150000`, a ninth check in

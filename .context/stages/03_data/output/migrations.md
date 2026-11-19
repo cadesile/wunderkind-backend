@@ -1073,3 +1073,41 @@ published, still the ladder for `legacy`. So the gate's two "rows 4 and 5 unreac
 3's null `deficitMax`" problems and the five per-tier "no range left" problems **survive this
 migration by design**: they measure the pence ladder, and amending its published bounds is a value
 change nobody has authorised. Do not read their survival as this migration having failed.
+
+## `Version20261119190000` — the catchment fan-base share ladder (2026-11-19)
+
+Adds `starter_config.fan_base_share_percent` (JSON, NOT NULL, PHP-default-backed), seeded with
+the authored ladder: `{"1":{"min":60,"max":70}, … ,"8":{"min":15,"max":20}}`. Published as
+`fanBaseSharePercent` on `GET /api/starter-config`; admin-editable per tier at
+`/admin/starter-config`, clamped 0–100 on save.
+
+Same NOT-NULL-with-a-dropped-DB-default shape as `Version20261102121403` and
+`Version20260509133608` — `starter_config` holds exactly one row, so `ADD … JSON NOT NULL` with
+no default fails on an existing database, and leaving the default behind is mapping drift the
+next `migrations:diff` emits.
+
+🔴 **A NEW COLUMN BESIDE `fan_base_ranges`, NEVER A REINTERPRETATION OF IT, and the reason is
+worth keeping.** The two are 1,000× apart in unit: `fan_base_ranges` is an absolute headcount
+and the deployed row reads `{"1":{"min":700000,"max":1500000}}` (the ENTITY default is far
+smaller — 50,000–150,000 — so read that key from an export, never from the PHP default).
+Re-using the old column for a percentage would have published a tier-1 fan base of 700,000% of
+the catchment to every save on the next config sync. `fan_base_ranges` is untouched and remains
+the app's fallback: `resolveStartingFanCount` (`wunderkind-app/src/economy/fanBase.ts`) takes the
+absolute path whenever either this ladder or a club's catchment is missing. Pinned by
+`StarterConfigFanBaseShareLadderTest` and `StarterConfigFanBaseShareTest`.
+
+⚠️ **The ladder is deliberately NOT steep, and a steeper one was rejected.** NPC generation
+already seats higher tiers in bigger places, so catchment supplies most of the pyramid gradient
+and the share's job is the level, not the gradient. 60–70% → 15–20% measures a 68.4:1 England
+spread against today's 73.3:1; the 5–10% floor considered first gives 164:1. ⚠️ The app's
+`REFERENCE_FAN_BASE_SHARE_PERCENT` constant still holds that rejected 5–10% variant and is what
+fills a tier this column omits — so publish all eight rungs.
+
+⚠️ **NO `WORLD_PACK_VERSION` BUMP, AND NONE WAS NEEDED.** The catchment the ladder multiplies is
+the pack's `populationSize`, which `WorldPackSnapshotBuilder::buildClubSnapshot()` has carried
+since that builder was written (verified against cached payloads at versions 8 and 9). Both
+generation paths delegate to that one builder and `InitializeController::tier()` serves the
+cached payload whole, so nothing about the pack shape moved here.
+
+⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand
+AND its value seeded into the pre-existing row — see `01_overview/output/environment.md`.

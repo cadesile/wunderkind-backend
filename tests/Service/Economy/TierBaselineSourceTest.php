@@ -14,6 +14,7 @@ use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\SponsorBandResolver;
 use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -112,7 +113,7 @@ class TierBaselineSourceTest extends TestCase
         $profileRepo->method('findByCode')->willReturn(null);
         $profileRepo->method('findEconomyBaseline')->willReturn(null);
 
-        $scale = new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo);
+        $scale = new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration());
 
         return new EconomyConfigPublisher(
             $gameConfigRepo,

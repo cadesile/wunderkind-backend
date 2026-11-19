@@ -14,6 +14,7 @@ use App\Service\NpcClubGenerationService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class NpcClubGenerationServiceTest extends TestCase
 {
@@ -50,6 +51,8 @@ class NpcClubGenerationServiceTest extends TestCase
                 $gameConfigRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             // A REAL service over a stubbed Connection, because it is final and cannot be
             // doubled — the same way LocationCatalogueService is built below. Seating is a

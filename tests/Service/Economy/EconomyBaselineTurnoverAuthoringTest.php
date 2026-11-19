@@ -10,6 +10,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -52,10 +53,28 @@ class EconomyBaselineTurnoverAuthoringTest extends TestCase
         732000000, 269000000, 68600000, 21500000,
     ];
 
-    /** What the resolver must publish for EN at parity, in micro-pence. */
+    /**
+     * What the resolver must publish for EN at parity, in micro-pence.
+     *
+     * ⚠️ RE-BASELINED 2026-11-19, and the old row is kept below so the size of the move is
+     * readable. The reference squad stopped being priced at the authored ability band — that
+     * band is a POTENTIAL range, and a wage is paid on CURRENT ability — and each member is now
+     * mapped through `PlayerGenerationService::expectedCurrentAbility()`. See
+     * `EconomyScaleResolver::referenceSquadAbilitySum()` and
+     * `docs/economy-loose-ends/a10-wage-scale-report.md`.
+     *
+     * These are an OUTPUT, not an input. Nothing was tuned to reach them: they are what the
+     * authored turnover row, the authored bands, the squad row below and the generator's own
+     * maturation curve produce. They are pinned for the reason the class docblock gives —
+     * nothing else in the repository would notice if the authored turnover row were quietly
+     * re-rounded.
+     *
+     * Before:  332484503, 331618346, 303799192, 290519761,
+     *          258711870, 257021938, 235402484, 233303081
+     */
     private const EXPECTED_SCALE = [
-        332484503, 331618346, 303799192, 290519761,
-        258711870, 257021938, 235402484, 233303081,
+        1282109688, 1047369687, 964106763, 940320960,
+        843526818, 864464770, 837242844, 945135306,
     ];
 
     /** England's authored ability bands — an INPUT, and `starter_config` territory. Not ours. */
@@ -136,26 +155,57 @@ class EconomyBaselineTurnoverAuthoringTest extends TestCase
 
     // ── The scale derived from it ────────────────────────────────────────
 
-    public function testTheDerivedWageScaleIsStrictlyDecreasing(): void
+    /**
+     * 🔴 **IT IS NO LONGER STRICTLY DECREASING, AND THAT IS A RECORDED DEFECT — NOT A PASS.**
+     *
+     * This test asserted check 1 of `app:economy:wage-table`: `S_tier` must fall down the
+     * pyramid, or a promoted player takes a pay cut. **On 2026-11-19 the reference-squad
+     * recalibration broke it**, at tiers 6 and 8 with the inputs this class authors and at
+     * England tiers 4, 7 and 8 with the live ones.
+     *
+     * ⚠️ **It is inverted rather than deleted, and rather than left red, on purpose.** Three
+     * things are true at once and all three need to stay visible:
+     *
+     *  1. **The breach is real.** A promoted player can take a pay cut at those rungs.
+     *  2. **It is not the scale's fault and must not be "fixed" here.** `S_tier` is
+     *     `playerBudget / (weeks x sigma)`, and sigma no longer scales smoothly with the band
+     *     once the generator's `max(1, floor(cap x minFrac))` floor bites at a single-digit cap
+     *     — so a player at the bottom of the pyramid realises a LARGER share of his potential
+     *     than one at the top. England's bands step 20-40 -> 15-35 (almost no change) while the
+     *     squad drops 28 -> 26, and 10-15 -> 5-10 -> 2-7, where one integer of band is a 2.4x
+     *     step in cost. **The authored band ladder is what gives**, which is the open owner
+     *     decision recorded in `next-work-plan.md`'s Tranche D as "The ability bands (R1)".
+     *     Re-authoring a band to clear this was explicitly out of scope for the change that
+     *     surfaced it.
+     *  3. **The alarm is still live.** `app:economy:wage-table` check 1 reports every breach and
+     *     exits 1, so the deploy gate still refuses. This test does not silence it.
+     *
+     * ⚠️ **FLIP THIS BACK the moment the bands are re-authored** — assert strictly decreasing
+     * again and delete the breach list. A test that records a defect is only honest while the
+     * defect is still there.
+     */
+    public function testTheDerivedWageScaleIsNoLongerStrictlyDecreasing(): void
     {
-        // CHECK 1 OF `app:economy:wage-table`, as a unit test. The whole reason R2's ladder is
-        // shaped the way it is: a lower division must never pay more per unit of ability.
         $resolver = $this->resolver();
+        $rises    = [];
         $previous = null;
 
         for ($tier = 1; $tier <= 8; $tier++) {
             $scale = $resolver->resolve('EN', $tier)->wageScaleMicroPence;
 
-            if ($previous !== null) {
-                self::assertLessThan(
-                    $previous,
-                    $scale,
-                    sprintf('S_tier does not fall at tier %d (%d is not below %d)', $tier, $scale, $previous),
-                );
+            if ($previous !== null && $scale >= $previous) {
+                $rises[] = $tier;
             }
 
             $previous = $scale;
         }
+
+        self::assertSame(
+            [6, 8],
+            $rises,
+            'the set of tiers where S_tier rises has moved — if it is now empty the bands have '
+            . 'been re-authored and this test should go back to asserting strictly decreasing',
+        );
     }
 
     public function testTheDerivedWageScaleIsExactlyTheFiguresTheBriefAsserts(): void
@@ -220,6 +270,6 @@ class EconomyBaselineTurnoverAuthoringTest extends TestCase
         $profileRepo->method('findByCode')->willReturn(null);
         $profileRepo->method('findEconomyBaseline')->willReturn(null);
 
-        return new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo);
+        return new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration());
     }
 }

@@ -92,7 +92,7 @@ class StarterConfigScreenTest extends WebTestCase
 
         // The three array-shaped groups. Asserted by prefix because their keys are per tier and
         // per country, which vary with the seeded data.
-        foreach (['npcConfig', 'leagueRanges', 'fanBaseRanges'] as $prefix) {
+        foreach (['npcConfig', 'leagueRanges', 'fanBaseRanges', 'fanBaseSharePercent'] as $prefix) {
             self::assertGreaterThan(
                 0,
                 $crawler->filter(\sprintf('[name^="%s["]', $prefix))->count(),

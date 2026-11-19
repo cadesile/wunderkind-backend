@@ -489,6 +489,48 @@ class StarterConfig
     ];
 
     /**
+     * The SHARE of a club's catchment that supports it, as a whole percentage, keyed on tier.
+     *
+     * ⚠️ **A SECOND, SEPARATE KEY FROM `$fanBaseRanges` ABOVE, AND THE TWO ARE 1,000x APART IN
+     * UNIT.** `$fanBaseRanges` is an ABSOLUTE HEADCOUNT (the live England row publishes
+     * `{"1":{"min":700000,"max":1500000}}` under it); this is a PERCENT of the plot population
+     * the club draws from. Reinterpreting the old key in place rather than adding this one
+     * would have handed every tier-1 club a fan base of 700,000% of its catchment on the next
+     * config sync. `$fanBaseRanges` keeps its name, its values and its place on
+     * `GET /api/starter-config`, and is the app's fallback whenever this ladder is absent —
+     * see `wunderkind-app/src/economy/fanBase.ts`.
+     *
+     * The app computes `fanCount = floor(population x share / 100)` with the share drawn
+     * uniformly across the tier's band, and falls back to the absolute band whenever either
+     * this ladder or the club's catchment is missing. So an empty value here is "today's
+     * behaviour", not "no fans".
+     *
+     * **Authored 2026-11-19, and the ladder is deliberately NOT steep.** NPC generation already
+     * seats higher tiers in bigger places, so the catchment itself supplies most of the
+     * gradient; 60-70% at tier 1 down to 15-20% at tier 8 reproduces roughly today's pyramid
+     * shape while letting catchment set the spread WITHIN a tier, which is the point of the
+     * feature. A steeper 5-10% floor was considered and rejected as a deliberate steepening
+     * nobody had asked for.
+     *
+     * Admin-editable per tier at `/admin/starter-config`, exactly as `$fanBaseRanges` is;
+     * `DashboardController::saveStarterConfig()` clamps both bounds to 0-100 because a share
+     * above 100% is not a share.
+     *
+     * @var array<string, array{min: int, max: int}>
+     */
+    #[ORM\Column(type: 'json')]
+    private array $fanBaseSharePercent = [
+        '1' => ['min' => 60, 'max' => 70],
+        '2' => ['min' => 49, 'max' => 59],
+        '3' => ['min' => 40, 'max' => 49],
+        '4' => ['min' => 33, 'max' => 41],
+        '5' => ['min' => 27, 'max' => 34],
+        '6' => ['min' => 22, 'max' => 29],
+        '7' => ['min' => 18, 'max' => 24],
+        '8' => ['min' => 15, 'max' => 20],
+    ];
+
+    /**
      * Percentage increase applied to a club's fan base on promotion.
      * e.g. 0.20 = 20%. Default: 0.20
      */
@@ -745,6 +787,11 @@ class StarterConfig
         $this->fanBaseRanges = json_decode($v, true) ?? [];
         return $this;
     }
+
+    /** @return array<string, array{min: int, max: int}> */
+    public function getFanBaseSharePercent(): array { return $this->fanBaseSharePercent; }
+    /** @param array<string, array{min: int, max: int}> $v */
+    public function setFanBaseSharePercent(array $v): static { $this->fanBaseSharePercent = $v; return $this; }
 
     public function getFanBasePromotionIncrease(): float { return $this->fanBasePromotionIncrease; }
     public function setFanBasePromotionIncrease(float $v): static { $this->fanBasePromotionIncrease = max(0.0, $v); return $this; }

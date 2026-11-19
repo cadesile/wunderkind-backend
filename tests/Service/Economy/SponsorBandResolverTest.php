@@ -16,6 +16,7 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\SponsorBandResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -280,7 +281,7 @@ class SponsorBandResolverTest extends TestCase
 
         return new SponsorBandResolver(
             $gameConfigRepo,
-            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo),
+            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration()),
         );
     }
 

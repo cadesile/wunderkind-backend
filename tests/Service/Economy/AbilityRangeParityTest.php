@@ -14,6 +14,7 @@ use App\Service\Economy\SponsorBandResolver;
 use App\Service\Economy\TicketPriceResolver;
 use App\Service\Economy\WageModelResolver;
 use App\Entity\GameConfig;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -192,7 +193,7 @@ class AbilityRangeParityTest extends TestCase
         $profileRepo->method('findByCode')->willReturn(null);
         $profileRepo->method('findEconomyBaseline')->willReturn(null);
 
-        return new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo);
+        return new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration());
     }
 
     private function publisher(StarterConfig $starter, ?EconomyScaleResolver $resolver = null): EconomyConfigPublisher

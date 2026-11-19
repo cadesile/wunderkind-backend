@@ -1365,8 +1365,16 @@ round it to zero and make every player free.
 
 **The reference squad is read from the same config the world generator uses** —
 `starterConfig.npcSquadConfig` for size, `starterConfig.leagueAbilityRanges`
-for the ability band — so the figure the wage scale is calibrated against is
-the figure that actually gets paid. There used to be a third ability table —
+for the POTENTIAL band, `PoolConfig::firstTeamAgeRange()` for ages and
+PoolConfig's position weights for the position mix — so the figure the wage
+scale is calibrated against is the figure that actually gets paid.
+⚠️ **Since 2026-11-19 the band is not priced directly.** It is a *potential*
+range, and a wage is paid on *current* ability, so each member is a potential
+rung mapped through `PlayerGenerationService::expectedCurrentAbility()` before
+being raised to `k`. Pricing the band itself left real squads paying 21–35% of
+the budget they were nominally calibrated against; see
+`referenceSquadAbilitySum()`'s docblock and
+`docs/economy-loose-ends/a10-wage-scale-report.md`. There used to be a third ability table —
 `gameConfig.leaguePlayerAbilityRanges`, a stored column published to the app
 that no server code read and that disagreed at every England tier. It was
 **dropped** on 2026-11-13 (`Version20261113160000`); the published key of that
@@ -1582,10 +1590,15 @@ world.
 **⚠️ What `wageScaleMicroPence` is calibrated AGAINST, and why a client can read it wrongly.**
 `EconomyScaleResolver::wageScaleMicroPence()` solves
 `round(playerBudget × WAGE_SCALE_UNIT / (weeks × sigma))`, where sigma is
-`referenceSquadAbilitySum()` — the sum of `ability^k` over a reference squad drawn evenly across
-**that tier's authored ability band** (`starter_config.league_ability_ranges`). So the published
-scale is only meaningful for abilities inside that band. The method's own comment names the
-case: **"England tier 8 spans 2-7, so 22 players land on six distinct integers."**
+`referenceSquadAbilitySum()` — the sum of `ability^k` over a reference squad whose members are
+drawn evenly across **that tier's authored POTENTIAL band**
+(`starter_config.league_ability_ranges`) and then mapped to the CURRENT ability the generator
+would actually give them (`PlayerGenerationService::expectedCurrentAbility()`, 2026-11-19).
+⚠️ **So the band is the squad's potentials, and the squad's abilities sit well below it** —
+England tier 1's 40–90 band becomes members of 25.4 to 47.5, and tier 8's 2–7 becomes 1.0 to
+4.2. The published scale is meaningful for abilities in the latter range, not the former: the
+band is where these players will eventually be, which is why the app's own ladder is labelled
+"eventual".
 
 With `k = 2.5`, extrapolating outside the band is violent — `20^2.5 / 3^2.5` is about **115×**.
 The app's debug wage table samples a fixed global ladder `[10, 20, 40, 60, 80, 95]` at every
@@ -1689,7 +1702,13 @@ the row count** — that is the defect `LeagueSizeResolver`'s docblock exists to
 fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
 immediately by catching the reference squad being summed over continuous abilities when
 `Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
-wide one.
+wide one. ⚠️ **It no longer builds the squad itself** (2026-11-19): it was a second statement of
+what a reference squad is, which stopped being survivable once the squad became the band mapped
+through the generator's maturation curve, so it reads
+`EconomyScaleResolver::referenceSquadAbilities()`. Checks 1 and 2 (S_tier monotonic, no
+cross-tier inversion) now FAIL at England tiers 4, 7 and 8 — a real consequence of the
+recalibration, not a regression; see
+`docs/economy-loose-ends/a10-wage-scale-report.md`.
 
 **`LeagueSizeResolver` — the TV pool's divisor, and the one place a league's size is
 answered.** Read its docblock before writing anything that asks "how many clubs are in this

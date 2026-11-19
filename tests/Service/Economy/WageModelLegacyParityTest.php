@@ -13,6 +13,7 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\WageModelResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -316,6 +317,8 @@ class WageModelLegacyParityTest extends TestCase
                 $gameConfigRepo,
                 $starterRepo,
                 $this->createStub(CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );
