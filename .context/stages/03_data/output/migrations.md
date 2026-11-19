@@ -660,6 +660,49 @@ Two details that are deliberate and should not be "tidied":
 drift afterwards. A suite run before that step fails with `relation "club_sale" does not
 exist` on every new test, which looks nothing like the change.
 
+## `Version20261119150000` — resync the `tv_deal` cache `Version20261119120000` left stale
+
+**`tv_deal` is not an independent figure wherever a pool exists: it is a CACHE of
+`tvPoolPence / slots`.** `LeagueSizeResolver::syncTvDeal()` is the only writer and it runs on an
+**admin save only** (`LeagueAdminController:95`/`:201`), so when `Version20261119120000` corrected
+`slots` the figure derived from `slots` was left encoding the old divisor and nothing re-ran the
+sync. From the deployed world export of 2026-11-19, EN tier 1: pool `30000000000`, resolved
+`tvDeal` `1875000000` (pool/16), **stored `tv_deal` `1666666666` (pool/18)**.
+
+**No client was affected, and that matters for how to read this.** All four publication sites
+resolve `derivedTvDealPence() ?? getTvDeal()` (`SyncService:834`, `InitializeController:251`,
+`LeagueService:306`, `LeagueImportExportService:66`), so the stale column was invisible
+downstream. The one reader that did not resolve was the release gate, `app:economy:wage-table`,
+which paired this column with the *corrected* `sizeOf()` — **England's TV income read 12.5% low**.
+**The code fix in the same commit is the half that matters**; this migration exists because the
+column is a published cache and the next reader should not have to know its history.
+
+⚠️ **ONLY WHERE `tv_pool_pence IS NOT NULL`, AND THAT IS THE WHOLE CARE HERE.** A pool-less league's
+`tv_deal` is an AUTHORED absolute an operator typed, not a cache — exactly the case
+`derivedTvDealPence()` returns null for. Writing a derived figure over it would invent a pool
+nobody authored. `slots > 0` for the mirror reason: `slots = 0` means derive, and dividing by it is
+not a figure. PostgreSQL's bigint `/` truncates toward zero like PHP's `intdiv()`, so the stored
+figure matches the resolved one to the penny rather than to a rounding mode.
+
+**`WORLD_PACK_VERSION` is deliberately untouched** — not a pack-shape change. Every publication
+site was already serving `pool / slots`, so this writes into the column the value clients were
+already being given.
+
+**Proved reversible on the clone rather than asserted.** The clone's own rows are already
+consistent (`tv_deal = pool / slots` at every EN and SC tier), so the migration is a verified
+**no-op** there: the ordered `tv_deal` column's md5 is `baa40bc2e46a16ceeac928053cc52159` before
+and after migrating. To exercise `up()`, the clone was temporarily staled to the deployed box's
+shape (slots 16/14, `tv_deal = pool/18`) and the round trip measured:
+`797da64c59f65551f3cb980ebe76a7f9` -> up -> `a75902d6cde7efde3068ea3b2d8ea6a3` -> down ->
+`797da64c59f65551f3cb980ebe76a7f9` -> up -> `a75902d6cde7efde3068ea3b2d8ea6a3`; the clone was then
+restored to its own fingerprint. `down()` restores from `league_tv_deal_pre_resync_backup` and
+**never recomputes** — recomputing would be the same bug in reverse, overwriting an operator's
+later edit with whatever `slots` says at rollback time. The stash column is nullable because
+`tv_deal` is, so a league that held NULL goes back to NULL. Pinned by `LeagueTvDealResyncTest`,
+which runs the migration's own `RESYNC_SQL` constant and covers the stale row, the **null-pool row
+that must not move**, a null cache that must stay null, the `slots = 0` hands-off case,
+idempotency, and `intdiv` truncation.
+
 ## `Version20261119120000` — correct an authored `slots` that disagrees with the real size
 
 **A BEHAVIOUR CHANGE, deliberately, and the other half of `Version20261119090000`.** That one
@@ -691,6 +734,11 @@ demonstrate a reservation and is treated as unreserved.
 re-migrate; `rows_changed` against the stash is **0**; `app:economy:wage-table` is byte-identical;
 and SC tier 8 still reads its authored **3**.
 
+⚠️ **AMENDED 2026-11-19 (A7): on the DEPLOYED box this migration was not inert, and the
+byte-identical gate above is a clone reading that must not be generalised.** It moved `slots` on 12
+rows there and left `league.tv_deal` — a cache of `tvPoolPence / slots` — encoding the old
+divisor, because `syncTvDeal()` runs on an admin save only. See `Version20261119150000` above.
+
 `down()` restores every row from `league_slots_pre_correction_backup` (a distinct table name from
 `Version20261119090000`'s, so the two roll back independently) and never resets a column to 0 —
 that would turn an authored decision into "derive". Pinned by `LeagueSlotsCorrectionTest`, which
@@ -703,6 +751,12 @@ shapes, the `slots = 0` hands-off case, and idempotency.
 inert wherever `slots` is authored (the authored value wins), so it bites only `slots = 0`
 leagues — on the deployed box that is SC tiers 5–8, which *do* reserve, so nothing is wrong there
 today. **Reported, not fixed: changing the resolver is wider than a data correction.**
+
+**Still not fixed as of A7 (2026-11-19), but no longer silent.** `app:economy:wage-table`'s new
+check 9 compares the resolved size against the real rows using *this* migration's detection rule,
+so a box where the resolver's unconditional `+1` is wrong now prints it as an under-filled tier.
+`EconomyAuthoredSizeDriftTest` pins that, which is what keeps the defect visible until somebody
+decides to change the resolver.
 
 ## `Version20261116180000` + `Version20261116181000` — the league payout ladders (2026-11-16)
 
