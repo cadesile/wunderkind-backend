@@ -47,8 +47,22 @@ use Doctrine\Migrations\AbstractMigration;
  * SC tier 8 from 3 to 4 — a real, unauthored economic change, in the one change whose promise is
  * that the day it lands is byte-identical.
  *
- * So on that clone this migration writes NOTHING, and on the deployed box — where `slots` is 0 —
- * it authors the counts that box is already using. Both are no-ops in behaviour.
+ * So on that clone this migration writes NOTHING.
+ *
+ * ⚠️ **CORRECTED 2026-11-19 — an earlier draft of this docblock said the deployed box has
+ * `slots = 0`. IT DOES NOT, and the claim came from a task brief whose premise was wrong.**
+ * Measured on the deployed export (`wunderkind-world-2026-11-18 (1).json`, 200 leagues, 3,191
+ * clubs, 25 countries): `slots` is authored non-zero on **196 of 200** rows there. Only **SC
+ * tiers 5-8** are 0, so those four rows are all this migration writes on that box.
+ *
+ * The 12 rows whose authored `slots` DISAGREES with their real size — EN at 18 against 16 real
+ * club rows on all eight tiers, SC tiers 1-4 at 18 against 14 — are deliberately **not** touched
+ * here, because the `only where 0` guard above skips them. Correcting those is a behaviour change
+ * (it moves check 8's per-club divisor and the published `clubCount`) and it needed the owner's
+ * decision, which it now has: it lands as its own migration, not folded into this no-op.
+ *
+ * So: a no-op in behaviour on both boxes, which is still the promise — it simply keeps that
+ * promise by writing four rows rather than by writing all of them.
  *
  * ── 2. COMPUTED IN SQL, NOT HARDCODED ─────────────────────────────────────────────────────
  *

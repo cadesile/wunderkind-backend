@@ -493,6 +493,34 @@ filename alone.
   `Version20261118120000` NULLed the columns to inherit from the ppm ladder, the raw-column export
   read **£0** and every gate run needed a hand-patch.
 
+  ⚠️ **AND SO IS `tvDeal`, AS OF THE SAME DAY — THREE KEYS, NOT TWO (2026-11-19).** `export()`
+  emits `tvDeal` as `LeagueSizeResolver::derivedTvDealPence($l) ?? $l->getTvDeal()`, with the raw
+  column under **`tvDealOverride`**. The cause is NOT the payouts' cause and is worth stating
+  separately: a NULL `prizeMoney` *means* inherit, whereas a NULL `tvDeal` means **nobody ever
+  wrote it**. `syncTvDeal()` is called only from `LeagueAdminController:95`/`:201` — an admin
+  save — and `LeagueService:82` deliberately skips it at generation because no NPC club exists
+  yet to derive a size from. Nothing calls it afterwards, so a generated pooled league keeps a
+  NULL column for ever. That is the live state of **Scottish tiers 5–8**, the only pooled
+  leagues in the world.
+
+  **This was a live gameplay defect, not merely a gate one.** The same raw column was published
+  by `/api/initialize/leagues`, `SyncService::buildLeagueSnapshot()` **and**
+  `LeagueService`'s own league snapshot — four surfaces in total — and the app reads
+  `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`), so those four tiers earned
+  **£0 of TV for a whole season**. All four now resolve. `derivedTvDealPence()` returns null
+  without a pool, so all 8 EN tiers and the other 184 leagues publish exactly what they did
+  before. Pinned by
+  `LeagueImportExportRoundTripTest::testAPooledLeagueExportsTheDerivedShareNotItsNullColumn()`,
+  `...testARoundTripLeavesAPooledLeaguesTvDealColumnNull()`,
+  `...testAnUnpooledLeagueExportsItsAuthoredDealUnchanged()` and
+  `SyncServiceLeagueTest::testAPooledLeagueWithNoAuthoredDealPublishesTheDerivedShare()`.
+
+  ⚠️ **`app:economy:wage-table` CANNOT SEE THIS FIX, and that is a finding in itself.** The
+  gate reads `$league->getTvDeal()` off the entity (`EconomyWageTableCommand:459`), not a
+  published surface, so its output is **byte-identical before and after** — verified by stash.
+  The command is therefore blind to the exact defect that zeroed a division's TV income. Do not
+  take an unchanged gate as evidence that nothing moved here.
+
   The RAW columns are exported as **`prizeMoneyOverride`** and
   **`leaguePositionPotOverride`**, and ⚠️ **those two are the only ones `import()` reads.**
   Writing a resolved figure back into the columns would convert every inherit (NULL) into a

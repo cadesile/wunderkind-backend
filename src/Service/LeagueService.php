@@ -299,7 +299,12 @@ class LeagueService
                 'country'                       => $league->getCountry(),
                 'promotionSpots'                => $league->getPromotionSpots(),
                 'reputationTier'                => $league->getLeagueReputationTier()?->value,
-                'tvDeal'                        => $league->getTvDeal(),
+                // RESOLVED, as the payouts below already are. See
+                // `SyncService::buildLeagueSnapshot()` for the full reasoning: a pooled league's
+                // `tvDeal` column is only ever written by an admin save, so publishing it raw
+                // sent NULL and the app paid £0 of TV. Inert where there is no pool.
+                'tvDeal'                        => $this->leagueSizeResolver->derivedTvDealPence($league)
+                    ?? $league->getTvDeal(),
                 'sponsorPot'                    => $sponsorPot,
                 // RESOLVED, as the sync snapshot and the world pack now do — a null column
                 // inherits the authored tier-1 base x this tier's ratio x the country factor.

@@ -38,6 +38,16 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
      */
     private const INHERIT_COUNTRY = 'ZY';
 
+    /**
+     * A league whose TV is DERIVED: a pool is authored and the per-club column is NULL, which is
+     * the live state of Scottish tiers 5-8. `slots` is authored so the divisor is deterministic
+     * and this fixture does not depend on how many NPC club rows happen to exist.
+     */
+    private const POOL_COUNTRY = 'ZP';
+    private const POOL_PENCE   = 1_000_000;
+    private const POOL_SLOTS   = 10;
+    private const POOL_DERIVED = 100_000;
+
     private LeagueImportExportService $service;
     private LeagueRepository $leagues;
     private NpcClubRepository $clubs;
@@ -423,20 +433,105 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
 
     private function removeFixtures(): void
     {
-        foreach ([self::COUNTRY, self::INHERIT_COUNTRY] as $country) {
+        foreach ([self::COUNTRY, self::INHERIT_COUNTRY, self::POOL_COUNTRY] as $country) {
             foreach ($this->clubs->findBy(['country' => $country]) as $club) {
                 $this->em->remove($club);
             }
         }
         $this->em->flush();
 
-        foreach ([self::COUNTRY, self::INHERIT_COUNTRY] as $country) {
+        foreach ([self::COUNTRY, self::INHERIT_COUNTRY, self::POOL_COUNTRY] as $country) {
             foreach ($this->leagues->findBy(['country' => $country]) as $league) {
                 $this->em->remove($league);
             }
         }
         $this->em->flush();
         $this->em->clear();
+    }
+
+    /**
+     * The defect this closes: a pooled league published its NULL column, the app read
+     * `Math.max(0, league.tvDealPence)` and paid £0 of TV.
+     */
+    public function testAPooledLeagueExportsTheDerivedShareNotItsNullColumn(): void
+    {
+        $this->seedPooledLeague();
+
+        $row = $this->leagueRowIn($this->service->export(), self::POOL_COUNTRY);
+
+        self::assertSame(
+            self::POOL_DERIVED,
+            $row['tvDeal'],
+            'the export published the raw NULL column instead of the derived per-club share',
+        );
+        self::assertNull(
+            $row['tvDealOverride'],
+            'the raw column must export as null, or a round trip will freeze the derived share',
+        );
+    }
+
+    /**
+     * The export/import symmetry trap, for `tvDeal` this time: if the resolved share is read back
+     * into the column, a round trip converts "derive from the pool" into a permanent per-league
+     * override — silently, with no error.
+     */
+    public function testARoundTripLeavesAPooledLeaguesTvDealColumnNull(): void
+    {
+        $this->seedPooledLeague();
+
+        $exported = $this->service->export();
+
+        // Otherwise this passes for the wrong reason on a box where nothing derives.
+        self::assertSame(self::POOL_DERIVED, $this->leagueRowIn($exported, self::POOL_COUNTRY)['tvDeal']);
+
+        $this->removeFixtures();
+        $result = $this->service->import($exported);
+        $this->em->clear();
+
+        self::assertSame([], $result['errors']);
+        self::assertNull(
+            $this->pooledLeague()->getTvDeal(),
+            'the derived share was written into the column — this league no longer follows its pool',
+        );
+    }
+
+    /**
+     * The inert half, and the one that protects every league outside Scotland: all eight England
+     * tiers author `tvDeal` directly with no pool, and must export byte-identically.
+     */
+    public function testAnUnpooledLeagueExportsItsAuthoredDealUnchanged(): void
+    {
+        $this->seedInheritingLeague();
+
+        $row = $this->leagueRowIn($this->service->export(), self::INHERIT_COUNTRY);
+
+        self::assertNull($this->inheritingLeague()->getTvPoolPence(), 'fixture must have no pool');
+        self::assertSame(400_000, $row['tvDeal'], 'an authored deal must survive untouched');
+        self::assertSame(400_000, $row['tvDealOverride'], 'and it is a genuine override, so it round-trips');
+    }
+
+    private function seedPooledLeague(): void
+    {
+        $league = new League(self::POOL_COUNTRY, 3, 'Pooled Division');
+        $league->setPromotionSpots(2);
+        $league->setSlots(self::POOL_SLOTS);
+        $league->setTvPoolPence(self::POOL_PENCE);
+
+        // NOT SET, AND THAT IS THE FIXTURE: nothing writes this column at generation, so a
+        // pooled league carries NULL until an admin saves it.
+        self::assertNull($league->getTvDeal());
+
+        $this->em->persist($league);
+        $this->em->flush();
+        $this->em->clear();
+    }
+
+    private function pooledLeague(): League
+    {
+        $league = $this->leagues->findOneBy(['country' => self::POOL_COUNTRY, 'tier' => 3]);
+        self::assertNotNull($league, 'the pooled fixture is missing');
+
+        return $league;
     }
 
     /**

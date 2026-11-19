@@ -240,7 +240,15 @@ class InitializeController extends AbstractController
             'country'           => $league->getCountry(),
             'promotionSpots'    => $league->getPromotionSpots(),
             'reputationTier'    => $league->getLeagueReputationTier()?->value,
-            'tvDeal'            => $league->getTvDeal(),
+            // RESOLVED, exactly like the payouts here. `tvDeal` is DERIVED whenever a pool is
+            // authored — `LeagueTierDefaultDiff:103` already states that rule — but
+            // `syncTvDeal()` runs ONLY on an admin save (`LeagueAdminController:95`/`:201`) and
+            // `LeagueService:82` deliberately skips it at generation, so a generated pooled
+            // league keeps a NULL column for ever. Publishing the raw column therefore sent
+            // NULL, and the app's `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`)
+            // turned that into £0 of TV income. `derivedTvDealPence()` returns null when there
+            // is no pool, so this is INERT for every league that authors its deal directly.
+            'tvDeal'            => $leagueSizeResolver->derivedTvDealPence($league) ?? $league->getTvDeal(),
             // RESOLVED, the same chain the sync snapshot and the world pack use: a null
             // column inherits the tier-1 base x this tier's ratio x the country factor.
             'prizeMoney'        => $leaguePayoutResolver->prizeFor($league, $gameConfig),

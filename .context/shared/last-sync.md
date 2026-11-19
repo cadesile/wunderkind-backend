@@ -5,6 +5,45 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **B1 + B2: `tvDeal` is published resolved, and a false migration docblock corrected
+  (2026-11-19)**, committed on `development` on top of `603ea577`. **Stages touched:**
+  04_interfaces (`services.md`), shared (this file). No migration, no authored economy figure,
+  `WORLD_PACK_VERSION` unchanged at 11.
+
+  **B1 — a pooled league published its NULL column and the game paid £0 of TV.** `tvDeal` is
+  derived whenever `tvPoolPence` is authored, but `syncTvDeal()` runs only on an admin save
+  (`LeagueAdminController:95`/`:201`) and `LeagueService:82` deliberately skips it at generation,
+  so a generated pooled league keeps a NULL column for ever — the live state of **Scottish tiers
+  5–8**, the only pooled leagues in the world. **Four** surfaces published that raw column:
+  `LeagueImportExportService::export()`, `/api/initialize/leagues`,
+  `SyncService::buildLeagueSnapshot()` and `LeagueService`'s own snapshot. The app reads
+  `Math.max(0, league.tvDealPence)`, so those tiers earned nothing for a season. All four now emit
+  `derivedTvDealPence($l) ?? $l->getTvDeal()`, which is **inert** without a pool — all 8 EN tiers
+  and the other 184 leagues are unchanged. The export gains **`tvDealOverride`** (the raw column)
+  and `import()` prefers it, keyed on presence not value, so a resolved share can never be written
+  into a column; a pre-change backup still restores through the bare key. Third key in that
+  contract, after the payout pair.
+
+  ⚠️ **`app:economy:wage-table` is structurally blind to this fix.** It reads
+  `$league->getTvDeal()` off the entity (`EconomyWageTableCommand:459`), not a published surface,
+  so its output is byte-identical before and after — **verified by stashing the four source files
+  and diffing two full runs.** An unchanged gate is NOT evidence that nothing moved here. ALSO
+  RECORDED: on this clone the command **exits 1 with 31 pre-existing check failures** (sponsorship
+  band at 13 tiers, the bankruptcy ladder's 0.01-week traversal, rows 4/5 unreachable), identical
+  before and after. "Exit 0" is not the bar on this box; "unchanged" is.
+
+  **Tests: 3270, 3 failures — baseline items 1, 2 and 3 exactly** (the three empty-content-table
+  failures), with item 4 contributing **zero**, which the amended entry #4 says it does. Four new
+  tests, all four **proved meaningful by stashing the source fix and re-running**: they fail with
+  the exact messages the defect produces and pass with it.
+
+  **B2 — `Version20261119090000`'s docblock asserted something false about the deployed box**
+  (*"where `slots` is 0"*). Only **4 of 200** rows are 0 there, all `SC` tiers 5–8; EN reads 18
+  against 16 real club rows on all eight tiers and SC tiers 1–4 read 18 against 14. The claim came
+  from a task brief whose premise was wrong. **Comment-only — `git diff` shows no code lines
+  changed** and the `only where 0` guard means the behaviour was always right. The 12 disagreeing
+  rows are a behaviour change and land as their own migration (B3), not folded into a no-op.
+
 - **A3 + A4 + A3b + A5: four numbers stop being side effects (2026-11-19)**, committed on
   `development` on top of `bac1228b`. **Stages touched:** 01_overview (`environment.md`), 03_data
   (`migrations.md`), 04_interfaces (`services.md`), shared (this file). `app:economy:wage-table EN

@@ -287,6 +287,47 @@ class SyncServiceLeagueTest extends TestCase
      * no country profile rows, so every figure resolves to the league's OWN COLUMN at parity —
      * which is why the prize and pot assertions in this file are unchanged by the ladder.
      */
+    /**
+     * THE GAMEPLAY DEFECT, pinned at the surface the running game reads.
+     *
+     * `testAPooledLeaguePublishesBothFigures` above passes a pooled league whose `tvDeal` column
+     * is ALSO authored, at exactly the derived figure — so it held before this fix and says
+     * nothing about it. The live state of Scottish tiers 5-8 is a pool with a NULL column,
+     * because `syncTvDeal()` only ever runs on an admin save. Publishing that raw NULL made the
+     * app compute `Math.max(0, null)` and pay £0 of TV for a whole season.
+     */
+    public function testAPooledLeagueWithNoAuthoredDealPublishesTheDerivedShare(): void
+    {
+        $user     = $this->createStub(User::class);
+        $userClub = new Club('Test FC', $user);
+        $league   = new League('SC', 8, 'Scottish 8');
+        $league->setTvPoolPence(120_000_000);
+        $league->setSlots(14);
+        $userClub->setCurrentLeague($league);
+
+        // THE FIXTURE: nothing wrote this column, which is the shipped state of a pooled league.
+        self::assertNull($league->getTvDeal());
+
+        $service = $this->getStubBuilder(\App\Service\SyncService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([])
+            ->getStub();
+
+        $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
+        $repoProp->setValue($service, $this->createStub(NpcClubRepository::class));
+        $this->injectSizeResolver($service);
+
+        $result = (new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot'))
+            ->invoke($service, $userClub, new GameConfig());
+
+        self::assertNotNull($result['tvDeal'], 'a pooled league published NULL — the app pays £0 of TV');
+        self::assertSame(
+            intdiv(120_000_000, 14),
+            $result['tvDeal'],
+            'the published share must be the pool divided by the authored size',
+        );
+    }
+
     private function injectSizeResolver(object $service): void
     {
         $npcRepo    = $this->createStub(NpcClubRepository::class);

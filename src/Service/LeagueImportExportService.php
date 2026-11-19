@@ -14,6 +14,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use App\Service\Economy\LeaguePayoutResolver;
+use App\Service\Economy\LeagueSizeResolver;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueImportExportService
@@ -26,6 +27,7 @@ class LeagueImportExportService
         private readonly EntityManagerInterface $em,
         private readonly LeaguePayoutResolver   $leaguePayoutResolver,
         private readonly GameConfigRepository   $gameConfigRepository,
+        private readonly LeagueSizeResolver     $leagueSizeResolver,
     ) {}
 
     // ── Export ────────────────────────────────────────────────────────────────
@@ -47,7 +49,22 @@ class LeagueImportExportService
                 'tier'                 => $l->getTier(),
                 'name'                 => $l->getName(),
                 'promotionSpots'       => $l->getPromotionSpots(),
-                'tvDeal'               => $l->getTvDeal(),
+                // ── RESOLVED, AND THE SAME TWO-KEY CONTRACT AS THE PAYOUTS BELOW ───────────
+                //
+                // `tvDeal` is DERIVED whenever `tvPoolPence` is authored — `LeagueSizeResolver`
+                // owns that arithmetic and `LeagueTierDefaultDiff:103` already states the rule.
+                // But `syncTvDeal()` is called ONLY from an admin save
+                // (`LeagueAdminController:95`/`:201`); `LeagueService:82` deliberately skips it
+                // at generation because no NPC club exists yet, and nothing calls it afterwards.
+                // So a generated pooled league keeps a NULL column for ever — which is the live
+                // state of Scottish tiers 5-8 — and serialising the raw column published NULL.
+                // The app reads `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`), so
+                // those tiers earned £0 of TV in a running save, not merely in a gate report.
+                //
+                // `derivedTvDealPence()` returns null when there is no pool, so every league
+                // that authors its deal directly exports exactly what it did before.
+                'tvDeal'               => $this->leagueSizeResolver->derivedTvDealPence($l)
+                    ?? $l->getTvDeal(),
                 'tvPoolPence'          => $l->getTvPoolPence(),
                 'slots'                => $l->getSlots(),
                 'leaguePositionDecreasePercent' => $l->getLeaguePositionDecreasePercent(),
@@ -77,6 +94,11 @@ class LeagueImportExportService
                 // Null here means "inherit", which is the state of all 196 leagues today, and
                 // round-tripping must leave it null rather than freezing the ladder into 196
                 // per-league overrides.
+                // ⚠️ AND THE RAW COLUMN, WHICH IS THE ONE `import()` READS. Null means "derive
+                // from the pool"; a value means an operator authored this league's deal by hand.
+                // Round-tripping must leave a derived league's column NULL rather than freezing
+                // the resolved share into it — the same trap the payout pair carries.
+                'tvDealOverride'       => $l->getTvDeal(),
                 'prizeMoneyOverride'   => $l->getPrizeMoney(),
                 'leaguePositionPotOverride' => $l->getLeaguePositionPot(),
                 'sponsorCount'         => $l->getSponsorCount(),
@@ -178,8 +200,17 @@ class LeagueImportExportService
                 // Use array_key_exists (not isset) so explicit null values are applied correctly
                 if (array_key_exists('promotionSpots', $row))
                     $league->setPromotionSpots($row['promotionSpots'] !== null ? (int) $row['promotionSpots'] : null);
-                if (array_key_exists('tvDeal', $row))
+                // THE OVERRIDE KEY WINS, KEYED ON ITS PRESENCE RATHER THAN ITS VALUE — the
+                // same idiom as the payout pair below and safe for the same reason. Every export
+                // written from here on carries `tvDealOverride` even when null, so a row WITHOUT
+                // it can only be a file written before this change, where `tvDeal` WAS the raw
+                // column and restoring it is correct. A new file can therefore never reach the
+                // fallback, so a RESOLVED share can never be written into the column.
+                if (array_key_exists('tvDealOverride', $row)) {
+                    $league->setTvDeal($row['tvDealOverride'] !== null ? (int) $row['tvDealOverride'] : null);
+                } elseif (array_key_exists('tvDeal', $row)) {
                     $league->setTvDeal($row['tvDeal'] !== null ? (int) $row['tvDeal'] : null);
+                }
                 // ── THE OVERRIDE COLUMNS, AND THE RESOLVED KEYS ARE NOT READ ──────────────
                 //
                 // ⚠️ THIS IS THE ROUND-TRIP TRAP, AND IT IS WHY THE KEYS ARE SPLIT. `export()`
@@ -211,9 +242,11 @@ class LeagueImportExportService
                 } elseif (array_key_exists('leaguePositionPot', $row)) {
                     $league->setLeaguePositionPot($row['leaguePositionPot'] !== null ? (int) $row['leaguePositionPot'] : null);
                 }
-                // RESTORED VERBATIM, AND tvDeal IS NOT RE-DERIVED FROM THE POOL HERE. An export
-                // holds both columns, and a clear-then-import round trip has to reproduce the
-                // file exactly — testWorldSurvivesClearAndReimport asserts that. Re-deriving
+                // RESTORED VERBATIM, AND tvDeal IS STILL NOT RE-DERIVED FROM THE POOL HERE.
+                // The export now carries the resolved share under `tvDeal` and the raw column
+                // under `tvDealOverride`, and it is the override that is restored above, so a
+                // clear-then-import round trip still reproduces the file exactly —
+                // testWorldSurvivesClearAndReimport asserts that. Re-deriving
                 // would also divide by a size taken mid-import, when the NPC clubs that make up
                 // that size may not have been inserted yet.
                 if (array_key_exists('tvPoolPence', $row))
