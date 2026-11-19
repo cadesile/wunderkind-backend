@@ -58,17 +58,59 @@ class EconomyTvCountryScalingGuardTest extends KernelTestCase
     /** Tier-1 TV for the baseline, in pence: £136,000,000 — the figure authored on dev. */
     private const BASE_TV = 13_600_000_000;
 
+    /**
+     * The turnover table as the suite found it, stashed so `seed()`'s cannot outlive this file.
+     *
+     * ⚠️ `game_config` IS A SINGLE SHARED ROW in a test database that is not migration-tracked,
+     * and `seed()` has to author a turnover table or no tier resolves and the preview
+     * short-circuits before the checks this file is about are reached. So the row is owned for
+     * the duration and put back, rather than left holding a figure the next test reads.
+     *
+     * ⚠️ RESTORED IN `tearDown()`, NOT AT THE END OF EACH TEST, AND THAT IS THE POINT: PHPUnit
+     * runs `tearDown()` after a failed assertion too, so the row goes back exactly when
+     * something has already gone wrong — which is when a dirty shared row costs the most,
+     * because the next failure is then someone else's to attribute.
+     *
+     * @var list<int>
+     */
+    private array $shippedTurnoverPence = [];
+
     protected function setUp(): void
     {
         self::bootKernel();
+
+        $this->shippedTurnoverPence = self::getContainer()
+            ->get(GameConfigRepository::class)
+            ->getConfig(flush: true)
+            ->getEconomyBaselineTurnoverPence();
+
         $this->purge();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreTurnoverTable();
         $this->purge();
 
         parent::tearDown();
+    }
+
+    /** Put the shared turnover table back, whatever happened to the test. */
+    private function restoreTurnoverTable(): void
+    {
+        if ($this->shippedTurnoverPence === []) {
+            return; // setUp() never got as far as stashing it; nothing authored, nothing to undo.
+        }
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+
+        self::getContainer()
+            ->get(GameConfigRepository::class)
+            ->getConfig(flush: true)
+            ->setEconomyBaselineTurnoverPence($this->shippedTurnoverPence);
+
+        $em->flush();
     }
 
     private function purge(): void
@@ -109,6 +151,7 @@ class EconomyTvCountryScalingGuardTest extends KernelTestCase
         }
 
         // A turnover table, or no tier resolves and the whole preview short-circuits.
+        // Stashed in setUp() and put back in tearDown() — see $shippedTurnoverPence.
         $config = self::getContainer()->get(GameConfigRepository::class)->getConfig(flush: true);
         $config->setEconomyBaselineTurnoverPence([38_866_153_952, 0, 0, 0, 0, 0, 0, 0]);
         $em->flush();

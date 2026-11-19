@@ -5,6 +5,64 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A16: the two `game_config` polluters now own the row for their duration (2026-11-19)**,
+  committed on `development` directly on top of `8298cc60`. **Stages touched:** 01_overview
+  (`environment.md`), shared (this file). Report and verbatim evidence:
+  `wunderkind-docs/economy-loose-ends/a16-test-pollution-report.md`.
+
+  **What landed.** `EconomyAuthoredSizeDriftTest` and `EconomyTvCountryScalingGuardTest` stash
+  `economyBaselineTurnoverPence` in `setUp()` and restore it in `tearDown()`. Both still have to
+  author a turnover table in `seed()` — without one no tier resolves and the gate short-circuits
+  before the checks they exist for — so the row is OWNED rather than left alone. ⚠️ **The restore
+  is in `tearDown()` on purpose, not at the end of each test:** `tearDown()` runs after a failed
+  assertion too, so the row is clean exactly when something has already gone wrong. Proved by
+  forcing a polluter to fail mid-run (scratchpad only, never committed): the forced failure was
+  the ONLY failure, the reader after it still passed, and the row read `[0,...]` afterwards.
+  Test-only change; no production code touched.
+
+  🔴 **A10'S "SIXTH KNOWN FAILURE" WAS A DEFECT AND IS FIXED — IT IS NOT A FLAKE THAT STOPPED
+  APPEARING, AND IT IS DELIBERATELY NOT LISTED IN `environment.md`.** Listing it would have
+  trained the next agent to expect four failures where the baseline says three, which is the one
+  habit this project's attribute-by-stashing discipline cannot afford. The known-failures list
+  stays at items #1-#5 (range three to five) and now carries a short note saying the sixth was
+  fixed, plus what to conclude if that assertion ever fails again (someone's pollution, find the
+  writer).
+
+  ⚠️ **TWO CORRECTIONS TO THE BRIEF, both measured rather than argued.**
+
+  1. **It was NOT failing in every full run, and `environment.md` never listed it.** The brief
+     said both. A single `--filter`ed full run before the fix showed the documented THREE
+     failures and `testTheEconomyBlockShipsSwitchedOff` PASSED, while `polluter -> reader` on its
+     own failed every time. The reason is new and worth keeping:
+     `tests/Controller/Admin/EconomyAdminTest` sorts between the polluters and the reader and
+     zeroes the turnover table through the real admin save, so the full run was green by accident
+     of two tests both abusing the same shared row. A10 saw it because it ran the suite in
+     20-file batches, where that accident does not hold. **"It passes in a full run" is therefore
+     not evidence that a shared-row leak is harmless** — that is now in `environment.md` too. The
+     sixth-failure record lived in this file (A10's entry), not in `environment.md`.
+  2. The change is **86 lines, not ~20** — almost all of it the docblock explaining why the
+     restore is where it is.
+
+  **Suite.** Before: 3,233 tests, 3 failures (#1, #2, #3). After: 3,233 tests, 3 failures, the
+  same three, assertions 155,818 -> 155,870. The shared row read `[0,0,0,0,0,0,0,0]` before the
+  task and again after it, so nothing leaked either way. `AdminShellCoverageTest` (72 tests) is
+  excluded by `--filter '/^(?!.*AdminShellCoverage).*$/'`; the OOM and that workaround are now
+  recorded in `environment.md`, which they were not.
+
+  ⚠️ **Three things for the PM.**
+  - `environment.md`'s ```` ```bash ```` block at the per-branch-DB section was **unterminated**,
+    so the ENTIRE known-failures section (items #1-#5, the three-to-five range, the "not ~31"
+    warning) rendered as a literal code block and the `TEST_TOKEN` paragraph that belonged to the
+    block sat outside it. Closing the fence and moving those four lines back is the only
+    structural edit made here, and it was made because an unreadable baseline is the thing §4 of
+    the brief is trying to protect. Flagged rather than hidden.
+  - ⚠️ **`EconomyAdminTest` still does not restore `game_config`** — already noted in
+    `environment.md`, and this task found it is now load-bearing by accident (see correction 1).
+    It is the next polluter and deserves its own task.
+  - `WorldOverviewServiceTest` restores `game_config` inline, before its assertions rather than in
+    `tearDown()`. It happens to be safe today because the restore sits in a helper that returns
+    before anything asserts, but it is the happy-path shape, not the failure-safe one.
+
 - **A18: the catchment fan-base share ladder is published (2026-11-19)**, committed on
   `development` as the single commit directly on top of `b82540d7` (its own hash is not quoted
   here because it moved on an amend; the report has the final one). **Stages touched:** 03_data (`entities.md`,
