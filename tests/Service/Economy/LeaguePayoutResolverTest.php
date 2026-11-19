@@ -13,6 +13,7 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\LeaguePayoutResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -617,7 +618,7 @@ class LeaguePayoutResolverTest extends TestCase
 
         return new LeaguePayoutResolver(
             $gameConfigRepo,
-            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo),
+            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration()),
         );
     }
 

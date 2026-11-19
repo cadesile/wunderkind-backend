@@ -12,6 +12,7 @@ use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\WageModelResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -55,10 +56,24 @@ class YouthScholarshipCapTest extends TestCase
         '7' => ['playerMin' => 22, 'playerMax' => 25], '8' => ['playerMin' => 20, 'playerMax' => 24],
     ];
 
-    /** The candidate ladder from the step-5 calibration. */
+    /**
+     * The AUTHORED turnover ladder, R2 (`Version20261118120000`).
+     *
+     * ⚠️ **This was the step-5 CANDIDATE ladder until 2026-11-19, and the swap is not
+     * cosmetic.** The candidate was superseded by R2 months of calibration ago, and it sits
+     * about 1.27-1.49x above it — which did not matter while every wage at the bottom of the
+     * pyramid was a tenth of a budget, and matters now. The reference-squad recalibration of
+     * 2026-11-19 raised every `S_tier` roughly fourfold, so the cap's crossover — the point
+     * where half an average wage overtakes the flat £250 — moved up THROUGH the candidate's
+     * tier-8 figure and stopped just short of R2's. Measured: the candidate puts tier 8's cap
+     * at £254.97 (the flat figure wins, so the cap is inert and this file's whole first
+     * property becomes untestable) while R2 puts it at £201.39 (the cap bites, which is what
+     * the mechanism is for). Pinning the mechanism against a ladder nobody authored was the
+     * accident; the authored one is the right fixture.
+     */
     private const TURNOVER = [
-        49_257_823_013, 16_225_145_609, 5_105_781_037, 2_878_038_443,
-        1_111_614_720, 406_895_378, 97_642_916, 27_219_507,
+        33_100_000_000, 11_400_000_000, 3_460_000_000, 2_070_000_000,
+        732_000_000, 269_000_000, 68_600_000, 21_500_000,
     ];
 
     // ── It is inert in the shipped state ─────────────────────────────────
@@ -397,7 +412,14 @@ class YouthScholarshipCapTest extends TestCase
         $config   = $this->config(turnover: self::TURNOVER, model: EconomyWageModel::TURNOVER);
         $resolver = $this->resolver($config);
 
-        foreach ([1, 2, 3, 4, 5, 6] as $tier) {
+        // ⚠️ **TIER 7 MOVED UP HERE ON 2026-11-19, AND THAT IS THE RECALIBRATION WORKING.**
+        // The flat £250 was implausible at tier 7 because an average tier-7 wage was £314 and
+        // half of it is £157. The reference squad stopped being priced at the POTENTIAL band
+        // and `S_tier` rose about 3.6x at that tier, so the same average is now £1,125 and half
+        // of it is £562 — the flat figure is no longer the outlier, and the `min()` leaves it
+        // alone. **The inversion the cap exists to patch has been fixed at the source for tier
+        // 7.** Only tier 8, whose band is 2-7, is still narrow enough to need the cap.
+        foreach ([1, 2, 3, 4, 5, 6, 7] as $tier) {
             self::assertSame(
                 25000,
                 $resolver->youthScholarshipPence('EN', $tier, $config),
@@ -405,7 +427,7 @@ class YouthScholarshipCapTest extends TestCase
             );
         }
 
-        foreach ([7, 8] as $tier) {
+        foreach ([8] as $tier) {
             self::assertLessThan(
                 25000,
                 $resolver->youthScholarshipPence('EN', $tier, $config),
@@ -513,6 +535,8 @@ class YouthScholarshipCapTest extends TestCase
                 $gameConfigRepo,
                 $starterRepo,
                 $this->createStub(CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );

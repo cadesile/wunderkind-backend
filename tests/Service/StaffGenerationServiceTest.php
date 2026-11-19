@@ -14,6 +14,7 @@ use App\Service\NameGeneratorService;
 use App\Service\Personality\PersonalityGeneratorService;
 use App\Service\StaffGenerationService;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class StaffGenerationServiceTest extends TestCase
 {
@@ -83,6 +84,8 @@ class StaffGenerationServiceTest extends TestCase
                 $gameConfigRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             new \App\Service\Economy\TierBandScaleResolver(
                 $this->createStub(\App\Repository\StarterConfigRepository::class),

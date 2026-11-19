@@ -146,7 +146,7 @@ final class WageModelResolver
      * signal than a 2000-2800 multiplier ever was.
      */
     public function turnoverPlayerPence(
-        int $ability,
+        int|float $ability,
         string $country,
         int $tier,
         int $clubReputation = 50,
@@ -162,10 +162,25 @@ final class WageModelResolver
         $k     = $config->getEconomyWageCurveExponentBp() / self::BP;
         $shape = max(0, $ability) ** $k;
 
-        // One multiply, then the single division out of micro-pence. The reputation modifier is
-        // applied as basis points so it stays integer until that last step.
-        $micro = (int) round($scale->wageScaleMicroPence * $shape);
-        $micro = intdiv($micro * $this->reputationModifierBp($clubReputation, $config), self::BP);
+        // One multiply, then the single division out of micro-pence.
+        //
+        // ⚠️ THE REPUTATION MODIFIER IS FOLDED INTO THE SAME ROUNDING STEP, not applied after
+        // it, because applying it after OVERFLOWED. It used to read
+        // `intdiv((int) round(S x shape) x repBp, BP)`, and `(int) round(S x shape)` reaches
+        // 2.8e15 at a steep tier — multiplying that by 10000 is 2.8e19, past PHP_INT_MAX, so
+        // the product silently became a float and `intdiv()` raised a TypeError. It was always
+        // within a factor of about 1.3 of that ceiling; the reference-squad recalibration of
+        // 2026-11-19 raised every S_tier roughly fourfold and pushed it over, with
+        // `EconomyAuthoredSizeDriftTest` catching it on a synthetic country whose scale is
+        // steeper still.
+        //
+        // The two forms agree EXACTLY at the shipped reputation spread of 0, where repBp is
+        // 10000 and `intdiv(m x 10000, 10000) === m`; with a spread configured they can differ
+        // by at most one micro-pence, which is a millionth of a penny and well inside the
+        // headroom this unit exists to provide. The chain still rounds exactly once.
+        $micro = (int) round(
+            $scale->wageScaleMicroPence * $shape * $this->reputationModifierBp($clubReputation, $config) / self::BP,
+        );
 
         return intdiv($micro, EconomyScaleResolver::WAGE_SCALE_UNIT);
     }

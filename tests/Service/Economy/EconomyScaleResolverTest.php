@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Tests\Service\Economy;
 
 use App\Entity\GameConfig;
+use App\Entity\PoolConfig;
 use App\Entity\Location\CountryProfile;
 use App\Entity\StarterConfig;
+use App\Enum\PlayerPosition;
 use App\Repository\GameConfigRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -197,16 +200,24 @@ class EconomyScaleResolverTest extends TestCase
 
         self::assertTrue($scale->isResolvable);
 
-        // INTEGER ABILITIES, matching the resolver. `Player::$currentAbility` is an int, so a
-        // reference squad of continuous abilities would calibrate S_tier against players who
-        // cannot exist — the error is invisible on a wide band and 2.5% on England's tier-8
-        // span of 2-7, which is how `app:economy:wage-table`'s self-consistency check caught
-        // it. This reconstruction has to round the same way or it tests nothing.
+        // ⚠️ RECONSTRUCTED FROM THE RESOLVER'S OWN REFERENCE SQUAD, not from the ability band.
+        // Until 2026-11-19 this loop spread the band 40-90 across twenty integers and summed
+        // that — and it passed, because the resolver was doing the same thing. Both were
+        // wrong: the band is a POTENTIAL range and a wage is paid on current ability, so the
+        // scale was calibrated against players nobody would ever pay. Re-deriving the squad
+        // here would pin the old calibration rather than the property this test is named
+        // after; `referenceSquadAbilities()` is public precisely so the definition has one
+        // statement. What is still asserted, and all that should be, is the DEFINITION: the
+        // squad S_tier was calibrated against costs the configured share of turnover.
         $k     = 2.5;
         $sigma = 0.0;
-        for ($i = 0; $i < 20; $i++) {
-            $sigma += ((int) round(40 + 50 * $i / 19)) ** $k;
+        foreach ($resolver->referenceSquadAbilities('EN', 1) as $ability) {
+            $sigma += $ability ** $k;
         }
+
+        // And the squad is nothing like the band it was derived from: the top member's
+        // POTENTIAL rung is 90 and his expected CURRENT ability is under 50.
+        self::assertLessThan(50, max($resolver->referenceSquadAbilities('EN', 1)));
 
         $bill   = (int) round(46 * $sigma * $scale->wageScaleMicroPence / EconomyScaleResolver::WAGE_SCALE_UNIT);
         $budget = intdiv(intdiv($turnover * 6000, 10000) * 7500, 10000);
@@ -233,8 +244,21 @@ class EconomyScaleResolverTest extends TestCase
 
         self::assertTrue($scale->isResolvable);
         self::assertGreaterThan(0, $scale->wageScaleMicroPence);
-        // The point of the unit: the figure is NOT a whole number of pence.
-        self::assertLessThan(EconomyScaleResolver::WAGE_SCALE_UNIT * 1000, $scale->wageScaleMicroPence);
+
+        // The point of the unit: the figure is NOT a whole number of pence, so rounding it to
+        // pence here would quantise the division's wages.
+        //
+        // ⚠️ THIS USED TO BE `assertLessThan(WAGE_SCALE_UNIT * 1000, ...)` — an upper bound of
+        // 1000 pence, which was a proxy for "small" and not the property named in the test.
+        // It went red on 2026-11-19 when the reference squad stopped being priced at the
+        // authored POTENTIAL band and started being priced at the current ability the
+        // generator actually produces: S_tier at this tier rose about fourfold, as every
+        // S_tier did, and the bound was pinning the old calibration rather than the precision.
+        self::assertNotSame(
+            0,
+            $scale->wageScaleMicroPence % EconomyScaleResolver::WAGE_SCALE_UNIT,
+            'S_tier landed on a whole number of pence — the sub-penny headroom is doing nothing',
+        );
     }
 
     public function testATransposedAbilityBandIsNormalisedRatherThanInverted(): void
@@ -366,6 +390,8 @@ class EconomyScaleResolverTest extends TestCase
             $this->gameConfigRepo(new GameConfig()),
             $this->starterConfigRepo($this->starterConfig()),
             $profiles,
+            ReferenceSquadDoubles::poolConfigRepository(),
+            ReferenceSquadDoubles::playerGeneration(),
         );
 
         for ($i = 0; $i < 25; $i++) {
@@ -373,7 +399,210 @@ class EconomyScaleResolverTest extends TestCase
         }
     }
 
+    // ── The reference squad: expected CURRENT ability, not the authored band ──
+
+    /**
+     * S_TIER, PINNED AGAINST A VALUE A HUMAN CAN CHECK WITHOUT RUNNING THE GENERATOR.
+     *
+     * The reference squad is deliberately collapsed to ONE member, ONE age and ONE position,
+     * because the shipped shape — 22 to 33 potential rungs averaged over fifteen ages and four
+     * positions — is correct but not hand-checkable, and a pin nobody can verify is a pin
+     * nobody will fix. Everything below is arithmetic, in the order the code does it:
+     *
+     *   potential            the band is 100-100 and the squad size is 1, so the single
+     *                        member's potential rung is 100.
+     *   abilityTarget(26)    age 26 falls in the >=26 maturation band, 0.85-1.00, midpoint
+     *                        0.925. It is outside the 18-23 prodigy window, so no prodigy
+     *                        weighting; it is at or over the youth ceiling age of 20, so no
+     *                        ceiling. = 0.925
+     *   cap                  floor(0.925 x 100)                                        = 92
+     *   pace       MID 0.30-0.70 -> lo max(1, floor(27.6)) = 27, hi ceil(64.4) = 65, mid = 46
+     *   technical  MID 0.50-1.00 -> lo floor(46) = 46,        hi ceil(92) = 92,    mid = 69
+     *   vision     MID 0.50-1.00 -> same as technical                                  = 69
+     *   height               midpoint of 163-203, no GK bonus                         = 183
+     *   weight               71 + floor(normalise(183,163,211) x 15) = 71 + floor(6.25) = 77
+     *   power                ceil((0.4380631 x 0.6 + (13.650+13.450)/40 x 0.4) x 100)  = 54
+     *   stamina              ceil((0.4786036 x 0.5 + (13.650+10.750+9.800)/60 x 0.5) x 100) = 53
+     *   heart                round((11.900+13.650+10.750)/60 x 100)                    = 61
+     *   currentAbility       (46+69+69+54+53+61)/6 = 352/6                      = 58.666...
+     *
+     * The three personality-driven attributes read `expectedTraits()`, whose eight values are
+     * pinned on their own in PersonalityGeneratorServiceTest — so this stays arithmetic rather
+     * than becoming a second assertion about the mould table.
+     *
+     * Then, with turnover £1,000,000, wage:turnover 60%, staff share 25% and 46 weeks:
+     *
+     *   playerBudget = 100,000,000 x 0.60 x 0.75                   = 45,000,000 pence
+     *   sigma        = (352/6)^2.5                                 ~ 26,362.04
+     *   S_tier       = 45,000,000 x 10^6 / (46 x sigma)            ~ 37,111,000 micro-pence
+     *                                                              ~ 37.11 pence
+     *
+     * The OLD calibration priced that member at his potential of 100, giving sigma = 100^2.5 =
+     * 100,000 and S_tier ~ 9.78 pence — 3.8x lower, which is the whole defect in one number.
+     */
+    public function testSTierIsPinnedToAHandComputedReferenceSquad(): void
+    {
+        $pool = (new PoolConfig())
+            ->setPlayerFirstTeamAgeMin(26)
+            ->setPlayerAgeMax(26)
+            ->setPositionWeightGk(0)
+            ->setPositionWeightDef(0)
+            ->setPositionWeightMid(1)
+            ->setPositionWeightAtt(0);
+
+        $generation = ReferenceSquadDoubles::playerGeneration($pool);
+
+        // The ability chain, asserted exactly rather than approximately: every step above is
+        // integer arithmetic until the final division by six.
+        self::assertSame(
+            352 / 6,
+            $generation->expectedCurrentAbility(100, 26, PlayerPosition::MIDFIELDER),
+            'the expected-ability chain moved — walk the derivation in this docblock before changing the number',
+        );
+
+        $config = (new GameConfig())
+            ->setEconomyBaselineTurnoverPence([100_000_000, 0, 0, 0, 0, 0, 0, 0]);
+
+        $resolver = new EconomyScaleResolver(
+            $this->gameConfigRepo($config),
+            $this->starterConfigRepo($this->starterConfig(
+                ['EN' => ['1' => ['min' => 100, 'max' => 100]]],
+                ['1' => ['playerMin' => 1, 'playerMax' => 1]],
+            )),
+            $this->profileRepo(['EN' => $this->profile('EN', isBaseline: true)]),
+            ReferenceSquadDoubles::poolConfigRepository($pool),
+            $generation,
+        );
+
+        $expectedSigma = (352 / 6) ** 2.5;
+        $expectedScale = (int) round((45_000_000 * EconomyScaleResolver::WAGE_SCALE_UNIT) / (46 * $expectedSigma));
+
+        self::assertSame($expectedScale, $resolver->resolve('EN', 1)->wageScaleMicroPence);
+
+        // And in pence, so the figure is readable without recomputing the power.
+        self::assertSame(37.11, round($expectedScale / EconomyScaleResolver::WAGE_SCALE_UNIT, 2));
+
+        // The old calibration, for the record: the same member priced at his POTENTIAL.
+        $onPotential = (int) round((45_000_000 * EconomyScaleResolver::WAGE_SCALE_UNIT) / (46 * 100 ** 2.5));
+        self::assertSame(9.78, round($onPotential / EconomyScaleResolver::WAGE_SCALE_UNIT, 2));
+        self::assertGreaterThan($onPotential * 3, $expectedScale);
+    }
+
+    /**
+     * THE REFERENCE SQUAD MUST NOT CONTAIN A COIN FLIP.
+     *
+     * `S_tier` is baked into generated rows that outlive the request and is published to the
+     * device, so two calls that disagree would price two clubs in the same division
+     * differently for no reason. The risk is real rather than theoretical: the chain now walks
+     * `PlayerGenerationService`, every other path through which draws — the 5% prodigy branch,
+     * the maturation band, the six attributes, the physique and the whole personality matrix.
+     * All of them are replaced by expectations, and nothing in the chain may reach
+     * `random_int()` or `mt_rand()`.
+     *
+     * Asserted by re-resolving on FRESH resolvers, so the per-request memoisation cannot make
+     * a random chain look stable, with the Mersenne Twister re-seeded differently each time:
+     * any `mt_rand()` in the chain diverges immediately, and a `random_int()` diverges with
+     * overwhelming probability across this many repeats.
+     */
+    public function testTheReferenceSquadIsDeterministic(): void
+    {
+        $bands  = ['EN' => ['1' => ['min' => 40, 'max' => 90], '8' => ['min' => 2, 'max' => 7]]];
+        $squads = ['1' => ['playerMin' => 32, 'playerMax' => 35], '8' => ['playerMin' => 20, 'playerMax' => 24]];
+
+        $first = null;
+
+        for ($i = 0; $i < 40; $i++) {
+            mt_srand($i * 7919 + 1);
+
+            $resolver = new EconomyScaleResolver(
+                $this->gameConfigRepo(
+                    (new GameConfig())->setEconomyBaselineTurnoverPence(
+                        [33_100_000_000, 0, 0, 0, 0, 0, 0, 2_150_000_000],
+                    ),
+                ),
+                $this->starterConfigRepo($this->starterConfig($bands, $squads)),
+                $this->profileRepo(['EN' => $this->profile('EN', isBaseline: true)]),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
+            );
+
+            $observed = [
+                'squad1' => $resolver->referenceSquadAbilities('EN', 1),
+                'squad8' => $resolver->referenceSquadAbilities('EN', 8),
+                'scale1' => $resolver->resolve('EN', 1)->wageScaleMicroPence,
+                'scale8' => $resolver->resolve('EN', 8)->wageScaleMicroPence,
+            ];
+
+            $first ??= $observed;
+
+            self::assertSame($first, $observed, "run {$i} disagreed with the first — something in the chain is drawing");
+        }
+
+        mt_srand();
+
+        self::assertCount(33, $first['squad1']);
+        self::assertCount(22, $first['squad8']);
+    }
+
+    /**
+     * EVERY MEMBER IS BELOW HIS OWN POTENTIAL RUNG, AND THAT IS THE POINT.
+     *
+     * The authored band is a potential range; current ability is derived strictly below it. If
+     * a member ever came out at or above his rung the calibration would be back to pricing
+     * potentials, which is the defect this replaced — and it would do it silently, because
+     * S_tier would merely be a bit low again.
+     */
+    public function testEveryReferenceMemberSitsBelowItsPotentialRung(): void
+    {
+        $resolver = new EconomyScaleResolver(
+            $this->gameConfigRepo((new GameConfig())->setEconomyBaselineTurnoverPence(
+                [33_100_000_000, 0, 0, 0, 0, 0, 0, 2_150_000_000],
+            )),
+            $this->starterConfigRepo($this->starterConfig(
+                ['EN' => ['1' => ['min' => 40, 'max' => 90]]],
+                ['1' => ['playerMin' => 32, 'playerMax' => 35]],
+            )),
+            $this->profileRepo(['EN' => $this->profile('EN', isBaseline: true)]),
+            ReferenceSquadDoubles::poolConfigRepository(),
+            ReferenceSquadDoubles::playerGeneration(),
+        );
+
+        $squad = $resolver->referenceSquadAbilities('EN', 1);
+        $span  = 90 - 40;
+
+        foreach ($squad as $i => $ability) {
+            $rung = (int) round(40 + $span * $i / (count($squad) - 1));
+
+            self::assertGreaterThan(0.0, $ability);
+            self::assertLessThan($rung, $ability, "member {$i} is priced at or above its potential rung {$rung}");
+        }
+    }
+
     // ───────────────────────────── plumbing ─────────────────────────────
+
+    /**
+     * @param array<string, CountryProfile> $profiles
+     */
+    private function profileRepo(array $profiles): CountryProfileRepository
+    {
+        $repo = $this->createStub(CountryProfileRepository::class);
+        $repo->method('findByCode')->willReturnCallback(
+            static fn (string $code) => $profiles[strtoupper(trim($code))] ?? null,
+        );
+        $repo->method('findEconomyBaseline')->willReturnCallback(
+            static function () use ($profiles) {
+                foreach ($profiles as $profile) {
+                    if ($profile->isEconomyBaseline()) {
+                        return $profile;
+                    }
+                }
+                return null;
+            },
+        );
+
+        return $repo;
+    }
+
 
     /** @param array<string, CountryProfile> $profiles */
     private function resolver(GameConfig $config, StarterConfig $starter, array $profiles): EconomyScaleResolver
@@ -397,6 +626,8 @@ class EconomyScaleResolverTest extends TestCase
             $this->gameConfigRepo($config),
             $this->starterConfigRepo($starter),
             $repo,
+            ReferenceSquadDoubles::poolConfigRepository(),
+            ReferenceSquadDoubles::playerGeneration(),
         );
     }
 

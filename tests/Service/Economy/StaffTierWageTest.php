@@ -13,6 +13,7 @@ use App\Repository\StarterConfigRepository;
 use App\Service\Economy\EconomyScaleResolver;
 use App\Service\Economy\TierBandScaleResolver;
 use App\Service\Economy\WageModelResolver;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -204,6 +205,8 @@ class StaffTierWageTest extends TestCase
                 $gameConfigRepo,
                 $starterRepo,
                 $this->createStub(CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             new TierBandScaleResolver($starterRepo),
         );

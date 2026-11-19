@@ -30,6 +30,7 @@ use App\Service\PlayerGenerationService;
 use App\Service\ScoutGenerationService;
 use App\Service\StaffGenerationService;
 use App\Service\WorldPackSnapshotBuilder;
+use App\Tests\Support\ReferenceSquadDoubles;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -179,7 +180,7 @@ final class MarketPoolGenerateInBandTest extends TestCase
 
         $wageModel = new WageModelResolver(
             $gameConfigRepo,
-            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo),
+            new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profileRepo, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration()),
             new \App\Service\Economy\TierBandScaleResolver($starterRepo),
         );
 

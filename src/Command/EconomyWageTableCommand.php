@@ -360,7 +360,7 @@ final class EconomyWageTableCommand extends Command
             $prevScale = $scale->wageScaleMicroPence;
 
             // CHECK 4 — the squad bill against its own definition.
-            $bill   = $this->squadBillPence($country, $tier, $band, $squad, $reputation, $config);
+            $bill   = $this->squadBillPence($country, $tier, $reputation, $config);
             $budget = $this->playerBudgetPence($scale->turnoverPence, $config);
             $drift  = $budget > 0 ? abs($bill - $budget) * 100 / $budget : 0.0;
 
@@ -1022,9 +1022,6 @@ final class EconomyWageTableCommand extends Command
                 continue;
             }
 
-            $band    = $this->scaleResolver->abilityBand($country, $tier);
-            $squad   = $this->squadSize($tier);
-
             // A TIER ABSENT FROM npcSquadConfig IS A SILENT MIS-CALIBRATION, not a missing row.
             // `EconomyScaleResolver::npcSquadRow()` returns [] and referenceSquadSize() falls to
             // 1, while the GENERATOR falls back to WorldInitializationService::defaultTierConfig()
@@ -1039,7 +1036,7 @@ final class EconomyWageTableCommand extends Command
                 );
             }
 
-            $weekly  = intdiv($this->squadBillPence($country, $tier, $band, $squad, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
+            $weekly  = intdiv($this->squadBillPence($country, $tier, 50, $config), max(1, $config->getEconomyWeeksPerSeason()));
             // Through the resolver's own definition, so the check and the thing it checks
             // cannot drift apart — which is exactly how the scholarship bug got in.
             $midWage = $this->wageModel->averageFirstTeamWagePence($country, $tier, 50, $config) ?? 0;
@@ -1600,31 +1597,30 @@ final class EconomyWageTableCommand extends Command
         return $problems;
     }
 
-    /** What the reference squad costs per season at this tier, summed player by player. */
+    /**
+     * What the reference squad costs per season at this tier, summed player by player.
+     *
+     * ⚠️ **THE SQUAD COMES FROM THE RESOLVER AND IS NOT REBUILT HERE.** It used to be: this
+     * method spread the ability band evenly and priced that, which was a second statement of
+     * what a reference squad is and was correct only while the resolver's own statement said
+     * the same two lines. On 2026-11-19 the resolver stopped pricing the band — the band is a
+     * POTENTIAL range and wages are paid on current ability — and began mapping each member
+     * through the generator's maturation curve. A local copy of that would be the very drift
+     * the change removed, so `referenceSquadAbilities()` was made public instead and this
+     * check now prices exactly the squad S_tier was calibrated against. That is what keeps
+     * the check meaningful: it still catches a rounding error anywhere in the chain, and it
+     * can no longer report a drift that is its own and nothing else's.
+     */
     private function squadBillPence(
         string $country,
         int $tier,
-        array $band,
-        int $squad,
         int $reputation,
         GameConfig $config,
     ): int {
-        if ($squad < 1) {
-            return 0;
-        }
-
         $weeks = $config->getEconomyWeeksPerSeason();
         $bill  = 0;
 
-        for ($i = 0; $i < $squad; $i++) {
-            // THE SAME INTEGER SPREAD EconomyScaleResolver::referenceSquadAbilitySum() uses.
-            // If the two rounded differently this check would report a drift that was its own
-            // and nothing else's — which is exactly what it did before the resolver started
-            // summing integers.
-            $ability = $squad === 1
-                ? $this->mid($band)
-                : (int) round($band['min'] + ($band['max'] - $band['min']) * $i / ($squad - 1));
-
+        foreach ($this->scaleResolver->referenceSquadAbilities($country, $tier) as $ability) {
             $bill += ($this->wageModel->turnoverPlayerPence($ability, $country, $tier, $reputation, $config) ?? 0) * $weeks;
         }
 

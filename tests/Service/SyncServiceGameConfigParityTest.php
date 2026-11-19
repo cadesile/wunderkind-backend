@@ -11,6 +11,7 @@ use App\Repository\GameConfigRepository;
 use App\Repository\Location\CountryProfileRepository;
 use App\Repository\StarterConfigRepository;
 use App\Service\SyncService;
+use App\Tests\Support\ReferenceSquadDoubles;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -277,7 +278,7 @@ class SyncServiceGameConfigParityTest extends TestCase
         // No profile rows: every country resolves at parity, which is the shipped state.
         $profiles = $this->createStub(CountryProfileRepository::class);
 
-        $scaleResolver = new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profiles);
+        $scaleResolver = new EconomyScaleResolver($gameConfigRepo, $starterRepo, $profiles, ReferenceSquadDoubles::poolConfigRepository(), ReferenceSquadDoubles::playerGeneration());
 
         return new EconomyConfigPublisher(
             $gameConfigRepo,

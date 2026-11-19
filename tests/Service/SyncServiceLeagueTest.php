@@ -11,6 +11,7 @@ use App\Entity\User;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class SyncServiceLeagueTest extends TestCase
 {
@@ -345,6 +346,8 @@ class SyncServiceLeagueTest extends TestCase
                 $configRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
         ));
     }

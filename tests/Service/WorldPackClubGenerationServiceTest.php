@@ -23,6 +23,7 @@ use App\Service\WorldPackClubGenerationService;
 use App\Service\WorldPackSnapshotBuilder;
 use App\Enum\CitySize;
 use PHPUnit\Framework\TestCase;
+use App\Tests\Support\ReferenceSquadDoubles;
 
 class WorldPackClubGenerationServiceTest extends TestCase
 {
@@ -60,6 +61,8 @@ class WorldPackClubGenerationServiceTest extends TestCase
                 $gameConfigRepo,
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
                 $this->createStub(\App\Repository\Location\CountryProfileRepository::class),
+                ReferenceSquadDoubles::poolConfigRepository(),
+                ReferenceSquadDoubles::playerGeneration(),
             ),
             new \App\Service\Economy\TierBandScaleResolver(
                 $this->createStub(\App\Repository\StarterConfigRepository::class),
