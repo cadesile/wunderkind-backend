@@ -88,12 +88,38 @@
   `AbilityRangeParityTest` did NOT move, contrary to the brief's expectation — it asserts the
   published and pricing bands are one table, which this does not touch.
 
+  **Suite, reconciled rather than summarised (amended 2026-11-19 after review).** The suite is
+  **3,297** tests with this change — A7's 3,294 plus the three added here, confirmed by
+  `--list-tests`, not inferred. **3,225 executed: 4 failures, 0 errors.** The missing 72 are
+  `AdminShellCoverageTest` alone, which is OOM-killed on its own **identically on a clean tree**;
+  `3,225 + 72 = 3,297` exactly. Every batch reported exactly its planned count except the one
+  that exited 137, whose 20 files were re-run split and recovered all but that file. File
+  coverage was checked, not assumed: 386 files on disk, 386 across the batches, none duplicated,
+  none missed, no `*Test.php` with zero tests listed. Skipped totals **13** across batches —
+  A7's single-run figure to the test, which closes the "batched totals count skips differently"
+  hypothesis. Working in `docs/economy-loose-ends/a10-run-2026-11-19/suite-batches/_reconciliation.txt`.
+
+  ⚠️ **A SIXTH KNOWN FAILURE, AND IT IS DETERMINISTIC — not a composition flake.**
+  `LegacyNewGameFlowTest::testTheEconomyBlockShipsSwitchedOff` ("the turnover table must be
+  unauthored") fails because `EconomyAuthoredSizeDriftTest:156` and
+  `EconomyTvCountryScalingGuardTest:113` — **both landed today with A7** — write
+  `38_866_153_952` into the SHARED `game_config` row inside their own `seed()` and never restore
+  it. Default order is alphabetical and `tests/Command/Economy*` sorts before
+  `tests/Controller/Api/Legacy*`, so **it will now fail in every full run.** ⚠️ **It is NOT a
+  stale test**, which is the tempting reading given R2 authored the turnover table: `wunderkind_test`
+  is not migration-tracked, so R2 never reaches it, and `GameConfig::$economyBaselineTurnoverPence`
+  still ships as `[0, ...]` with a docblock saying so. Proved three ways — reader alone OK,
+  polluter-then-reader FAILS, reader-then-polluter OK — in
+  `a10-run-2026-11-19/legacy-newgame-flake-attribution.txt`. **The fix belongs in the two
+  polluters, not in the reader**, whose docblock names the real mistake it exists to catch.
+
   ⚠️ **Two things for the PM.** `last-sync.md`'s R2-era line *"wageScaleMicroPence is calibrated
   against the tier's authored ability band ... so it is only meaningful inside it"* is superseded
   and was left in place as a historical record. And the full suite is being **OOM-killed** on this
   box (`docker inspect ... OOMKilled: true`, 3.83 GiB VM, exit 137) **identically on a clean
   tree** — verified by stash-and-rerun — so it was run in 20-file batches instead;
-  `environment.md`'s known-failures section should say a `137` is an environment result.
+  `environment.md`'s known-failures section should say a `137` is an environment result, and
+  should carry the sixth failure above.
 
 - **A7: authored-size drift made loud, and the `tv_deal` cache unstuck (2026-11-19)**, committed
   on `development` on top of `52c8b3bf`. **Stages touched:** 04_interfaces (`services.md`),
