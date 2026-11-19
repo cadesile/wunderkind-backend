@@ -5,6 +5,80 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A3 + A4 + A3b + A5: four numbers stop being side effects (2026-11-19)**, committed on
+  `development` on top of `bac1228b`. **Stages touched:** 01_overview (`environment.md`), 03_data
+  (`migrations.md`), 04_interfaces (`services.md`), shared (this file). `app:economy:wage-table EN
+  SC` is **byte-identical before and after** (full `diff`, no differences) — no authored economy
+  figure moved and `WORLD_PACK_VERSION` is unchanged at 11.
+
+  **A3 — the world export now carries RESOLVED payouts, and the key split is the load-bearing
+  part.** `LeagueImportExportService::export()` emits `prizeMoney` / `leaguePositionPot` through
+  `LeaguePayoutResolver` (one `GameConfig` fetched for the whole export), because that is the key
+  the app's gate reads (`scripts/economy/variantGate.ts`, `dispersionGate.ts`:
+  `league?.prizeMoney ?? 0`) — since `Version20261118120000` NULLed the columns, the raw-column
+  export read £0 and every gate run needed a hand-patch.
+
+  ⚠️ **The raw columns moved to NEW keys `prizeMoneyOverride` / `leaguePositionPotOverride`, and
+  those are the ONLY two `import()` reads.** Writing a resolved figure back would convert every
+  inherit (NULL) into a per-league override on the first round trip, freezing the ppm ladder into
+  196 rows and defeating `5dc3f51b`'s NULL-means-inherit design silently. The legacy fallback to
+  the bare `prizeMoney` key is keyed on the override key's **presence, not its value**: every new
+  export carries it even when null, so only a pre-change file can reach the fallback — which is
+  what keeps an old backup's genuine overrides restorable while making it impossible for a
+  resolved figure to reach a column. `EXPORT_VERSION` stays 1 deliberately, so existing backups
+  still import.
+
+  `sponsorPot` was NOT added: `sponsorCount` was already exported and is what the gate uses — the
+  device rolls the pot itself (`rollLeagueSponsorPot`). A resolved `sponsorPot` would also be
+  asymmetric, since `LeagueSponsor` rows are not in the export at all.
+
+  **A4 — `league.slots` is authored, and only where it was 0.** `Version20261119090000` computes
+  each league's currently derived size **in SQL** and writes it wherever `slots = 0`, stashing
+  every row for an exact `down()`. ⚠️ **It deliberately does NOT author every league**: an
+  already-authored value is a decision, and overwriting it with a live club count is the exact
+  side effect the change exists to abolish. That is not hypothetical — **this clone holds SC tier
+  8 at an authored 3 while it derives 4**, so "author every league to its derived size" would have
+  moved a real division on the day it landed. Computed rather than hardcoded because the derived
+  size differs per box (clone EN 18/tier, deployed box 16). **It does not pick a division size**;
+  16-vs-20 remains open and unprejudiced.
+
+  ⚠️ **On this clone the migration writes NOTHING** — all 120 league rows were already authored
+  (verified: 0 rows differ from the stash) — so the gate diff proves the command still runs, not
+  that the authoring is right. That property is pinned instead by new
+  `LeagueSlotsAuthoringTest`, which runs the migration's OWN statement off
+  `Version20261119090000::AUTHOR_SQL` (migrations are not autoloaded, so it requires the file by
+  path; `wunderkind_test` is not migration-tracked, so a migration cannot reach it and a re-typed
+  copy would test the copy). It pins the bottom-tier `+1`, that an authored value survives, that
+  an empty non-bottom tier stays deriving, and that a club whose country disagrees with its
+  league's is not counted — the last mirroring `countsByLeagueForCountry()`'s own country filter.
+
+  **A3b — `bankruptcy_deduction_weeks` is authored at last.** `Version20261119091000` writes the
+  agreed five-row weeks-of-wages ladder (1–2/2–4/4–8/8–16/16+ at 3/6/10/20/50 points). ⚠️ **The
+  backend mechanism already existed** — column, publisher, admin textarea, setter normalisation
+  and gate check 5 all shipped 2026-11-13 in `Version20261113120000`, with the column ending up
+  `null`; the open item was only ever the figure, which `economy-threshold-review.md` §1 had
+  already specified. Nothing was designed here.
+
+  ⚠️ **Authoring it is NOT inert in the usual sense and that was checked rather than assumed:**
+  `resolveWeeksLadder` prefers the published ladder over the app's own constant, so authoring
+  flips every client onto this. `wunderkind-app`'s `BANKRUPTCY_WEEKS_LADDER`
+  (`src/economy/insolvency.ts`) was read read-only and is **byte-identical** to these rows, so no
+  client's behaviour moves. No app edit was made. `bankruptcyDeductionTiers` is untouched and
+  remains the ladder for `legacy`, so the gate's two "rows 4 and 5 unreachable" problems and the
+  five per-tier "no range left" problems **survive by design** — they measure the pence ladder,
+  and amending its published bounds is a value change nobody has authorised.
+
+  **A5 — `WorldOverviewServiceTest` was never a production defect.** The failure was
+  `EconomyAdminTest` writing base £100,000,000 with a tier-2 ratio of 2x and tier 8 at 424ppm into
+  the **single shared `game_config` row** through the real admin save and never restoring it; SE
+  tier 2's NULL column then correctly INHERITED and resolved to £200,000,000. Accounted for to the
+  penny. The conversion does not coerce null to zero and this test's own fixture had not drifted —
+  so the fix was to make it **own the payout config for its duration** (stash both tier-1 bases,
+  zero them, restore), which is precisely the discipline it already applied to the live
+  `CountryProfile` statuses. The assertion was NOT relaxed. ⚠️ **`EconomyAdminTest` still does
+  not restore what it writes**, so the next reader of that row meets the same trap — flagged, not
+  fixed, as it is outside this tranche.
+
 - **Check 8's two TV-dependent bounds amended (2026-11-18)**, no commit — still on `development`
   @ `740f2c8e`. **Stages touched:** 04_interfaces (`services.md`), 07_synthesis
   (`current-focus.md`), shared (this file). `PAYOUT_SHARE_MAX_PCT` 50 → 55 and

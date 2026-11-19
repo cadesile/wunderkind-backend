@@ -10,8 +10,10 @@ use App\Entity\NpcClub;
 use App\Enum\CitySize;
 use App\Enum\Formation;
 use App\Enum\ReputationTier;
+use App\Repository\GameConfigRepository;
 use App\Repository\LeagueRepository;
 use App\Repository\NpcClubRepository;
+use App\Service\Economy\LeaguePayoutResolver;
 use Doctrine\ORM\EntityManagerInterface;
 
 class LeagueImportExportService
@@ -22,6 +24,8 @@ class LeagueImportExportService
         private readonly LeagueRepository       $leagueRepository,
         private readonly NpcClubRepository      $npcClubRepository,
         private readonly EntityManagerInterface $em,
+        private readonly LeaguePayoutResolver   $leaguePayoutResolver,
+        private readonly GameConfigRepository   $gameConfigRepository,
     ) {}
 
     // ── Export ────────────────────────────────────────────────────────────────
@@ -30,6 +34,11 @@ class LeagueImportExportService
     {
         $leagues = $this->leagueRepository->findAll();
         $clubs   = $this->npcClubRepository->findAll();
+
+        // ONE CONFIG FOR THE WHOLE EXPORT, as `SyncService::buildLeagueSnapshot()` and
+        // `/api/initialize/leagues` both do: `prizeFor()` would otherwise re-fetch it per
+        // league, and a world export is 196 of them.
+        $config = $this->gameConfigRepository->getConfig();
 
         $leagueData = [];
         foreach ($leagues as $l) {
@@ -43,8 +52,33 @@ class LeagueImportExportService
                 'slots'                => $l->getSlots(),
                 'leaguePositionDecreasePercent' => $l->getLeaguePositionDecreasePercent(),
                 'leagueReputationTier' => $l->getLeagueReputationTier()?->value,
-                'prizeMoney'           => $l->getPrizeMoney(),
-                'leaguePositionPot'    => $l->getLeaguePositionPot(),
+                // ── RESOLVED, NOT THE RAW COLUMN, AND THE KEY NAME IS THE WHOLE POINT ──────
+                //
+                // `Version20261118120000` NULLed both columns so they inherit from the ppm
+                // ladder, which is `5dc3f51b`'s design. Serialising the raw column therefore
+                // read £0 in every export taken after it, and the app's economy gate
+                // (`scripts/economy/variantGate.ts`, `dispersionGate.ts`) reads
+                // `league?.prizeMoney ?? 0` — so it credited zero prize and zero position money
+                // and every gate run since has needed a hand-patch.
+                //
+                // The resolved figure arrives under the EXISTING key because that is the one the
+                // gate reads: publishing it beside the raw column under a new name would need a
+                // change in `wunderkind-app` to be worth anything. Same chain as
+                // `SyncService::buildLeagueSnapshot()` and `/api/initialize/leagues`.
+                'prizeMoney'           => $this->leaguePayoutResolver->prizeFor($l, $config),
+                'leaguePositionPot'    => $this->leaguePayoutResolver->positionPotFor($l, $config),
+                // ── AND THE RAW COLUMNS, SO THE EXPORT IS STILL A BACKUP ───────────────────
+                //
+                // ⚠️ THESE TWO ARE THE ONES `import()` READS. The resolved keys above are
+                // export-only and deliberately ignored on the way back in — see
+                // `importLeagues()`. An operator forcing a per-league override must edit the
+                // `*Override` key; editing `prizeMoney` does nothing.
+                //
+                // Null here means "inherit", which is the state of all 196 leagues today, and
+                // round-tripping must leave it null rather than freezing the ladder into 196
+                // per-league overrides.
+                'prizeMoneyOverride'   => $l->getPrizeMoney(),
+                'leaguePositionPotOverride' => $l->getLeaguePositionPot(),
                 'sponsorCount'         => $l->getSponsorCount(),
                 'trophy'               => $l->getTrophy(),
                 'parachute'            => $l->getParachute(),
@@ -146,10 +180,37 @@ class LeagueImportExportService
                     $league->setPromotionSpots($row['promotionSpots'] !== null ? (int) $row['promotionSpots'] : null);
                 if (array_key_exists('tvDeal', $row))
                     $league->setTvDeal($row['tvDeal'] !== null ? (int) $row['tvDeal'] : null);
-                if (array_key_exists('prizeMoney', $row))
+                // ── THE OVERRIDE COLUMNS, AND THE RESOLVED KEYS ARE NOT READ ──────────────
+                //
+                // ⚠️ THIS IS THE ROUND-TRIP TRAP, AND IT IS WHY THE KEYS ARE SPLIT. `export()`
+                // now emits RESOLVED payouts under `prizeMoney` / `leaguePositionPot` because
+                // that is what the app's gate reads. Writing those back into the columns would
+                // convert every inherit (NULL) into a per-league override on the first round
+                // trip — permanently freezing the ppm ladder into 196 rows and defeating
+                // `5dc3f51b`'s NULL-means-inherit design, silently and with no error.
+                //
+                // So the resolved keys are IGNORED here, and the raw columns come back from
+                // `prizeMoneyOverride` / `leaguePositionPotOverride` instead. A NULL override
+                // restores as NULL, which is what keeps the ladder inherited.
+                //
+                // THE FALLBACK IS KEYED ON THE OVERRIDE KEY'S PRESENCE, NOT ITS VALUE, and that
+                // is what makes it safe. Every export written from here on carries
+                // `prizeMoneyOverride` even when it is null, so a row WITHOUT the key can only
+                // be a file written before this change — where `prizeMoney` was the raw column
+                // and restoring it is correct. A new file can therefore never reach the
+                // fallback, so a resolved figure can never be written to a column. Same idiom
+                // as the `trophy` / `trophyImage` pair below, and for the same reason: a world
+                // backup an admin committed months ago must still restore.
+                if (array_key_exists('prizeMoneyOverride', $row)) {
+                    $league->setPrizeMoney($row['prizeMoneyOverride'] !== null ? (int) $row['prizeMoneyOverride'] : null);
+                } elseif (array_key_exists('prizeMoney', $row)) {
                     $league->setPrizeMoney($row['prizeMoney'] !== null ? (int) $row['prizeMoney'] : null);
-                if (array_key_exists('leaguePositionPot', $row))
+                }
+                if (array_key_exists('leaguePositionPotOverride', $row)) {
+                    $league->setLeaguePositionPot($row['leaguePositionPotOverride'] !== null ? (int) $row['leaguePositionPotOverride'] : null);
+                } elseif (array_key_exists('leaguePositionPot', $row)) {
                     $league->setLeaguePositionPot($row['leaguePositionPot'] !== null ? (int) $row['leaguePositionPot'] : null);
+                }
                 // RESTORED VERBATIM, AND tvDeal IS NOT RE-DERIVED FROM THE POOL HERE. An export
                 // holds both columns, and a clear-then-import round trip has to reproduce the
                 // file exactly — testWorldSurvivesClearAndReimport asserts that. Re-deriving

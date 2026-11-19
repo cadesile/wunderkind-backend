@@ -483,6 +483,34 @@ filename alone.
   `trophyImage`/`trophyColour` pair instead of `trophy` is converted through
   `TrophyConfigFactory::fromLegacy()`, so a world backup committed before the
   trophy component changed still restores its trophies.
+
+  ⚠️ **THE PAYOUT KEYS ARE SPLIT, AND THE EXPORT'S `prizeMoney` IS NOT THE COLUMN (2026-11-19).**
+  `export()` emits `prizeMoney` and `leaguePositionPot` **resolved** through
+  `LeaguePayoutResolver` (one `GameConfig` for the whole export), the same chain
+  `SyncService::buildLeagueSnapshot()` and `/api/initialize/leagues` use. It has to be those key
+  names because they are what the app's economy gate reads
+  (`scripts/economy/variantGate.ts`, `dispersionGate.ts`: `league?.prizeMoney ?? 0`) — since
+  `Version20261118120000` NULLed the columns to inherit from the ppm ladder, the raw-column export
+  read **£0** and every gate run needed a hand-patch.
+
+  The RAW columns are exported as **`prizeMoneyOverride`** and
+  **`leaguePositionPotOverride`**, and ⚠️ **those two are the only ones `import()` reads.**
+  Writing a resolved figure back into the columns would convert every inherit (NULL) into a
+  per-league override on the first round trip — freezing the ladder into 196 rows and defeating
+  `5dc3f51b`'s NULL-means-inherit design, silently and with no error.
+  `LeagueImportExportRoundTripTest::testARoundTripLeavesAnInheritedLeaguesPayoutColumnsNull()`
+  pins it.
+
+  Import falls back to the bare `prizeMoney` key **only when the override key is absent** — keyed
+  on presence, not value, so since every new export carries it (often as null) only a pre-change
+  file can reach the fallback. That is what keeps an old backup's genuine overrides restorable
+  while making it impossible for a resolved figure to reach a column. `EXPORT_VERSION` stays **1**
+  deliberately, so existing backups still import.
+
+  **`sponsorCount` was already exported and is what the gate uses**; no `sponsorPot` was added —
+  the device rolls the pot itself (`rollLeagueSponsorPot`), and a resolved pot would be asymmetric
+  since `LeagueSponsor` rows are not in the export at all (a clear-then-import restores no
+  sponsors).
 - **`LeagueService`** — league lifecycle logic (season conclusion,
   leaderboard categories), using `LeagueRepository`,
   `GameConfigRepository`. `generateLeaguesForCountry()` reads its per-tier

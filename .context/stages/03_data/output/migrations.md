@@ -898,3 +898,80 @@ left exactly as found.)
 figures. ⚠️ The bump is NOT enough on its own here: existing NPC clubs keep the facilities they
 were generated with, so the band-3 change reaches nothing until the bottom two tiers are
 REGENERATED.
+
+## `Version20261119090000` — author `league.slots` wherever it is still 0
+
+**What it does.** Computes each league's currently derived size in SQL and writes it to
+`league.slots` **only where `slots = 0`** (0 means "derive"), stashing every row's prior value in
+`league_slots_pre_authoring_backup` so `down()` is exact. Designed to change nothing on the day it
+lands: it authors the figure each box was already deriving.
+
+**Why.** `LeagueSizeResolver::sizeOf()` reads 0 as "derive" and returns the live NPC club count
+(+1 at the country's bottom tier), so the division size, every club's matchday, the app gate's
+`homeGames` and the per-club divisor in `app:economy:wage-table`'s check 8 all followed however
+many club rows happened to exist. On 2026-11-18 a spoof-club purge took England from 20 club rows
+per tier to 16 and thereby re-priced every division in the world — matchday fell ~20%, six tiers
+dropped below the app's coverage floor — with no economy change authored anywhere.
+
+⚠️ **ONLY WHERE `slots = 0`, AND THAT IS NOT A DETAIL.** An already-authored value is somebody's
+decision, and overwriting it with a live club count would be the defect applied deliberately. It
+is also not hypothetical: the development clone holds all 120 league rows authored, and **SC tier
+8 sits at an authored 3 while deriving 4** (3 NPC rows + the player's slot). "Author every league
+to its derived size" would therefore have moved a real division.
+
+⚠️ **COMPUTED, NOT HARDCODED**, because the derived size differs per box — the clone has EN at 18
+club rows per tier, the deployed box 16. A hardcoded table would author the wrong count on one of
+them and silently re-price it.
+
+⚠️ **IT DOES NOT PICK A DIVISION SIZE.** 16-vs-20 is an open owner decision; authoring the current
+count is what avoids pre-empting it, and the admin can edit the value afterwards
+(`LeagueAdminController::quickEdit()`, blank = 0 = derive).
+
+**Three details copied from the resolver rather than reinvented**, since a divisor that disagrees
+with the one it replaces is worse than no change: the NPC join also matches on
+`n.country = lg.country`, because `NpcClubRepository::countsByLeagueForCountry()` filters on the
+club's own country; the bottom tier is `MAX(tier)` per country, because
+`findLowestTierForCountry()` is `ORDER BY tier DESC LIMIT 1` (the deepest EXISTING row, not
+`country_profile.league_tier_count`); and the `+1` applies only there. Raw SQL also re-applies the
+two bounds `League::setSlots()` would have given it — `LEAST(..., 40)` and skipping `derived = 0`.
+
+**Tested by running the migration's own statement.** `wunderkind_test` is not migration-tracked, so
+the migration cannot reach it; `LeagueSlotsAuthoringTest` requires the file by path (migrations are
+deliberately not autoloaded) and executes `Version20261119090000::AUTHOR_SQL`, so the test cannot
+drift from the migration. **No `WORLD_PACK_VERSION` bump** — no key moves and no resolved size
+changes.
+
+## `Version20261119091000` — author `game_config.bankruptcy_deduction_weeks`
+
+**What it does.** Writes the agreed five-row weeks-of-wages deficit ladder — 1–2/2–4/4–8/8–16/16+
+weeks at 3/6/10/20/50 points — stashing the column first in
+`bankruptcy_weeks_pre_authoring_backup`. `down()` restores a stashed NULL as NULL, with no
+`COALESCE`, because NULL is this column's own meaningful state ("the app uses its own ladder").
+
+⚠️ **AUTHORING ONLY — the mechanism already existed.** Column, publication through
+`EconomyConfigPublisher::clientBlock()`, the admin JSON textarea, `normaliseDeductionWeeks()` and
+`app:economy:wage-table`'s check 5 all shipped 2026-11-13 in `Version20261113120000` with the
+column left `null`. The open item was only the figure, specified in
+`docs/economy-threshold-review.md` §1. Nothing was designed here.
+
+**Why.** `bankruptcyDeductionTiers`, the pence ladder this supersedes for the turnover model, is
+flat absolute pence with no tier dimension: its harshest band starts at £40,000.01 against a
+tier-1 weekly wage bill of £3,238,043, so the whole ladder is traversed in 0.01 weeks. The bill is
+`turnover × 0.45 ÷ 46`, so it depends on nothing but the turnover row and reads identically on
+dev. Weeks of wages cannot decouple at all — a country factor, a tier factor, inflation and a
+wage-model flip each move numerator and denominator together, which is why
+`npcSolvencyThresholds` already works this way. The rows are contiguous (`weeksMin` equals the
+previous `weeksMax`), so they store unaltered and the first-match-vs-last-match question stops
+existing.
+
+⚠️ **NOT INERT, AND THAT WAS CHECKED RATHER THAN ASSUMED.** `resolveWeeksLadder` prefers the
+published ladder over the app's own constant, so authoring flips every client onto this.
+`wunderkind-app`'s `BANKRUPTCY_WEEKS_LADDER` (`src/economy/insolvency.ts`) was read read-only on
+2026-11-19 and is **byte-identical** to these rows, so no client behaviour moves. The mechanic is
+additionally still gated by `bankruptcyDeductionsEnabled`.
+
+⚠️ **`bankruptcyDeductionTiers` IS DELIBERATELY UNTOUCHED** — same name, type, values, still
+published, still the ladder for `legacy`. So the gate's two "rows 4 and 5 unreachable behind row
+3's null `deficitMax`" problems and the five per-tier "no range left" problems **survive this
+migration by design**: they measure the pence ladder, and amending its published bounds is a value
+change nobody has authorised. Do not read their survival as this migration having failed.

@@ -29,10 +29,20 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
     /** Distinctive so it cannot collide with another test's synthetic country. */
     private const COUNTRY = 'ZQ';
 
+    /**
+     * A SECOND synthetic country, for the league that INHERITS its payouts.
+     *
+     * Kept apart from `COUNTRY` deliberately: that fixture seeds an explicit override on both
+     * payout columns, which is the opposite of the state the round-trip trap is about, and the
+     * existing tests index its export row positionally.
+     */
+    private const INHERIT_COUNTRY = 'ZY';
+
     private LeagueImportExportService $service;
     private LeagueRepository $leagues;
     private NpcClubRepository $clubs;
     private EntityManagerInterface $em;
+    private \App\Service\Economy\LeaguePayoutResolver $payouts;
 
     protected function setUp(): void
     {
@@ -41,6 +51,7 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         $this->leagues = self::getContainer()->get(LeagueRepository::class);
         $this->clubs   = self::getContainer()->get(NpcClubRepository::class);
         $this->em      = self::getContainer()->get(EntityManagerInterface::class);
+        $this->payouts = self::getContainer()->get(\App\Service\Economy\LeaguePayoutResolver::class);
 
         $this->removeFixtures();
     }
@@ -210,11 +221,125 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         self::assertSame(17, $after['leaguePositionDecreasePercent']);
     }
 
-    /** @param array<string, mixed> $export */
-    private function leagueRowIn(array $export): array
+    /**
+     * ⚠️ THE ROUND-TRIP TRAP, AND IT IS THE WHOLE RISK IN THE RESOLVED-PAYOUT CHANGE.
+     *
+     * `export()` emits RESOLVED payouts under `prizeMoney` / `leaguePositionPot`, because that
+     * is the key the app's economy gate reads. If `import()` wrote those back into the columns,
+     * round-tripping a world would convert every inherit (NULL) into a per-league override —
+     * freezing the ppm ladder into 196 rows and defeating `5dc3f51b`'s NULL-means-inherit
+     * design, silently and with no error. So the columns must still be NULL afterwards.
+     */
+    public function testARoundTripLeavesAnInheritedLeaguesPayoutColumnsNull(): void
     {
-        foreach ($export['leagues'] ?? [] as $row) {
+        $this->seedInheritingLeague();
+
+        $exported = $this->service->export();
+        $row      = $this->leagueRowIn($exported, self::INHERIT_COUNTRY);
+
+        // The export really is carrying a resolved figure, not a null — otherwise this test
+        // would pass for the wrong reason on a box with no authored ladder.
+        self::assertNotNull(
+            $row['prizeMoney'],
+            'the ladder is unauthored on this box, so the trap cannot be exercised',
+        );
+        self::assertNull($row['prizeMoneyOverride'], 'the raw column must export as null');
+        self::assertNull($row['leaguePositionPotOverride']);
+
+        $this->removeFixtures();
+        $result = $this->service->import($exported);
+        $this->em->clear();
+
+        self::assertSame([], $result['errors']);
+
+        $restored = $this->inheritingLeague();
+
+        self::assertNull(
+            $restored->getPrizeMoney(),
+            'the resolved prize was written into the column — the ladder is now frozen as an override',
+        );
+        self::assertNull(
+            $restored->getLeaguePositionPot(),
+            'the resolved position pot was written into the column — the ladder is now frozen as an override',
+        );
+    }
+
+    /**
+     * A fresh export's `prizeMoney` must EQUAL the resolver, not merely be non-zero.
+     *
+     * Non-zero was the bar the blocker was found against and it is too weak: the raw column read
+     * £0, so anything non-zero would have looked like a fix while still being the wrong figure.
+     */
+    public function testAFreshExportsPayoutsEqualTheResolver(): void
+    {
+        $this->seedInheritingLeague();
+
+        $league = $this->inheritingLeague();
+        $row    = $this->leagueRowIn($this->service->export(), self::INHERIT_COUNTRY);
+
+        self::assertSame($this->payouts->prizeFor($league), $row['prizeMoney']);
+        self::assertSame($this->payouts->positionPotFor($league), $row['leaguePositionPot']);
+    }
+
+    /** An explicit override still wins, and still survives the round trip as an override. */
+    public function testAnExplicitOverrideSurvivesTheRoundTripAsAnOverride(): void
+    {
+        $this->seed();
+
+        $row = $this->leagueRowIn($this->service->export());
+        self::assertSame(250_000, $row['prizeMoney'], 'an override resolves to itself');
+        self::assertSame(250_000, $row['prizeMoneyOverride']);
+        self::assertSame(75_000, $row['leaguePositionPotOverride']);
+
+        $exported = $this->service->export();
+        $this->removeFixtures();
+        self::assertSame([], $this->service->import($exported)['errors']);
+        $this->em->clear();
+
+        $restored = $this->leagues->findOneBy(['country' => self::COUNTRY, 'tier' => 4]);
+
+        self::assertSame(250_000, $restored->getPrizeMoney(), 'a real override must not be lost');
+        self::assertSame(75_000, $restored->getLeaguePositionPot());
+    }
+
+    /**
+     * A file written BEFORE the resolved-payout change still restores its columns.
+     *
+     * Such a row has no `*Override` key at all and its `prizeMoney` IS the raw column, so the
+     * fallback must fire. It is keyed on the override key's PRESENCE, which is what stops a new
+     * file — where the key is always present, often null — from ever reaching it.
+     */
+    public function testALegacyFileWithoutTheOverrideKeysStillRestoresItsColumns(): void
+    {
+        $this->seed();
+        $exported = $this->service->export();
+
+        foreach ($exported['leagues'] as $i => $row) {
             if (($row['country'] ?? null) === self::COUNTRY) {
+                unset(
+                    $exported['leagues'][$i]['prizeMoneyOverride'],
+                    $exported['leagues'][$i]['leaguePositionPotOverride'],
+                );
+            }
+        }
+
+        $this->removeFixtures();
+        self::assertSame([], $this->service->import($exported)['errors']);
+        $this->em->clear();
+
+        $restored = $this->leagues->findOneBy(['country' => self::COUNTRY, 'tier' => 4]);
+
+        self::assertSame(250_000, $restored->getPrizeMoney(), 'a pre-change backup lost its override');
+        self::assertSame(75_000, $restored->getLeaguePositionPot());
+    }
+
+    /** @param array<string, mixed> $export */
+    private function leagueRowIn(array $export, ?string $country = null): array
+    {
+        $country ??= self::COUNTRY;
+
+        foreach ($export['leagues'] ?? [] as $row) {
+            if (($row['country'] ?? null) === $country) {
                 return $row;
             }
         }
@@ -298,15 +423,48 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
 
     private function removeFixtures(): void
     {
-        foreach ($this->clubs->findBy(['country' => self::COUNTRY]) as $club) {
-            $this->em->remove($club);
+        foreach ([self::COUNTRY, self::INHERIT_COUNTRY] as $country) {
+            foreach ($this->clubs->findBy(['country' => $country]) as $club) {
+                $this->em->remove($club);
+            }
         }
         $this->em->flush();
 
-        foreach ($this->leagues->findBy(['country' => self::COUNTRY]) as $league) {
-            $this->em->remove($league);
+        foreach ([self::COUNTRY, self::INHERIT_COUNTRY] as $country) {
+            foreach ($this->leagues->findBy(['country' => $country]) as $league) {
+                $this->em->remove($league);
+            }
         }
         $this->em->flush();
         $this->em->clear();
+    }
+
+    /**
+     * A league in the state all 196 real ones are in: both payout columns NULL, inheriting.
+     *
+     * Returned flushed and detached, so a caller reads it back from the repository rather than
+     * from an identity map that already holds the values it is trying to prove.
+     */
+    private function seedInheritingLeague(): void
+    {
+        $league = new League(self::INHERIT_COUNTRY, 4, 'Inherit Division');
+        $league->setPromotionSpots(2);
+        $league->setTvDeal(400_000);
+
+        // NOT SET, AND THAT IS THE FIXTURE: NULL means inherit from the ppm ladder.
+        self::assertNull($league->getPrizeMoney());
+        self::assertNull($league->getLeaguePositionPot());
+
+        $this->em->persist($league);
+        $this->em->flush();
+        $this->em->clear();
+    }
+
+    private function inheritingLeague(): League
+    {
+        $league = $this->leagues->findOneBy(['country' => self::INHERIT_COUNTRY, 'tier' => 4]);
+        self::assertNotNull($league, 'the inheriting fixture is missing');
+
+        return $league;
     }
 }
