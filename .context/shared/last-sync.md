@@ -5,6 +5,32 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **B3: `slots` corrected where an authored value disagrees with the real size (2026-11-19)**,
+  committed on `development` on top of `e2c855c6`. **Stages touched:** 03_data (`migrations.md`),
+  shared (this file). `Version20261119120000`, plus `LeagueSlotsCorrectionTest`. Carries the
+  owner's decision that **`slots` equals the division's real size**; corrects 12 rows on the
+  deployed box (EN tiers 1-8 18->16, SC tiers 1-4 18->14) and does not settle 16-vs-20.
+
+  ⚠️ **THE FINDING, and it changed the implementation: `sizeOf()`'s `+1` at the deepest tier is
+  NOT universally right.** The brief's rule was "slots = rows + 1 if bottom tier", taken from the
+  resolver. Dry-run on the clone showed that rule would change **6 rows** — CA, JP, NG, PL, US at
+  tier 8 (8 -> 9) and **SC tier 8 (3 -> 4)**. Cause: the generator reserves a place for the player
+  at the deepest tier on some boxes and not others. EN on this clone reserves (18/18/…/17); those
+  six countries hold the same count at every tier, so `rows + 1` is one more club than the
+  division can field. **The previous session's refusal to overwrite SC's authored 3 was right for
+  a better reason than it knew: 3 is correct and the derived 4 is the bug.** The migration now
+  DETECTS the reservation (deepest tier holding exactly one fewer row than the tier above) rather
+  than assuming it, and both shapes are pinned.
+
+  **Verified a complete no-op on the clone rather than assumed:** the `slots` column fingerprint
+  is `d56d40bd232d2d31ebe7342f47e76b16` across migrate -> rollback -> re-migrate, `rows_changed`
+  against the stash is 0, the stash table drops on `down()`, SC tier 8 still reads 3, and
+  `app:economy:wage-table` is byte-identical (still exit 1 with its 31 pre-existing failures).
+
+  **Left open and reported, not fixed:** `sizeOf()`'s unconditional `+1` is a latent defect for
+  any `slots = 0` league on an unreserved box. Inert today — the only deriving leagues are SC
+  tiers 5-8 on the deployed box, which do reserve.
+
 - **B1 + B2: `tvDeal` is published resolved, and a false migration docblock corrected
   (2026-11-19)**, committed on `development` on top of `603ea577`. **Stages touched:**
   04_interfaces (`services.md`), shared (this file). No migration, no authored economy figure,

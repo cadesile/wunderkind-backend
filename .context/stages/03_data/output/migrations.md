@@ -660,6 +660,50 @@ Two details that are deliberate and should not be "tidied":
 drift afterwards. A suite run before that step fails with `relation "club_sale" does not
 exist` on every new test, which looks nothing like the change.
 
+## `Version20261119120000` — correct an authored `slots` that disagrees with the real size
+
+**A BEHAVIOUR CHANGE, deliberately, and the other half of `Version20261119090000`.** That one
+authored `slots` only where it was 0 and refused to touch an authored value, correctly, because no
+decision existed. The owner made it on **2026-11-19**: **`slots` equals the division's real size**
+— 18 was never anybody's decision, it is residue from the spoof purge, which took club rows down
+and left `slots` where it was. It does **not** settle 16-vs-20, which is about what to GENERATE.
+
+**Corrects 12 rows on the deployed box** (world partitions exactly 184 + 12 + 4): EN tiers 1–8
+from 18 to 16, SC tiers 1–4 from 18 to 14. `SC` tiers 5–8 are `slots = 0` and belong to
+`Version20261119090000`; the other 184 already agree. No payout money moves —
+`LeaguePayoutResolver` never divides by size — but **check 8's per-club arithmetic**, the
+**published `clubCount`** and the app's `tvPoolPence / clubCount` cross-check were all being fed a
+false divisor. This recalibrates instruments, not the economy.
+
+### ⚠️ The reserved player slot is DETECTED, not assumed — and an earlier draft got this wrong
+
+`LeagueSizeResolver::sizeOf()` adds 1 at a country's deepest tier for the place the generator
+leaves open for the player's club. **That is not universally true.** Measured on the development
+clone, 2026-11-19: EN reserves (18 rows at tiers 1–7, 17 at tier 8) but **CA, JP, NG, PL, US and
+SC do not** — every tier including the deepest holds the same count. A first draft used
+`sizeOf()`'s rule and would have written **9 over a correct 8 in five countries, and 4 over SC's
+correct 3**. So the target is `rows + 1` only at the deepest tier *and* only where it holds
+exactly one fewer row than the tier above; `rows` otherwise. A single-tier country cannot
+demonstrate a reservation and is treated as unreserved.
+
+**Verified a complete no-op on the clone, not asserted:** the `slots` column's md5 fingerprint is
+`d56d40bd232d2d31ebe7342f47e76b16` before migrate, after migrate, after rollback and after
+re-migrate; `rows_changed` against the stash is **0**; `app:economy:wage-table` is byte-identical;
+and SC tier 8 still reads its authored **3**.
+
+`down()` restores every row from `league_slots_pre_correction_backup` (a distinct table name from
+`Version20261119090000`'s, so the two roll back independently) and never resets a column to 0 —
+that would turn an authored decision into "derive". Pinned by `LeagueSlotsCorrectionTest`, which
+runs the migration's own `CORRECT_SQL` constant and covers both the reserved and unreserved
+shapes, the `slots = 0` hands-off case, and idempotency.
+
+### A defect this exposes and does NOT fix
+
+`sizeOf()`'s unconditional `+1` is wrong on any box whose deepest tier was not reserved. It is
+inert wherever `slots` is authored (the authored value wins), so it bites only `slots = 0`
+leagues — on the deployed box that is SC tiers 5–8, which *do* reserve, so nothing is wrong there
+today. **Reported, not fixed: changing the resolver is wider than a data correction.**
+
 ## `Version20261116180000` + `Version20261116181000` — the league payout ladders (2026-11-16)
 
 **A pair, and the split is the point.** The first adds schema and cannot move a figure; the
