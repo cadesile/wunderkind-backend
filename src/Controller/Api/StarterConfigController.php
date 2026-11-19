@@ -94,6 +94,14 @@ class StarterConfigController extends AbstractController
             'leagueAbilityRanges' => $config->getLeagueAbilityRanges(),
             'defaultFacilities'   => $config->getDefaultFacilities(),
             'fanBaseRanges'              => $config->getFanBaseRanges(),
+            // ADDITIVE, 2026-11-19. The per-tier SHARE of a club's catchment that supports it,
+            // as whole percentages. ⚠️ NOT a replacement for `fanBaseRanges` directly above and
+            // NOT in the same unit — that key is an absolute headcount and stays exactly as it
+            // is, because it is the client's fallback whenever this ladder or a club's
+            // catchment population is missing (`wunderkind-app/src/economy/fanBase.ts`). Read
+            // as a share, `fanBaseRanges`' live tier-1 value of 700,000 would mean 700,000% of
+            // the catchment, which is why these are two keys and not one.
+            'fanBaseSharePercent'        => $config->getFanBaseSharePercent(),
             'fanBasePromotionIncrease'   => $config->getFanBasePromotionIncrease(),
             'fanBaseRelegationDecrease'  => $config->getFanBaseRelegationDecrease(),
             // Optional first-run guidance for the app's new-game setup flow. Served

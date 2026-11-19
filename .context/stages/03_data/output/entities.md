@@ -956,8 +956,20 @@ Each is effectively a single global-config row.
   balance, starter counts of players/coaches/scouts/managers,
   `starterSponsorTier`, `starterClubTier`, `defaultFacilities`,
   `starterReputationTier`, `enabledCountries`, `leagueAbilityRanges`,
-  `npcSquadConfig`, `fanBaseRanges`, promotion/relegation fan-base
+  `npcSquadConfig`, `fanBaseRanges`, `fanBaseSharePercent`,
+  promotion/relegation fan-base
   multipliers, `setupTutorialConfig`). `id:int = 1` fixed. No relations.
+  🔴 **`fanBaseRanges` and `fanBaseSharePercent` (added 2026-11-19,
+  `Version20261119190000`) are TWO KEYS IN TWO UNITS 1,000x APART, and confusing them is the
+  one dangerous mistake here.** Both are `Record<tier-string, {min,max}>`; the first is an
+  ABSOLUTE HEADCOUNT (the deployed row reads 700,000-1,500,000 at tier 1 — the ENTITY default
+  is 50,000-150,000, so read it from an export, never from the PHP default), the second is a
+  PERCENT of the population of the plot the club sits on. The app computes
+  `fanCount = floor(population x share / 100)` and falls back to the absolute band whenever
+  the ladder or the club's catchment is absent, so `fanBaseRanges` is live behaviour and not
+  superseded. Reading the absolute key as a share would mean 700,000% of the catchment. Pinned
+  by `StarterConfigFanBaseShareLadderTest` and `StarterConfigFanBaseShareTest`; the admin save
+  clamps the share to 0-100 because a share above 100% is not a share.
   **`setupTutorialConfig:json` (added 2026-11-02, `Version20261102121403`)** — the optional
   first-run guidance block served as `tutorial` on `GET /api/starter-config`, seeded with the
   5 briefings + 10 notes the app already shipped as a fixture. NOT NULL with a PHP default

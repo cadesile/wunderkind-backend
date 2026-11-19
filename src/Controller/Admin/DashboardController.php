@@ -850,6 +850,24 @@ class DashboardController extends AbstractDashboardController
             $config->setFanBaseRanges($fanBaseRanges);
         }
 
+        // Fan base SHARE ladder — submitted as fanBaseSharePercent[1][min]=60 etc.
+        //
+        // ⚠️ A SEPARATE KEY FROM `fanBaseRanges` DIRECTLY ABOVE, and the two must never be
+        // confused: those are absolute headcounts, these are percentages of a club's catchment.
+        // Same submitted-array handling, with one extra rule — both bounds are clamped to 0-100,
+        // because a share above 100% is not a share and would hand a club more fans than its
+        // town has people.
+        $fanShareInput = $request->request->all('fanBaseSharePercent') ?: [];
+        $fanBaseSharePercent = [];
+        foreach ($fanShareInput as $tier => $bounds) {
+            $min = min(100, max(0, (int) ($bounds['min'] ?? 0)));
+            $max = min(100, max(0, (int) ($bounds['max'] ?? 0)));
+            $fanBaseSharePercent[(string) $tier] = ['min' => min($min, $max), 'max' => max($min, $max)];
+        }
+        if (!empty($fanBaseSharePercent)) {
+            $config->setFanBaseSharePercent($fanBaseSharePercent);
+        }
+
         $config->setFanBasePromotionIncrease((float) $request->request->get('fanBasePromotionIncrease', 0.20));
         $config->setFanBaseRelegationDecrease((float) $request->request->get('fanBaseRelegationDecrease', 0.10));
 

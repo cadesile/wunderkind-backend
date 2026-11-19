@@ -80,10 +80,15 @@ class LegacyNewGameFlowTest extends WebTestCase
             array_diff($before, array_keys($data)),
             'starter-config lost a key an old build reads',
         );
+        // `fanBaseSharePercent` joined `economy` on 2026-11-19 — the per-tier SHARE of a
+        // club's catchment, published BESIDE `fanBaseRanges` and never in place of it. Listed
+        // in payload order, which puts it next to the absolute band it accompanies. The
+        // `$before` list above is deliberately untouched: the claim this test makes is that
+        // nothing an old build reads has gone, and `fanBaseRanges` is still in it.
         self::assertSame(
-            ['economy'],
+            ['fanBaseSharePercent', 'economy'],
             array_values(array_diff(array_keys($data), $before)),
-            'the only addition to starter-config should be `economy`',
+            'starter-config gained a key that is neither `fanBaseSharePercent` nor `economy`',
         );
     }
 

@@ -515,6 +515,37 @@
             {% endfor %}
         </div>
 
+        {# ── the catchment SHARE ladder ──────────────────────────────────
+           A SECOND, SEPARATE ladder from the absolute bands above, in PERCENT of the
+           population of the plot the club sits on. The app multiplies the two:
+           fanCount = floor(population x share / 100). It falls back to the absolute band
+           above whenever this is empty or the club has no known catchment, so clearing a
+           tier here means "today's behaviour at that tier", not "no fans".
+           Clamped 0-100 on save by DashboardController::saveStarterConfig(). #}
+        <div class="bmc-card__head" style="margin-top:14px">
+            <i data-lucide="percent"></i>
+            <span class="bmc-card__title">CATCHMENT SHARE %</span>
+            <span class="bmc-card__meta">percent of the club's plot population that supports it — overrides the absolute bands above</span>
+        </div>
+
+        <div class="bmc-card__body bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+            {% for tier in 1..8 %}
+                {% set fs = config.fanBaseSharePercent[tier ~ ''] ?? {min: 0, max: 0} %}
+                <div class="bmc-field-col" style="gap:4px">
+                    <span class="bmc-lbl">TIER {{ tier }}</span>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <label class="bmc-num bmc-num--76"><input name="fanBaseSharePercent[{{ tier }}][min]" inputmode="numeric"
+                               value="{{ fs.min ?? 0 }}" data-saved="{{ fs.min ?? 0 }}" data-min="0" data-max="100"
+                               data-lte="fanBaseSharePercent[{{ tier }}][max]" aria-label="Tier {{ tier }} minimum catchment share percent"></label>
+                        <span class="bmc-sep">–</span>
+                        <label class="bmc-num bmc-num--76"><input name="fanBaseSharePercent[{{ tier }}][max]" inputmode="numeric"
+                               value="{{ fs.max ?? 0 }}" data-saved="{{ fs.max ?? 0 }}" data-min="0" data-max="100"
+                               aria-label="Tier {{ tier }} maximum catchment share percent"></label>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
         <div class="bmc-setting" data-bmc-setting>
             <div class="bmc-setting__text">
                 <span class="bmc-setting__label">PROMOTION INCREASE</span>
