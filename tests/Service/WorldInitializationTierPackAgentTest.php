@@ -94,8 +94,12 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
             foreach ($clubSnap['players'] as $playerSnap) {
                 $this->assertArrayHasKey('agent', $playerSnap);
                 $this->assertNotNull($playerSnap['agent'], 'every world-pack player should carry an agent');
+                // NO `commissionRate` SINCE v11 — the agent survives in a pack, his fee does
+                // not. See WorldPackSnapshotBuilder::buildPlayerSnapshot() and
+                // WorldPackCarriesNoMoneyTest; the fee is still on the shared shape for the
+                // browse surfaces, and is stripped at the pack boundary only.
                 $this->assertSame(
-                    ['id', 'name', 'commissionRate', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth', 'appearance'],
+                    ['id', 'name', 'reputation', 'experience', 'rating', 'nationality', 'dateOfBirth', 'appearance'],
                     array_keys($playerSnap['agent']),
                 );
                 $agentIdsAcrossAllPlayers[] = $playerSnap['agent']['id'];

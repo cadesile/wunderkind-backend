@@ -168,8 +168,14 @@ class WorldPackTierAssemblyService
 
         $gameConfig = $this->gameConfigRepository->getConfig();
         $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
-        $sponsorPot = $this->worldInitializationService->rollLeagueSponsors($league, $gameConfig);
-        $payload    = $this->worldInitializationService->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
+
+        // Rolled for its SIDE EFFECT, not for the pack: the pot left the payload at v11, but
+        // each `LeagueSponsor::$rolledValue` is country-wide server state that `SyncService`
+        // sums for an existing save. Same reasoning as the synchronous path in
+        // `WorldInitializationService::buildTierPack()`.
+        $this->worldInitializationService->rollLeagueSponsors($league, $gameConfig);
+
+        $payload = $this->worldInitializationService->buildLeagueSnapshot($league, $clubsData, $fixtures, $gameConfig);
 
         $set = $tierRun->getSet();
         if ($set === null) {

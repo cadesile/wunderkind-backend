@@ -55,7 +55,19 @@ class WorldInitializationAgentAssignmentTest extends TestCase
         $this->assertNull($player->getAgent());
     }
 
-    public function testBuildPlayerSnapshotNestsAgentUsingSharedShape(): void
+    /**
+     * The nested agent is still the shared shape — MINUS its fee, since v11.
+     *
+     * `Agent::toSnapshotArray()` is unchanged and still carries `commissionRate`, because the
+     * browse and scout-search surfaces quote a live fee off it.
+     * `WorldPackSnapshotBuilder::buildPlayerSnapshot()` unsets that one key on the way into a
+     * pack: WHO represents a player is census data, WHAT he charges is money, and a pack
+     * carries no money (`WorldPackCarriesNoMoneyTest`).
+     *
+     * Asserted as the shared shape minus one named key rather than as a literal list, so the
+     * test still fails if the shared shape gains or loses anything else.
+     */
+    public function testBuildPlayerSnapshotNestsAgentUsingSharedShapeWithoutTheFee(): void
     {
         $agent = new Agent('Jorge Mendes');
         $agent->setCommissionRate('10.00');
@@ -64,8 +76,12 @@ class WorldInitializationAgentAssignmentTest extends TestCase
 
         $snap = $this->service()->buildPlayerSnapshot($player);
 
+        $expected = $agent->toSnapshotArray();
+        $this->assertArrayHasKey('commissionRate', $expected, 'the shared shape still prices');
+        unset($expected['commissionRate']);
+
         $this->assertArrayHasKey('agent', $snap);
-        $this->assertSame($agent->toSnapshotArray(), $snap['agent']);
+        $this->assertSame($expected, $snap['agent']);
     }
 
     public function testBuildPlayerSnapshotAgentIsNullWhenPlayerHasNone(): void

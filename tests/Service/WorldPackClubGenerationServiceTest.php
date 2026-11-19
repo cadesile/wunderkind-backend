@@ -145,13 +145,33 @@ class WorldPackClubGenerationServiceTest extends TestCase
         }
     }
 
-    public function testGeneratePlayersSetsContractValue(): void
+    /**
+     * ⚠️ REVERSED AT v11 (2026-11-18), from `testGeneratePlayersSetsContractValue`.
+     *
+     * Generation used to price every world-pack player through
+     * `WageModelResolver::playerWeeklyPence()`, because the pack stored the figure. Nothing is
+     * priced at generation now: the pack carries no `contractValue` at all
+     * (`WorldPackCarriesNoMoneyTest`), and the device prices each player from the published
+     * tier wage scale when it ingests him.
+     *
+     * `PlayerGenerationService::generate()` leaves `contractValue` at its 0 default, so this
+     * asserts that 0 — which is CORRECT here precisely because it is never serialised and
+     * never read. Asserting it rather than ignoring it is the point: a non-zero value would
+     * mean something has started pricing at generation again, and the whole gain of v11 is
+     * that re-authoring a turnover figure needs no version bump and no regeneration.
+     */
+    public function testGeneratePlayersLeavesThemUnpricedForTheDeviceToPrice(): void
     {
         $service = $this->makeService();
         $players = $service->generatePlayers($this->tierConf(['playerMin' => 3, 'playerMax' => 3]), $this->abilityRange(), 'English', $this->evenPositionWeights(), []);
 
+        $this->assertNotEmpty($players);
         foreach ($players as $player) {
-            $this->assertGreaterThan(0, $player->getContractValue());
+            $this->assertSame(
+                0,
+                $player->getContractValue(),
+                'nothing prices at generation since v11 — the device does it at init',
+            );
         }
     }
 

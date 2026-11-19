@@ -30,7 +30,6 @@ class WorldPackClubGenerationService
         private readonly ScoutGenerationService $scoutGen,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly NameGeneratorService $nameGenerator,
-        private readonly \App\Service\Economy\WageModelResolver $wageModel,
     ) {}
 
     /**
@@ -40,15 +39,20 @@ class WorldPackClubGenerationService
      *                        club in the tier, so an agent can represent multiple clubs)
      * @return Player[]
      */
+    /**
+     * ⚠️ NO `$country`, `$tier` OR `$clubReputation` SINCE v11. All three were here for one
+     * reason — pricing the squad at generation — and nothing prices at generation any more.
+     * They are not "available if needed": accepting them is what would let a price quietly
+     * return to a cached payload. The device prices from the tier it is initialising into.
+     * `generateStaff()` below still takes country and tier, because the backend goes on
+     * writing `staff.weekly_salary` for its NON-pack consumers.
+     */
     public function generatePlayers(
         array $tierConf,
         array $abilityRange,
         string $nationality,
         PoolConfig $poolConfig,
         array $agents,
-        string $country = '',
-        int $tier = 0,
-        int $clubReputation = 50,
     ): array {
         $totalPlayers = random_int((int) $tierConf['playerMin'], (int) $tierConf['playerMax']);
         $foreignPct   = (int) $tierConf['foreignPercent'];
@@ -68,10 +72,10 @@ class WorldPackClubGenerationService
             $domesticCount = $posTotal - $foreignCount;
 
             for ($i = 0; $i < $domesticCount; $i++) {
-                $players[] = $this->buildPlayer($position, $nationality, $abilityRange, $ageRange, $country, $tier, $clubReputation);
+                $players[] = $this->buildPlayer($position, $nationality, $abilityRange, $ageRange);
             }
             for ($i = 0; $i < $foreignCount; $i++) {
-                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange, $ageRange, $country, $tier, $clubReputation);
+                $players[] = $this->buildPlayer($position, $this->foreignNationality($nationality), $abilityRange, $ageRange);
             }
         }
 
@@ -154,10 +158,23 @@ class WorldPackClubGenerationService
     }
 
     /**
-     * Sets a contract value the same way MarketPoolService::generatePlayers() does for
-     * pool players — PlayerGenerationService::generate() itself leaves this at its 0
-     * default, so world-pack NPC players need it set explicitly to match the shape
-     * pool-drawn NPC players always had (contractValue is part of buildPlayerSnapshot()).
+     * ── NOTHING IS PRICED HERE ANY MORE (v11, 2026-11-18) ────────────────────────────────
+     *
+     * This used to set a contract value through `WageModelResolver::playerWeeklyPence()`, with
+     * the country, tier and club reputation that made a world-pack club "the priced
+     * population". It does not, because the pack no longer carries `contractValue` at all —
+     * `WorldPackSnapshotBuilder::buildPlayerSnapshot()` strips it, and the device prices every
+     * ingested player from the published tier scale at initialisation.
+     *
+     * So `PlayerGenerationService::generate()` leaves `contractValue` at its 0 default and
+     * that 0 is now CORRECT and unread: it is never serialised into a pack, and nothing
+     * downstream of generation looks at it. Do not "fix" it by pricing here — a price computed
+     * at generation is a price frozen into a cached payload, which is the entire defect v11
+     * removes. Re-authoring a turnover figure must reach a new save with no version bump.
+     *
+     * The shared pool is the other half of the old two-sided rule and is unchanged:
+     * `MarketPoolService` still stores a legacy figure and `Economy\ServeTimePlayerPricer`
+     * still prices it at serve time. Only the generated-and-stored side has gone away.
      */
     /** @param array{min: int, max: int} $abilityRange */
     /**
@@ -170,31 +187,8 @@ class WorldPackClubGenerationService
         string $nationality,
         array $abilityRange,
         ?array $ageRange = null,
-        string $country = '',
-        int $tier = 0,
-        int $clubReputation = 50,
     ): Player {
-        $player = $this->playerGen->generate($position, RecruitmentSource::YOUTH_INTAKE, $nationality, $abilityRange, $ageRange);
-
-        // THROUGH THE RESOLVER. The expression that was here — `(int) ($ability * roll *
-        // multiplier)`, with its own copy of the tier-walk — now lives in one place shared with
-        // MarketPoolService, StaffGenerationService and GenerateMarketDataCommand. In `legacy`
-        // mode it reproduces this byte for byte, truncating cast included.
-        //
-        // THE COUNTRY AND TIER ARE WHAT MAKE THIS THE PRICED POPULATION. A world-pack club is
-        // generated for a known country and tier, so the turnover model can price it at
-        // generation and the figure is stored in the pack. That is exactly why flipping the
-        // model needs a WORLD_PACK_VERSION bump: packs hold wages.
-        $player->setContractValue(
-            $this->wageModel->playerWeeklyPence(
-                $player->getCurrentAbility(),
-                $country,
-                $tier,
-                $clubReputation,
-            ),
-        );
-
-        return $player;
+        return $this->playerGen->generate($position, RecruitmentSource::YOUTH_INTAKE, $nationality, $abilityRange, $ageRange);
     }
 
     /** Picks a random nationality different from $exclude where possible (bounded retries). */

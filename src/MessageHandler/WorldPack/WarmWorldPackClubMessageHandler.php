@@ -86,12 +86,11 @@ class WarmWorldPackClubMessageHandler
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_PLAYERS);
         $this->em->flush();
-        // Same country/tier/reputation the synchronous builder passes — the async path must
-        // price a club identically or a pack warmed by the queue would differ from one warmed
-        // on a request.
+        // Nothing to keep in step on price any more: at v11 neither path prices a player, so
+        // a pack warmed by the queue and one warmed on a request differ in no money figure
+        // because neither carries one. The ability band still comes from country and tier.
         $players = $this->clubGenerator->generatePlayers(
             $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
-            $tierRun->getCountry(), $tierRun->getTier(), $npcClub->getReputation(),
         );
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_STAFF);

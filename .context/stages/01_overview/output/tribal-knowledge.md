@@ -182,6 +182,47 @@ amounts to in practice:
 - **`GET /api/players/youth`** served the stored legacy figure for the same serializer reason. It
   is now priced at serve time.
 
+### ⚠️ SUPERSEDED 2026-11-18 (v11): nothing is priced at generation any more
+
+**The two-sided rule has collapsed into one side.** The paragraph below is kept because it is
+the record of what the owner ruled and why, and the SHARED-POOL half of it is still live and
+still correct. The generated-and-stored half is gone.
+
+**The rule now:** nothing is priced at generation; everything is priced at READ.
+
+- **Generated, per-country populations** — world-pack NPC clubs and the founder's squad — are
+  generated UNPRICED. `WorldPackClubGenerationService::buildPlayer()` no longer calls
+  `WageModelResolver::playerWeeklyPence()`, `WorldPackSnapshotBuilder` strips `contractValue`
+  and `agent.commissionRate` at the pack boundary, and the DEVICE prices the squad it ingests
+  from the published tier wage scale (`economy/packWages.ts` in the app). Staff, club balances,
+  land value and the four league money keys left the pack in the same cut.
+- **Shared-pool populations** are unchanged: stored legacy, priced at serve time from the
+  BROWSING club's country and tier, through `Economy\ServeTimePlayerPricer`. A new endpoint
+  serving pool rows still calls it.
+
+So the test is no longer "which population is this". It is simply: **a pack is a census, not a
+price list.** The owner's framing, 2026-11-18 — the pack becomes *"truly what it needs to be — a
+test of teams, players and staff"*: identities, squads, abilities, facilities, personalities.
+Everything monetary is a function of live config, resolved on the device at init.
+
+**Why, measured.** A pack is a cached payload gated by `WORLD_PACK_VERSION`, so every figure
+baked into one made authoring that figure a cache invalidation across every country. Three of
+the five bumps before v11 were PURELY money (v6 sponsor bands, v7 payout ladders, v8 staff
+pay), and the v10 turnover authoring left 208 of 256 cached tier payloads stale. v11 is
+recorded in `WorldInitializationService::WORLD_PACK_VERSION`'s docblock as **the last bump
+money will ever cause**, and `WorldPackCarriesNoMoneyTest` is what keeps it so.
+
+**One thing did NOT change, and it is the trap underneath all of this.** Never put the pricing
+in `PlayerSnapshotSerializer`. It is still shared with `PlayerBrowseSerializer` and the youth
+endpoint, which still need `contractValue` — a browse row with no price is not a browsable
+player. The strip happens at the PACK boundary in `WorldPackSnapshotBuilder
+::buildPlayerSnapshot()`, which is the only seam where it can happen without either breaking
+browse or re-pricing cached content on every read.
+
+---
+
+**The superseded ruling, as recorded:**
+
 So the rule to carry forward is two-sided, and which side applies is decided by the POPULATION,
 not by the endpoint: **generated, per-country populations are priced once at generation and
 stored** (world-pack NPC clubs, the founder's squad — which is why a model flip needs a

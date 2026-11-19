@@ -94,21 +94,24 @@ class StarterPackService
      * **Nothing is persisted and nothing is consumed**, so this cannot fail on supply, there is
      * no longer anything to flush atomically with it, and it is safe to call speculatively.
      *
-     * ── PRICED WITH COUNTRY AND TIER, LIKE AN NPC CLUB ───────────────────────────────────
+     * ── NOT PRICED AT ALL, LIKE AN NPC CLUB (v11, 2026-11-18) ────────────────────────────
      *
-     * The country and tier are passed through to the wage model, so a founder's squad follows
-     * the turnover model exactly as its division does. A pool-DRAWN starter player never did:
-     * MarketPoolService prices pool rows with no country or tier (they are one row served to
-     * every country, so there is nothing to price them against), and the starter pack reached
-     * the client through PlayerSnapshotSerializer, which deliberately does not re-price. So a
-     * founder's squad was the one squad in the pyramid outside the economy — that gap closes
-     * here. It is inert until `economyWageModel` is flipped to `turnover`; under `legacy` the
-     * country and tier are ignored and the figure is the same expression as before.
+     * This squad used to be priced at generation, with country and tier passed to the wage
+     * model, to close the one gap where a founder's squad sat outside the economy. That gap is
+     * closed the other way round now: NOBODY is priced at generation. A starter pack reaches
+     * the client through `WorldPackSnapshotBuilder::buildPlayerSnapshot()`, which strips
+     * `contractValue`, so the device prices this squad from its division's published wage
+     * scale at initialisation — the same resolution, from the same figures, one step later and
+     * off a cached payload.
+     *
+     * The founder's squad and an NPC club's squad therefore agree by construction rather than
+     * by two call sites remembering to pass the same arguments, which is what the old note
+     * above was really guarding.
      *
      * `$clubReputation` is 0 for a brand-new club, which is what `Club::$reputation` defaults
-     * to and the honest value for a club with no history. At the shipped reputation spread of 0
-     * it has no effect at all; once a spread is authored it redistributes a tier's wage bill
-     * DOWNWARD for a founder, which is the intended direction.
+     * to and the honest value for a club with no history. It no longer reaches a wage — it is
+     * kept because it is logged with the rest of the generation inputs, and because the caller
+     * already has it.
      *
      * @return array{players: array, staff: array, scouts: array}
      */
@@ -143,9 +146,6 @@ class StarterPackService
             $nationality,
             $poolConfig,
             $agents,
-            $country,
-            $tier,
-            $clubReputation,
         );
 
         // Same $abilityRange as the squad above — a founder's staff are at the founder's level.

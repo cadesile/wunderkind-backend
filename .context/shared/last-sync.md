@@ -1309,3 +1309,63 @@
   hydration beyond the templates — and the one part that scales with club count
   (`ResolveNewCompetitionAudienceForPushMessage`) is already routed to `async`. Left inline
   deliberately; don't re-open it as unfinished.
+
+- **`01_overview/output/tribal-knowledge.md` + `07_synthesis/output/architecture-notes.md` +
+  `04_interfaces/output/{routes,services}.md` + `01_overview/output/deployment.md` — ALL MONEY
+  LEAVES THE WORLD PACK, `WORLD_PACK_VERSION` 10 → 11 (2026-11-18).** Owner's design the same
+  day: the pack becomes *"truly what it needs to be — a test of teams, players and staff"* —
+  identities, squads, abilities, facilities, personalities — and everything monetary is a
+  function of live config, resolved on the device at init.
+
+  Removed from the pack: `tvDeal`/`sponsorPot`/`prizeMoney`/`leaguePositionPot` (league),
+  `startingBalance` + `land.valuePence` (club), `contractValue` + `agent.commissionRate`
+  (player), `weeklySalary` (staff). `leaguePositionDecreasePercent` STAYS — it is a rule, not an
+  amount, and the app has no other source for it at init. The scout block already shipped no
+  wage and is the pattern the rest now follows. `WorldPackClubGenerationService::buildPlayer()`
+  no longer prices at all, and its `$country`/`$tier`/`$clubReputation` plumbing went with the
+  pricing call rather than being left as an invitation to put it back.
+
+  **The ruling that changed.** `tribal-knowledge.md`'s two-sided pricing ruling is now
+  one-sided: "generated populations are priced once at generation and stored" is superseded —
+  **nothing is priced at generation.** The shared-pool half is untouched and still live (stored
+  legacy, priced at serve time through `Economy\ServeTimePlayerPricer`). The superseded text is
+  kept in place above the new rule rather than deleted, per the house convention.
+
+  **Three things worth carrying forward.**
+
+  1. **The strip had exactly one correct seam, and the obvious one is wrong.**
+     `PlayerSnapshotSerializer` is shared with `PlayerBrowseSerializer` and `/api/players/youth`,
+     which serve shared-pool rows priced at SERVE time — deleting `contractValue` there would
+     silently un-price every scout-search result. And it must not RE-price there either
+     (architecture-notes' trap 4). So the money is unset at the PACK boundary, in
+     `WorldPackSnapshotBuilder::buildPlayerSnapshot()`. `WorldPackCarriesNoMoneyTest` pins the
+     invariant from the pack side *and* pins that the shared serializer still prices, so the
+     plausible wrong fix fails a test.
+
+  2. **The sponsor pot needed the COUNT to arrive, not the pot.** `GET /api/initialize/leagues`
+     was already the device's source for the other three league figures but has never sent a
+     pot — so dropping the pack's key alone would have zeroed league sponsorship. The device
+     already rolls a pot (`rollLeagueSponsorPot`, every season boundary after the first), it
+     just lacked the census, so that endpoint gained **`sponsorCount`** and **`sponsorSizes`**
+     (counted off `LeagueSponsor` rows, upper-cased at the boundary, `null` rather than `{}`
+     when none are sourced). Uncached, so no bump. A count is not a price — same category as
+     the `clubCount` it already returned.
+
+  3. **`rollLeagueSponsors()` is still called at both pack-build sites, for its side effect
+     only.** The pot left the payload, but the call mutates each `LeagueSponsor::$rolledValue`,
+     which is country-wide server state `SyncService` sums for an existing save. Deleting the
+     call to tidy away an unused variable would leave every sponsor rolled at 0 on the sync
+     surface — a different bug in a different payload. Both call sites say so in a comment.
+
+  Tests: new `WorldPackCarriesNoMoneyTest` (recursive money scan over club/league/player/staff/
+  scout, plus a named-key list and a `*Pence|*Salary|*Balance|…` suffix scan, so a key nobody
+  has thought of yet also fails) and new `InitializeLeaguesSponsorCensusTest`. Six existing
+  tests were deliberately inverted with the reason written into each: the two that asserted "a
+  generated player must be priced", `WorldPackLandSnapshotTest`'s club key list and three
+  `valuePence` assertions, and the two agent-shape pins. ⚠️ **`PlayerSnapshotShapeConsolidation
+  Test`'s docblock says its key arrays are historical records that must never be edited — one
+  key was removed from `LEGACY_WORLDPACK_KEYS` anyway, and the exception is documented in that
+  docblock as a one-off rather than a precedent.** `LEGACY_BROWSE_KEYS` is untouched.
+
+  `app:economy:wage-table` is byte-identical before and after (verified by md5 across a stash)
+  — this touched no authored figure.

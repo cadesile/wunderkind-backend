@@ -55,6 +55,24 @@ serve these paths identically; see `01_overview/output/environment.md`.
   the pack, `GET /leagues` as a sibling of `leagues`. Nothing was removed,
   renamed or re-meant.
 
+  ⚠️ **v11 (2026-11-18) DID remove keys, and it is the one deliberate exception to the line
+  above.** All money left the world pack — `POST /league/{tier}` no longer carries `tvDeal`,
+  `sponsorPot`, `prizeMoney` or `leaguePositionPot` on a league, `startingBalance` or
+  `land.valuePence` on a club, `contractValue` or `agent.commissionRate` on a player, or
+  `weeklySalary` on a staff member. `leaguePositionDecreasePercent` stayed: it is a rule, not
+  an amount. There is no fallback window by design — the app ships in the same cut and prices
+  every ingested squad itself, because a backend that dropped the keys against an app still
+  reading them would price every squad at zero.
+
+  **`GET /leagues` is where three of the four league figures now come from** — it is UNCACHED
+  and already resolved `prizeMoney`/`leaguePositionPot` through `LeaguePayoutResolver` plus
+  `tvDeal`. It gained two ADDITIVE census keys in the same cut: **`sponsorCount`** and
+  **`sponsorSizes`** (the league's roster counted by company size, upper-cased for the app's
+  `CompanySize`, `null` when no sponsors are sourced). It deliberately publishes **no
+  `sponsorPot`** — the device rolls that from the division's published bands, which is what
+  every season boundary after the first already did. Being uncached, those additions needed no
+  version bump of their own.
+
   ⚠️ **The two are different facts and may legitimately disagree.** The tier
   pack reports **the version the pack in your hand was built at**; `/leagues`
   reports **the version the server builds at now**, i.e. what the next tier

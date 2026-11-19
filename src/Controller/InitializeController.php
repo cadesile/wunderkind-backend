@@ -249,6 +249,32 @@ class InitializeController extends AbstractController
             // two new keys without a WORLD_PACK_VERSION bump.
             'tvPoolPence'       => $league->getTvPoolPence(),
             'clubCount'         => $leagueSizeResolver->sizeOf($league),
+            // ── THE COUNT, NOT THE POT (v11, 2026-11-18) ─────────────────────────────────
+            //
+            // `sponsorPot` left the world pack with the rest of the money, and this endpoint
+            // deliberately does not replace it with a pot of its own: the device already rolls
+            // one. `rollLeagueSponsorPot` (app `utils/leagueFinances.ts`) draws each sponsor
+            // from the DIVISION's published sponsor bands, and `SeasonTransitionService` has
+            // called it at every season boundary for months — season 1 was the only one taking
+            // a server figure instead. Now it rolls there too.
+            //
+            // So what the device is missing is not a price, it is CENSUS data: how many
+            // sponsors this league has, and what size they are. Same category as `clubCount`
+            // directly above, and the roll needs both to be faithful:
+            //
+            //   - `sponsorCount` — the authored column. The app's fallback path uses it with a
+            //     reputation-derived size mix.
+            //   - `sponsorSizes` — the ACTUAL mix, counted off this league's `LeagueSponsor`
+            //     rows. Preferred by the app when present, and it makes the device's roll draw
+            //     from the same bands for the same sponsors the server would have rolled. Keys
+            //     are upper-cased because `CompanySize` is lower-case here and the app's
+            //     `CompanySize` is upper-case; this is the boundary, so it converts here.
+            //
+            // ⚠️ Do NOT let the app fall back to `?? 0` for the pot instead of this. That
+            // hard-zero has a history: season-1 position prizes paid at the full pot for every
+            // finishing position. Supplying the count is the fix; tolerating the absence is not.
+            'sponsorCount'      => $league->getSponsorCount(),
+            'sponsorSizes'      => $this->sponsorSizesFor($league),
             // Resolved whole-value, `league ?? gameConfig` — the same resolution the sync
             // snapshot and the season pyramid do, so a client reading any of the three gets
             // one answer.
@@ -276,6 +302,37 @@ class InitializeController extends AbstractController
             'leagues'     => $data,
             'packVersion' => WorldInitializationService::WORLD_PACK_VERSION,
         ]);
+    }
+
+    /**
+     * This league's sponsor roster counted by company size, e.g. `['SMALL' => 3, 'MEDIUM' => 1]`.
+     *
+     * Census data, not a price — see the `sponsorSizes` comment in `leagues()`. The device rolls
+     * the pot itself from the division's published bands; this is what tells it how many
+     * sponsors of which size to roll for, so season 1 draws the same shape the server would.
+     *
+     * NULL WHEN THE LEAGUE HAS NO `LeagueSponsor` ROWS, rather than an empty array: the app
+     * treats a present `sponsorSizes` as authoritative and an absent one as "fall back to
+     * `sponsorCount`". An empty object would be read as "this league has no sponsors" and roll a
+     * pot of nothing, which is wrong for a league whose `sponsorCount` is authored but whose
+     * sponsors have not been sourced yet.
+     *
+     * Keys are UPPER-CASED at this boundary: `App\Enum\CompanySize` is lower-case ('small'),
+     * the app's `CompanySize` union is upper-case ('SMALL'), and the app indexes its band table
+     * by it directly.
+     *
+     * @return array<string, int>|null
+     */
+    private function sponsorSizesFor(\App\Entity\League $league): ?array
+    {
+        $sizes = [];
+
+        foreach ($league->getLeagueSponsors() as $leagueSponsor) {
+            $key = strtoupper($leagueSponsor->getSponsor()->getSize()->value);
+            $sizes[$key] = ($sizes[$key] ?? 0) + 1;
+        }
+
+        return $sizes === [] ? null : $sizes;
     }
 
     /**

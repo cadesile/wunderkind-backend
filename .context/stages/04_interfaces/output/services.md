@@ -1097,8 +1097,14 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 9 and must be bumped for *any* payload shape change,
-  not just the three snapshot builders.** It was missed when the trophy-sprite
+  **`WORLD_PACK_VERSION` is 11 (2026-11-18) and must be bumped for *any* payload shape
+  change, not just the three snapshot builders.** (It read 9 here while the constant was
+  already 10 — the R2 authoring bump — so treat the constant as the source of truth and this
+  line as a mirror.) ⚠️ **v11 took ALL money out of the pack and is recorded in the
+  constant's own docblock as the last bump money will ever cause**: re-authoring a wage,
+  balance, payout, land price or sponsor band now reaches a new save with no bump and no
+  regeneration, because the device resolves every monetary figure from live config.
+  `WorldPackCarriesNoMoneyTest` fails if a money key returns. It was missed when the trophy-sprite
   work (`Version20261018202041`, 2026-10-18) replaced the league block's
   `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
   cached packs went on serving the retired asset-slug shape — the cache has no
@@ -1353,9 +1359,17 @@ would double-count it and quietly make a tier-1 pot enormous. `SponsorBandResolv
 two tiers of one country agree even with a 5x tier-1 factor set.
 
 **Not gated on `economyWageModel`** — a sponsor band has nothing to do with how a player is
-priced — so it applies the moment a country factor is set. That is why the runbook requires a
-`WORLD_PACK_VERSION` bump on a factor change and not only on a model flip: `sponsorPot` is part
-of the cached league block.
+priced — so it applies the moment a country factor is set. That used to mean the runbook
+required a `WORLD_PACK_VERSION` bump on a factor change and not only on a model flip, because
+`sponsorPot` was part of the cached league block.
+
+⚠️ **NO LONGER, SINCE v11 (2026-11-18): `sponsorPot` is NOT in the pack, so a sponsor-band or
+country-factor change needs no bump and no regeneration.** The device rolls the pot itself from
+the division's published bands, through `rollLeagueSponsorPot` — which is what every season
+boundary after the first has always done; season 1 was the only one taking a server figure. The
+inputs it needs are the sponsor CENSUS, and `GET /api/initialize/leagues` now publishes them
+(`sponsorCount`, plus `sponsorSizes` counted off the league's `LeagueSponsor` rows). That
+endpoint is uncached, so adding them cost no bump either.
 
 **THREE SOURCES SINCE 2026-11-15, resolved in this order** (`bandFor()`): the explicit per-tier
 row (`economySponsorBandsPerTierPence`, used **verbatim** — an override), else the flat column x
@@ -1516,11 +1530,18 @@ app-side display fix. Worth knowing here because the figure looks like a backend
 and is not: re-authoring `wageScaleMicroPence` to make that table look sane would break every
 real squad the band actually produces.
 
-**TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
-all. Per-country rows are generated for a known country and tier, so they are priced at
-generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That
-population is world-pack NPC clubs **and, since 2026-11-17, the founder's own starter squad**,
-which used to be drawn from the pool and priced by neither mechanism — the last per-club gap.
+**TWO POPULATIONS, TWO TREATMENTS** — ⚠️ **ONE POPULATION, ONE TREATMENT SINCE v11
+(2026-11-18).** Nothing is priced at generation any more. Per-country rows — world-pack NPC
+clubs and the founder's starter squad — are generated UNPRICED and the DEVICE prices them from
+the published tier wage scale at init, so flipping the wage model, or re-authoring any figure
+it reads, no longer needs a `WORLD_PACK_VERSION` bump at all. See `tribal-knowledge.md`'s
+superseded-ruling block for the full account.
+
+The ORIGINAL text, kept because the shared-pool half below is still live and still correct:
+per-country rows are generated for a known country and tier, so they are priced at generation
+and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That population
+is world-pack NPC clubs **and, since 2026-11-17, the founder's own starter squad**, which used
+to be drawn from the pool and priced by neither mechanism — the last per-club gap.
 Shared-pool rows are ONE row served to every country at every tier, so they are stored legacy
 and priced at serve time, which is now **`Economy\ServeTimePlayerPricer`**: used by
 `PlayerBrowseSerializer` (`/api/scout/search`, `/api/players/foreign`) and by
