@@ -92,8 +92,18 @@ are different states and the runbook is the bridge. The economy overhaul (2026-1
 current example — eight migrations landed with every factor at parity and the wage model on
 `legacy`, so the deploy itself was a provable no-op.
 
-**`docs/deploy/economy-rollout.md`** is its procedure. The step worth knowing about from here:
-flipping `economyWageModel` changes world-pack CONTENT without changing pack SHAPE, so
+**`docs/deploy/economy-rollout.md`** is its procedure.
+
+⚠️ **THE STEP BELOW IS OBSOLETE AS OF v11 (2026-11-18), AND THAT IS THE POINT OF v11.**
+Flipping `economyWageModel` — or re-authoring any figure it reads — **no longer needs a
+`WORLD_PACK_VERSION` bump at all**, because a pack holds no wages. Nothing monetary is in a
+pack: the device resolves every money figure from live config at initialisation. A wage, balance,
+payout, land price or sponsor band can now be re-authored and reach a NEW SAVE with no bump and
+no regeneration. (Existing saves are a separate question and always were: a contract already
+signed is honoured until renewal.)
+
+The original step, kept because it is the history that explains the constant's docblock: flipping
+`economyWageModel` changes world-pack CONTENT without changing pack SHAPE, so
 `WorldInitializationService::WORLD_PACK_VERSION` has to be bumped in the same pass — and that
 is a code change shipping through a normal deploy, sequenced between two admin actions. The
 cache has no TTL, so skipping it leaves every already-cached country serving pre-flip wages

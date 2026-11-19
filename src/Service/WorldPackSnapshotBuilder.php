@@ -22,9 +22,37 @@ use App\Enum\Tier;
  * WorldInitializationService). Stateless — no pool-table or DB dependency;
  * every method here works identically on a freshly-built, never-persisted
  * entity as it does on one pulled from a pool table.
+ *
+ * ── A PACK IS A CENSUS, NOT A PRICE LIST (owner, 2026-11-18) ─────────────────────────────
+ *
+ * **No snapshot this class builds carries money.** Identities, squads, abilities, facilities,
+ * personalities and the ground a club stands on — all of that is what a pack is for, and all
+ * of it is stable. Every monetary quantity is a function of live, admin-editable config, so
+ * it is resolved on the DEVICE at initialisation instead: wages through the app's
+ * `economy/wages.ts` against the published tier scale, balances through its
+ * `npcStartingBalanceByTier` ladder, league payouts through the uncached
+ * `GET /api/initialize/leagues`.
+ *
+ * WHY, measured: a pack is a cached payload gated by `WorldInitializationService
+ * ::WORLD_PACK_VERSION`, so every figure baked into one makes authoring that figure a cache
+ * invalidation. Of the five version bumps before this change, THREE were purely money (v6
+ * sponsor bands, v7 payout ladders, v8 staff pay), and the v10 bump for a turnover table left
+ * 208 of 256 cached tier payloads stale. None of those would have happened under this rule.
+ *
+ * `WorldPackCarriesNoMoneyTest` pins it. Adding a money key back here is what it exists to
+ * fail, so if it fails, the key is the bug — not the test.
  */
 class WorldPackSnapshotBuilder
 {
+    /**
+     * Keys `PlayerSnapshotSerializer` emits for its browse/youth consumers that a PACK must
+     * not carry. See `buildPlayerSnapshot()` for why the strip happens here and not there.
+     */
+    private const MONEY_KEYS_STRIPPED_FROM_PACKS = ['contractValue'];
+
+    /** As above, one level down, inside the nested `agent` block. */
+    private const MONEY_KEYS_STRIPPED_FROM_AGENTS = ['commissionRate'];
+
     public function __construct(
         private readonly PlayerSnapshotSerializer $playerSnapshots = new PlayerSnapshotSerializer(),
     ) {}
@@ -96,7 +124,6 @@ class WorldPackSnapshotBuilder
             'abbreviation'    => $club->getAbbreviation() ?? ClubInitializationService::generateAbbreviation($club->getName()),
             'tier'            => $club->getTier(),
             'reputation'      => $club->getReputation(),
-            'startingBalance' => $club->getBalance(),
             'primaryColor'   => $club->getPrimaryColor(),
             'secondaryColor' => $club->getSecondaryColor(),
             'identity'       => $club->getIdentity(),
@@ -138,15 +165,17 @@ class WorldPackSnapshotBuilder
      * town that has never been priced has no plots to sit on either, and gets one when
      * app:npc-clubs:seat-plots runs after enrichment.
      *
-     * PENCE, LIKE EVERY OTHER MONEY FIELD HERE — startingBalance, landPence on
-     * GET /api/locations, landPencePaid on a claim. A pounds decimal would be a second money
-     * convention in one payload, and floats lose precision at £150m.
+     * ── NO `valuePence`, SINCE 2026-11-18 ────────────────────────────────────────────────
      *
-     * THE PLOT'S OWN PRICE WHERE IT HAS ONE. LandPlot::getEffectiveLandPence() prefers the
-     * plot's override and falls back to the town's value, which is the same figure the
-     * catalogue quotes a player — so the pack and the shop agree on what this ground costs.
+     * This block used to quote the plot's price, and it was the last money left on a club.
+     * A pack is a CENSUS now (see the class docblock): it says which ground this club stands
+     * on, not what the ground is worth. The price is a live figure — `LandPlot
+     * ::getEffectiveLandPence()` falls back to the town's value, and both are operator-authored
+     * and admin-editable — so baking it into a cached payload meant re-authoring one town
+     * invalidated every pack in the country. `GET /api/locations` quotes the catalogue price
+     * live, which is where a client that wants to BUY ground already reads it.
      *
-     * @return array{name: string, region: string, plotNumber: ?int, capital: bool, valuePence: ?int}|null
+     * @return array{name: string, region: string, plotNumber: ?int, capital: bool}|null
      */
     public function buildLandSnapshot(NpcClub $club): ?array
     {
@@ -163,7 +192,6 @@ class WorldPackSnapshotBuilder
             'region'     => $location->getRegion(),
             'plotNumber' => $plot?->getPlotNumber(),
             'capital'    => $location->isCapital(),
-            'valuePence' => $plot?->getEffectiveLandPence() ?? $location->getLandPence(),
         ];
     }
 
@@ -175,10 +203,39 @@ class WorldPackSnapshotBuilder
      *
      * Emits three keys this method did not before — `tier`, `overall` and `potentialTier`;
      * nothing it used to emit was removed or changed.
+     *
+     * ── THE MONEY IS STRIPPED HERE, AND HERE IS THE ONLY PLACE IT CAN BE ──────────────────
+     *
+     * `contractValue` and `agent.commissionRate` are still emitted by
+     * `PlayerSnapshotSerializer` because its OTHER consumers need them: `PlayerBrowseSerializer`
+     * (GET /api/scout/search, GET /api/players/foreign) and GET /api/players/youth serve
+     * shared-pool rows priced at SERVE time by `Economy\ServeTimePlayerPricer`, and a browse
+     * row with no price is not a browsable player. So the figure cannot be removed from the
+     * serializer, and it must not be RE-priced there either — `WorldPackSnapshotBuilder`
+     * delegates to it, so pricing inside it would change cached pack content on every read
+     * with no version bump (architecture-notes.md's trap 4).
+     *
+     * That leaves exactly one correct seam: the pack boundary, which is this method. The keys
+     * are unset on the way out, so the canonical shape stays intact for everyone else and a
+     * pack carries no price.
      */
     public function buildPlayerSnapshot(Player $player): array
     {
-        return $this->playerSnapshots->serialize($player);
+        $snapshot = $this->playerSnapshots->serialize($player);
+
+        foreach (self::MONEY_KEYS_STRIPPED_FROM_PACKS as $key) {
+            unset($snapshot[$key]);
+        }
+
+        // The agent survives — WHO represents this player is census data. WHAT he charges is
+        // not: `commissionRate` is read off live config at the moment a fee is calculated.
+        if (isset($snapshot['agent']) && is_array($snapshot['agent'])) {
+            foreach (self::MONEY_KEYS_STRIPPED_FROM_AGENTS as $key) {
+                unset($snapshot['agent'][$key]);
+            }
+        }
+
+        return $snapshot;
     }
 
     public function buildStaffSnapshot(Staff $staff): array
@@ -195,7 +252,6 @@ class WorldPackSnapshotBuilder
             'tier'            => Tier::fromScore($staff->getCoachingAbility())->value,
             'coachingAbility' => $staff->getCoachingAbility(),
             'scoutingRange'   => $staff->getScoutingRange(),
-            'weeklySalary'    => $staff->getWeeklySalary(),
             'morale'          => $staff->getMorale(),
             'specialisms'     => $staff->getSpecialisms() ?? [],
             'appearance'      => $staff->getAppearance(),

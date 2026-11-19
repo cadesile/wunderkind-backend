@@ -58,6 +58,34 @@ class WorldOverviewServiceTest extends KernelTestCase
         $em->persist(new League($code, 2, 'Test Second'));
         $em->flush();
 
+        // ── AND OWN THE PAYOUT CONFIG TOO, FOR EXACTLY THE SAME REASON ───────────────────
+        //
+        // ⚠️ THIS IS WHY THE TEST FAILED FOR DAYS, and it is not a fixture that drifted. The
+        // "unfunded" tier below has NULL payout columns, and `WorldOverviewService` resolves
+        // through `LeaguePayoutResolver` — by design, since `5dc3f51b` made NULL mean INHERIT.
+        // So a NULL column reads as null only while the ladder itself is unauthored, which is
+        // the shipped state (`economyLeaguePrizeTier1Pence` ships 0) and the state this test's
+        // assertions are actually about.
+        //
+        // `game_config` is a SINGLE SHARED ROW in a test database that is not migration-tracked,
+        // and `EconomyAdminTest` writes to it through the real admin save without restoring it —
+        // leaving base £100,000,000 with a tier-2 ratio of 2x and tier 8 at 424ppm. Tier 2 then
+        // resolved to £200,000,000 and "an unset tier must stay null" failed on a clean tree,
+        // identically and in isolation, because the residue persists between runs.
+        //
+        // So this test owns the ladder for its duration, the same discipline it already applies
+        // to the live profiles below: stash it, author NOTHING (base 0 = unauthored, which is
+        // what makes a null column read as null), restore afterwards.
+        $configRepo = $container->get(\App\Repository\GameConfigRepository::class);
+        $config     = $configRepo->getConfig();
+
+        $wasPrizeBase = $config->getEconomyLeaguePrizeTier1Pence();
+        $wasPotBase   = $config->getEconomyLeaguePositionPotTier1Pence();
+
+        $config->setEconomyLeaguePrizeTier1Pence(0);
+        $config->setEconomyLeaguePositionPotTier1Pence(0);
+        $em->flush();
+
         // PLAYABLE IS NOW THE COUNTRY PROFILE'S LIVE STATUS, not a list on the starter config,
         // so isolating this test means owning the set of live profiles for its duration: demote
         // whatever else is live, make SE live, and put both back afterwards.
@@ -94,6 +122,9 @@ class WorldOverviewServiceTest extends KernelTestCase
         foreach ($wasLive as $liveCode) {
             $profiles->findByCode($liveCode)?->setStatus(CountryProfileStatus::LIVE);
         }
+
+        $config->setEconomyLeaguePrizeTier1Pence($wasPrizeBase);
+        $config->setEconomyLeaguePositionPotTier1Pence($wasPotBase);
 
         $em->flush();
         $service->clear();
@@ -156,6 +187,10 @@ class WorldOverviewServiceTest extends KernelTestCase
         self::assertSame(2500, $funded['tvDeal']);
         self::assertSame(1250, $funded['leaguePositionPot']);
 
+        // UNSET MEANS UNSET AT BOTH ENDS: a NULL column AND an unauthored ladder, which is what
+        // `seededOverview()` now guarantees by zeroing the two tier-1 bases. A NULL column with
+        // an AUTHORED ladder is a different case and a resolved figure is the right answer
+        // there — see `LeaguePayoutResolverTest`.
         self::assertNull($unfunded['prizeMoney'], 'an unset tier must stay null, not become 0');
         self::assertNull($unfunded['tvDeal']);
         self::assertNull($unfunded['leaguePositionPot']);

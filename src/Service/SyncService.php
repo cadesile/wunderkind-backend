@@ -823,7 +823,16 @@ class SyncService
             'season'                        => $club->getCurrentSeason(),
             'promotionSpots'                => $league->getPromotionSpots(),
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
-            'tvDeal'                        => $league->getTvDeal() !== null ? (int) $league->getTvDeal() : null,
+            // RESOLVED, exactly like the payouts here. `tvDeal` is DERIVED whenever a pool is
+            // authored — `LeagueTierDefaultDiff:103` already states that rule — but
+            // `syncTvDeal()` runs ONLY on an admin save (`LeagueAdminController:95`/`:201`) and
+            // `LeagueService:82` deliberately skips it at generation, so a generated pooled
+            // league keeps a NULL column for ever. Publishing the raw column therefore sent
+            // NULL, and the app's `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`)
+            // turned that into £0 of TV income. `derivedTvDealPence()` returns null when there
+            // is no pool, so this is INERT for every league that authors its deal directly.
+            'tvDeal'                        => $this->leagueSizeResolver->derivedTvDealPence($league)
+                ?? ($league->getTvDeal() !== null ? (int) $league->getTvDeal() : null),
             'sponsorPot'                    => (int) $sponsorPot,
             // RESOLVED, `league column ?? base x ratio x country factor`. Same keys, same
             // nullable-int types, same position in the array — so the key-set-and-order parity

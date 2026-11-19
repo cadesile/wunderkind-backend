@@ -483,6 +483,62 @@ filename alone.
   `trophyImage`/`trophyColour` pair instead of `trophy` is converted through
   `TrophyConfigFactory::fromLegacy()`, so a world backup committed before the
   trophy component changed still restores its trophies.
+
+  ⚠️ **THE PAYOUT KEYS ARE SPLIT, AND THE EXPORT'S `prizeMoney` IS NOT THE COLUMN (2026-11-19).**
+  `export()` emits `prizeMoney` and `leaguePositionPot` **resolved** through
+  `LeaguePayoutResolver` (one `GameConfig` for the whole export), the same chain
+  `SyncService::buildLeagueSnapshot()` and `/api/initialize/leagues` use. It has to be those key
+  names because they are what the app's economy gate reads
+  (`scripts/economy/variantGate.ts`, `dispersionGate.ts`: `league?.prizeMoney ?? 0`) — since
+  `Version20261118120000` NULLed the columns to inherit from the ppm ladder, the raw-column export
+  read **£0** and every gate run needed a hand-patch.
+
+  ⚠️ **AND SO IS `tvDeal`, AS OF THE SAME DAY — THREE KEYS, NOT TWO (2026-11-19).** `export()`
+  emits `tvDeal` as `LeagueSizeResolver::derivedTvDealPence($l) ?? $l->getTvDeal()`, with the raw
+  column under **`tvDealOverride`**. The cause is NOT the payouts' cause and is worth stating
+  separately: a NULL `prizeMoney` *means* inherit, whereas a NULL `tvDeal` means **nobody ever
+  wrote it**. `syncTvDeal()` is called only from `LeagueAdminController:95`/`:201` — an admin
+  save — and `LeagueService:82` deliberately skips it at generation because no NPC club exists
+  yet to derive a size from. Nothing calls it afterwards, so a generated pooled league keeps a
+  NULL column for ever. That is the live state of **Scottish tiers 5–8**, the only pooled
+  leagues in the world.
+
+  **This was a live gameplay defect, not merely a gate one.** The same raw column was published
+  by `/api/initialize/leagues`, `SyncService::buildLeagueSnapshot()` **and**
+  `LeagueService`'s own league snapshot — four surfaces in total — and the app reads
+  `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`), so those four tiers earned
+  **£0 of TV for a whole season**. All four now resolve. `derivedTvDealPence()` returns null
+  without a pool, so all 8 EN tiers and the other 184 leagues publish exactly what they did
+  before. Pinned by
+  `LeagueImportExportRoundTripTest::testAPooledLeagueExportsTheDerivedShareNotItsNullColumn()`,
+  `...testARoundTripLeavesAPooledLeaguesTvDealColumnNull()`,
+  `...testAnUnpooledLeagueExportsItsAuthoredDealUnchanged()` and
+  `SyncServiceLeagueTest::testAPooledLeagueWithNoAuthoredDealPublishesTheDerivedShare()`.
+
+  ⚠️ **`app:economy:wage-table` CANNOT SEE THIS FIX, and that is a finding in itself.** The
+  gate reads `$league->getTvDeal()` off the entity (`EconomyWageTableCommand:459`), not a
+  published surface, so its output is **byte-identical before and after** — verified by stash.
+  The command is therefore blind to the exact defect that zeroed a division's TV income. Do not
+  take an unchanged gate as evidence that nothing moved here.
+
+  The RAW columns are exported as **`prizeMoneyOverride`** and
+  **`leaguePositionPotOverride`**, and ⚠️ **those two are the only ones `import()` reads.**
+  Writing a resolved figure back into the columns would convert every inherit (NULL) into a
+  per-league override on the first round trip — freezing the ladder into 196 rows and defeating
+  `5dc3f51b`'s NULL-means-inherit design, silently and with no error.
+  `LeagueImportExportRoundTripTest::testARoundTripLeavesAnInheritedLeaguesPayoutColumnsNull()`
+  pins it.
+
+  Import falls back to the bare `prizeMoney` key **only when the override key is absent** — keyed
+  on presence, not value, so since every new export carries it (often as null) only a pre-change
+  file can reach the fallback. That is what keeps an old backup's genuine overrides restorable
+  while making it impossible for a resolved figure to reach a column. `EXPORT_VERSION` stays **1**
+  deliberately, so existing backups still import.
+
+  **`sponsorCount` was already exported and is what the gate uses**; no `sponsorPot` was added —
+  the device rolls the pot itself (`rollLeagueSponsorPot`), and a resolved pot would be asymmetric
+  since `LeagueSponsor` rows are not in the export at all (a clear-then-import restores no
+  sponsors).
 - **`LeagueService`** — league lifecycle logic (season conclusion,
   leaderboard categories), using `LeagueRepository`,
   `GameConfigRepository`. `generateLeaguesForCountry()` reads its per-tier
@@ -1097,8 +1153,14 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 9 and must be bumped for *any* payload shape change,
-  not just the three snapshot builders.** It was missed when the trophy-sprite
+  **`WORLD_PACK_VERSION` is 11 (2026-11-18) and must be bumped for *any* payload shape
+  change, not just the three snapshot builders.** (It read 9 here while the constant was
+  already 10 — the R2 authoring bump — so treat the constant as the source of truth and this
+  line as a mirror.) ⚠️ **v11 took ALL money out of the pack and is recorded in the
+  constant's own docblock as the last bump money will ever cause**: re-authoring a wage,
+  balance, payout, land price or sponsor band now reaches a new save with no bump and no
+  regeneration, because the device resolves every monetary figure from live config.
+  `WorldPackCarriesNoMoneyTest` fails if a money key returns. It was missed when the trophy-sprite
   work (`Version20261018202041`, 2026-10-18) replaced the league block's
   `trophyImage`/`trophyColour` with a single `trophy` TrophyConfig, so 84 of 85
   cached packs went on serving the retired asset-slug shape — the cache has no
@@ -1353,9 +1415,17 @@ would double-count it and quietly make a tier-1 pot enormous. `SponsorBandResolv
 two tiers of one country agree even with a 5x tier-1 factor set.
 
 **Not gated on `economyWageModel`** — a sponsor band has nothing to do with how a player is
-priced — so it applies the moment a country factor is set. That is why the runbook requires a
-`WORLD_PACK_VERSION` bump on a factor change and not only on a model flip: `sponsorPot` is part
-of the cached league block.
+priced — so it applies the moment a country factor is set. That used to mean the runbook
+required a `WORLD_PACK_VERSION` bump on a factor change and not only on a model flip, because
+`sponsorPot` was part of the cached league block.
+
+⚠️ **NO LONGER, SINCE v11 (2026-11-18): `sponsorPot` is NOT in the pack, so a sponsor-band or
+country-factor change needs no bump and no regeneration.** The device rolls the pot itself from
+the division's published bands, through `rollLeagueSponsorPot` — which is what every season
+boundary after the first has always done; season 1 was the only one taking a server figure. The
+inputs it needs are the sponsor CENSUS, and `GET /api/initialize/leagues` now publishes them
+(`sponsorCount`, plus `sponsorSizes` counted off the league's `LeagueSponsor` rows). That
+endpoint is uncached, so adding them cost no bump either.
 
 **THREE SOURCES SINCE 2026-11-15, resolved in this order** (`bandFor()`): the explicit per-tier
 row (`economySponsorBandsPerTierPence`, used **verbatim** — an override), else the flat column x
@@ -1516,11 +1586,18 @@ app-side display fix. Worth knowing here because the figure looks like a backend
 and is not: re-authoring `wageScaleMicroPence` to make that table look sane would break every
 real squad the band actually produces.
 
-**TWO POPULATIONS, TWO TREATMENTS** — the distinction that governs where the model can apply at
-all. Per-country rows are generated for a known country and tier, so they are priced at
-generation and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That
-population is world-pack NPC clubs **and, since 2026-11-17, the founder's own starter squad**,
-which used to be drawn from the pool and priced by neither mechanism — the last per-club gap.
+**TWO POPULATIONS, TWO TREATMENTS** — ⚠️ **ONE POPULATION, ONE TREATMENT SINCE v11
+(2026-11-18).** Nothing is priced at generation any more. Per-country rows — world-pack NPC
+clubs and the founder's starter squad — are generated UNPRICED and the DEVICE prices them from
+the published tier wage scale at init, so flipping the wage model, or re-authoring any figure
+it reads, no longer needs a `WORLD_PACK_VERSION` bump at all. See `tribal-knowledge.md`'s
+superseded-ruling block for the full account.
+
+The ORIGINAL text, kept because the shared-pool half below is still live and still correct:
+per-country rows are generated for a known country and tier, so they are priced at generation
+and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That population
+is world-pack NPC clubs **and, since 2026-11-17, the founder's own starter squad**, which used
+to be drawn from the pool and priced by neither mechanism — the last per-club gap.
 Shared-pool rows are ONE row served to every country at every tier, so they are stored legacy
 and priced at serve time, which is now **`Economy\ServeTimePlayerPricer`**: used by
 `PlayerBrowseSerializer` (`/api/scout/search`, `/api/players/foreign`) and by

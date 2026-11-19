@@ -68,6 +68,12 @@ class Agent
      * the agent serialization lives in one place. (Excludes `judgements`, the
      * agent's internal assessment values.)
      *
+     * ⚠️ `commissionRate` STAYS HERE, and is stripped downstream for world packs only.
+     * This shape is shared with the browse/scout-search surfaces, which quote a live fee and
+     * need it. A pack carries no money (see `WorldPackSnapshotBuilder`'s class docblock), so
+     * `buildPlayerSnapshot()` unsets this one key on the way into a pack. Do not remove it
+     * here to satisfy that rule — you would silently un-price every scout-search result.
+     *
      * @return array{id: string, name: string, commissionRate: string, reputation: int, experience: int, rating: int, nationality: ?string, dateOfBirth: ?string}
      */
     public function toSnapshotArray(): array

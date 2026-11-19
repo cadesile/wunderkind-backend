@@ -136,9 +136,44 @@ hunting:
    `npc_club` rows. Deliberately NOT "fixed" by deleting rows — cleaning the shared database
    only moves the breakage somewhere else.
 
+   ⚠️ **AMENDED 2026-11-19: this is more unstable than "alternates by run composition" says, and
+   the count in a run is 1 OR 2, OR ZERO.** Measured on a **stashed, clean tree** at `bac1228b`,
+   consecutive IDENTICAL commands with nothing changing in between:
+
+   ```
+   CLEAN isolated run 1: Tests: 3, Assertions: 11, Failures: 1.
+   CLEAN isolated run 2: Tests: 3, Assertions: 7,  Failures: 2.
+   CLEAN isolated run 3: Tests: 3, Assertions: 7,  Failures: 2.
+   CLEAN Repository suite run 1: Tests: 39, Assertions: 88, Failures: 2.
+   CLEAN Repository suite run 2: OK, but there were issues! Tests: 39, Assertions: 96.
+   CLEAN Repository suite run 3: Tests: 39, Assertions: 88, Failures: 2.
+   ```
+
+   So **`testFindForeignClubsReturnsCitySizeFields` joins and leaves the failure list by itself**,
+   and the suite occasionally goes fully green. A full run therefore shows FOUR, FIVE or THREE
+   failures without anything having changed. ⚠️ **Do not treat a move between 4 and 5 as a
+   regression, and do not attribute it by assertion** — re-run it two or three times on the same
+   tree before suspecting your change; that alone distinguishes this from a real break, and it is
+   cheaper than the stash that was needed to establish it.
+
 ⚠️ **Check a failure against this list before treating it as yours, and check it the way #4 was
 checked** — stash the change and re-run the one test. Both are one command, and today a
 template-and-CSS change was briefly suspected of breaking #1 for want of doing it.
+
+**A FIFTH failure existed unlisted for days, and was FIXED 2026-11-19 — do not re-diagnose it.**
+`WorldOverviewServiceTest::testMoneyIsConvertedToPoundsAndNullsSurvive` failed on a clean tree
+("an unset tier must stay null, not become 0 / Failed asserting that 200000000 is null"), was
+established by stash twice, and was never in this list. **It was not a production defect.**
+`WorldOverviewService` resolves payouts through `LeaguePayoutResolver` by design, so a NULL column
+INHERITS; the SE tier-2 fixture then resolved to £200,000,000 because `EconomyAdminTest` writes
+base £100,000,000 with a tier-2 ratio of 2x into the **single shared `game_config` row** through
+the real admin save and never restores it. The test now owns the payout config for its duration —
+the same discipline it already applied to the live `CountryProfile` statuses — and passes.
+
+⚠️ **`EconomyAdminTest` still does not restore `game_config`**, so the next test that depends on
+an unauthored economy will meet the same trap. That is the general lesson of #4 and of this one:
+**`game_config` and `starter_config` are single shared rows, and a test that depends on their
+contents must own them for its duration rather than assume the shipped defaults.**
 ```
 
 `TEST_TOKEN` must be set INSIDE the container (`lando ssh -s appserver -c '...'`); prefixing

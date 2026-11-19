@@ -249,26 +249,37 @@ class StarterPackServiceTest extends KernelTestCase
     }
 
     /**
-     * Priced with the country and tier, like an NPC club, so a founder's squad follows the
-     * same economic model as the division it plays in.
+     * ⚠️ REVERSED AT v11 (2026-11-18). This test asserted *"a generated player must be
+     * priced"* — that a founder's squad carried a positive `contractValue`, so it followed the
+     * same economic model as the division it plays in rather than being the one squad in the
+     * pyramid outside the economy.
      *
-     * A pool-DRAWN starter player never did: `MarketPoolService` prices pool rows with no
-     * country or tier, and the starter pack reaches the client through
-     * `PlayerSnapshotSerializer`, which deliberately does not re-price. The founder's squad was
-     * the one squad in the pyramid outside the economy.
+     * It now asserts the opposite, and the GOAL it was written for is better served by the
+     * reversal. A starter pack is a pack: it goes through
+     * `WorldPackSnapshotBuilder::buildPlayerSnapshot()`, which strips money since v11, so the
+     * device prices this squad from its division's published wage scale at initialisation —
+     * the same resolution, from the same authored figures, one step later and off a payload
+     * that is no longer invalidated when those figures are re-authored.
      *
-     * Asserts only that a wage is set and positive. The FIGURE is the wage model's business and
-     * is covered by its own tests; under the shipped `legacy` model country and tier are
-     * ignored, so asserting a turnover number here would pin behaviour that is switched off.
+     * So the founder's squad and an NPC squad agree BY CONSTRUCTION now, instead of because
+     * two call sites each remembered to pass country and tier. That was the real content of
+     * the old assertion, and it is now structural.
+     *
+     * The app-side guarantee this hands off to is `npcFinances.test.ts`'s pricing test over
+     * `worldPlayerToPlayer` — the one place that used to read `contractValue ?? 0` and now
+     * must never produce a zero wage.
      */
-    public function testGeneratedPlayersCarryAWage(): void
+    public function testGeneratedPlayersCarryNoWageBecauseTheDevicePricesThem(): void
     {
         $pack = $this->service->generatePack(self::COUNTRY, 8);
 
         $this->assertNotEmpty($pack['players']);
         foreach ($pack['players'] as $player) {
-            $this->assertArrayHasKey('contractValue', $player);
-            $this->assertGreaterThan(0, $player['contractValue'], 'a generated player must be priced');
+            $this->assertArrayNotHasKey(
+                'contractValue',
+                $player,
+                'a starter pack is a pack: no money, so the device prices the squad at init',
+            );
         }
     }
 }

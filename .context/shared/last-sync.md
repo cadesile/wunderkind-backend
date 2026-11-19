@@ -5,6 +5,145 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **B3: `slots` corrected where an authored value disagrees with the real size (2026-11-19)**,
+  committed on `development` on top of `e2c855c6`. **Stages touched:** 03_data (`migrations.md`),
+  shared (this file). `Version20261119120000`, plus `LeagueSlotsCorrectionTest`. Carries the
+  owner's decision that **`slots` equals the division's real size**; corrects 12 rows on the
+  deployed box (EN tiers 1-8 18->16, SC tiers 1-4 18->14) and does not settle 16-vs-20.
+
+  ⚠️ **THE FINDING, and it changed the implementation: `sizeOf()`'s `+1` at the deepest tier is
+  NOT universally right.** The brief's rule was "slots = rows + 1 if bottom tier", taken from the
+  resolver. Dry-run on the clone showed that rule would change **6 rows** — CA, JP, NG, PL, US at
+  tier 8 (8 -> 9) and **SC tier 8 (3 -> 4)**. Cause: the generator reserves a place for the player
+  at the deepest tier on some boxes and not others. EN on this clone reserves (18/18/…/17); those
+  six countries hold the same count at every tier, so `rows + 1` is one more club than the
+  division can field. **The previous session's refusal to overwrite SC's authored 3 was right for
+  a better reason than it knew: 3 is correct and the derived 4 is the bug.** The migration now
+  DETECTS the reservation (deepest tier holding exactly one fewer row than the tier above) rather
+  than assuming it, and both shapes are pinned.
+
+  **Verified a complete no-op on the clone rather than assumed:** the `slots` column fingerprint
+  is `d56d40bd232d2d31ebe7342f47e76b16` across migrate -> rollback -> re-migrate, `rows_changed`
+  against the stash is 0, the stash table drops on `down()`, SC tier 8 still reads 3, and
+  `app:economy:wage-table` is byte-identical (still exit 1 with its 31 pre-existing failures).
+
+  **Left open and reported, not fixed:** `sizeOf()`'s unconditional `+1` is a latent defect for
+  any `slots = 0` league on an unreserved box. Inert today — the only deriving leagues are SC
+  tiers 5-8 on the deployed box, which do reserve.
+
+- **B1 + B2: `tvDeal` is published resolved, and a false migration docblock corrected
+  (2026-11-19)**, committed on `development` on top of `603ea577`. **Stages touched:**
+  04_interfaces (`services.md`), shared (this file). No migration, no authored economy figure,
+  `WORLD_PACK_VERSION` unchanged at 11.
+
+  **B1 — a pooled league published its NULL column and the game paid £0 of TV.** `tvDeal` is
+  derived whenever `tvPoolPence` is authored, but `syncTvDeal()` runs only on an admin save
+  (`LeagueAdminController:95`/`:201`) and `LeagueService:82` deliberately skips it at generation,
+  so a generated pooled league keeps a NULL column for ever — the live state of **Scottish tiers
+  5–8**, the only pooled leagues in the world. **Four** surfaces published that raw column:
+  `LeagueImportExportService::export()`, `/api/initialize/leagues`,
+  `SyncService::buildLeagueSnapshot()` and `LeagueService`'s own snapshot. The app reads
+  `Math.max(0, league.tvDealPence)`, so those tiers earned nothing for a season. All four now emit
+  `derivedTvDealPence($l) ?? $l->getTvDeal()`, which is **inert** without a pool — all 8 EN tiers
+  and the other 184 leagues are unchanged. The export gains **`tvDealOverride`** (the raw column)
+  and `import()` prefers it, keyed on presence not value, so a resolved share can never be written
+  into a column; a pre-change backup still restores through the bare key. Third key in that
+  contract, after the payout pair.
+
+  ⚠️ **`app:economy:wage-table` is structurally blind to this fix.** It reads
+  `$league->getTvDeal()` off the entity (`EconomyWageTableCommand:459`), not a published surface,
+  so its output is byte-identical before and after — **verified by stashing the four source files
+  and diffing two full runs.** An unchanged gate is NOT evidence that nothing moved here. ALSO
+  RECORDED: on this clone the command **exits 1 with 31 pre-existing check failures** (sponsorship
+  band at 13 tiers, the bankruptcy ladder's 0.01-week traversal, rows 4/5 unreachable), identical
+  before and after. "Exit 0" is not the bar on this box; "unchanged" is.
+
+  **Tests: 3270, 3 failures — baseline items 1, 2 and 3 exactly** (the three empty-content-table
+  failures), with item 4 contributing **zero**, which the amended entry #4 says it does. Four new
+  tests, all four **proved meaningful by stashing the source fix and re-running**: they fail with
+  the exact messages the defect produces and pass with it.
+
+  **B2 — `Version20261119090000`'s docblock asserted something false about the deployed box**
+  (*"where `slots` is 0"*). Only **4 of 200** rows are 0 there, all `SC` tiers 5–8; EN reads 18
+  against 16 real club rows on all eight tiers and SC tiers 1–4 read 18 against 14. The claim came
+  from a task brief whose premise was wrong. **Comment-only — `git diff` shows no code lines
+  changed** and the `only where 0` guard means the behaviour was always right. The 12 disagreeing
+  rows are a behaviour change and land as their own migration (B3), not folded into a no-op.
+
+- **A3 + A4 + A3b + A5: four numbers stop being side effects (2026-11-19)**, committed on
+  `development` on top of `bac1228b`. **Stages touched:** 01_overview (`environment.md`), 03_data
+  (`migrations.md`), 04_interfaces (`services.md`), shared (this file). `app:economy:wage-table EN
+  SC` is **byte-identical before and after** (full `diff`, no differences) — no authored economy
+  figure moved and `WORLD_PACK_VERSION` is unchanged at 11.
+
+  **A3 — the world export now carries RESOLVED payouts, and the key split is the load-bearing
+  part.** `LeagueImportExportService::export()` emits `prizeMoney` / `leaguePositionPot` through
+  `LeaguePayoutResolver` (one `GameConfig` fetched for the whole export), because that is the key
+  the app's gate reads (`scripts/economy/variantGate.ts`, `dispersionGate.ts`:
+  `league?.prizeMoney ?? 0`) — since `Version20261118120000` NULLed the columns, the raw-column
+  export read £0 and every gate run needed a hand-patch.
+
+  ⚠️ **The raw columns moved to NEW keys `prizeMoneyOverride` / `leaguePositionPotOverride`, and
+  those are the ONLY two `import()` reads.** Writing a resolved figure back would convert every
+  inherit (NULL) into a per-league override on the first round trip, freezing the ppm ladder into
+  196 rows and defeating `5dc3f51b`'s NULL-means-inherit design silently. The legacy fallback to
+  the bare `prizeMoney` key is keyed on the override key's **presence, not its value**: every new
+  export carries it even when null, so only a pre-change file can reach the fallback — which is
+  what keeps an old backup's genuine overrides restorable while making it impossible for a
+  resolved figure to reach a column. `EXPORT_VERSION` stays 1 deliberately, so existing backups
+  still import.
+
+  `sponsorPot` was NOT added: `sponsorCount` was already exported and is what the gate uses — the
+  device rolls the pot itself (`rollLeagueSponsorPot`). A resolved `sponsorPot` would also be
+  asymmetric, since `LeagueSponsor` rows are not in the export at all.
+
+  **A4 — `league.slots` is authored, and only where it was 0.** `Version20261119090000` computes
+  each league's currently derived size **in SQL** and writes it wherever `slots = 0`, stashing
+  every row for an exact `down()`. ⚠️ **It deliberately does NOT author every league**: an
+  already-authored value is a decision, and overwriting it with a live club count is the exact
+  side effect the change exists to abolish. That is not hypothetical — **this clone holds SC tier
+  8 at an authored 3 while it derives 4**, so "author every league to its derived size" would have
+  moved a real division on the day it landed. Computed rather than hardcoded because the derived
+  size differs per box (clone EN 18/tier, deployed box 16). **It does not pick a division size**;
+  16-vs-20 remains open and unprejudiced.
+
+  ⚠️ **On this clone the migration writes NOTHING** — all 120 league rows were already authored
+  (verified: 0 rows differ from the stash) — so the gate diff proves the command still runs, not
+  that the authoring is right. That property is pinned instead by new
+  `LeagueSlotsAuthoringTest`, which runs the migration's OWN statement off
+  `Version20261119090000::AUTHOR_SQL` (migrations are not autoloaded, so it requires the file by
+  path; `wunderkind_test` is not migration-tracked, so a migration cannot reach it and a re-typed
+  copy would test the copy). It pins the bottom-tier `+1`, that an authored value survives, that
+  an empty non-bottom tier stays deriving, and that a club whose country disagrees with its
+  league's is not counted — the last mirroring `countsByLeagueForCountry()`'s own country filter.
+
+  **A3b — `bankruptcy_deduction_weeks` is authored at last.** `Version20261119091000` writes the
+  agreed five-row weeks-of-wages ladder (1–2/2–4/4–8/8–16/16+ at 3/6/10/20/50 points). ⚠️ **The
+  backend mechanism already existed** — column, publisher, admin textarea, setter normalisation
+  and gate check 5 all shipped 2026-11-13 in `Version20261113120000`, with the column ending up
+  `null`; the open item was only ever the figure, which `economy-threshold-review.md` §1 had
+  already specified. Nothing was designed here.
+
+  ⚠️ **Authoring it is NOT inert in the usual sense and that was checked rather than assumed:**
+  `resolveWeeksLadder` prefers the published ladder over the app's own constant, so authoring
+  flips every client onto this. `wunderkind-app`'s `BANKRUPTCY_WEEKS_LADDER`
+  (`src/economy/insolvency.ts`) was read read-only and is **byte-identical** to these rows, so no
+  client's behaviour moves. No app edit was made. `bankruptcyDeductionTiers` is untouched and
+  remains the ladder for `legacy`, so the gate's two "rows 4 and 5 unreachable" problems and the
+  five per-tier "no range left" problems **survive by design** — they measure the pence ladder,
+  and amending its published bounds is a value change nobody has authorised.
+
+  **A5 — `WorldOverviewServiceTest` was never a production defect.** The failure was
+  `EconomyAdminTest` writing base £100,000,000 with a tier-2 ratio of 2x and tier 8 at 424ppm into
+  the **single shared `game_config` row** through the real admin save and never restoring it; SE
+  tier 2's NULL column then correctly INHERITED and resolved to £200,000,000. Accounted for to the
+  penny. The conversion does not coerce null to zero and this test's own fixture had not drifted —
+  so the fix was to make it **own the payout config for its duration** (stash both tier-1 bases,
+  zero them, restore), which is precisely the discipline it already applied to the live
+  `CountryProfile` statuses. The assertion was NOT relaxed. ⚠️ **`EconomyAdminTest` still does
+  not restore what it writes**, so the next reader of that row meets the same trap — flagged, not
+  fixed, as it is outside this tranche.
+
 - **Check 8's two TV-dependent bounds amended (2026-11-18)**, no commit — still on `development`
   @ `740f2c8e`. **Stages touched:** 04_interfaces (`services.md`), 07_synthesis
   (`current-focus.md`), shared (this file). `PAYOUT_SHARE_MAX_PCT` 50 → 55 and
@@ -1309,3 +1448,63 @@
   hydration beyond the templates — and the one part that scales with club count
   (`ResolveNewCompetitionAudienceForPushMessage`) is already routed to `async`. Left inline
   deliberately; don't re-open it as unfinished.
+
+- **`01_overview/output/tribal-knowledge.md` + `07_synthesis/output/architecture-notes.md` +
+  `04_interfaces/output/{routes,services}.md` + `01_overview/output/deployment.md` — ALL MONEY
+  LEAVES THE WORLD PACK, `WORLD_PACK_VERSION` 10 → 11 (2026-11-18).** Owner's design the same
+  day: the pack becomes *"truly what it needs to be — a test of teams, players and staff"* —
+  identities, squads, abilities, facilities, personalities — and everything monetary is a
+  function of live config, resolved on the device at init.
+
+  Removed from the pack: `tvDeal`/`sponsorPot`/`prizeMoney`/`leaguePositionPot` (league),
+  `startingBalance` + `land.valuePence` (club), `contractValue` + `agent.commissionRate`
+  (player), `weeklySalary` (staff). `leaguePositionDecreasePercent` STAYS — it is a rule, not an
+  amount, and the app has no other source for it at init. The scout block already shipped no
+  wage and is the pattern the rest now follows. `WorldPackClubGenerationService::buildPlayer()`
+  no longer prices at all, and its `$country`/`$tier`/`$clubReputation` plumbing went with the
+  pricing call rather than being left as an invitation to put it back.
+
+  **The ruling that changed.** `tribal-knowledge.md`'s two-sided pricing ruling is now
+  one-sided: "generated populations are priced once at generation and stored" is superseded —
+  **nothing is priced at generation.** The shared-pool half is untouched and still live (stored
+  legacy, priced at serve time through `Economy\ServeTimePlayerPricer`). The superseded text is
+  kept in place above the new rule rather than deleted, per the house convention.
+
+  **Three things worth carrying forward.**
+
+  1. **The strip had exactly one correct seam, and the obvious one is wrong.**
+     `PlayerSnapshotSerializer` is shared with `PlayerBrowseSerializer` and `/api/players/youth`,
+     which serve shared-pool rows priced at SERVE time — deleting `contractValue` there would
+     silently un-price every scout-search result. And it must not RE-price there either
+     (architecture-notes' trap 4). So the money is unset at the PACK boundary, in
+     `WorldPackSnapshotBuilder::buildPlayerSnapshot()`. `WorldPackCarriesNoMoneyTest` pins the
+     invariant from the pack side *and* pins that the shared serializer still prices, so the
+     plausible wrong fix fails a test.
+
+  2. **The sponsor pot needed the COUNT to arrive, not the pot.** `GET /api/initialize/leagues`
+     was already the device's source for the other three league figures but has never sent a
+     pot — so dropping the pack's key alone would have zeroed league sponsorship. The device
+     already rolls a pot (`rollLeagueSponsorPot`, every season boundary after the first), it
+     just lacked the census, so that endpoint gained **`sponsorCount`** and **`sponsorSizes`**
+     (counted off `LeagueSponsor` rows, upper-cased at the boundary, `null` rather than `{}`
+     when none are sourced). Uncached, so no bump. A count is not a price — same category as
+     the `clubCount` it already returned.
+
+  3. **`rollLeagueSponsors()` is still called at both pack-build sites, for its side effect
+     only.** The pot left the payload, but the call mutates each `LeagueSponsor::$rolledValue`,
+     which is country-wide server state `SyncService` sums for an existing save. Deleting the
+     call to tidy away an unused variable would leave every sponsor rolled at 0 on the sync
+     surface — a different bug in a different payload. Both call sites say so in a comment.
+
+  Tests: new `WorldPackCarriesNoMoneyTest` (recursive money scan over club/league/player/staff/
+  scout, plus a named-key list and a `*Pence|*Salary|*Balance|…` suffix scan, so a key nobody
+  has thought of yet also fails) and new `InitializeLeaguesSponsorCensusTest`. Six existing
+  tests were deliberately inverted with the reason written into each: the two that asserted "a
+  generated player must be priced", `WorldPackLandSnapshotTest`'s club key list and three
+  `valuePence` assertions, and the two agent-shape pins. ⚠️ **`PlayerSnapshotShapeConsolidation
+  Test`'s docblock says its key arrays are historical records that must never be edited — one
+  key was removed from `LEGACY_WORLDPACK_KEYS` anyway, and the exception is documented in that
+  docblock as a one-off rather than a precedent.** `LEGACY_BROWSE_KEYS` is untouched.
+
+  `app:economy:wage-table` is byte-identical before and after (verified by md5 across a stash)
+  — this touched no authored figure.

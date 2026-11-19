@@ -242,9 +242,25 @@ client-side escape.
    inside `legacyStaffPence()`, which is pinned byte-for-byte by `WageModelLegacyParityTest`.
 4. **Never price a player inside `PlayerSnapshotSerializer`.** `WorldPackSnapshotBuilder`
    delegates to it, and the pack is a frozen cached surface gated by `WORLD_PACK_VERSION`;
-   re-pricing there changes cached content on every read with no version bump. Generated
-   populations are priced once at generation; shared-pool rows go through
-   `Economy\ServeTimePlayerPricer` at serve time. See `tribal-knowledge.md`'s owner ruling.
+   re-pricing there changes cached content on every read with no version bump. Shared-pool rows
+   go through `Economy\ServeTimePlayerPricer` at serve time. See `tribal-knowledge.md`'s owner
+   ruling.
+
+   ⚠️ **UPDATED 2026-11-18 (v11) — the trap is unchanged, the second half of it is gone.**
+   "Generated populations are priced once at generation" is no longer true: **nothing is priced
+   at generation.** A pack carries no money at all — `contractValue`, `agent.commissionRate`,
+   staff `weeklySalary`, club `startingBalance`, `land.valuePence` and the four league money
+   keys (`tvDeal`, `sponsorPot`, `prizeMoney`, `leaguePositionPot`) have all left it. The device
+   prices the squad it ingests from published config.
+
+   The rule in bold above matters MORE after that change, not less, and in a way that is easy
+   to get backwards: the obvious way to take a price out of a pack is to delete it from the
+   serializer, and that would silently un-price every `/api/scout/search`,
+   `/api/players/foreign` and `/api/players/youth` row — those surfaces are priced at serve
+   time and need the key. So the money is stripped at the PACK BOUNDARY, in
+   `WorldPackSnapshotBuilder::buildPlayerSnapshot()`, which is the one seam that satisfies both
+   constraints. `WorldPackCarriesNoMoneyTest` pins the invariant from the pack side and pins
+   that the shared serializer still prices from the browse side.
 5. **`down()` on the introducing migration is not lossless and cannot be.** `uq_country_tier`
    cannot coexist with a buffer, so the rollback keeps each country's oldest set and drops the
    rest. That is the rollback, not a side effect.

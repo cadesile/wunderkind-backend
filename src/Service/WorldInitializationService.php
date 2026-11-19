@@ -174,8 +174,30 @@ class WorldInitializationService
      *     tiers are REGENERATED; the bump and `app:worldpack:maintain` only restock what is
      *     generated after that. Wages and the payout figures do move on the bump alone, since
      *     the resolvers read `GameConfig` at pack-build time.
+     *
+     *   - **11 (2026-11-18)** — ALL MONEY LEAVES THE PACK. `tvDeal`, `sponsorPot`,
+     *     `prizeMoney` and `leaguePositionPot` off the league; `startingBalance` and
+     *     `land.valuePence` off the club; `contractValue` and `agent.commissionRate` off the
+     *     player; `weeklySalary` off the staff member. The scout block already shipped no
+     *     wage and is the pattern the rest now follows. `leaguePositionDecreasePercent` stays
+     *     — it is a rule, not an amount.
+     *
+     *     ⚠️ **THIS IS THE LAST BUMP MONEY WILL EVER CAUSE, and that is the point of it.**
+     *     Every bump above invalidates every cached pack in every country, and three of the
+     *     five before this one (v6 sponsor bands, v7 payout ladders, v8 staff pay) were
+     *     PURELY money — a figure was re-authored, so a payload full of squads had to be
+     *     rebuilt. This one cost 208 of 256 tier payloads to author a turnover table. After
+     *     this change the pack is a CENSUS (`WorldPackSnapshotBuilder`'s class docblock):
+     *     teams, players, staff, abilities, facilities, personalities. Re-authoring any
+     *     economy figure now reaches a new save with NO bump and NO regeneration, because
+     *     every monetary quantity is resolved on the device from live config.
+     *
+     *     So a future money change does not belong here. If you are reaching for a bump
+     *     because a wage, balance, payout or price moved, the answer is that nothing needs
+     *     bumping — and if a pack turns out to still carry that figure,
+     *     `WorldPackCarriesNoMoneyTest` is the thing that should have caught it.
      */
-    public const WORLD_PACK_VERSION = 10;
+    public const WORLD_PACK_VERSION = 11;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -199,8 +221,10 @@ class WorldInitializationService
         private readonly FixtureGenerationService $fixtureGenerationService,
         private readonly WorldPackSnapshotBuilder $snapshotBuilder,
         private readonly WorldPackClubGenerationService $clubGenerator,
+        // NO LeaguePayoutResolver. It was injected for `prizeMoney`/`leaguePositionPot`, which
+        // left the pack at v11; `GET /api/initialize/leagues` resolves both live and injects it
+        // itself. An unused money resolver on a pack builder is an invitation to re-add a key.
         private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
-        private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
     ) {}
 
     /**
@@ -260,12 +284,13 @@ class WorldInitializationService
         foreach ($npcClubs as $npcClub) {
             $allClubIds[] = (string) $npcClub->getId();
 
-            // COUNTRY, TIER AND THE CLUB'S OWN REPUTATION reach generation now, because the
-            // turnover wage model prices a world-pack player from them. In `legacy` mode they
-            // are ignored and every figure is unchanged.
+            // NO COUNTRY, TIER OR REPUTATION. They used to reach generation so the turnover
+            // wage model could price a world-pack player; at v11 nothing is priced at
+            // generation, so a squad is a squad and the device prices it. Staff below still
+            // take them — the backend keeps writing `staff.weekly_salary` for non-pack
+            // consumers — and the ability BAND is still per country and tier.
             $players = $this->clubGenerator->generatePlayers(
                 $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
-                $country, $tier, $npcClub->getReputation(),
             );
             // Same $abilityRange as the players: one band per club, staff included.
             $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier, $abilityRange);
@@ -274,14 +299,46 @@ class WorldInitializationService
             $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);
         }
 
-        $fixtures   = $this->fixtureGenerationService->generate($allClubIds);
-        $sponsorPot = $this->rollLeagueSponsors($league, $gameConfig);
+        $fixtures = $this->fixtureGenerationService->generate($allClubIds);
 
-        return $this->buildLeagueSnapshot($league, $clubsData, $fixtures, $sponsorPot, $gameConfig);
+        // ── STILL ROLLED, DELIBERATELY, THOUGH THE PACK NO LONGER CARRIES THE TOTAL ───────
+        //
+        // The pot left the pack at v11 (money is resolved on the device now), so the return
+        // value is unused here. The CALL is not: `rollLeagueSponsors` mutates each
+        // `LeagueSponsor::$rolledValue` — shared, country-wide server state that
+        // `SyncService` sums into an existing save's league financials
+        // (`SyncService.php:815`) and `SeasonSnapshot` documents as country-wide. Dropping
+        // the call to tidy away an unused variable would leave every sponsor rolled at 0 for
+        // the sync surface, which is a different bug in a different payload.
+        $this->rollLeagueSponsors($league, $gameConfig);
+
+        return $this->buildLeagueSnapshot($league, $clubsData, $fixtures, $gameConfig);
     }
 
-    /** Public: also called by WorldPackTierAssemblyService when folding per-club async generation results into the final payload. */
-    public function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, int $sponsorPot, GameConfig $gameConfig): array
+    /**
+     * Public: also called by WorldPackTierAssemblyService when folding per-club async
+     * generation results into the final payload.
+     *
+     * ── NO LEAGUE MONEY SINCE v11 ────────────────────────────────────────────────────────
+     *
+     * `tvDeal`, `sponsorPot`, `prizeMoney` and `leaguePositionPot` all left together. The
+     * `$sponsorPot` parameter went with them — it had no other reader, and keeping an
+     * accepted-and-ignored money argument on a pack builder is exactly how the key creeps
+     * back. Its ROLL still happens at both call sites, for server-side state; see there.
+     *
+     * The device gets all four from `GET /api/initialize/leagues`, which is UNCACHED and
+     * already resolves `prizeMoney`/`leaguePositionPot` through `LeaguePayoutResolver` — so
+     * re-authoring a payout ladder reaches a new save with no bump and no regeneration, which
+     * is the whole point of the change. `sponsorPot` is the one it does not send: the device
+     * rolls that itself from the division's published sponsor bands, off the `sponsorCount`
+     * that endpoint now carries.
+     *
+     * `leaguePositionDecreasePercent` STAYS. It is a rule — the percentage by which each
+     * finishing position's share steps down — not an amount, and the app has no other source
+     * for it at init. Hard-zeroing it is a bug with a history: it paid season-1 position
+     * prizes at the full pot for every position.
+     */
+    public function buildLeagueSnapshot(League $league, array $clubsData, array $fixtures, GameConfig $gameConfig): array
     {
         return [
             // THE GENERATION THIS PACK WAS BUILT UNDER, so a device can say which world it
@@ -295,15 +352,8 @@ class WorldInitializationService
             'country'                       => $league->getCountry(),
             'promotionSpots'                => $league->getPromotionSpots(),
             'reputationTier'                => $league->getLeagueReputationTier()?->value,
-            'tvDeal'                        => $league->getTvDeal(),
-            'sponsorPot'                    => $sponsorPot,
-            // RESOLVED, NOT READ OFF THE COLUMN. A null column means "inherit the authored
-            // tier-1 base x this tier's ratio x the country factor" — see LeaguePayoutResolver.
-            // The KEYS and their types are unchanged, so this is not a shape change; the VALUES
-            // move the moment the ratios are authored, which is why WORLD_PACK_VERSION is
-            // bumped in the same release rather than left to the authoring pass.
-            'prizeMoney'                    => $this->leaguePayoutResolver->prizeFor($league, $gameConfig),
-            'leaguePositionPot'             => $this->leaguePayoutResolver->positionPotFor($league, $gameConfig),
+            // A RULE, NOT AN AMOUNT — which is why this one survived v11 and the four money
+            // keys beside it did not. See the method docblock.
             'leaguePositionDecreasePercent' => $gameConfig->getLeaguePositionDecreasePercent(),
             'trophy'                        => $league->getTrophy(),
             'clubs'                         => $clubsData,
