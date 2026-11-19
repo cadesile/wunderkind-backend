@@ -119,6 +119,12 @@ docker exec wunderkindbackend_database_1 \
   psql -U postgres -c 'CREATE DATABASE wunderkind_testmaster OWNER wunderkind;'
 lando ssh -s appserver -c 'TEST_TOKEN=master php bin/console doctrine:schema:create --env=test'
 lando ssh -s appserver -c 'TEST_TOKEN=master php vendor/bin/phpunit --no-coverage tests/...'
+```
+
+`TEST_TOKEN` must be set INSIDE the container (`lando ssh -s appserver -c '...'`); prefixing
+`lando php` sets it on the host CLI, where Symfony never sees it. Verify with
+`doctrine:schema:update --dump-sql --env=test`, which should report nothing to update —
+that zero-drift baseline is what makes a failure meaningful instead of noise.
 
 ### Known test failures — the baseline to judge a run against (2026-11-16)
 
@@ -192,12 +198,25 @@ the same discipline it already applied to the live `CountryProfile` statuses —
 an unauthored economy will meet the same trap. That is the general lesson of #4 and of this one:
 **`game_config` and `starter_config` are single shared rows, and a test that depends on their
 contents must own them for its duration rather than assume the shipped defaults.**
-```
 
-`TEST_TOKEN` must be set INSIDE the container (`lando ssh -s appserver -c '...'`); prefixing
-`lando php` sets it on the host CLI, where Symfony never sees it. Verify with
-`doctrine:schema:update --dump-sql --env=test`, which should report nothing to update —
-that zero-drift baseline is what makes a failure meaningful instead of noise.
+**A SIXTH FAILURE WAS RECORDED ON 2026-11-19 AND IS DELIBERATELY NOT ON THIS LIST, BECAUSE IT WAS
+A DEFECT AND IT IS FIXED (A16, same day) — it was never a flake that stopped appearing.**
+`LegacyNewGameFlowTest::testTheEconomyBlockShipsSwitchedOff` ("the turnover table must be
+unauthored") failed because `EconomyAuthoredSizeDriftTest` and `EconomyTvCountryScalingGuardTest`,
+both landed that day, wrote `38_866_153_952` into the shared `game_config` row in their own
+`seed()` and never put it back. Both now stash the table in `setUp()` and restore it in
+`tearDown()` — in `tearDown()` on purpose, because that runs after a FAILED assertion too, so the
+row is clean exactly when something has already gone wrong. ⚠️ **If that assertion fails again it
+is someone's pollution, not a known failure, and the something to find is whoever wrote the row.**
+
+⚠️ **AND THE FULL RUN HAD BEEN HIDING IT.** Measured on 2026-11-19 before the fix: a single
+`--filter`ed full run showed the usual THREE failures and that test PASSED, even though
+`polluter -> reader` on its own failed every time. The reason is that
+`tests/Controller/Admin/EconomyAdminTest` sorts between them and zeroes the turnover table
+through the real admin save, so the full run was green by accident of two tests both abusing the
+same shared row. A10 saw it fail because it ran the suite in 20-file batches, where that accident
+does not hold. **So "it passes in a full run" is not evidence that a shared-row leak is harmless.**
+
 
 **One caveat, and it bites more than once: `schema:create` builds structure, not content.**
 Operator-authored content lives in tables the suite does not seed, so a fresh per-branch DB
@@ -238,6 +257,22 @@ docker exec wunderkindbackend_database_1 bash -c \
 
 The same applies to any FK/nullability change: `Version20261102140000` (competition_entrant) had
 to be applied to `wunderkind_test` by hand before its regression test could pass.
+
+### A full run is OOM-killed by `AdminShellCoverageTest` — filter it out (2026-11-19)
+
+**A plain `lando php vendor/bin/phpunit` dies at roughly 183/3,305 with exit 137** (the container
+is OOM-killed, `docker inspect ... OOMKilled: true`, 3.83 GiB VM). ⚠️ **It is an ENVIRONMENT
+result, not a failure to attribute**, it happens identically on a clean tree, and the cause was
+narrowed twice to `AdminShellCoverageTest` alone (72 tests). It cost two sessions a full-suite run
+on 2026-11-19 before it was written down.
+
+```bash
+# a clean full run of 3,233 tests — everything except AdminShellCoverageTest
+lando php vendor/bin/phpunit --filter '/^(?!.*AdminShellCoverage).*$/'
+```
+
+Run that file on its own if you need it covered.
+
 
 ## Deployed dev/prod — Docker Compose
 
