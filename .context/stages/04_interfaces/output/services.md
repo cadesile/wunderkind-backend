@@ -1058,8 +1058,29 @@ filename alone.
   which cannot set `ability` by design. **Unconditional, which is safe because the formula is
   deterministic** — re-deriving a scout `ScoutGenerationService` just derived gives the identical
   figure, so unlike the personality subscriber there is no authored value to protect.
-  **prePersist only: an admin EDIT does not re-derive** (nor does it for `weeklySalary`);
-  `app:backfill-scout-abilities --force` is the documented path.
+  **On prePersist AND preUpdate** — corrected 2026-11-20, hours after this class first shipped
+  prePersist-only. The original design left an admin edit to be followed up with
+  `app:backfill-scout-abilities --force`, and that was wrong: `ScoutCrudController` exposes
+  `experience` and `judgementsJson` as EDITABLE while `ability` is read-only, so an operator
+  could move an input and leave the derived figure stale with nothing saying the two disagree —
+  and **A24 prices a scout's wage off `ability`**, which turns that into a wrong wage found far
+  from its cause. Relying on a remembered command is not a mechanism.
+
+  ⚠️ **`weeklySalary` is deliberately NOT treated this way, and the asymmetry is principled.**
+  Its admin help says it is "set by hand here only to override one scout" — an intentional
+  override, which auto-recomputation would destroy. `ability` is intentionally not overridable,
+  so it must be recomputed. **The test is whether the field is an override or a derivation.**
+
+  A `preUpdate` change does not stick on its own (the changeset is already computed), so the hook
+  calls `recomputeSingleEntityChangeSet()`; it early-returns when the derived figure already
+  matches, which is the common case and skips the recompute entirely. Side effect worth having:
+  an `ability` written by any route is now **corrected** rather than merely ignored.
+
+  Pinned by `tests/EventSubscriber/ScoutAbilityLifecycleSubscriberTest.php` — a FUNCTIONAL test
+  through a real flush, because the registration being tagged and the formula being right do not
+  together prove the wire between them, and a subscriber that silently never fires looks
+  identical to one that does (both generation paths set `ability` explicitly, so no other test
+  needs it). Verified non-vacuous: disabling the two listener attributes fails all 7 cases.
 - **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
   `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
   Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,
