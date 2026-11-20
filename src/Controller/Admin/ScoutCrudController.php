@@ -129,8 +129,11 @@ class ScoutCrudController extends AbstractCrudController
      * could type over it would create a second source for one quantity with
      * nothing in the schema saying whether the typed value or the formula wins
      * — the governing defect the economy workstream exists to remove. To move a
-     * scout's ability, move its experience or judgements and re-derive with
-     * `app:backfill-scout-abilities --force`.
+     * scout's ability, move its `experience` or `judgements`: the derivation then
+     * follows automatically on save, via `ScoutAbilityLifecycleSubscriber`'s
+     * `preUpdate` hook. No command run is needed, and that is deliberate —
+     * expecting an operator to remember `--force` is not a mechanism, and A24
+     * prices a wage off this figure.
      */
     private function indexFields(): iterable
     {
@@ -182,10 +185,11 @@ class ScoutCrudController extends AbstractCrudController
             ->setHelp(
                 'Derived 1–100 figure, 0.7 × experience + 0.3 × mean(judgements), by '
                 . 'ScoutAbilityCalculator — NOT editable, because a value typed over a derived '
-                . 'one leaves nothing saying which is authoritative. To change it, change '
-                . 'experience or judgements and run `app:backfill-scout-abilities --force`. '
-                . 'New scouts are derived on persist by ScoutAbilityLifecycleSubscriber; an edit '
-                . 'here does not re-derive.',
+                . 'one leaves nothing saying which is authoritative. To change it, change the '
+                . 'Experience or Judgements above and save: ability re-derives automatically, on '
+                . 'create and on every edit (ScoutAbilityLifecycleSubscriber). Unlike the wage '
+                . 'below, this is a derivation rather than an override, so a figure written here '
+                . 'by any route is corrected rather than kept.',
             );
 
         yield IntegerField::new('weeklySalary', 'Weekly Wage')

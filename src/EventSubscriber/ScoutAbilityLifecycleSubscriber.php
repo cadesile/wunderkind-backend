@@ -8,6 +8,7 @@ use App\Entity\Scout;
 use App\Service\ScoutAbilityCalculator;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PrePersistEventArgs;
+use Doctrine\ORM\Event\PreUpdateEventArgs;
 use Doctrine\ORM\Events;
 
 /**
@@ -33,14 +34,31 @@ use Doctrine\ORM\Events;
  * There is nothing to protect here, because `ability` is never authored: the admin exposes it
  * read-only on purpose.
  *
- * ⚠️ **prePersist ONLY — an admin EDIT does not re-derive.** Changing a scout's `experience` or
- * `judgements` in the admin leaves the stored ability as it was, exactly as it leaves
- * `weeklySalary` as it was (`ScoutWageCalculator` is not re-run on edit either).
- * `app:backfill-scout-abilities --force` is the documented path, and the admin field's help text
- * says so. A `preUpdate` hook would need `recomputeSingleEntityChangeSet()` to make the write
- * stick, which is a sharp edge worth adding only if editing scouts by hand becomes routine.
+ * ⚠️ **AND ON UPDATE TOO, added 2026-11-20 after this class first shipped prePersist-only.**
+ * The original note here said an admin edit deliberately did not re-derive, with
+ * `app:backfill-scout-abilities --force` as the documented path. **That was wrong once A24 is in
+ * view**, and the reason is worth keeping rather than quietly deleting:
+ *
+ * `ScoutCrudController` exposes `experience` and `judgementsJson` as EDITABLE while `ability` is
+ * read-only. So an admin could move an input and leave the derived figure stale, with nothing in
+ * the schema or the UI saying the two now disagree — and A24 prices a scout's WAGE off `ability`,
+ * which turns a stale figure into a wrong wage, discovered far from its cause. That is precisely
+ * the two-routes-to-one-quantity defect this workstream exists to remove, and relying on an
+ * operator to remember a `--force` run is not a mechanism. So the derivation now runs on every
+ * write, and `ability` is a true function of its inputs at all times.
+ *
+ * A useful side effect: because the derivation runs unconditionally on update, a hand-crafted
+ * POST that tried to set `ability` directly is CORRECTED rather than merely ignored.
+ *
+ * ⚠️ **`weeklySalary` is deliberately NOT treated this way, and the asymmetry is principled.**
+ * Its admin help text says it is "set by hand here only to override one scout" — it is an
+ * intentionally overridable figure, so auto-recomputing it would destroy the override that is its
+ * whole purpose. `ability` is intentionally NOT overridable (read-only by design), so it must be
+ * recomputed. **The test is whether the field is an override or a derivation**, not whether it
+ * happens to be derived at generation.
  */
 #[AsDoctrineListener(event: Events::prePersist)]
+#[AsDoctrineListener(event: Events::preUpdate)]
 final class ScoutAbilityLifecycleSubscriber
 {
     public function __construct(
@@ -50,6 +68,41 @@ final class ScoutAbilityLifecycleSubscriber
     public function prePersist(PrePersistEventArgs $args): void
     {
         $this->fill($args->getObject());
+    }
+
+    /**
+     * ⚠️ **A changed field in `preUpdate` does NOT stick on its own.** By the time this fires the
+     * unit of work has already computed its changeset, so a plain setter call writes to the
+     * object and is then ignored by the UPDATE. `recomputeSingleEntityChangeSet()` is Doctrine's
+     * documented way to fold the new value in, and it is why this method cannot simply call
+     * `fill()` like `prePersist` does.
+     *
+     * The early return is what keeps that safe and cheap: when the derived figure already matches
+     * the stored one — the overwhelmingly common case, since most updates touch neither
+     * `experience` nor `judgements` — nothing is written and no changeset is recomputed. A
+     * recompute does not re-fire `preUpdate`, so there is no loop here either way.
+     */
+    public function preUpdate(PreUpdateEventArgs $args): void
+    {
+        $scout = $args->getObject();
+
+        if (!$scout instanceof Scout) {
+            return;
+        }
+
+        $derived = $this->abilityCalculator->abilityForScout($scout);
+
+        if ($derived === $scout->getAbility()) {
+            return;
+        }
+
+        $scout->setAbility($derived);
+
+        $em = $args->getObjectManager();
+        $em->getUnitOfWork()->recomputeSingleEntityChangeSet(
+            $em->getClassMetadata(Scout::class),
+            $scout,
+        );
     }
 
     /** Pure logic, no Doctrine args — unit-testable, same shape as PersonalityLifecycleSubscriber::fill(). */

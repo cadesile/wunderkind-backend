@@ -24,11 +24,16 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * is the expected result rather than a sign something went wrong.
  *
  * What it is actually for:
- *   - **re-derivation after the formula or the inputs change** (`--force`): an operator who
- *     retunes `ScoutAbilityCalculator`'s weighting, or edits a scout's experience in the admin,
- *     needs the stored figure to follow. The migration cannot be re-run and must not be edited.
+ *   - **re-derivation after the FORMULA changes** (`--force`): an operator who retunes
+ *     `ScoutAbilityCalculator`'s weighting needs the whole world to follow. The migration cannot
+ *     be re-run and must not be edited, so this is the only route.
  *   - **rows a later import leaves behind**: anything that writes scouts by raw SQL rather than
- *     through `ScoutGenerationService` lands the column's floor of 1.
+ *     through Doctrine bypasses the subscriber and lands the column's floor of 1.
+ *
+ * ⚠️ **It is NOT needed after an admin edit, and this docblock used to say it was.**
+ * `ScoutAbilityLifecycleSubscriber` gained a `preUpdate` hook on 2026-11-20, so changing a
+ * scout's `experience` or `judgements` re-derives its ability on save. Leaving a stale figure to
+ * be fixed by a remembered command was the wrong design once A24 prices a wage off it.
  *
  * ACTS ONLY ON THE FLOOR (`ability = 1`) by default, so re-running is safe. `--force` re-derives
  * every row. There is no "deliberate 1" to protect, because the admin exposes `ability`

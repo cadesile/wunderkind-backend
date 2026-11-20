@@ -557,9 +557,12 @@ migrations are the change log (see `migrations.md`).
     default** — experience is tier-banded and judgements are not, so a judgement-heavy blend
     collapses tier separation. **Never 0:** the floor is 1, the migration derived every
     existing row rather than landing a lying default, and `ScoutAbilityLifecycleSubscriber`
-    derives it on `prePersist` so no creation path can forget it. **Read-only in the admin on
-    purpose** — an editable derived field is a second source for one quantity. Re-derive with
-    `app:backfill-scout-abilities --force`.
+    derives it on `prePersist` **and `preUpdate`** so no creation path can forget it and no edit can
+    leave it stale. **Read-only in the admin on purpose** — an editable derived field is a second
+    source for one quantity, and the `preUpdate` hook makes that read-only intent ENFORCED rather
+    than merely presented: an `ability` written by any route is corrected on flush. Changing
+    `experience` or `judgements` re-derives automatically; `app:backfill-scout-abilities --force`
+    is now only for a FORMULA change or rows written by raw SQL.
 
   ⚠️ **`experience` is NOT ability, and three app sites used to assume it was** (corrected in
   the same change). It is career length: the shared market pool is config-bound to 4–34 on dev,
