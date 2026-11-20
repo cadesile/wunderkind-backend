@@ -1012,6 +1012,54 @@ filename alone.
   fix: scout experience 44-88 at tier 1, 15-35 at tier 4, 2-7 at tier 8. **"Staff" includes
   scouts** — see the owner ruling in `01_overview/output/tribal-knowledge.md`, which also
   records why a wrong ability becomes a wrong wage in the app.
+
+  ⚠️ **It writes FIVE judgement keys, and that settles an apparent repo conflict.** `build()`
+  rolls `potential`/`technical`/`physical`/`mental`/`personality` from
+  `PoolConfig::$scoutJudgementMin/Max`, and it is the **only** path that has ever written a
+  persisted `Scout` — so all 5,278 rows on dev carry exactly those five.
+  `GenerateMarketDataCommand::buildScoutJudgements()` writes **seven** (adding `youth`/`senior`)
+  and does not write this table; that is where the app's seven-key `ScoutJudgements` type came
+  from. Both repos were right about different populations. **Anything averaging judgements must
+  average over the keys present** — a fixed `/7` under-rates every real scout by ~29%.
+
+  ⚠️ **AND NOTE WHAT IS NOT BANDED: judgements are rolled from the FLAT GLOBAL range whatever
+  the club's tier.** Only `$experience` takes `$abilityRange`. That asymmetry is load-bearing —
+  it is the reason `ScoutAbilityCalculator` weights experience at 70%, since every point given
+  to judgements is a point taken away from the tier separation this banding exists to create.
+
+- **`ScoutAbilityCalculator`** (2026-11-20) — a scout's single **1–100** `ability`, derived from
+  the `experience` and `judgements` already on the row:
+  `clamp(1, 100, round(0.7 × experience + 0.3 × mean(judgements)))`. Owner ruling — *"experience
+  doesn't match 1 to one"* — and the figure three app sites were already assuming existed (one
+  fed `scout.experience` into the staff wage band; two type comments called it "raw 0-100 ability
+  from backend"). A26 phase 1: the field only, **no wage wired** (that is A24).
+
+  **Deterministic, monotonic in both inputs, clamped 1–100, never 0.** Generation
+  (`ScoutGenerationService`, `GenerateMarketDataCommand`), the `Version20261120100000` backfill
+  and `app:backfill-scout-abilities` all call this one method, so a backfilled scout and an
+  identical freshly generated one never disagree — the same contract `ScoutWageCalculator`
+  records for `weeklySalary`.
+
+  **The 70/30 split is an owner decision (2026-11-20), not a tuning default** — see the banding
+  note above. Measured on EN club scouts, tier 1 vs tier 8: 0.3/0.7 gives a 18-point spread,
+  0.5/0.5 gives 30, **0.7/0.3 gives 42**, which tracks the tier ladder the rest of the economy
+  is built on. Consequence accepted for this phase: the shared pool's experience window (4–34 on
+  dev) caps a **pool** scout at ~48, so the top of the scale belongs to tier-1 club scouts.
+  Widening it is a `PoolConfig` change, not a formula one.
+
+  ⚠️ **It uses exact integer arithmetic, deliberately.** See
+  `03_data/output/migrations.md` — a float blend disagreed with the migration's `NUMERIC` SQL on
+  6 of 5,278 dev scouts, all exact-.5 cases.
+
+- **`ScoutAbilityLifecycleSubscriber`** (2026-11-20) — derives `ability` on `prePersist` for any
+  `Scout`, so no creation path can land the column's floor of 1. Same role and reasoning as
+  `PersonalityLifecycleSubscriber` ("centralises generation across every creation path ... so no
+  construction site can forget it"); the path it actually catches is the **admin create form**,
+  which cannot set `ability` by design. **Unconditional, which is safe because the formula is
+  deterministic** — re-deriving a scout `ScoutGenerationService` just derived gives the identical
+  figure, so unlike the personality subscriber there is no authored value to protect.
+  **prePersist only: an admin EDIT does not re-derive** (nor does it for `weeklySalary`);
+  `app:backfill-scout-abilities --force` is the documented path.
 - **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
   `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
   Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,

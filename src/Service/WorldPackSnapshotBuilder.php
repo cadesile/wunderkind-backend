@@ -276,6 +276,18 @@ class WorldPackSnapshotBuilder
             'nationality' => $scout->getNationality() ?? '',
             'countryCode' => $scout->getNationality() !== null ? Country::fromNationality($scout->getNationality())?->value : null,
             'experience'  => $scout->getExperience(),
+            // ADDITIVE, 2026-11-20, AND THIS KEY IS WHY WORLD_PACK_VERSION WENT 11 → 12.
+            //
+            // It is census, not money, so the pack-is-a-census rule permits it: `ability` is what
+            // a scout IS, exactly like the abilities this snapshot already carries for players and
+            // staff, and v9 and v10 were both ability-content bumps of the same kind. The
+            // `weeklySalary` omission documented below is NOT a precedent against it — a salary is
+            // money and resolves on the device; an ability cannot be resolved from config because
+            // it is per-row data. Derived and stored on the backend rather than computed on device
+            // precisely so there is one source for it.
+            'ability'     => $scout->getAbility(),
+            // STILL DERIVED FROM `experience`, DELIBERATELY — re-pointing this key at `ability`
+            // would be a changed value under an unchanged key, i.e. a break. See MarketDataService.
             'tier'        => Tier::fromScore($scout->getExperience())->value,
             'judgements'  => $scout->getJudgements(),
             'appearance'  => $scout->getAppearance(),

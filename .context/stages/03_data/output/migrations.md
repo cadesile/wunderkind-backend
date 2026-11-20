@@ -1111,3 +1111,59 @@ cached payload whole, so nothing about the pack shape moved here.
 
 ⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand
 AND its value seeded into the pre-existing row — see `01_overview/output/environment.md`.
+
+## `Version20261120100000` — `scout.ability` (2026-11-20)
+
+Adds `scout.ability` (int, unsigned, NOT NULL) — the scout's single **1–100** figure — and
+derives it for **every existing row** from that row's own `experience` + `judgements`. Owner
+ruling: *"add 'ability' value, 1-100, have it driven off experience and judgements, to set a
+single figure, then we'll base wage on that."* A26 phase 1; the wage half is A24 and is NOT wired
+here. Canonical formula: `ScoutAbilityCalculator`.
+
+🔴 **THE BACKFILL IS IN THE MIGRATION, NOT BEHIND IT — a deliberate departure from
+`scout.weekly_salary`'s pattern.** That column (2026-11-05) landed `DEFAULT 0` with
+`app:backfill-scout-wages` behind it, and its own migration called the default "the only safe
+default for a migration but also a lie". For `ability` a zero is worse than a lie: it is **not a
+legal value** (the clamp floor is 1) and **A24 will price a wage off this column**, so any window
+in which every scout read 0 would price the whole world at the bottom of the band. Every row is
+derived in one `UPDATE` inside `up()`, so the column is never in a state anything could misread.
+`app:backfill-scout-abilities` still exists — for re-derivation after a formula or config change
+(`--force`) and for rows a later raw-SQL import leaves at the floor — but on a database that has
+run this migration it is a **no-op, and that is the expected result.**
+
+⚠️ **`up()` RATHER THAN `postUp()`, departing from `api-backwards-compatibility.md`'s checklist
+point 5.** Postgres has transactional DDL, so `ADD COLUMN ... DEFAULT 1` → `UPDATE` → `DROP
+DEFAULT` commits as one unit and is strictly *more* atomic than a `postUp()` pass, which would
+leave a brief window at the floor. `postUp()` is the right shape when the DDL must commit before
+the DML can see it; it does not here.
+
+🔴 **THE SQL IS A FROZEN TRANSCRIPTION OF THE FORMULA, NOT A SECOND HOME FOR IT.** A migration is
+a historical record and must not be edited once applied, so if the weighting is ever retuned this
+statement stays as it is and `--force` re-derives the world. **Do not "fix" this SQL to match a
+later formula.**
+
+⚠️ **PHP AND THIS SQL DID DISAGREE, AND THE FIX IS WORTH KNOWING.** `0.7` and `0.3` are not
+representable in binary floating point, so PHP's `0.7 * e + 0.3 * m` lands just under on inputs
+whose true result is exactly *k*.5, while Postgres `NUMERIC` is exact decimal — **6 of the 5,278
+dev scouts rounded differently** (experience 33 against a judgement mean of 38 is exactly 34.5:
+SQL gave 35, PHP gave 34). Six rows is small; the defect is the workstream's governing one in
+miniature, so it was removed rather than tolerated. `ScoutAbilityCalculator` now multiplies
+through by the weights' denominator — `round((7·e·n + 3·Σj) / 10n)` — and divides **once**, which
+IEEE correctly-rounds, so a true *k*.5 arrives as exactly *k*.5 and both sides round half away
+from zero. Pinned by
+`ScoutAbilityCalculatorTest::testRoundsExactHalvesTheSameWayTheMigrationSqlDoes()`;
+`app:backfill-scout-abilities --force --dry-run` reporting **0 of 5,278** is the end-to-end check.
+
+The judgement mean is taken over `jsonb_each_text`, i.e. **over the keys the row actually has** —
+persisted scouts carry 5, `GenerateMarketDataCommand` writes 7, and a fixed divisor would
+under-rate every real scout by ~29%. A row with no numeric judgements falls back to experience
+alone, never to a fabricated 0 for that half of the blend.
+
+⚠️ **Paired with `WORLD_PACK_VERSION` 11 → 12** in the same commit, because `buildScoutSnapshot()`
+publishes the figure into cached packs. **This does not break v11's "last bump money will ever
+cause" rule** — `ability` is census, not money, the same class of content as the player and staff
+abilities the pack already carries, and v9 and v10 were both bumps of exactly this kind.
+
+⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand —
+added nullable, backfilled with the same arithmetic, then set `NOT NULL`. Without it 20 tests
+error on `column "ability" does not exist`. See `01_overview/output/environment.md`.

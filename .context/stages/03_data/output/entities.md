@@ -541,8 +541,39 @@ migrations are the change log (see `migrations.md`).
   `experience`, `rating:int(50)`, `appearance:?array`. `OneToMany` →
   `players:Collection<Player>`.
 - **`Scout`** — a club's scout. `name`, `dob`, `nationality`,
-  `judgements:array`, `experience`, `appearance:?array`. Embeds
-  `personality:PersonalityProfile`.
+  `judgements:array`, `experience`, `ability`, `weeklySalary`,
+  `appearance:?array`. Embeds `personality:PersonalityProfile`.
+
+  **Two DERIVED columns, both computed from stored data and neither rolled** — so a backfilled
+  scout and an identical freshly generated one always agree:
+
+  - **`weeklySalary`** (int, unsigned, default 0) — pence/week, from `experience` via
+    `ScoutWageCalculator`. Added 2026-11-05.
+  - **`ability`** (int, unsigned, default 1) — the scout's single **1–100** figure, from
+    `experience` + `judgements` via `ScoutAbilityCalculator`:
+    `clamp(1, 100, round(0.7 × experience + 0.3 × mean(judgements)))`. Added 2026-11-20
+    (`Version20261120100000`) on an owner ruling that `experience` *"doesn't match 1 to one"*
+    with how good a scout is. **The 70/30 weighting is an owner decision, not a tuning
+    default** — experience is tier-banded and judgements are not, so a judgement-heavy blend
+    collapses tier separation. **Never 0:** the floor is 1, the migration derived every
+    existing row rather than landing a lying default, and `ScoutAbilityLifecycleSubscriber`
+    derives it on `prePersist` so no creation path can forget it. **Read-only in the admin on
+    purpose** — an editable derived field is a second source for one quantity. Re-derive with
+    `app:backfill-scout-abilities --force`.
+
+  ⚠️ **`experience` is NOT ability, and three app sites used to assume it was** (corrected in
+  the same change). It is career length: the shared market pool is config-bound to 4–34 on dev,
+  while club scouts draw it from the club's `league_ability_ranges` band (2–95).
+
+  ⚠️ **`judgements` has TWO key sets and the five-key one is the only one in this table.**
+  `ScoutGenerationService::build()` writes `potential`/`technical`/`physical`/`mental`/
+  `personality` and is the only path that has ever written a persisted scout — all 5,278 rows
+  on dev carry exactly those five. `GenerateMarketDataCommand::buildScoutJudgements()` writes
+  seven, adding `youth`/`senior`, for a population that is not in this table; that is where
+  the app's seven-key `ScoutJudgements` type came from. **Anything averaging these must average
+  over the keys present** — a fixed `/7` divisor under-rates every real scout by ~29%, and the
+  result still looks plausible. `PoolConfig.php`'s "5 scout judgement categories" comment is
+  therefore correct for this table, and the two repos were never actually in conflict.
 - **`Staff`** — coaching/other staff. `firstName/lastName`,
   `role:StaffRole(enum)`, `coachingAbility/scoutingRange:int(50)`,
   `weeklySalary`, `morale:int(50)`, `nationality`, `specialty`,

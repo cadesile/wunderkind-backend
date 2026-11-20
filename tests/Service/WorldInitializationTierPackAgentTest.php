@@ -224,8 +224,12 @@ class WorldInitializationTierPackAgentTest extends KernelTestCase
 
             $this->assertArrayHasKey('scouts', $clubSnap);
             $this->assertCount(2, $clubSnap['scouts']);
+            // `ability` added 2026-11-20 (A26), between `experience` and `tier` — the scout's
+            // single 1-100 figure, derived on the backend from experience + judgements. It is
+            // census rather than money, so it is allowed in the pack, and it is what took
+            // WORLD_PACK_VERSION to 12. Still no `weeklySalary`: that one is money and stays out.
             $this->assertSame(
-                ['id', 'name', 'dateOfBirth', 'nationality', 'countryCode', 'experience', 'tier', 'judgements', 'appearance', 'personality'],
+                ['id', 'name', 'dateOfBirth', 'nationality', 'countryCode', 'experience', 'ability', 'tier', 'judgements', 'appearance', 'personality'],
                 array_keys($clubSnap['scouts'][0]),
             );
         } finally {

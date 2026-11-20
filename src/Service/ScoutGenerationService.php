@@ -21,6 +21,7 @@ class ScoutGenerationService
         private readonly NameGeneratorService $nameGenerator,
         private readonly PersonalityLifecycleSubscriber $personalityLifecycle,
         private readonly ScoutWageCalculator $wageCalculator,
+        private readonly ScoutAbilityCalculator $abilityCalculator,
     ) {}
 
     /**
@@ -69,13 +70,30 @@ class ScoutGenerationService
         // Derived from the experience just rolled, not rolled separately — see
         // ScoutWageCalculator for why generation and the backfill must agree.
         $scout->setWeeklySalary($this->wageCalculator->weeklyWageFor($experience, $cfg));
-        $scout->setJudgements([
+        // FIVE KEYS, AND THIS IS THE AUTHORITATIVE SET. Every persisted Scout in the world comes
+        // through here — the shared pool via `MarketPoolService::generateScouts()` and club
+        // scouts via `WorldPackClubGenerationService::generateScouts()` — so these five are what
+        // `judgements` means in the database. `GenerateMarketDataCommand` has its own 7-key
+        // builder (adding `youth` and `senior`), which is where the app's 7-key
+        // `ScoutJudgements` type came from; it does not write this table. Anything averaging
+        // these must average over the keys PRESENT, never a fixed divisor.
+        //
+        // ⚠️ NOTE WHAT IS *NOT* BANDED HERE: unlike `$experience` above, judgements are rolled
+        // from the flat global `scoutJudgementMin/Max` whatever the club's tier. That asymmetry
+        // is exactly why `ScoutAbilityCalculator` weights experience at 70% — see its docblock.
+        $judgements = [
             'potential'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'technical'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'physical'    => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'mental'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'personality' => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-        ]);
+        ];
+
+        $scout->setJudgements($judgements);
+
+        // Derived from the experience and judgements just rolled, not rolled separately — see
+        // ScoutAbilityCalculator for why generation and the backfill must agree.
+        $scout->setAbility($this->abilityCalculator->abilityFor($experience, $judgements));
 
         // prePersist won't fire for an entity that's never persisted — roll personality now.
         $this->personalityLifecycle->fill($scout);

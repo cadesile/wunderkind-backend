@@ -5,6 +5,38 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A26 phase 1: scouts get a real `ability`, 1-100 (2026-11-20)**, on `development`.
+  **Stages touched:** 01_overview (`environment.md`), 03_data (`entities.md`, `migrations.md`),
+  04_interfaces (`services.md`), shared (this file). Report:
+  `wunderkind-docs/economy-loose-ends/a26-scout-ability-report.md`.
+
+  **The ruling.** Owner, 2026-11-20: *"add 'ability' value, 1-100, have it driven off experience
+  and judgements, to set a single figure, then we'll base wage on that"* - because *"experience
+  doesn't match 1 to one"*. Phase 1 is **the field only**; basing the wage on it is A24 and is
+  blocked behind part B's budget move, so nothing monetary is wired here and no salary moves.
+
+  **What landed.** `Scout::$ability` (int, unsigned, NOT NULL, 1-100) + `ScoutAbilityCalculator`
+  (`clamp(1, 100, round(0.7 x experience + 0.3 x mean(judgements)))`), set at both generation
+  paths, derived on `prePersist` by `ScoutAbilityLifecycleSubscriber` so no creation path can
+  forget it, published on `GET /api/market/data` and in `buildScoutSnapshot()`, exposed
+  READ-ONLY in the admin, and backfilled for all 5,278 dev scouts inside
+  `Version20261120100000` itself rather than behind it. `WORLD_PACK_VERSION` 11 -> 12.
+
+  **The 70/30 weighting is an owner decision, and the reason is BANDING.** `experience` is
+  tier-banded; `judgements` are not (flat global `scoutJudgementMin/Max` at every tier). So
+  weight given to judgements is weight taken from tier separation - which would re-open the
+  £2,230/wk tier-8 scout that banding was added to fix, and A24 prices wage off this figure.
+
+  ⚠️ **The 5-vs-7 judgement disagreement was real in code, and both repos were right.**
+  `ScoutGenerationService` writes 5 keys and is the only path that has ever written a persisted
+  scout (all 5,278 dev rows); `GenerateMarketDataCommand` writes 7 for a population not in the
+  table. The mean is taken over keys PRESENT - a fixed /7 would under-rate every real scout by
+  ~29%.
+
+  ⚠️ **PHP and the migration's SQL disagreed on 6 of 5,278 rows** (exact-.5 rounding: binary
+  floats vs `NUMERIC`). Fixed by exact integer arithmetic in the calculator, not by tolerating
+  it - see `03_data/output/migrations.md`.
+
 - **A16: the two `game_config` polluters now own the row for their duration (2026-11-19)**,
   committed on `development` directly on top of `8298cc60`. **Stages touched:** 01_overview
   (`environment.md`), shared (this file). Report and verbatim evidence:

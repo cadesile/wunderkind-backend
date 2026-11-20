@@ -114,11 +114,23 @@ class ScoutCrudController extends AbstractCrudController
     }
 
     /**
-     * Scout, experience, weekly wage.
+     * Scout, experience, ability, weekly wage.
      *
      * Experience is a plain figure rather than a meter: it runs roughly 4–34,
      * not 0–100, so a bar would read as "everyone is terrible" when it is
-     * really just a different scale.
+     * really just a different scale. **`ability` is the genuinely 0–100 one** —
+     * added 2026-11-20 because experience "doesn't match 1 to one" (owner) —
+     * and the two sit side by side here precisely so the difference is visible
+     * to whoever is looking at the pool.
+     *
+     * ⚠️ **`ability` IS READ-ONLY ON EVERY PAGE, INCLUDING NEW AND EDIT, AND
+     * THAT IS A DECISION RATHER THAN AN OVERSIGHT.** It is derived from
+     * `experience` + `judgements` by `ScoutAbilityCalculator`. An admin who
+     * could type over it would create a second source for one quantity with
+     * nothing in the schema saying whether the typed value or the formula wins
+     * — the governing defect the economy workstream exists to remove. To move a
+     * scout's ability, move its experience or judgements and re-derive with
+     * `app:backfill-scout-abilities --force`.
      */
     private function indexFields(): iterable
     {
@@ -135,6 +147,11 @@ class ScoutCrudController extends AbstractCrudController
         yield IntegerField::new('experience', 'Experience')
             ->setTemplatePath('admin/field/bmc_cell.html.twig')
             ->formatValue(fn ($v, Scout $s) => ['text' => (string) $s->getExperience()]);
+
+        // Derived, never typed — see the method docblock.
+        yield IntegerField::new('ability', 'Ability')
+            ->setTemplatePath('admin/field/bmc_cell.html.twig')
+            ->formatValue(fn ($v, Scout $s) => ['text' => (string) $s->getAbility()]);
 
         yield IntegerField::new('weeklySalary', 'Wage/wk')
             ->setTemplatePath('admin/field/bmc_cell.html.twig')
@@ -155,6 +172,22 @@ class ScoutCrudController extends AbstractCrudController
         yield DateField::new('dob')->setLabel('Date of Birth');
         yield TextField::new('nationality');
         yield IntegerField::new('experience');
+
+        // READ-ONLY, DELIBERATELY — `setFormTypeOption('disabled', true)` means the input is
+        // rendered but Symfony ignores any submitted value, so a hand-crafted POST cannot set it
+        // either. An editable derived field would be a second source for one quantity; see
+        // indexFields()' docblock and ScoutAbilityCalculator.
+        yield IntegerField::new('ability', 'Ability')
+            ->setFormTypeOption('disabled', true)
+            ->setHelp(
+                'Derived 1–100 figure, 0.7 × experience + 0.3 × mean(judgements), by '
+                . 'ScoutAbilityCalculator — NOT editable, because a value typed over a derived '
+                . 'one leaves nothing saying which is authoritative. To change it, change '
+                . 'experience or judgements and run `app:backfill-scout-abilities --force`. '
+                . 'New scouts are derived on persist by ScoutAbilityLifecycleSubscriber; an edit '
+                . 'here does not re-derive.',
+            );
+
         yield IntegerField::new('weeklySalary', 'Weekly Wage')
             ->formatValue(fn ($v) => $v !== null ? '£' . number_format((int) $v / 100, 2) : '—')
             ->setHelp(

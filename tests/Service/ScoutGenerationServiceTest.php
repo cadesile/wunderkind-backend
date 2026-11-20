@@ -12,6 +12,7 @@ use App\Service\NameGeneratorService;
 use App\Service\Personality\PersonalityGeneratorService;
 use App\Service\ScoutGenerationService;
 use App\Service\ScoutWageCalculator;
+use App\Service\ScoutAbilityCalculator;
 use PHPUnit\Framework\TestCase;
 
 class ScoutGenerationServiceTest extends TestCase
@@ -36,6 +37,7 @@ class ScoutGenerationServiceTest extends TestCase
             $nameGen,
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
             new ScoutWageCalculator($poolRepo),
+            new ScoutAbilityCalculator(),
         );
     }
 
@@ -63,6 +65,7 @@ class ScoutGenerationServiceTest extends TestCase
             $nameGen,
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
             new ScoutWageCalculator($poolRepo),
+            new ScoutAbilityCalculator(),
         );
 
         $scout = $service->build('Brazilian');
@@ -104,6 +107,57 @@ class ScoutGenerationServiceTest extends TestCase
 
         $this->assertSame(5, $scout->getExperience());
         $this->assertSame($calculator->weeklyWageFor(5, $config), $scout->getWeeklySalary());
+    }
+
+    /**
+     * `ability` must be WIRED, not merely present — the calculator has its own tests, and this
+     * asserts generation actually calls it rather than leaving the column's floor of 1.
+     */
+    public function testAbilityIsDerivedFromTheRolledExperienceAndJudgements(): void
+    {
+        $config  = new PoolConfig();
+        $service = $this->makeService($config);
+
+        $scout = $service->build('English', ['min' => 60, 'max' => 60]);
+
+        $this->assertSame(
+            (new ScoutAbilityCalculator())->abilityFor(60, $scout->getJudgements()),
+            $scout->getAbility(),
+            'generation must store exactly what the calculator derives for this scout',
+        );
+    }
+
+    /**
+     * ⚠️ A26's load-bearing invariant: a zero ability would price a scout at the very bottom of
+     * the wage band A24 will build, and the column's unbackfilled floor of 1 is indistinguishable
+     * from a derived 1. With the default `scoutJudgementMin` of 40 and any experience, the blend
+     * cannot land that low, so a 1 here means the derivation did not run.
+     */
+    public function testAGeneratedScoutIsNeverLeftAtTheAbilityFloor(): void
+    {
+        $service = $this->makeService();
+
+        for ($i = 0; $i < 25; $i++) {
+            $ability = $service->build('English', ['min' => 20, 'max' => 34])->getAbility();
+
+            $this->assertGreaterThan(1, $ability, 'a generated scout must carry a derived ability');
+            $this->assertLessThanOrEqual(100, $ability);
+        }
+    }
+
+    /**
+     * The five keys this service writes ARE the authoritative set — see its own comment. Pinned
+     * because `GenerateMarketDataCommand` writes seven for a different population, and anything
+     * averaging judgements over a fixed divisor would silently under-rate every real scout.
+     */
+    public function testJudgementsAreTheFiveAuthoritativeKeys(): void
+    {
+        $judgements = $this->makeService()->build('English')->getJudgements();
+
+        $this->assertSame(
+            ['potential', 'technical', 'physical', 'mental', 'personality'],
+            array_keys($judgements),
+        );
     }
 
     /** A transposed band is a real state of a hand-edited admin grid, and must not throw. */

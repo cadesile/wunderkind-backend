@@ -196,8 +196,32 @@ class WorldInitializationService
      *     because a wage, balance, payout or price moved, the answer is that nothing needs
      *     bumping — and if a pack turns out to still carry that figure,
      *     `WorldPackCarriesNoMoneyTest` is the thing that should have caught it.
+     *
+     *   - **12 (2026-11-20)** — `scouts[].ability`, a new CENSUS key on the scout block.
+     *     `buildScoutSnapshot()` gains the scout's single 1-100 ability, derived on the backend
+     *     from `experience` + `judgements` by `ScoutAbilityCalculator` and stored on
+     *     `scout.ability`.
+     *
+     *     ⚠️ **THIS IS NOT THE RULE ABOVE BEING BROKEN ONE COMMIT LATER, AND THE DISTINCTION IS
+     *     THE WHOLE POINT OF v11.** v11 says money will never cause another bump. `ability` is
+     *     not money — it is what a scout IS, the same class of content as the player and staff
+     *     abilities the pack has always carried, and v9 (scout experience banded) and v10
+     *     (ability/facility content) were both bumps of exactly this kind. The census rule bans
+     *     amounts from the pack; it does not freeze the census.
+     *
+     *     Why it is in the pack at all, rather than derived on device: `experience` and
+     *     `judgements` are both already here, so the app COULD compute it and no payload would
+     *     change — and that is precisely what makes it dangerous. It would be a second source
+     *     for one quantity with nothing saying which is authoritative, the governing defect the
+     *     economy workstream exists to remove. Money resolves on device because the device holds
+     *     the config that prices it; an ability cannot, because it is per-row data, not a dial.
+     *     So the backend owns it and the app reads it.
+     *
+     *     Nothing else moves on this bump: no existing key changes shape, type or meaning.
+     *     `scouts[].tier` stays derived from `experience` deliberately — re-pointing it at
+     *     `ability` would be a changed value under an unchanged key, i.e. a break.
      */
-    public const WORLD_PACK_VERSION = 11;
+    public const WORLD_PACK_VERSION = 12;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
