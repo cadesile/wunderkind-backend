@@ -2092,3 +2092,19 @@ headcount — live starter counts are 20 players against **13 staff** (`starterC
 A25 is a necessary part of fixing that screen and not a sufficient one. §12 of the report has the
 full table and a stated prediction to check against: on a pack rebuilt at v14, a tier-4 Scottish
 club's staff wages should go **UP** by roughly a tenth.
+
+## 2026-11-20 — Country scaling: TV, prize, position pot, parachute and youth scholarship now scale by country (backend `development`)
+
+Owner ruling: *"everything should scale. TV, prize, position and parachute."* The authored ladder is
+untouched (one country-blind figure per tier); `countryFactorBp` is applied where each figure is
+RESOLVED. England (factor 10000) is byte-identical across all 8 tiers; Scotland is exactly 1/10.
+`LeagueSizeResolver::tvPoolPenceFor/tvDealFor`, `LeaguePayoutResolver::parachuteFor` and an
+explicit prize/pot override is now a baseline-country figure (`scaleExplicit`);
+`WageModelResolver::youthScholarshipPenceUnder` scales its anchor and floor. Transfer fees already
+scale (derived from the served wage). Gate check 6 in `app:economy:wage-table` is REVERSED: it now
+reports a pool pre-scaled by hand (which would scale twice). Facilities/upkeep deliberately NOT
+scaled (owner), so Scottish solvency reads WORSE: variant gate PASS -> FAIL at all four SC tiers —
+expected, not a regression. Full suite run DEFERRED (machine loaded by orphaned processes); targeted
+suites green. Report: `docs/economy-loose-ends/country-scaling-report.md`.
+**For the PM:** `stages/04_interfaces/output/services.md` and `docs/api/economy-config.md`'s parachute
+paragraph ("serves verbatim") — the latter I amended; the former not checked.

@@ -454,7 +454,7 @@ class EconomyAdminController extends AbstractController
             $league = $this->leagueRepository->findByCountryAndTier($country, $tier);
             $mid    = (int) round(($band['min'] + $band['max']) / 2);
 
-            $perClubTv = $league?->getTvDeal();
+            $perClubTv = $league !== null ? $this->leagueSizeResolver->tvDealFor($league) : null;
             $tvShare   = ($perClubTv !== null && $scale->turnoverPence > 0)
                 ? $perClubTv * 100 / $scale->turnoverPence
                 : null;
@@ -687,7 +687,7 @@ class EconomyAdminController extends AbstractController
 
             // The division's whole payout: the TV pool as authored, every placing's share of
             // the pot, and the champion's prize once.
-            $tvPool        = $league?->getTvPoolPence() ?? 0;
+            $tvPool        = $league !== null ? ($this->leagueSizeResolver->tvPoolPenceFor($league) ?? 0) : 0;
             $positionTotal = $pot !== null ? intdiv($pot * $taperSumPpm, 1000000) : 0;
             $leagueTotal   = $tvPool + $positionTotal + ($prize ?? 0);
             $leagueTurnover = ($turnover[$tier - 1] ?? 0) * $clubs;

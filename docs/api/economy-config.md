@@ -371,9 +371,14 @@ every shipped build as a side effect of an unrelated admin action.
 `parachute` is published on the same three uncached league payloads as the TV pool, resolved
 **`league ?? gameConfig`** — whole-value, not merged key by key.
 
-**The backend serves this block verbatim and does not read inside it.** It stores it, decides
-which of the two applies, and publishes it. There is no schema, no validation, and no
-normalisation beyond `[]` becoming `null`.
+**The backend serves this block nearly verbatim and reads inside it in exactly ONE place.** It
+stores it, decides which of the two applies, and publishes it. There is no schema, no validation,
+and no normalisation beyond `[]` becoming `null`. **The one exception (owner ruling 2026-11-20,
+*"everything should scale"*): each integer in `perSeasonPence` is multiplied by the league's
+country factor** (`LeaguePayoutResolver::parachuteFor`). The authored schedule is therefore a
+BASELINE-country (England) schedule, authored once; England's factor is exactly 10000 so an
+England club is paid precisely what is authored. Every other key — `seasons` and anything you
+add — still passes through untouched.
 
 That is a deliberate decision, not a gap. The backend cannot pay a club anything — there is no
 income loop, the device runs the economy — so any structure imposed here would be a second

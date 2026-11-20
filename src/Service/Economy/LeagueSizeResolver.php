@@ -88,6 +88,11 @@ final class LeagueSizeResolver
     public function __construct(
         private readonly NpcClubRepository $npcClubRepository,
         private readonly LeagueRepository  $leagueRepository,
+        /**
+         * Optional ONLY so the many fixtures that build this class with two arguments keep
+         * compiling; the container always supplies it. Null means parity (10000bp).
+         */
+        private readonly ?EconomyScaleResolver $scaleResolver = null,
     ) {}
 
     /** @var array<string, array<string, int>> country => (league id => npc count) */
@@ -146,7 +151,10 @@ final class LeagueSizeResolver
      */
     public function derivedTvDealPence(League $league): ?int
     {
-        $pool = $league->getTvPoolPence();
+        // THE SCALED POOL, NOT THE AUTHORED ONE. The authored pool is one country-blind figure
+        // per tier (the admin's TIER DEFAULTS screen); the country factor is applied here, at
+        // resolution, so every publish site that goes through this method scales together.
+        $pool = $this->tvPoolPenceFor($league);
         if ($pool === null) {
             return null;
         }
@@ -154,6 +162,62 @@ final class LeagueSizeResolver
         $size = $this->sizeOf($league);
 
         return $size > 0 ? intdiv($pool, $size) : null;
+    }
+
+    /**
+     * The per-club TV figure a device should be given: the derived share when a pool is authored,
+     * else the league's directly-authored per-club `tvDeal` scaled for its country, else null.
+     *
+     * The directly-authored branch is the pre-pool legacy shape (no live league uses it — all 196
+     * carry a pool) and is scaled too, so no path leaves a TV figure country-blind. When a pool
+     * IS authored but the table is empty (mid-bootstrap, `sizeOf` = 0) the stored `tv_deal`
+     * column is the cache `syncTvDeal()` wrote from the already-scaled derivation, so it is
+     * returned as it stands rather than scaled a second time.
+     */
+    public function tvDealFor(League $league): ?int
+    {
+        $derived = $this->derivedTvDealPence($league);
+        if ($derived !== null) {
+            return $derived;
+        }
+
+        $stored = $league->getTvDeal();
+        if ($stored === null || $league->getTvPoolPence() !== null || $this->scaleResolver === null) {
+            return $stored;
+        }
+
+        return intdiv($stored * $this->scaleResolver->countryFactorBp($league->getCountry()), 10_000);
+    }
+
+    /**
+     * The league's whole TV pool for ITS country, in pence — the authored pool times the country
+     * factor. Null when no pool is authored.
+     *
+     * OWNER RULING 2026-11-20: *"everything should scale. TV, prize, position and parachute."*
+     * The authored `tvPoolPence` is a baseline-country figure; England is the baseline, whose
+     * factor is exactly 10000, so an England pool is returned bit-for-bit. ONE `intdiv`, on the
+     * exact product (a pool is at most ~1e11 pence and the factor at most ~1e5, far inside
+     * int64), so the figure never loses a penny per step.
+     *
+     * ⚠️ Publish THIS, never `getTvPoolPence()`, wherever a device or a preview reads the pool:
+     * the invariant `pool ÷ clubs == tvDeal` holds only if both sides are the same figure. The
+     * admin editor and the league export keep the RAW pool deliberately — they are the
+     * authoring surface and must round-trip.
+     */
+    public function tvPoolPenceFor(League $league): ?int
+    {
+        $pool = $league->getTvPoolPence();
+        if ($pool === null) {
+            return null;
+        }
+
+        if ($this->scaleResolver === null) {
+            return $pool;
+        }
+
+        $factorBp = $this->scaleResolver->countryFactorBp($league->getCountry());
+
+        return intdiv($pool * $factorBp, 10_000);
     }
 
     /**

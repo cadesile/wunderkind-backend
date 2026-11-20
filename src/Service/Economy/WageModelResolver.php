@@ -411,7 +411,16 @@ final class WageModelResolver
 
         $capBp   = $config->getEconomyYouthScholarshipCapBp();
         $ceiling = $capBp > 0 ? max(1, intdiv($average * $capBp, self::BP)) : null;
-        $anchor  = $config->getEconomyYouthScholarshipTier1Pence();
+        // THE AUTHORED ANCHOR AND FLOOR ARE BASELINE-COUNTRY PENCE, so the country factor is applied
+        // to them here. Without it the figure was country-blind BY CONSTRUCTION: below, the tier's
+        // share is `anchor x avg(tier) / avg(tier 1)`, and a country factor cancels in that ratio,
+        // so Scotland's tier-1 scholar cost exactly England's (measured live 2026-11-20: 150000 at
+        // both). Owner ruling 2026-11-20: everything scales. England's factor is 10000: a no-op.
+        $factorBp = $this->scaleResolver->countryFactorBp($country);
+        $baseAnchor = $config->getEconomyYouthScholarshipTier1Pence();
+        // An authored anchor never scales to "unauthored" (0 means no anchor below).
+        $anchor   = $baseAnchor > 0 ? max(1, intdiv($baseAnchor * $factorBp, self::BP)) : 0;
+        $floor    = intdiv($config->getEconomyYouthScholarshipFloorPence() * $factorBp, self::BP);
 
         // ── The flat figure plus its cap: the behaviour when no anchor is authored ──────────
         if ($anchor <= 0) {
@@ -438,7 +447,7 @@ final class WageModelResolver
         // invariant, so the cap is applied last and always wins. A floor authored above a
         // tier's cap is therefore clamped down to it rather than breaking the one promise this
         // whole mechanism exists to make.
-        $value = max($config->getEconomyYouthScholarshipFloorPence(), $scaled);
+        $value = max($floor, $scaled);
 
         if ($ceiling !== null) {
             $value = min($value, $ceiling);

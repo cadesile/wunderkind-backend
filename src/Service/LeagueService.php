@@ -313,8 +313,7 @@ class LeagueService
                 // `SyncService::buildLeagueSnapshot()` for the full reasoning: a pooled league's
                 // `tvDeal` column is only ever written by an admin save, so publishing it raw
                 // sent NULL and the app paid £0 of TV. Inert where there is no pool.
-                'tvDeal'                        => $this->leagueSizeResolver->derivedTvDealPence($league)
-                    ?? $league->getTvDeal(),
+                'tvDeal'                        => $this->leagueSizeResolver->tvDealFor($league),
                 'sponsorPot'                    => $sponsorPot,
                 // RESOLVED, as the sync snapshot and the world pack now do — a null column
                 // inherits the authored tier-1 base x this tier's ratio x the country factor.
@@ -329,12 +328,12 @@ class LeagueService
                 // divided by, so a client can check the arithmetic rather than trusting it —
                 // and can pay NPC clubs their share, which the backend cannot do (no income
                 // loop here; the device runs the economy).
-                'tvPoolPence'                   => $league->getTvPoolPence(),
+                'tvPoolPence'                   => $this->leagueSizeResolver->tvPoolPenceFor($league),
                 'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
                 // RESOLVED WHOLE-VALUE, `league ?? gameConfig`. Not merged key by key — that
                 // would need the backend to understand the keys, which is exactly what a
                 // verbatim passthrough declines to do.
-                'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
+                'parachute'                     => $this->leaguePayoutResolver->parachuteFor($league, $gameConfig),
                 'clubs'                         => $clubs,
                 'fixtures'                      => $fixtures,
             ];

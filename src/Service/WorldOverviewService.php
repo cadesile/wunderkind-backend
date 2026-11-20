@@ -39,6 +39,7 @@ class WorldOverviewService
         private readonly CountryProfileRepository $countryProfileRepository,
         private readonly CacheInterface $cache,
         private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
+        private readonly \App\Service\Economy\LeagueSizeResolver $leagueSizeResolver,
     ) {}
 
     /** @return array<string, mixed> */
@@ -95,11 +96,11 @@ class WorldOverviewService
                     // RESOLVED through LeaguePayoutResolver, so an inherited tier reads as
                     // the figure it will actually pay rather than as an unauthored dash.
                     'prizeMoney'        => self::pence($this->leaguePayoutResolver->prizeFor($league)),
-                    'tvDeal'            => self::pence($league->getTvDeal()),
+                    'tvDeal'            => self::pence($this->leagueSizeResolver->tvDealFor($league)),
                     // The POOL as well as the per-club share, through the same pence-to-pounds
                     // helper — a tier showing a share with no pool is a tier nobody has
                     // authored a pool for yet, which is the state every league ships in.
-                    'tvPoolPence'       => self::pence($league->getTvPoolPence()),
+                    'tvPoolPence'       => self::pence($this->leagueSizeResolver->tvPoolPenceFor($league)),
                     'leaguePositionPot' => self::pence($this->leaguePayoutResolver->positionPotFor($league)),
                 ];
             }

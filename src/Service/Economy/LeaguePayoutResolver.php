@@ -43,8 +43,9 @@ use App\Repository\GameConfigRepository;
  *
  * ── RESOLUTION ORDER, AND WHY NULL IS THE INTERESTING CASE ────────────────────────────────
  *
- *  1. the league's own column when it is NOT NULL — an OVERRIDE, used verbatim, no ratio and
- *     no country factor, so a division authored by hand keeps exactly the figure it was given;
+ *  1. the league's own column when it is NOT NULL — an OVERRIDE, used with no ratio but, since
+ *     2026-11-20, WITH the country factor (owner: "everything should scale"). It is a
+ *     baseline-country figure; see `scaleExplicit()`;
  *  2. the tier-1 base (`GameConfig::$economyLeaguePrizeTier1Pence` /
  *     `$economyLeaguePositionPotTier1Pence`) x this tier's ratio x the country factor;
  *  3. null, meaning "unauthored" — which the publish sites already render as `—` rather than £0.
@@ -125,7 +126,7 @@ final class LeaguePayoutResolver
         $explicit = $league->getPrizeMoney();
 
         if ($explicit !== null) {
-            return $explicit;
+            return $this->scaleExplicit($explicit, $league->getCountry());
         }
 
         $config = $config ?? $this->gameConfigRepository->getConfig();
@@ -147,7 +148,7 @@ final class LeaguePayoutResolver
         $explicit = $league->getLeaguePositionPot();
 
         if ($explicit !== null) {
-            return $explicit;
+            return $this->scaleExplicit($explicit, $league->getCountry());
         }
 
         $config = $config ?? $this->gameConfigRepository->getConfig();
@@ -158,6 +159,64 @@ final class LeaguePayoutResolver
             $league->getTier(),
             $league->getCountry(),
         );
+    }
+
+    /**
+     * The parachute schedule this league pays, scaled for its country — or null when none applies.
+     *
+     * `league ?? gameConfig`, whole-value, exactly as every publish site resolved it before; the
+     * ONLY new behaviour is that the documented `perSeasonPence` list is multiplied by the country
+     * factor. Every other key passes through untouched, so the app-owned schema (docs/api/
+     * economy-config.md) is narrowed by one key rather than taken over. Entries that are not
+     * integers are left alone rather than coerced: a malformed block is the app's to notice.
+     *
+     * OWNER RULING 2026-11-20 (*"everything should scale. TV, prize, position and parachute"*).
+     * England's factor is exactly 10000, so an England schedule is returned unchanged.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function parachuteFor(League $league, ?GameConfig $config = null): ?array
+    {
+        $config = $config ?? $this->gameConfigRepository->getConfig();
+        $block  = $league->getParachute() ?? $config->getLeagueParachute();
+
+        if ($block === null || !isset($block['perSeasonPence']) || !is_array($block['perSeasonPence'])) {
+            return $block;
+        }
+
+        $factorBp = $league->getCountry() === '' ? self::BP : $this->scaleResolver->countryFactorBp($league->getCountry());
+
+        if ($factorBp === self::BP) {
+            return $block;
+        }
+
+        $block['perSeasonPence'] = array_map(
+            static fn (mixed $v): mixed => is_int($v) ? intdiv($v * $factorBp, self::BP) : $v,
+            $block['perSeasonPence'],
+        );
+
+        return $block;
+    }
+
+    /**
+     * An explicit per-league figure, scaled for the league's country.
+     *
+     * RETIRES "an override is used verbatim, no country factor" — see the class docblock's
+     * resolution order, now amended. Measured 2026-11-20 on the live export: all 196 leagues hold
+     * a non-null override that is a cascaded copy of the country-blind tier default, so "verbatim"
+     * was not protecting a single hand-authored division; it was defeating the factor for all of
+     * them. An explicit figure is now a BASELINE-country figure, like everything else authored
+     * once. Parity (England, or a country at 10000bp) is returned untouched.
+     */
+    private function scaleExplicit(int $pence, string $country): int
+    {
+        if ($country === '') {
+            return $pence;
+        }
+
+        $factorBp = $this->scaleResolver->countryFactorBp($country);
+
+        return $factorBp === self::BP ? $pence : intdiv($pence * $factorBp, self::BP);
     }
 
     /**
