@@ -220,8 +220,38 @@ class WorldInitializationService
      *     Nothing else moves on this bump: no existing key changes shape, type or meaning.
      *     `scouts[].tier` stays derived from `experience` deliberately — re-pointing it at
      *     `ability` would be a changed value under an unchanged key, i.e. a break.
+     *
+     *   - **13 (2026-11-20, A27)** — `scouts[].judgements` gains two keys, `youth` and `senior`.
+     *     Owner ruling, asked whether scouting accuracy should vary by the player's age:
+     *     **"Yes, it should."**
+     *
+     *     ⚠️ **THIS BUMP IS NOT OPTIONAL, AND IT IS NOT COSMETIC.** The app's `ageGateFor()`
+     *     has read `judgements.youth` / `judgements.senior` since it was written, and
+     *     `ScoutGenerationService::build()` has never written either — so it resolved to 0 for
+     *     every scout that has ever existed, making every scout's displayed accuracy 70% of its
+     *     designed value and leaving the real noise band permanently untightened. A pack cached
+     *     at v12 carries the five-key judgements and would keep that feature dead on any device
+     *     it reached, so the bump is what actually delivers the fix.
+     *
+     *     Census, not money, and the same kind of content as the v12 bump above: two more
+     *     per-scout accuracy ratings on the 0-100 scale the other five already use. No amount
+     *     enters the pack. The pack-is-a-census rule bans prices, not the census.
+     *
+     *     ⚠️ **`scouts[].ability` MOVES ON THIS BUMP, UNDER AN UNCHANGED KEY — and that is
+     *     sanctioned rather than a break.** `ScoutAbilityCalculator` averages judgements over the
+     *     keys PRESENT, so five keys to seven changes the judgement mean and therefore the
+     *     ability of every scout in the world. The figure's definition and type are unchanged;
+     *     its inputs grew. `Version20261120120000` writes the keys and re-derives the column in
+     *     one migration, and `app:backfill-scout-abilities --force` is run behind it, so no
+     *     cached pack and no stored row ever disagrees with the formula. Measured on dev: the
+     *     ability distribution over 5,278 scouts moved from 11-48 (mean 29.13) to the figures
+     *     recorded in `wunderkind-docs/economy-loose-ends/a27-scout-age-gate-report.md`.
+     *
+     *     Nothing else moves: no other key changes shape, type or meaning, and no app change was
+     *     needed — `ScoutJudgements` already declared all seven keys and the UI already had
+     *     labels for the two new rows.
      */
-    public const WORLD_PACK_VERSION = 12;
+    public const WORLD_PACK_VERSION = 13;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [

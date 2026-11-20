@@ -1013,14 +1013,35 @@ filename alone.
   scouts** — see the owner ruling in `01_overview/output/tribal-knowledge.md`, which also
   records why a wrong ability becomes a wrong wage in the app.
 
-  ⚠️ **It writes FIVE judgement keys, and that settles an apparent repo conflict.** `build()`
-  rolls `potential`/`technical`/`physical`/`mental`/`personality` from
-  `PoolConfig::$scoutJudgementMin/Max`, and it is the **only** path that has ever written a
-  persisted `Scout` — so all 5,278 rows on dev carry exactly those five.
-  `GenerateMarketDataCommand::buildScoutJudgements()` writes **seven** (adding `youth`/`senior`)
-  and does not write this table; that is where the app's seven-key `ScoutJudgements` type came
-  from. Both repos were right about different populations. **Anything averaging judgements must
-  average over the keys present** — a fixed `/7` under-rates every real scout by ~29%.
+  ⚠️ **It writes SEVEN judgement keys as of 2026-11-20 (A27) — it wrote FIVE before that, and the
+  two added keys turned on a feature that had never run.** `build()` rolls
+  `potential`/`technical`/`physical`/`mental`/`personality` plus the age-band pair
+  `youth`/`senior`, all from the same `PoolConfig::$scoutJudgementMin/Max`, and it is the **only**
+  path that has ever written a persisted `Scout`. The app's `ageGateFor()` reads `judgements.youth`
+  for under-18s and `judgements.senior` otherwise; with only five keys written it returned 0 for
+  all 5,278 dev scouts and every scout in every save, making each one's displayed accuracy 70% of
+  its designed value and leaving the noise band permanently untightened. Owner ruling behind the
+  fix: scouting accuracy *"should"* vary by the player's age. `Version20261120120000` added the
+  keys to existing rows and re-derived `ability` behind them; `WORLD_PACK_VERSION` went 12 → 13.
+
+  ⚠️ **The age-band pair deliberately does NOT get its own bounds.** They are judgements on the
+  same 0–100 scale, so a separate `scoutAgeGateMin/Max` would be a second config surface for one
+  quantity — and `ScoutAbilityCalculator`'s 70/30 weighting was measured against judgements drawn
+  from this one flat range, so banding two of seven differently would move the approved tier
+  spread silently. They are rolled independently of each other and of `potential`, because
+  deriving `youth` from `potential` collapses the app's accuracy blend to `potential` and changes
+  nothing for the under-18s the gate exists for. Pinned by
+  `ScoutGenerationServiceTest::testTheAgeBandJudgementsAreIndependentRollsWithinTheConfiguredBounds()`.
+
+  ⚠️ **ADDING OR REMOVING A KEY HERE MOVES EVERY SCOUT'S `ability` AND (from A24) EVERY SCOUT'S
+  WAGE**, because `ScoutAbilityCalculator` averages over the keys PRESENT. So it needs
+  `app:backfill-scout-abilities --force` behind it and a pack bump — A27 measured the dev
+  distribution either side: 11–48 (mean 29.13, sd 6.90) → 12–47 (mean 29.11, sd 6.76).
+  `ScoutGenerationServiceTest::testJudgementsAreTheSevenAuthoritativeKeys()` is the pin that makes
+  such a change impossible to land quietly; it held five keys until A27 and was changed on the
+  ruling, not removed. `GenerateMarketDataCommand::buildScoutJudgements()` writes its own seven
+  for a population that is not in this table. **Anything averaging judgements must still average
+  over the keys present** — a fixed divisor misrates a pre-v13 pack's five stored values.
 
   ⚠️ **AND NOTE WHAT IS NOT BANDED: judgements are rolled from the FLAT GLOBAL range whatever
   the club's tier.** Only `$experience` takes `$abilityRange`. That asymmetry is load-bearing —
