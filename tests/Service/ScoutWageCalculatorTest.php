@@ -16,6 +16,11 @@ use PHPUnit\Framework\TestCase;
  * The properties that matter are DETERMINISM and MONOTONICITY, not the exact pence: generation
  * and the backfill command both call this, so the same scout must price the same either way, and
  * a better scout must never be cheaper than a worse one.
+ *
+ * ⚠️ **THE INPUT IS `ability`, NOT `experience`, SINCE A24 (2026-11-20)** — owner ruling. The
+ * arithmetic is unchanged, so every value assertion below holds verbatim; what moved is which of
+ * the two 0-100 numbers is fed in, and `testScoutOverloadReadsTheEntitysOwnAbility` is the one
+ * that catches the wrong one. See `ScoutWageCalculator`'s docblock for why.
  */
 class ScoutWageCalculatorTest extends TestCase
 {
@@ -23,20 +28,20 @@ class ScoutWageCalculatorTest extends TestCase
     {
         $calculator = $this->calculator($this->config(2500, 7000));
 
-        self::assertSame(2500, $calculator->weeklyWageFor(0), 'floor at zero experience');
-        self::assertSame(7000, $calculator->weeklyWageFor(100), 'ceiling at full experience');
+        self::assertSame(2500, $calculator->weeklyWageFor(0), 'floor at zero ability');
+        self::assertSame(7000, $calculator->weeklyWageFor(100), 'ceiling at full ability');
         self::assertSame(4750, $calculator->weeklyWageFor(50), 'midpoint');
     }
 
     /**
-     * The same experience always prices the same.
+     * The same ability always prices the same.
      *
      * Load-bearing rather than obvious: Scout::$weeklySalary was added after every scout in the
-     * world existed, so the backfill derives a wage from stored experience. A random roll would
+     * world existed, so the backfill derives a wage from what is stored. A random roll would
      * make a backfilled scout and an identical new one disagree, and support unable to explain
      * either figure.
      */
-    public function testTheSameExperienceAlwaysPricesTheSame(): void
+    public function testTheSameAbilityAlwaysPricesTheSame(): void
     {
         $calculator = $this->calculator($this->config(2500, 7000));
 
@@ -47,16 +52,23 @@ class ScoutWageCalculatorTest extends TestCase
         }
     }
 
-    /** A more experienced scout never costs less. */
-    public function testWageIsMonotonicInExperience(): void
+    /**
+     * A more able scout never costs less.
+     *
+     * ⚠️ A property of THIS interpolation only. Since A24 the app's band ladder sits in front of
+     * it and is NOT monotonic in the staff/player ratio — the owner has ruled those cliffs are to
+     * be measured on a real save before anything is re-authored. Pinned app-side in
+     * `src/__tests__/economy/scoutWageBands.test.ts`.
+     */
+    public function testWageIsMonotonicInAbility(): void
     {
         $calculator = $this->calculator($this->config(2500, 7000));
 
         $previous = -1;
 
-        for ($experience = 0; $experience <= 100; $experience++) {
-            $wage = $calculator->weeklyWageFor($experience);
-            self::assertGreaterThanOrEqual($previous, $wage, "experience {$experience} priced below its predecessor");
+        for ($ability = 0; $ability <= 100; $ability++) {
+            $wage = $calculator->weeklyWageFor($ability);
+            self::assertGreaterThanOrEqual($previous, $wage, "ability {$ability} priced below its predecessor");
             $previous = $wage;
         }
     }
@@ -76,8 +88,8 @@ class ScoutWageCalculatorTest extends TestCase
         self::assertSame(7000, $calculator->weeklyWageFor(100));
     }
 
-    /** Experience outside 0-100 is clamped rather than extrapolated. */
-    public function testExperienceOutsideTheScaleIsClamped(): void
+    /** Ability outside 0-100 is clamped rather than extrapolated. */
+    public function testAbilityOutsideTheScaleIsClamped(): void
     {
         $calculator = $this->calculator($this->config(2500, 7000));
 
@@ -94,14 +106,23 @@ class ScoutWageCalculatorTest extends TestCase
         self::assertSame(3000, $calculator->weeklyWageFor(100));
     }
 
-    public function testScoutOverloadReadsTheEntitysOwnExperience(): void
+    /**
+     * 🔴 THE A24 REGRESSION GUARD. The entity overload must read `ability`, not `experience`.
+     *
+     * They are different quantities on the same 0-100 scale, so the wrong one produces a
+     * perfectly plausible wage that disagrees with every other scout in the game — which is why
+     * this test sets them to DIFFERENT values rather than the one number the old test used.
+     */
+    public function testScoutOverloadReadsTheEntitysOwnAbility(): void
     {
         $calculator = $this->calculator($this->config(2500, 7000));
 
         $scout = new Scout('Test Scout');
         $scout->setExperience(50);
+        $scout->setAbility(30);
 
-        self::assertSame($calculator->weeklyWageFor(50), $calculator->weeklyWageForScout($scout));
+        self::assertSame($calculator->weeklyWageFor(30), $calculator->weeklyWageForScout($scout));
+        self::assertNotSame($calculator->weeklyWageFor(50), $calculator->weeklyWageForScout($scout));
     }
 
     private function config(int $min, int $max): PoolConfig

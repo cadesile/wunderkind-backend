@@ -338,12 +338,18 @@ class GenerateMarketDataCommand extends Command
             // and with what the migration backfilled. Note this path writes SEVEN judgement keys
             // where that one writes five — which is precisely why ScoutAbilityCalculator means
             // over the keys present rather than a fixed divisor.
-            $scout->setAbility($this->scoutAbilityCalculator->abilityFor($experience, $judgements));
+            $ability = $this->scoutAbilityCalculator->abilityFor($experience, $judgements);
+            $scout->setAbility($ability);
             // A WAGE AT ALL, FOR THE FIRST TIME. This command left every scout it created on
             // weeklySalary 0, and BackfillScoutWagesCommand treats 0 as "never priced" — so a
             // pool generated here reported thousands of free scouts and understated every
             // club's running costs until somebody happened to run the backfill.
-            $scout->setWeeklySalary($this->scoutWageCalculator->weeklyWageFor($experience));
+            //
+            // ⚠️ PRICED ON `$ability`, NOT `$experience`, SINCE A24 (2026-11-20) — owner ruling,
+            // and the reason is in ScoutWageCalculator's docblock. Passing the wrong one of these
+            // two 0-100 numbers produces a plausible-looking wage that disagrees with every other
+            // scout in the game, which is exactly why they are now named differently here.
+            $scout->setWeeklySalary($this->scoutWageCalculator->weeklyWageFor($ability));
 
             $this->em->persist($scout);
 

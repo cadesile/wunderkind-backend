@@ -218,9 +218,19 @@ class PoolConfigController extends AbstractController
         $config->setScoutAgeMax((int) $request->request->get('scoutAgeMax', 40));
         $config->setScoutExperienceMin((int) $request->request->get('scoutExperienceMin', 0));
         $config->setScoutExperienceMax((int) $request->request->get('scoutExperienceMax', 10));
-        // Weekly wage range in pence, interpolated across a scout's experience by
-        // ScoutWageCalculator. Changing it does NOT reprice existing scouts — run
+        // Weekly wage range in pence, interpolated across a scout's ABILITY by
+        // ScoutWageCalculator (it was `experience` until A24, 2026-11-20 — owner ruling).
+        // Changing it does NOT reprice existing scouts — run
         // `app:backfill-scout-wages --force` for that.
+        //
+        // ⚠️ **SINCE A24 THIS PAIR PRICES ONLY THE SHARED HIRE-MARKET POOL.** A scout at a club
+        // is priced on the device from `GameConfig::$wageMultiplierTiers[].staffMultiplier`
+        // against that club's own tier, exactly as a coach is — so editing these two numbers no
+        // longer moves what the player's club pays its own scouts, only what the hire market
+        // asks. A24's brief predicted this pair would become dead config; it did not, because the
+        // pool is one row served to every country and so has no tier to be banded against. The
+        // same is true of a market COACH, whose `weeklySalary` the app also maps straight
+        // through. Recorded in a24-wage-bands-report.md.
         //
         // POUNDS IN, PENCE OUT. The screen edits pounds per week, because 2500 meaning £25 is
         // a trap an operator falls into exactly once. The redesigned form posts

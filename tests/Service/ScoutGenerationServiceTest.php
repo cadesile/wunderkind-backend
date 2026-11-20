@@ -96,8 +96,17 @@ class ScoutGenerationServiceTest extends TestCase
         }
     }
 
-    /** The wage follows the banded experience, since it is interpolated on the same number. */
-    public function testTheWageIsDerivedFromTheBandedExperience(): void
+    /**
+     * The wage follows the DERIVED ABILITY — `experience` until A24, 2026-11-20 (owner ruling).
+     *
+     * 🔴 **THE ORDERING GUARD, AND IT IS WHY THIS TEST IS WORTH ITS LINES.** `setWeeklySalary()`
+     * used to sit immediately after `setExperience()`, because it interpolated on experience.
+     * Pricing on `ability` means it must now run AFTER the judgements are rolled — and a wage
+     * priced before that would silently use the entity's floor of 1 and put every generated scout
+     * at the very bottom of the band. `assertNotSame` against the floor is what catches it; the
+     * banding half is still asserted, one step removed, because ability is 70% banded experience.
+     */
+    public function testTheWageIsDerivedFromTheDerivedAbility(): void
     {
         $config = new PoolConfig();
         $service = $this->makeService($config);
@@ -106,7 +115,32 @@ class ScoutGenerationServiceTest extends TestCase
         $scout = $service->build('English', ['min' => 5, 'max' => 5]);
 
         $this->assertSame(5, $scout->getExperience());
-        $this->assertSame($calculator->weeklyWageFor(5, $config), $scout->getWeeklySalary());
+        $this->assertSame(
+            $calculator->weeklyWageFor($scout->getAbility(), $config),
+            $scout->getWeeklySalary(),
+        );
+        $this->assertNotSame(
+            $calculator->weeklyWageFor(1, $config),
+            $scout->getWeeklySalary(),
+            'a wage priced before the ability was derived would land on the column floor of 1',
+        );
+        $this->assertNotSame(
+            $calculator->weeklyWageFor(5, $config),
+            $scout->getWeeklySalary(),
+            'and it must not be priced on experience either — that is the A24 ruling',
+        );
+    }
+
+    /** Banding the experience still moves the wage, one step removed through `ability`. */
+    public function testTheWageStillFollowsTheBandedExperienceThroughAbility(): void
+    {
+        $config = new PoolConfig();
+        $service = $this->makeService($config);
+
+        $low  = $service->build('English', ['min' => 5, 'max' => 5])->getWeeklySalary();
+        $high = $service->build('English', ['min' => 60, 'max' => 60])->getWeeklySalary();
+
+        $this->assertGreaterThan($low, $high, 'a tier-1 club scout must cost more than a tier-8 one');
     }
 
     /**

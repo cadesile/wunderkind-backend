@@ -192,13 +192,25 @@ class ScoutCrudController extends AbstractCrudController
                 . 'by any route is corrected rather than kept.',
             );
 
+        // READ-ONLY SINCE A24 (2026-11-20), BY OWNER RULING — the same treatment, and for the
+        // same reason, as `ability` above. The help text this replaces promised "set by hand here
+        // only to override one scout", and once the wage is priced from a rule that promise was a
+        // live-looking field nothing honoured. See ScoutAbilityLifecycleSubscriber's docblock for
+        // the override-vs-derivation test and why the answer flipped.
         yield IntegerField::new('weeklySalary', 'Weekly Wage')
+            ->setFormTypeOption('disabled', true)
             ->formatValue(fn ($v) => $v !== null ? '£' . number_format((int) $v / 100, 2) : '—')
             ->setHelp(
-                'Pence per week. Normally derived from experience by ScoutWageCalculator at '
-                . 'generation; set by hand here only to override one scout. '
-                . '`app:backfill-scout-wages` fills in scouts that have none, and leaves '
-                . 'anything non-zero alone unless given --force.',
+                'Pence per week, DERIVED from Ability by ScoutWageCalculator — NOT editable. '
+                . 'Owner ruling 2026-11-20: a scout is priced from the wage band, so this is a '
+                . 'derivation rather than an override, and it re-derives on create and on every '
+                . 'edit (ScoutAbilityLifecycleSubscriber). To change it, change the Experience or '
+                . 'Judgements above and save. A figure written here by any route is corrected '
+                . 'rather than kept. ⚠️ In the GAME this figure prices only the shared hire '
+                . 'market: a scout at a club is priced on device from '
+                . 'wageMultiplierTiers[].staffMultiplier against the club’s own tier, exactly as '
+                . 'a coach is. `app:backfill-scout-wages` re-prices rows this subscriber has not '
+                . 'reached (raw-SQL inserts, or a formula change, with --force).',
             );
         yield TextareaField::new('judgementsJson', 'Judgements')
             ->setFormType(TextareaType::class)

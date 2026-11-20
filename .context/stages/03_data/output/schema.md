@@ -240,7 +240,8 @@ Three things to know before touching them:
 - **`scout.weekly_salary`** — added `Version20261105120000` as `DEFAULT 0 NOT NULL`, and **the
   0 is a deliberate "unpriced" sentinel, not a real wage**: a migration cannot invent a per-row
   figure. `app:backfill-scout-wages` derives each one from the experience already stored
-  (`ScoutWageCalculator`, deterministic, so generation and backfill agree) and acts only on
+  (`ScoutWageCalculator`, deterministic, so generation and backfill agree — interpolating on
+  `ability` since A24, 2026-11-20, `experience` before) and acts only on
   zero unless `--force`. Scout had **no wage column at all** before this, which is why any
   running-cost projection built from `GET /api/market/data` modelled every scout as free.
 - **`starter_config`** — `club_funding_minimum_pence` is **BIGINT and 0 means NO MINIMUM**, the

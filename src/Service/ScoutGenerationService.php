@@ -38,7 +38,9 @@ class ScoutGenerationService
      * divides a club's `wageReservationPence` across its staff IN PROPORTION TO ABILITY, so one
      * rating-33 scout among rating-2-7 coaches takes most of the budget: £2,230/wk against
      * coaches on £13-266. Banding the experience is what makes that split sane, and it fixes
-     * the wage here too, since `ScoutWageCalculator` interpolates on the same number.
+     * the wage here too — ⚠️ **indirectly since A24**: `ScoutWageCalculator` interpolates on
+     * `ability`, which is 70% banded experience, so banding the experience still moves the wage,
+     * one step further removed.
      *
      * Absent, the global range still applies, which is right for the shared pool: a market
      * scout is one row served to every country and has no tier to be banded against.
@@ -67,9 +69,6 @@ class ScoutGenerationService
         $scout->setDob($this->dobFromAge($age));
         $scout->setNationality($scoutNat);
         $scout->setExperience($experience);
-        // Derived from the experience just rolled, not rolled separately — see
-        // ScoutWageCalculator for why generation and the backfill must agree.
-        $scout->setWeeklySalary($this->wageCalculator->weeklyWageFor($experience, $cfg));
         // SEVEN KEYS, AND THIS IS THE AUTHORITATIVE SET. Every persisted Scout in the world comes
         // through here — the shared pool via `MarketPoolService::generateScouts()` and club
         // scouts via `WorldPackClubGenerationService::generateScouts()` — so these seven are what
@@ -121,7 +120,16 @@ class ScoutGenerationService
 
         // Derived from the experience and judgements just rolled, not rolled separately — see
         // ScoutAbilityCalculator for why generation and the backfill must agree.
-        $scout->setAbility($this->abilityCalculator->abilityFor($experience, $judgements));
+        $ability = $this->abilityCalculator->abilityFor($experience, $judgements);
+        $scout->setAbility($ability);
+
+        // ⚠️ **THE WAGE IS SET HERE, AFTER THE ABILITY, AND THE ORDER IS LOAD-BEARING SINCE A24
+        // (2026-11-20).** It used to sit immediately after `setExperience()` above, because it
+        // interpolated on experience. The owner's ruling moved the input to `ability`, which does
+        // not exist until the judgements are rolled — so pricing before this line would have
+        // silently used the entity's floor of 1 and put every generated scout at the very bottom
+        // of the band. See ScoutWageCalculator for why generation and the backfill must agree.
+        $scout->setWeeklySalary($this->wageCalculator->weeklyWageFor($ability, $cfg));
 
         // prePersist won't fire for an entity that's never persisted — roll personality now.
         $this->personalityLifecycle->fill($scout);

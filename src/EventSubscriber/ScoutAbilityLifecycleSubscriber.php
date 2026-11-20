@@ -6,13 +6,15 @@ namespace App\EventSubscriber;
 
 use App\Entity\Scout;
 use App\Service\ScoutAbilityCalculator;
+use App\Service\ScoutWageCalculator;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PreUpdateEventArgs;
 use Doctrine\ORM\Events;
 
 /**
- * Derives `Scout::$ability` for every scout on its way into the database.
+ * Derives `Scout::$ability` — and, since A24, `Scout::$weeklySalary` from it — for every scout
+ * on its way into the database.
  *
  * WHY A SUBSCRIBER AND NOT JUST A CALL AT EACH GENERATION SITE. Both generation paths
  * (`ScoutGenerationService::build()` and `app:generate-market-data`) do set it explicitly, and
@@ -50,12 +52,31 @@ use Doctrine\ORM\Events;
  * A useful side effect: because the derivation runs unconditionally on update, a hand-crafted
  * POST that tried to set `ability` directly is CORRECTED rather than merely ignored.
  *
- * ⚠️ **`weeklySalary` is deliberately NOT treated this way, and the asymmetry is principled.**
- * Its admin help text says it is "set by hand here only to override one scout" — it is an
- * intentionally overridable figure, so auto-recomputing it would destroy the override that is its
- * whole purpose. `ability` is intentionally NOT overridable (read-only by design), so it must be
- * recomputed. **The test is whether the field is an override or a derivation**, not whether it
- * happens to be derived at generation.
+ * ⚠️ **`weeklySalary` IS NOW TREATED THE SAME WAY — A24, 2026-11-20, BY OWNER RULING.** This
+ * paragraph used to say the opposite, and the reasoning it gave was sound for the world it was
+ * written in, so it is corrected rather than deleted:
+ *
+ * > Its admin help text says it is "set by hand here only to override one scout" — it is an
+ * > intentionally overridable figure, so auto-recomputing it would destroy the override that is
+ * > its whole purpose. `ability` is intentionally NOT overridable (read-only by design), so it
+ * > must be recomputed. **The test is whether the field is an override or a derivation**, not
+ * > whether it happens to be derived at generation.
+ *
+ * **The test is unchanged; the answer flipped.** A24 prices a scout's wage from a rule — the
+ * `wageMultiplierTiers` band on the app side, `ScoutWageCalculator` on this one — so the wage
+ * stopped being a figure an operator authors and became a figure the rule states. Asked directly,
+ * the owner ruled it a DERIVATION: it gets the same `preUpdate` treatment `ability` has, and the
+ * admin help text stops promising an override (`ScoutCrudController`).
+ *
+ * ⚠️ **ORDER MATTERS INSIDE THIS CLASS: ABILITY FIRST, THEN THE WAGE.** The wage is derived from
+ * `ability`, which is itself derived from `experience` + `judgements`. Deriving the wage from a
+ * stale ability would produce a wrong number that looks entirely plausible — the failure mode
+ * this whole class exists to prevent, one layer deeper.
+ *
+ * ⚠️ **AN OPERATOR WHO GENUINELY WANTS TO PIN ONE SCOUT'S WAGE NOW HAS NO ROUTE, AND THAT IS
+ * THE RULING, NOT AN OVERSIGHT.** It is the price of the band being the single source for a wage.
+ * If that turns out to be wanted, the honest shape is an explicit `weeklySalaryOverride` column
+ * that says in the schema which figure wins — not a live-looking field that silently re-derives.
  */
 #[AsDoctrineListener(event: Events::prePersist)]
 #[AsDoctrineListener(event: Events::preUpdate)]
@@ -63,6 +84,7 @@ final class ScoutAbilityLifecycleSubscriber
 {
     public function __construct(
         private readonly ScoutAbilityCalculator $abilityCalculator,
+        private readonly ScoutWageCalculator $wageCalculator,
     ) {}
 
     public function prePersist(PrePersistEventArgs $args): void
@@ -90,13 +112,26 @@ final class ScoutAbilityLifecycleSubscriber
             return;
         }
 
-        $derived = $this->abilityCalculator->abilityForScout($scout);
+        $ability = $this->abilityCalculator->abilityForScout($scout);
+        // Off the DERIVED ability, not the stored one — the stored one may be exactly what this
+        // write is correcting, and a wage computed from a stale ability is the plausible-looking
+        // wrong number this class exists to prevent.
+        $wage = $this->wageCalculator->weeklyWageFor($ability);
 
-        if ($derived === $scout->getAbility()) {
+        $abilityMoved = $ability !== $scout->getAbility();
+        $wageMoved    = $wage !== $scout->getWeeklySalary();
+
+        if (!$abilityMoved && !$wageMoved) {
             return;
         }
 
-        $scout->setAbility($derived);
+        if ($abilityMoved) {
+            $scout->setAbility($ability);
+        }
+
+        if ($wageMoved) {
+            $scout->setWeeklySalary($wage);
+        }
 
         $em = $args->getObjectManager();
         $em->getUnitOfWork()->recomputeSingleEntityChangeSet(
@@ -112,6 +147,9 @@ final class ScoutAbilityLifecycleSubscriber
             return;
         }
 
-        $entity->setAbility($this->abilityCalculator->abilityForScout($entity));
+        // ABILITY FIRST — the wage is derived from it. See the class docblock.
+        $ability = $this->abilityCalculator->abilityForScout($entity);
+        $entity->setAbility($ability);
+        $entity->setWeeklySalary($this->wageCalculator->weeklyWageFor($ability));
     }
 }
