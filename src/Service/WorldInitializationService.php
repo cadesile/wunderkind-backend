@@ -250,8 +250,31 @@ class WorldInitializationService
      *     Nothing else moves: no other key changes shape, type or meaning, and no app change was
      *     needed — `ScoutJudgements` already declared all seven keys and the UI already had
      *     labels for the two new rows.
+     *
+     * v14 (2026-11-20, A25) — **staff and scout ABILITY move, under unchanged keys, because the
+     *     band they are drawn from changed source.** A club's staff were drawn from the squad's
+     *     PLAYER band (potential) or, with none passed, from two flat global integers; they are
+     *     now drawn from `pool_config.staff_ability_ranges`, authored per country and per tier
+     *     and defined against player `current_ability`. `staff[].coachingAbility`,
+     *     `staff[].scoutingRange`, `staff[].weeklySalary` (derived from ability by
+     *     `WageModelResolver::staffWeeklyPence()`) and `scouts[].experience`/`ability` therefore
+     *     all take different values for the same club than a v13 pack holds.
+     *
+     *     Census, not money in the pack's sense — no amount is added, and `staff.weekly_salary`
+     *     was already written here for the backend's non-pack consumers. No key changes shape,
+     *     type or meaning, and no app change is needed: the app reads the same fields it always
+     *     did.
+     *
+     *     ⚠️ **THE BUMP IS WHAT DELIVERS THE FIX.** A cached v13 pack holds staff generated
+     *     from the player band, and nothing re-derives a staff member the way
+     *     `app:backfill-scout-abilities` re-derives a scout's `ability` — a generated staff
+     *     member exists nowhere but in the pack that holds it. So a pack that is not rebuilt
+     *     keeps the old, wrong band indefinitely. See the backfill section of
+     *     `wunderkind-docs/economy-loose-ends/a25-ability-bands-report.md`: the `staff` and
+     *     `scout` TABLES need no backfill at all, because every persisted row in them is a
+     *     shared-pool row and the untiered band is unchanged.
      */
-    public const WORLD_PACK_VERSION = 13;
+    public const WORLD_PACK_VERSION = 14;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
@@ -346,9 +369,12 @@ class WorldInitializationService
             $players = $this->clubGenerator->generatePlayers(
                 $tierConf, $abilityRange, $nationality, $poolConfig, $agents,
             );
-            // Same $abilityRange as the players: one band per club, staff included.
-            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier, $abilityRange);
-            $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality, $abilityRange);
+            // $abilityRange IS THE PLAYER BAND AND STOPS HERE (A25, 2026-11-20). Staff and
+            // scouts used to be handed it too; they now resolve their own authored
+            // per-country/per-tier table from $country and $tier, because the player band is
+            // POTENTIAL and a staff ability has no potential half to be measured against.
+            $staff   = $this->clubGenerator->generateStaff($tierConf, $nationality, $country, $tier);
+            $scouts  = $this->clubGenerator->generateScouts($tierConf, $nationality, $country, $tier);
 
             $clubsData[] = $this->clubGenerator->buildSnapshot($npcClub, $players, $staff, $scouts);
         }

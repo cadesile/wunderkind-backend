@@ -27,6 +27,7 @@ class StaffGenerationService
         private readonly NameGeneratorService $nameGenerator,
         private readonly PersonalityLifecycleSubscriber $personalityLifecycle,
         private readonly \App\Service\Economy\WageModelResolver $wageModel,
+        private readonly StaffAbilityRangeService $staffAbilityRanges,
     ) {}
 
     /**
@@ -35,35 +36,41 @@ class StaffGenerationService
      * staff member is one row served to every country at every tier, so it is priced at serve
      * time instead. See WageModelResolver's note on the two populations.
      *
-     * `$abilityRange` is the club's tier band, and passing it is what stops a tier-8 club being
-     * handed a world-class manager. Without it ability came from a SINGLE GLOBAL RANGE
-     * (`PoolConfig::$coachAbilityMin/Max`, 4-75 on dev) no matter what the club was — so the
-     * bottom of the pyramid drew from the same distribution as the top, and since ability
-     * drives `wageMultiplierTiers[].staffMultiplier` (2.0 up to 12.0) it was also a 6x swing in
-     * pay. Players never had this problem: their band has always been per-tier.
+     * ── ABILITY COMES FROM THE AUTHORED STAFF TABLE (A25, 2026-11-20) ────────────────────
      *
-     * Absent, the global range still applies, which is correct for the shared pool: a market
-     * coach has no tier to be banded against.
+     * `StaffAbilityRangeService::resolve($country, $tier)` is the ONLY source of the band, and
+     * the two things it replaced were both wrong in the same direction:
      *
-     * @param array{min: int, max: int}|null $abilityRange
+     *   1. **Two flat global integers** (`PoolConfig::$coachAbilityMin/Max`, **4-75** on the
+     *      live dev row against the 40-75 its docblock promised). One pair for every country
+     *      and every tier, so the bottom of the pyramid drew from the same distribution as the
+     *      top — and since ability drives `wageMultiplierTiers[].staffMultiplier` (2.0 up to
+     *      12.0) that was a 6x swing in pay as well. Players never had this problem; their
+     *      band has always been per-tier.
+     *   2. **A `$abilityRange` parameter the callers filled with the squad's PLAYER band.**
+     *      That band is POTENTIAL. A staff member has no current/potential split, so an
+     *      ability-40 coach is a 40 from day one while a potential-40 player performs far
+     *      below it — the two sides of every staff-vs-player comparison were different
+     *      quantities. **The parameter is gone rather than defaulted**, so no caller can put
+     *      the player band back without saying so.
+     *
+     * With no country or tier the resolver returns the UNTIERED pair, which is still correct
+     * for the shared pool: a market coach has no tier to be banded against.
      */
     public function build(
         StaffRole $role,
         ?string $nationality = null,
         string $country = '',
         int $tier = 0,
-        ?array $abilityRange = null,
     ): Staff {
         $cfg = $this->poolConfigRepo->getConfig();
 
-        $abilityMin = $abilityRange !== null ? (int) $abilityRange['min'] : $cfg->getCoachAbilityMin();
-        $abilityMax = $abilityRange !== null ? (int) $abilityRange['max'] : $cfg->getCoachAbilityMax();
-
-        // Normalised rather than trusted: `league_ability_ranges` is a hand-editable admin grid
-        // and a transposed pair is a real state of that row, same reasoning as legacyRoll().
-        if ($abilityMin > $abilityMax) {
-            [$abilityMin, $abilityMax] = [$abilityMax, $abilityMin];
-        }
+        // Already ordered and clamped by the resolver — `staff_ability_ranges` is a
+        // hand-editable admin grid and a transposed pair is a real state of that row, so the
+        // normalisation lives there rather than at each of its readers.
+        $band       = $this->staffAbilityRanges->resolve($country, $tier);
+        $abilityMin = $band['min'];
+        $abilityMax = $band['max'];
 
         $ability        = random_int($abilityMin, $abilityMax);
         $nat            = $nationality ?? $this->nameGenerator->getRandomNationality();

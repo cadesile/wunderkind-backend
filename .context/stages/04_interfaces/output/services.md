@@ -997,8 +997,17 @@ filename alone.
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
-- **`ScoutGenerationService`** — generates one scout. **`build()` takes an optional
-  `$abilityRange`, used for EXPERIENCE, for the same reason `StaffGenerationService` does.**
+- **`ScoutGenerationService`** — generates one scout. **`build()` takes `$country` and `$tier`
+  and resolves the authored STAFF table for the banded input, which lands on EXPERIENCE — the
+  `$abilityRange` parameter is GONE as of A25, 2026-11-20.** A club's scouts and its coaches are
+  now banded off ONE authored source. ⚠️ **`PoolConfig::$scoutExperienceMin/Max` (4-34 live) is
+  UNTOUCHED, by ruling** — it is the untiered window for the shared pool and a scouting-gameplay
+  input rather than only a wage input. ⚠️ **And a scale conflation remains, pre-existing and NOT
+  A25's to fix:** the banded figure lands on `experience`, a years-of-experience axis, while the
+  staff table is defined against player `current_ability`. The tiered input was already a
+  different quantity from `experience` before A25 (it was player potential), so this change makes
+  the staff comparison agree without claiming to have settled what the experience axis means.
+  Recorded as an open item in `a25-ability-bands-report.md`.
   Without it experience comes from one global range (`PoolConfig::$scoutExperienceMin/Max`,
   4-34 on dev) whatever the club. Scouts were missed when staff were banded on 2026-11-17 —
   a `Scout` is its own entity and never passes through `staffWeeklyPence()` — and were fixed
@@ -1110,18 +1119,71 @@ filename alone.
   together prove the wire between them, and a subscriber that silently never fires looks
   identical to one that does (both generation paths set `ability` explicitly, so no other test
   needs it). Verified non-vacuous: disabling the two listener attributes fails all 7 cases.
-- **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
-  `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
-  Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,
-  4-75 on dev) whatever the tier, so the bottom of the pyramid drew managers from the same
-  distribution as the top — and since ability drives `staffMultiplier` (2.0 up to 12.0 on dev)
-  that was also a 6x swing in pay. Players never had this problem; their band has always been
-  per-tier. Every per-club caller now passes the SAME band its players were generated from
-  (`WorldPackClubGenerationService::generateStaff()`, and through it
-  `WorldInitializationService`, `WarmWorldPackClubMessageHandler` and `StarterPackService`).
-  Absent, the global range still applies, which is correct for the shared pool: a market coach
-  has no tier to be banded against. Measured effect on EN tier 8: average staff ability fell
-  from a 4-75 draw to 4.
+- **`StaffAbilityRangeService`** (added 2026-11-20, A25) — **the authored per-country/per-tier
+  ability band a CLUB's staff and scouts are generated from, and the one place it is resolved.**
+  Reads `PoolConfig::$staffAbilityRanges` (03_data/output/entities.md). Owner ruling, three
+  limbs, all settled — do not re-litigate them.
+
+  `resolve($country, $tier)` returns `{min, max, source}` and reports its source for the same
+  reason `StarterPackService::resolveAbilityRange()` does: an operator-facing diagnostic that
+  re-derived the band would be free to drift from the code it is checking. Precedence is
+  authored row → `DEFAULT_TIER_BANDS` → the untiered pair. `$tier` 0 or an empty `$country` is
+  **not an error** — it is the shared pool saying it has no tier, which is every
+  `MarketPoolService` caller.
+
+  🔴 **WHAT A NUMBER HERE MEANS: the player `current_ability` scale.** Not potential, and not a
+  scale of its own. A staff member has no development curve, so the figure is what they deliver
+  now and is directly comparable to the `currentAbility` of the players at that tier. Settling
+  that **first** is why the seed below is derivable rather than invented: authoring a table
+  while "staff 50" and "player 50" denote different quantities would mean authoring against an
+  undefined unit.
+
+  **The seed is MEASURED, not chosen.** `bandFromPlayerBand()` maps a tier's authored PLAYER
+  band to `[0.45 × midpoint, 0.85 × midpoint]`. Under the live dev configuration 1,200 generated
+  first-team players per tier land at a current ability of almost exactly `0.6 ×` their
+  potential band's midpoint, p25–p95 spanning `0.45×`–`0.85×`, holding to within a point or two
+  at every live tier (live EN tier 1: potential 40–90 → CA p25/p50/p95 = 29/37/54, against a
+  seed of 29–55). ⚠️ **A fit, not a law** — against the COMMITTED default band it runs ~10%
+  high at tiers 1–3, because current ability compresses against high potential. So it is a
+  **seed an operator edits**, and choosing different numbers is calibration, deliberately
+  outside A25: what A25 delivered is the authoring surface, the scale definition, and a default
+  coherent with the players beside it. `DEFAULT_TIER_BANDS` is exactly this transform applied to
+  `StarterConfig::defaultTierRanges()`, pinned tier-for-tier by
+  `StaffAbilityRangeServiceTest::testTheCommittedDefaultBandsAreTheTransformOfTheCommittedPlayerDefaults()`
+  so retuning the player defaults cannot leave the staff defaults describing a scale that no
+  longer exists.
+
+  ⚠️ **`PoolConfig::$coachAbilityMin/Max` SURVIVES AS THE UNTIERED BAND AND IS NOT DEAD
+  CONFIG.** It bands the shared hire-market pool — one row served to every country at every
+  tier, with no tier to be banded against — precisely the reason `scoutWageMin/Max` survived
+  A24's prediction that it would become dead. Narrowed and relabelled on the admin screen, not
+  retired; retiring it would only have forced an untiered band to be invented elsewhere. Pinned
+  from both sides by that test class.
+
+  **Depth: SC has four tiers and must not carry eight rows.** `seedDefaults()` (merge-if-absent,
+  never overwrite) and `syncToPyramid()` (gap-fill upwards, trim downwards) mirror
+  `StarterAbilityRangeService` bullet for bullet. Depth is taken from the country's own authored
+  PLAYER band rather than a club or league count, because that table is already kept in step
+  with the pyramid and is already what the app's country picker counts. Wired at the same three
+  places the player twin is: `BootstrapCountryCommand` step 3b, the locations dashboard's "Seed
+  defaults" button, and `LeagueService::createLeaguesForCountry()` — in each case **after** the
+  player band, because the staff seed is derived from it. `LeagueService` now also returns
+  `staffBandsAdded`/`staffBandsRemoved`.
+- **`StaffGenerationService`** — generates one staff member. **`build()` takes `$country` and
+  `$tier` and resolves `StaffAbilityRangeService` for the band; the `$abilityRange` parameter is
+  GONE as of A25, 2026-11-20.** It had two predecessors and both were wrong in the same
+  direction: a single global range (`PoolConfig::$coachAbilityMin/Max`, **4-75 on dev against a
+  docblock that said 40-75**) whatever the tier, so the bottom of the pyramid drew managers from
+  the same distribution as the top — and since ability drives `staffMultiplier` (2.0 up to 12.0
+  on dev) that was also a 6x swing in pay; and then a `$abilityRange` parameter every per-club
+  caller filled with **the squad's PLAYER band**, which is POTENTIAL. A staff member has no
+  current/potential split, so a coach handed a potential band sits AT that figure while the
+  players beside him sit well below it — the two sides of every staff-vs-player comparison were
+  different quantities. The parameter is **removed rather than defaulted**, so no caller can
+  reinstate the borrow without changing the signature. With no country or tier the resolver
+  returns the untiered pair, which is still right for the shared pool: a market coach has no
+  tier to be banded against. Measured effect on EN tier 8 when banding first arrived: average
+  staff ability fell from a 4-75 draw to 4.
 - **`StarterPackService`** — builds a new club's starter pack. **`generatePack(country, tier)`
   GENERATES the squad through `WorldPackClubGenerationService` and touches no pool table**, so
   a founder's club is built by the same generator as every NPC club around it. It was a DRAW
@@ -1146,6 +1208,14 @@ filename alone.
        tier 8 after the change: starter ability 1-3-5 / potential 2-7 against NPC ability 1-3-6
        / potential 2-7. **This is a deliberate balance change and it is NOT gated on the wage
        model** — see `shared/api-backwards-compatibility.md`.
+  ⚠️ **AND `resolveAbilityRange()`'s BAND NO LONGER REACHES STAFF (A25, 2026-11-20).** Lines
+  151-152 used to read *"Same `$abilityRange` as the squad above — a founder's staff are at the
+  founder's level"* and hand the squad's PLAYER band to `generateStaff()`/`generateScouts()`.
+  A founder's staff are still at the founder's level, but off the authored per-country/per-tier
+  STAFF table resolved inside the generators from `$country` and `$tier`. Lending the player band
+  was a workaround for there being no staff table at all, and it could not be tuned out: the band
+  is applied to POTENTIAL, so the squad lands below it while a coach handed the same band is at
+  that figure from day one. See `StaffAbilityRangeService`.
   Priced with the club's country and tier like an NPC club, where a pool-drawn starter player
   was priced with neither and never re-priced on the way out (the starter pack goes through
   `PlayerSnapshotSerializer`, which deliberately does not re-price). That closed the last

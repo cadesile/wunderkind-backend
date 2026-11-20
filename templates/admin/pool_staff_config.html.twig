@@ -231,6 +231,63 @@
                 </div>
             {% endfor %}
             <div class="bmc-note" style="padding:12px"><i data-lucide="info" class="ink-info"></i><span>One range covers coaches, managers, directors of football, facility managers and chairmen.</span></div>
+            <div class="bmc-note" style="padding:0 12px 12px"><i data-lucide="alert-triangle" class="ink-warn"></i><span><strong>Untiered only.</strong> This pair bands the shared hire market, which has no tier. A club&#39;s own staff come from the per-country bands below.</span></div>
+        </section>
+
+        {#
+          ── STAFF ABILITY BANDS, per country and per tier (A25, 2026-11-20) ──────────────
+
+          THE AUTHORED TABLE A CLUB'S STAFF ARE GENERATED FROM, and the replacement for the
+          two flat globals in the card above. A number here is on the PLAYER CURRENT ABILITY
+          scale — not potential, and not a scale of its own — so it is directly comparable to
+          the `currentAbility` of the players at that tier. See StaffAbilityRangeService.
+
+          Built from countries that have League rows, each with its REAL tiers, exactly as the
+          player grid on the Starter config screen is. A 4-tier country gets four inputs; SC is
+          that country on the live row. Blank means "unauthored" and falls through to the
+          committed defaults — it does NOT mean zero. The save MERGES, so a country with no
+          pyramid (and therefore no inputs here) keeps whatever band it has.
+        #}
+        <section class="bmc-card bmc-span-all" data-domain="people">
+            <div class="bmc-card__head">
+                <i data-lucide="trending-up"></i>
+                <span class="bmc-card__title">STAFF ABILITY BANDS</span>
+                <span class="bmc-card__meta">per country &amp; tier · blank falls back to tier defaults — tier 1: 38–72, tier 8: 8–15</span>
+            </div>
+
+            <div class="bmc-setting__help bmc-pretty" style="padding:10px 12px 4px">
+                On the same scale as a player&#39;s <strong>current ability</strong>, so a tier&#39;s staff can be read against the players they work with. Covers all five staff roles and the club&#39;s scouts.
+            </div>
+
+            {% if dynamicLeagueTiers is empty %}
+                <div class="bmc-card__body"><span class="bmc-empty-note">NO LEAGUES IN THE DATABASE — GENERATE THEM FIRST</span></div>
+            {% else %}
+                {% for country, tiers in dynamicLeagueTiers %}
+                    <div class="bmc-card__band" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <span class="bmc-lbl bmc-lbl--ink">{{ country }} STAFF</span>
+                        <span class="bmc-card__meta">{{ tiers|length }} tier{{ tiers|length == 1 ? '' : 's' }}</span>
+                    </div>
+                    <div class="bmc-card__body bmc-grid"
+                         style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+                        {% for tier in tiers %}
+                            {% set lo = config.staffAbilityRanges[country][tier ~ '']['min'] ?? '' %}
+                            {% set hi = config.staffAbilityRanges[country][tier ~ '']['max'] ?? '' %}
+                            <div class="bmc-field-col" data-tier="{{ tier }}" style="gap:4px">
+                                <span class="bmc-lbl">TIER {{ tier }}</span>
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <label class="bmc-num bmc-num--60"><input name="staffRanges[{{ country }}][{{ tier }}][min]" inputmode="numeric"
+                                           value="{{ lo }}" data-saved="{{ lo }}" data-blank="ok" data-min="1" data-max="100"
+                                           data-range="min" aria-label="{{ country }} tier {{ tier }} staff ability minimum"></label>
+                                    <span class="bmc-sep">–</span>
+                                    <label class="bmc-num bmc-num--60"><input name="staffRanges[{{ country }}][{{ tier }}][max]" inputmode="numeric"
+                                           value="{{ hi }}" data-saved="{{ hi }}" data-blank="ok" data-min="1" data-max="100"
+                                           data-range="max" aria-label="{{ country }} tier {{ tier }} staff ability maximum"></label>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            {% endif %}
         </section>
 
         <section class="bmc-card bmc-span-all" data-domain="people">

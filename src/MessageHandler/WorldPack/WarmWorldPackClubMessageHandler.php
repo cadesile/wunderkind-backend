@@ -95,16 +95,21 @@ class WarmWorldPackClubMessageHandler
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_STAFF);
         $this->em->flush();
-        // The SAME $abilityRange the players above were generated from, so a club's staff
-        // sit at its own level rather than at a pyramid-wide average.
+        // THE COUNTRY AND TIER, NOT $abilityRange (A25, 2026-11-20). This used to pass the
+        // same PLAYER band the squad above was generated from; staff now resolve their own
+        // authored per-country/per-tier table from the pair below. See
+        // StaffAbilityRangeService for why the player band was the wrong quantity to lend.
         $staff = $this->clubGenerator->generateStaff(
-            $tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier(), $abilityRange,
+            $tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier(),
         );
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::GENERATING_SCOUTS);
         $this->em->flush();
-        // Same $abilityRange as the players and staff: one band per club, scouts included.
-        $scouts = $this->clubGenerator->generateScouts($tierConf, $nationality, $abilityRange);
+        // The same authored staff table the coaches above came from, off the same country and
+        // tier — one band per club for everyone who is not a player.
+        $scouts = $this->clubGenerator->generateScouts(
+            $tierConf, $nationality, $tierRun->getCountry(), $tierRun->getTier(),
+        );
 
         $clubRun->setStatus(WorldPackGenerationClubRunStatus::ASSIGNING);
         $this->em->flush();

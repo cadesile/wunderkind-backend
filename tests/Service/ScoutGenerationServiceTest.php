@@ -12,6 +12,7 @@ use App\Service\NameGeneratorService;
 use App\Service\Personality\PersonalityGeneratorService;
 use App\Service\ScoutGenerationService;
 use App\Service\ScoutWageCalculator;
+use App\Service\StaffAbilityRangeService;
 use App\Service\ScoutAbilityCalculator;
 use PHPUnit\Framework\TestCase;
 
@@ -38,7 +39,54 @@ class ScoutGenerationServiceTest extends TestCase
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
             new ScoutWageCalculator($poolRepo),
             new ScoutAbilityCalculator(),
+            $this->makeAbilityRanges($poolRepo),
         );
+    }
+
+    /**
+     * ── HOW A BAND REACHES A SCOUT SINCE A25, 2026-11-20 ─────────────────────────────────
+     *
+     * `build()` took an `$abilityRange` array until A25, and every per-club caller filled it
+     * with the squad's PLAYER band. It now takes `$country` and `$tier` and resolves the
+     * authored per-country/per-tier STAFF table — the same table a coach is drawn from. So a
+     * test that wants a scout banded at 2-7 authors that band on the PoolConfig and asks for
+     * `(self::BAND_COUNTRY, self::BAND_TIER)`; the helpers below are that, once.
+     *
+     * A made-up country code is used deliberately: the band under test must come from the row
+     * this test authored and not from a real country's seeded figures.
+     */
+    private const BAND_COUNTRY = 'XX';
+    private const BAND_TIER    = 1;
+
+    /**
+     * A REAL StaffAbilityRangeService over the same PoolConfig repository (it is final and
+     * cannot be doubled, and it is pure resolution — a double would only risk disagreeing
+     * with it).
+     */
+    private function makeAbilityRanges(PoolConfigRepository $poolRepo): StaffAbilityRangeService
+    {
+        return new StaffAbilityRangeService(
+            $poolRepo,
+            $this->createStub(\App\Repository\StarterConfigRepository::class),
+            $this->createStub(\Doctrine\ORM\EntityManagerInterface::class),
+        );
+    }
+
+    /** A service whose authored staff table bands BAND_COUNTRY/BAND_TIER at [$min, $max]. */
+    private function makeServiceBandedAt(int $min, int $max, ?PoolConfig $config = null): ScoutGenerationService
+    {
+        $config ??= new PoolConfig();
+        $config->setStaffAbilityRanges([
+            self::BAND_COUNTRY => [(string) self::BAND_TIER => ['min' => $min, 'max' => $max]],
+        ]);
+
+        return $this->makeService($config);
+    }
+
+    /** `build()` for the band authored by makeServiceBandedAt(). */
+    private function buildBanded(ScoutGenerationService $service, ?string $nationality = 'English'): Scout
+    {
+        return $service->build($nationality, self::BAND_COUNTRY, self::BAND_TIER);
     }
 
     public function testBuildReturnsScoutInstance(): void
@@ -66,6 +114,7 @@ class ScoutGenerationServiceTest extends TestCase
             new PersonalityLifecycleSubscriber(new PersonalityGeneratorService()),
             new ScoutWageCalculator($poolRepo),
             new ScoutAbilityCalculator(),
+            $this->makeAbilityRanges($poolRepo),
         );
 
         $scout = $service->build('Brazilian');
@@ -87,10 +136,10 @@ class ScoutGenerationServiceTest extends TestCase
         $config->setScoutExperienceMin(60);
         $config->setScoutExperienceMax(90);
 
-        $service = $this->makeService($config);
+        $service = $this->makeServiceBandedAt(2, 7, $config);
 
         for ($i = 0; $i < 50; $i++) {
-            $scout = $service->build('English', ['min' => 2, 'max' => 7]);
+            $scout = $this->buildBanded($service);
             $this->assertGreaterThanOrEqual(2, $scout->getExperience());
             $this->assertLessThanOrEqual(7, $scout->getExperience());
         }
@@ -109,10 +158,10 @@ class ScoutGenerationServiceTest extends TestCase
     public function testTheWageIsDerivedFromTheDerivedAbility(): void
     {
         $config = new PoolConfig();
-        $service = $this->makeService($config);
+        $service = $this->makeServiceBandedAt(5, 5, $config);
         $calculator = new ScoutWageCalculator($this->makePoolConfigRepo($config));
 
-        $scout = $service->build('English', ['min' => 5, 'max' => 5]);
+        $scout = $this->buildBanded($service);
 
         $this->assertSame(5, $scout->getExperience());
         $this->assertSame(
@@ -135,10 +184,13 @@ class ScoutGenerationServiceTest extends TestCase
     public function testTheWageStillFollowsTheBandedExperienceThroughAbility(): void
     {
         $config = new PoolConfig();
+        $config->setStaffAbilityRanges([
+            self::BAND_COUNTRY => ['8' => ['min' => 5, 'max' => 5], '1' => ['min' => 60, 'max' => 60]],
+        ]);
         $service = $this->makeService($config);
 
-        $low  = $service->build('English', ['min' => 5, 'max' => 5])->getWeeklySalary();
-        $high = $service->build('English', ['min' => 60, 'max' => 60])->getWeeklySalary();
+        $low  = $service->build('English', self::BAND_COUNTRY, 8)->getWeeklySalary();
+        $high = $service->build('English', self::BAND_COUNTRY, 1)->getWeeklySalary();
 
         $this->assertGreaterThan($low, $high, 'a tier-1 club scout must cost more than a tier-8 one');
     }
@@ -150,9 +202,9 @@ class ScoutGenerationServiceTest extends TestCase
     public function testAbilityIsDerivedFromTheRolledExperienceAndJudgements(): void
     {
         $config  = new PoolConfig();
-        $service = $this->makeService($config);
+        $service = $this->makeServiceBandedAt(60, 60, $config);
 
-        $scout = $service->build('English', ['min' => 60, 'max' => 60]);
+        $scout = $this->buildBanded($service);
 
         $this->assertSame(
             (new ScoutAbilityCalculator())->abilityFor(60, $scout->getJudgements()),
@@ -169,10 +221,10 @@ class ScoutGenerationServiceTest extends TestCase
      */
     public function testAGeneratedScoutIsNeverLeftAtTheAbilityFloor(): void
     {
-        $service = $this->makeService();
+        $service = $this->makeServiceBandedAt(20, 34);
 
         for ($i = 0; $i < 25; $i++) {
-            $ability = $service->build('English', ['min' => 20, 'max' => 34])->getAbility();
+            $ability = $this->buildBanded($service)->getAbility();
 
             $this->assertGreaterThan(1, $ability, 'a generated scout must carry a derived ability');
             $this->assertLessThanOrEqual(100, $ability);
@@ -258,7 +310,7 @@ class ScoutGenerationServiceTest extends TestCase
     /** A transposed band is a real state of a hand-edited admin grid, and must not throw. */
     public function testATransposedBandIsNormalised(): void
     {
-        $scout = $this->makeService()->build('English', ['min' => 7, 'max' => 2]);
+        $scout = $this->buildBanded($this->makeServiceBandedAt(7, 2));
 
         $this->assertGreaterThanOrEqual(2, $scout->getExperience());
         $this->assertLessThanOrEqual(7, $scout->getExperience());

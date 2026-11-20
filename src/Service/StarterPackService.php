@@ -148,9 +148,24 @@ class StarterPackService
             $agents,
         );
 
-        // Same $abilityRange as the squad above — a founder's staff are at the founder's level.
-        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier, $abilityRange);
-        $scouts = $this->clubGenerator->generateScouts($squadConf, $nationality, $abilityRange);
+        // ⚠️ **$abilityRange IS THE PLAYER BAND AND NO LONGER REACHES STAFF (A25, 2026-11-20,
+        // owner ruling).** These two lines read
+        //
+        //     // Same $abilityRange as the squad above — a founder's staff are at the
+        //     // founder's level.
+        //
+        // and that is what replaced it: a founder's staff ARE still at the founder's level,
+        // but off the authored per-country/per-tier STAFF table resolved inside
+        // StaffGenerationService from $country and $tier, not off the squad's band.
+        //
+        // Lending the player band was a workaround for there being no staff table at all, and
+        // it was wrong in a way that could not be tuned out: the band is applied to POTENTIAL
+        // (PlayerGenerationService's parameter is $potentialRange), so a founder's squad lands
+        // BELOW it while a coach handed the same band is at that figure from day one. The two
+        // sides of every staff-vs-player comparison were therefore different quantities. See
+        // StaffAbilityRangeService for the table, the measured seed and the scale ruling.
+        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier);
+        $scouts = $this->clubGenerator->generateScouts($squadConf, $nationality, $country, $tier);
 
         $pack = [
             'players' => array_map(fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p), $players),

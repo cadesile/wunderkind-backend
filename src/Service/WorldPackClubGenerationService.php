@@ -89,14 +89,15 @@ class WorldPackClubGenerationService
      * precedent); DOF/Facility Manager use the club's own nationality, matching
      * StarterPackService's pattern for the player's own club.
      *
-     * `$abilityRange` is the club's tier band — THE SAME ARRAY the players were generated
-     * from. Passing it is what keeps a club's staff at its own level: without it staff came
-     * from a single global range regardless of tier, so a tier-8 side could field a
-     * world-class manager while its players sat at ability 1-5. See
-     * StaffGenerationService::build().
+     * ⚠️ **NO `$abilityRange` SINCE A25, 2026-11-20 (owner ruling).** This method used to take
+     * the club's PLAYER band and hand it to every staff member — the same array the squad was
+     * generated from, which is a POTENTIAL figure against a staff ability that has no
+     * current/potential split. `$country` and `$tier` are now the whole of what staff banding
+     * needs: `StaffGenerationService` resolves the authored per-country/per-tier staff table
+     * from them. The parameter is REMOVED rather than ignored, so a caller cannot put the
+     * player band back without changing this signature. See StaffAbilityRangeService.
      *
      * @param array<string, mixed> $tierConf
-     * @param array{min: int, max: int}|null $abilityRange
      * @return Staff[]
      */
     public function generateStaff(
@@ -104,45 +105,47 @@ class WorldPackClubGenerationService
         string $nationality,
         string $country = '',
         int $tier = 0,
-        ?array $abilityRange = null,
     ): array {
         $staff = [];
 
         for ($i = 0; $i < (int) $tierConf['managerCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier, $abilityRange);
+            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['coachCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier, $abilityRange);
+            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['chairmanCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier, $abilityRange);
+            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier);
         }
         for ($i = 0; $i < (int) ($tierConf['directorOfFootballCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier, $abilityRange);
+            $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier);
         }
         for ($i = 0; $i < (int) ($tierConf['facilityManagerCount'] ?? 0); $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality, $country, $tier, $abilityRange);
+            $staff[] = $this->staffGen->build(StaffRole::FACILITY_MANAGER, $nationality, $country, $tier);
         }
 
         return $staff;
     }
 
     /**
-     * `$abilityRange` is the club's tier band — the same array its players and staff came from.
+     * `$country` and `$tier` are the club's own, and they band its scouts off the SAME
+     * authored staff table as its coaches — see generateStaff() above for why the
+     * `$abilityRange` parameter both methods used to take is gone (A25, 2026-11-20).
      *
-     * Scouts were missed when staff ability was banded, because a Scout is its own entity and
-     * never goes through `staffWeeklyPence()`. The result was a rating-33 scout in a tier-8
-     * squad of rating-2-7 coaches, which the app's proportional wage split then paid £2,230/wk.
+     * Scouts were missed when staff ability was first banded, because a Scout is its own
+     * entity and never goes through `staffWeeklyPence()`. The result was a rating-33 scout in
+     * a tier-8 squad of rating-2-7 coaches, which the app's proportional wage split then paid
+     * £2,230/wk. The banded figure lands on `experience`; `PoolConfig::$scoutExperienceMin/Max`
+     * remains the untiered window and was left alone by ruling.
      *
      * @param array<string, mixed> $tierConf
-     * @param array{min: int, max: int}|null $abilityRange
      * @return Scout[]
      */
-    public function generateScouts(array $tierConf, string $nationality, ?array $abilityRange = null): array
+    public function generateScouts(array $tierConf, string $nationality, string $country = '', int $tier = 0): array
     {
         $scouts = [];
         for ($i = 0; $i < (int) ($tierConf['scoutCount'] ?? 0); $i++) {
-            $scouts[] = $this->scoutGen->build($nationality, $abilityRange);
+            $scouts[] = $this->scoutGen->build($nationality, $country, $tier);
         }
         return $scouts;
     }

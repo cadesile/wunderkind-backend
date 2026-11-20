@@ -946,6 +946,34 @@ Each is effectively a single global-config row.
 - **`PoolConfig`** — singleton tuning for recruitment-pool generation
   ranges (player/coach/scout/agent age/ability/height/weight ranges and
   pool targets per role). No relations.
+  **`staffAbilityRanges`** (json, default `{}`, `Version20261120150000`, A25 2026-11-20) is
+  **the authored per-country/per-tier ability band a CLUB's staff and scouts are generated
+  from** — shape `{"EN": {"1": {"min": 29, "max": 55}, …}}`, keyed by tier as a string, the
+  same shape as `StarterConfig::$leagueAbilityRanges`. Resolved ONLY through
+  `StaffAbilityRangeService` (04_interfaces/output/services.md), which is also the one place
+  the precedence lives: authored row → `DEFAULT_TIER_BANDS` → the untiered pair below.
+  🔴 **A number here is on the player `current_ability` scale** — owner ruling, settled: staff
+  have no current/potential split, so the figure is what they deliver now and is directly
+  comparable to the players at that tier. ⚠️ **Depth is part of the data**: a country carries
+  exactly as many tiers as its pyramid has (four for SC on the live row, eight for the other
+  25), kept in step by `StaffAbilityRangeService::syncToPyramid()` off `LeagueService`, for the
+  same reason `StarterAbilityRangeService::syncToPyramid()` exists for the player table — the
+  key count is read as a country's depth, so a padded row misreports the pyramid. Empty `{}`
+  and a missing tier are valid and mean "unauthored", falling through to the committed
+  defaults rather than to a zero band. Seeded by the migration from each country's OWN authored
+  player band at `[0.45×, 0.85×]` of its midpoint, a MEASURED transform (see
+  `wunderkind-docs/economy-loose-ends/a25-ability-bands-report.md`), not a tuning choice.
+  Editable on the Staff pool admin screen's **STAFF ABILITY BANDS** card.
+  ⚠️ **`coachAbilityMin/Max` WAS NARROWED BY A25, NOT RETIRED, AND IS NOT DEAD CONFIG.** It
+  used to be the ONLY staff ability band — two flat global integers for every country and
+  every tier, **documented as 40-75 and 4-75 on the live dev row**, a span so wide it was not
+  a band at all (a tier-8 club could draw a 75 coach, a tier-1 club a 4). It now bands the
+  UNTIERED population only: the shared hire-market pool, one row served to every country at
+  every tier, which has no tier to be banded against. Precisely the reason `scoutWageMin/Max`
+  survived A24's prediction that it would become dead config. The admin card says so on the
+  screen. The other half of the same defect was a `$abilityRange` parameter that
+  `StarterPackService` and both world-pack generators filled with the squad's PLAYER band —
+  **a POTENTIAL figure** — which is removed rather than defaulted.
   **`playerFirstTeamAgeMin`** (default 19, `Version20261015213517`) is the youngest a
   player may be in a STARTER PACK or a generated NPC squad, read via
   `firstTeamAgeRange()`. It exists because `playerAgeMin/Max` alone could not serve the

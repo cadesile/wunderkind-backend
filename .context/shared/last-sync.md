@@ -1974,3 +1974,121 @@ is WRITTEN not just set; a hand-written wage is corrected; an unrelated update l
 **Full report, with the live before/after across all 5,278 dev scouts and the band's own figures:**
 `/Users/courtneyadesile/Documents/WunderkindFactory/docs/economy-loose-ends/a24-wage-bands-report.md`
 
+
+## 2026-11-20 — A25: staff ability gets its own authored per-country/per-tier table (backend `development`)
+
+Owner ruling, three limbs, all settled in one change: staff ability gets **its own authored table,
+per country and per tier**, replacing both the flat globals and the borrow-the-player-band
+workaround; **a staff ability is defined against the player `current_ability` scale**, not
+potential and not a scale of its own; and **a 4-tier country is authored at four tiers**, not
+padded to eight.
+
+**New: `pool_config.staff_ability_ranges`** (`json`, `Version20261120150000`) and
+**`StaffAbilityRangeService`**, the one place it is resolved — authored row →
+`DEFAULT_TIER_BANDS` → the untiered pair, with the source reported for the same reason
+`StarterPackService::resolveAbilityRange()` reports its own. I followed the existing authoring
+pattern (a JSON column on a singleton config entity, a Twig grid, a POST handler) rather than
+inventing a new entity shape: that is what `StarterConfig::$leagueAbilityRanges` is, and the staff
+table belongs beside the pool config it is read with.
+
+**🔴 The live row disagreed with the entity default again, twice.** `coach_ability_min/max` is
+**4–75** live against a docblock and column default of 40–75 — a span so wide it was not a band
+(a tier-8 club could draw a 75 coach, a tier-1 club a 4). And `starter_config.league_ability_ranges`
+for EN is **40–90 down to 2–7** live, not the committed 75–95 down to 10–25. That second one
+changed the design: the seed is computed **from each country's own authored player band** rather
+than hardcoded, because a hardcoded table would have been on the wrong scale for the row the game
+is running. Count them as instances four and five of the governing trap.
+
+**The seed is measured, not chosen.** `bandFromPlayerBand()` = `[0.45 × midpoint, 0.85 × midpoint]`
+of the tier's authored player band. 1,200 generated first-team players per tier land at a current
+ability of almost exactly `0.6 ×` their potential band's midpoint, p25–p95 spanning `0.45×`–`0.85×`,
+holding to within a point or two at every live tier. ⚠️ **A fit, not a law** — against the
+*committed* default band it runs ~10% high at tiers 1–3, because current ability compresses against
+high potential. So it is a **seed an operator edits**; choosing the numbers is calibration and was
+out of scope. `DEFAULT_TIER_BANDS` is that transform applied to `StarterConfig::defaultTierRanges()`
+and is pinned tier-for-tier, so retuning the player defaults cannot leave the staff defaults
+describing a scale that no longer exists.
+
+**🟡 The ruling's "SC has 4 tiers" is true of LIVE and false of this dev box**, where SC authors and
+runs eight tiers with 3 clubs each. Neither number is hardcoded as a result: **depth comes from the
+country's own authored player band**, which `StarterAbilityRangeService::syncToPyramid()` already
+keeps in step with the pyramid and which the app's country picker already counts as a country's
+depth. One source of truth for depth, and **nothing wired around club counts**. Verified by running
+the migration's own SQL against the LIVE export: SC comes out at exactly four tiers, the other 25
+at eight.
+
+**🔴 `coachAbilityMin/Max` was NARROWED, not removed, and it is not dead config.** It bands the
+UNTIERED population only — the shared hire-market pool, one row served to every country at every
+tier, with no tier to be banded against. **Exactly the precedent A24 set for `scoutWageMin/Max`**,
+whose brief also predicted it would go dead and which also did not, for the same reason. Removing
+it would have forced an untiered band to be invented elsewhere. Said on the entity, on the admin
+card (a visible "Untiered only" warning), in the controller's save, in `resolve()`'s reported
+source, and pinned from both sides by `StaffAbilityRangeServiceTest`.
+
+**The `$abilityRange` parameter is REMOVED, not defaulted**, from `StaffGenerationService::build()`,
+`ScoutGenerationService::build()` and `WorldPackClubGenerationService::generateStaff()/
+generateScouts()` — a caller that can pass a band can pass the wrong one, and leaving the hole open
+is how the workaround survived. `StarterPackService:151-152`, `WorldInitializationService` and
+`WarmWorldPackClubMessageHandler` now pass `($country, $tier)` only, each with its comment rewritten
+to say what replaced the borrow and why (the band is applied to POTENTIAL, so the squad lands below
+it while a coach handed the same band is at that figure from day one).
+
+**Scouts: the banded input moved, the experience WINDOW did not.** A scout's `ability` is derived,
+so there was no independent ability resolution to move; the tiered input that determines it now
+comes from the staff table, and the flat untiered `scoutExperienceMin/Max` (4–34 live) is untouched
+by ruling. ⚠️ **One pre-existing scale conflation remains and is flagged not fixed**: the banded
+figure lands on `experience`, a years-of-experience axis, while the table is defined against
+`current_ability`. The tiered input was already a different quantity from `experience` before A25
+(it was player potential), so this makes the staff comparison agree without settling what the
+experience axis means. Separate ruling.
+
+**No wage pricing was touched** — `git diff --stat` over `src/Service/Economy/` and
+`ScoutWageCalculator.php` is empty. A staff `weeklySalary` does move, because
+`staffWeeklyPence()` takes ability as an input and the ability changed: the rule unchanged applied
+to a corrected input.
+
+**No backfill, and this is measured.** ⚠️ **`staff` has no `club_id` column**, so all 9,784 staff
+and 5,278 scouts in dev are shared-pool rows drawn from the untiered band this change leaves alone
+(their 4–75 spread is that band). A club's staff exist nowhere but in cached world packs and
+starter packs, invalidated by **`WORLD_PACK_VERSION` 13 → 14** in this commit — and the bump is
+what delivers the fix, since nothing re-derives a staff member the way
+`app:backfill-scout-abilities` re-derives a scout's ability. Nothing destructive was run.
+
+**🔴 The ruling doc's band-ceiling blocker was already closed by A24** before A25 started: an
+ability above `wageMultiplierTiers`' top row lands on that row via the trailing return, pinned by a
+test. The doc's warning was live when written and is now stale.
+
+**Tests: +19, all attributable.** `StaffAbilityRangeServiceTest` +15 (new), `PoolConfigControllerTest`
++2 (the grid persists and merges; a transposed pair is ordered), `StaffGenerationServiceTest` +2
+(a tiered build uses the table and not the flat pair; an unauthored tier falls through to the
+defaults — and its flat-pair case was renamed to say it is the untiered one).
+`ScoutGenerationServiceTest` and `WorldPackClubGenerationServiceTest` kept their counts.
+
+⚠️ **The `wunderkind_test` trap DID apply this time** — this migration adds a column, so the DDL
+was hand-applied there before the suite would pass.
+
+**Full report, with the live row, the scale measurement, the before/after of generation and
+everything in the ruling doc I found to be wrong:**
+`/Users/courtneyadesile/Documents/WunderkindFactory/docs/economy-loose-ends/a25-ability-bands-report.md`
+
+**🔴 AND IT DOES NOT FIX THE SCOTTISH NEW-GAME SCREEN — measured, and said rather than implied.**
+The PM relayed device evidence from OTA 491: a new tier-4 Scottish club projects **player wages
+£12k/wk against staff wages £52k/wk**, insolvent from week one. A25 changes exactly one input to a
+staff wage (the ability), so the before/after ratio of a staff bill **is** the ratio of expected
+`staffMultiplier` — computed through the real `multipliersFor()` over the live
+`wageMultiplierTiers` and the live authored bands: **EN tiers 2–8 fall 18%–77%** (tier 8: 8.528 →
+2.000) and EN tier 1 rises 21.6%, which is the chartered defect removed. But **every SC tier
+RISES, tier 4 by +10.1%** (8.528 → 9.391).
+
+**The cause is not the ability band.** Live SC authors `75-95 / 65-85 / 55-75 / 45-65` — tiers 1–4
+of an EIGHT-tier ladder — so **Scotland's bottom division is authored as a mid-table English one**,
+and a seed faithful to that input is necessarily high. The same input sets
+`TierBandScaleResolver::scaleFor` to **64.7% for SC tier 4** against **6.9% for EN tier 8**, so two
+*bottom* divisions differ by **44x** per staff member before A25 is involved at all. The Scottish
+screen needs (a) SC's player band re-authored for a 4-tier pyramid — calibration of the PLAYER
+table, which would move every Scottish player's generation and pricing, so explicitly not A25's;
+(b) A24's staff/scout **country scaling**, a pricing defect being measured there; and (c) a look at
+headcount — live starter counts are 20 players against **13 staff** (`starterCoachCount: 8`).
+A25 is a necessary part of fixing that screen and not a sufficient one. §12 of the report has the
+full table and a stated prediction to check against: on a pack rebuilt at v14, a tier-4 Scottish
+club's staff wages should go **UP** by roughly a tenth.
