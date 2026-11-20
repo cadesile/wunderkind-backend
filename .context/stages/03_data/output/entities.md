@@ -1442,6 +1442,14 @@ defaulting to 0 (= off, the flat figure and its cap). The scholarship becomes
   free is a different mechanic from cheap.
 - **Floor then cap, in that order.** The floor is a preference, the cap is the invariant, so the
   cap is applied last and an absurd floor is clamped down rather than breaking the promise.
+- ⚠️ **BOTH COLUMNS ARE COUNTRY-SCALED AT RESOLUTION SINCE `c11c7f2d` (2026-11-20).** They are
+  absolute pence, and because the tier's share is `anchor × avg(tier) / avg(tier 1)` a country
+  factor applied to the wages **cancels in that ratio** — so the ladder was country-blind BY
+  CONSTRUCTION and Scotland paid England's scholarship at every tier (measured live: 150000 at
+  both). `WageModelResolver::youthScholarshipPenceUnder()` now multiplies the anchor and the
+  floor by `countryFactorBp($country)` before the clamp, with the anchor floored at 1p so a
+  small factor cannot scale an authored anchor into reading as unauthored (`0` = no anchor).
+  This is the only place either column is read; the admin authors ONE baseline-country figure.
 
 **The cap's anchor moved from the tier's WORST wage to its AVERAGE** in pass 2. England tier 8's
 cheapest professional earns £12.84/wk (ability 2 at the bottom of a 2-7 band through a 2.5
@@ -1492,9 +1500,25 @@ Two nullable json columns from `Version20261112200000`, resolved **`league ?? ga
 whole-value at every publish site. Both ship null, so every league publishes `parachute: null`
 and the migration is a no-op (verified: 120 of 120 leagues).
 
-**SERVED VERBATIM — a schema-agnostic passthrough**, exactly like `League::$trophy`,
+**A SCHEMA-AGNOSTIC PASSTHROUGH APART FROM ONE KEY**, otherwise exactly like `League::$trophy`,
 `Player::$appearance` and `NpcClub::$identity`. The backend stores it, picks which one applies,
-and publishes it without reading inside.
+and publishes it reading only `perSeasonPence`.
+
+🔴 **THIS SECTION SAID "SERVED VERBATIM … WITHOUT READING INSIDE" UNTIL `c11c7f2d`
+(2026-11-20), AND IT IS NOW NARROWED BY EXACTLY ONE KEY.** On the owner's ruling (*"everything
+should scale. TV, prize, position and parachute"*) resolution moved into
+`LeaguePayoutResolver::parachuteFor(League, ?GameConfig)`, which does the same
+`league ?? gameConfig` whole-value pick and then multiplies **`perSeasonPence`** by the league's
+`countryFactorBp`. Every other key passes through untouched, and an entry in that list which is
+not an integer is **left alone rather than coerced** — a malformed block is still the app's to
+notice. A block with no `perSeasonPence`, or whose `perSeasonPence` is not an array, is returned
+exactly as stored. England's factor is 10000, so an England schedule comes back bit-for-bit.
+**The admin league editor and the league export still read and write the RAW column** — the
+authoring surface must round-trip. ⚠️ **The passthrough argument below is NOT withdrawn**; the
+app still owns the schedule's shape and its execution. What changed is that one documented
+money key is now scaled with every other money figure instead of being the single quantity that
+stayed in England's terms in every country. The agreed shape — and this key's new status — is in
+`docs/api/economy-config.md`, which `c11c7f2d` amended.
 
 **That is the decision worth knowing before touching it**, because the obvious improvement is
 wrong: the backend cannot pay a club anything (no income loop; the device runs the economy), so

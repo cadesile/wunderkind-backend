@@ -352,8 +352,10 @@ What exists now:
   pointing at one row).
 - `app:economy:wage-table` — the gate, five checks, exits non-zero. It has already caught two
   real defects in this work.
-- `GET/POST /api/club/season-investment`, World → Economy admin screen, and the verbatim
-  parachute passthrough.
+- `GET/POST /api/club/season-investment`, World → Economy admin screen, and the
+  parachute passthrough. ⚠️ **"Verbatim" was struck 2026-11-20** — `c11c7f2d` moved resolution into
+  `LeaguePayoutResolver::parachuteFor()`, which scales the one documented `perSeasonPence` key by
+  the country factor and passes every other key through. See `03_data/output/entities.md`.
 
 **Fixed 2026-11-12, then fixed properly 2026-11-13:** the youth scholarship was wrong at BOTH
 ends of the turnover ladder. The flat £250 was 1.97x an average tier-8 wage *and* 0.19% of an

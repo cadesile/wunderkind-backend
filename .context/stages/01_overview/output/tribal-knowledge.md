@@ -212,6 +212,18 @@ pay), and the v10 turnover authoring left 208 of 256 cached tier payloads stale.
 recorded in `WorldInitializationService::WORLD_PACK_VERSION`'s docblock as **the last bump
 money will ever cause**, and `WorldPackCarriesNoMoneyTest` is what keeps it so.
 
+**That claim has held through three bumps since, and the constant is 14 as of 2026-11-20** — v12
+(scouts gain a derived `ability`), v13 (`3e1555c5`, two age-gated judgement keys join the five) and
+v14 (`a818a60b`, staff ability comes off the new authored per-country/per-tier table). **All three
+are ABILITY-shaped census content and none carries an amount**, so each is the census rule working
+rather than an exception to it. ⚠️ **But read "a pack is a census" as a statement about PRICE, not
+a licence to re-author freely.** A pack's census content is still frozen at build time, so
+**authoring `pool_config.staff_ability_ranges` reaches an existing cached country only through a
+rebuild** — and the v14 bump is what delivered A25's fix to a device at all, since nothing
+re-derives a generated staff member the way `app:backfill-scout-abilities` re-derives a scout's
+`ability`. Ability is an input to a wage, so an ability-authoring change moves money without any
+money being in the pack.
+
 **One thing did NOT change, and it is the trap underneath all of this.** Never put the pricing
 in `PlayerSnapshotSerializer`. It is still shared with `PlayerBrowseSerializer` and the youth
 endpoint, which still need `contractValue` — a browse row with no price is not a browsable

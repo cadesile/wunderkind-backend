@@ -169,6 +169,15 @@ actually *does* (which service/repo it calls), not restated route paths.
   `WorldInitializationService`, `LeagueRepository`.
 - **`PoolConfigController`** — player/staff/investor pool config screens
   and generation via `PoolConfigRepository`, `MarketPoolService`.
+  **The staff screen also carries the STAFF ABILITY BANDS grid since 2026-11-20
+  (`a818a60b`)** — `pool_config.staff_ability_ranges`, authored per country and per
+  tier on the player CURRENT-ABILITY scale, read only through
+  `StaffAbilityRangeService`. **No new route**: it posts to the existing
+  `admin_staff_pool_config_save`, which merges the grid rather than replacing it
+  and orders a transposed pair. `pool_config.coach_ability_min/max` is still on the
+  same screen, **narrowed** to the untiered shared hire market and carrying a
+  visible "Untiered only" warning — it is not dead config. See
+  `03_data/output/entities.md` and `04_interfaces/output/services.md`.
 - **`CompetitionEntrantCrudController`** — standard CRUD plus a custom
   "generate spoof entrant" admin action (see
   `CompetitionSpoofEntrantService` in `services.md`).

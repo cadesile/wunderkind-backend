@@ -112,12 +112,62 @@ indefinitely. `staleWorldPacks` on the admin dashboard is the completion signal.
 **Since 2026-11-17 a `WORLD_PACK_VERSION` bump does more than mark packs stale: it makes every
 existing `WorldPackSet` UNCLAIMABLE at once**, because the claim filters on the version. Until
 each live country is rebuilt, every new game there falls back to generating its world at request
-time — correct and complete, just slower for that player, and uncached. Two things make this
-self-healing rather than an outage: the hourly `app:worldpack:maintain` sweep restocks every
-live country without an operator, and the fallback needs no pool (squads are generated), so it
-cannot fail on supply. The figure to watch is **COUNTRIES BELOW TARGET** on the Worldpack cache
-screen, not `staleWorldPacks`, which counts payload rows rather than servable sets. Full
-mechanics: `07_synthesis/output/architecture-notes.md`'s "World pack sets".
+time — correct and complete, just slower for that player, and uncached. Two things were supposed
+to make this self-healing rather than an outage: the hourly `app:worldpack:maintain` sweep
+restocking every live country without an operator, and the fallback needing no pool (squads are
+generated), so it cannot fail on supply. The figure to watch is **COUNTRIES BELOW TARGET** on the
+Worldpack cache screen, not `staleWorldPacks`, which counts payload rows rather than servable
+sets. Full mechanics: `07_synthesis/output/architecture-notes.md`'s "World pack sets".
+
+**Live example: `WORLD_PACK_VERSION` went 12 → 13 (`3e1555c5`) and 13 → 14 (`a818a60b`) on
+2026-11-20**, the second because staff ability moved onto a new authored table and a cached v13
+pack would have kept the fix dead on every device it reached. Both bumps are ability-shaped census
+content rather than money, so v11's "the last bump money will ever cause" still stands.
+
+## 🔴 Two world-pack rebuild traps, both established 2026-11-20, both expensive
+
+**Between them these silently invalidated roughly three hours of device testing**, because the
+admin screen reported success while nothing was written and every save afterwards read a stale or
+mixed pack. ⚠️ **A `MIXED` or `STALE` version indicator is a GATE, not a footnote — read it before
+any number underneath it.**
+
+### 1. "Rebuild the world pack cache" does not rebuild CLAIMED sets, and a tester has claimed them all
+
+`admin_worldpack_delete_country` calls **`deleteUnclaimed($country)`**. **Claimed sets are spared
+by design** — a device may still be downloading its tiers — and that protection is correct. The
+trap is that **every save a tester creates claims a set**, so after a day of testing every set in
+the country is claimed, the rebuild **deletes nothing, reports success, and the stale packs
+survive**. The page then reads e.g. `EN 2/2 STALE 8/8`: present, complete and stale, which looks
+like a *failed* rebuild rather than a *skipped* one.
+
+- **✅ `php bin/console app:worldpack:warm <CC>` builds INLINE and works.** It is the reliable
+  route and worked first time after the v14 bump (EN to 2 ready sets of 8 tiers, SC to 2 of 4).
+- The admin alternative is the **per-set delete with `force`**, which exists precisely for "a set
+  claimed by an abandoned save", then top up to target. ⚠️ **Forcing breaks the world of whatever
+  save claimed it**, so only do it to throwaway saves.
+- **The general lesson, which is not about world packs:** when a destructive operation protects a
+  class of data, check whether the thing you are trying to fix is **entirely inside the protected
+  class**. A no-op that reports success is worse than a refusal.
+
+### 2. On the dev stack the async world-pack build does not run at all
+
+Established **by elimination**, after three theories were each disproved — orphan cache rows, a
+claimed-set deadlock, and `crond` being down. ⚠️ **All three were wrong, and the answer was found
+by running the inline command rather than by reasoning from symptoms.**
+
+**What is TRUE and therefore not worth re-investigating:** the write path stamps
+`WORLD_PACK_VERSION` correctly; `deficit()` is version-aware, so stale sets never block a top-up;
+`crond` **is** running (`crond -f -l 8`, PID 103 under supervisord); and dispatch succeeds.
+**And yet nothing is ever written.** So the defect is in the consumer or the handler on the dev
+stack, not in the generation code. **Cause unknown.**
+
+**Until it is fixed: warm from the console and never trust the admin top-up on dev.**
+
+⚠️ **`supervisorctl` DOES NOT WORK ON THIS IMAGE, AND THAT IS BY CONSTRUCTION, NOT A FAULT.**
+`docker/supervisord.conf` defines no `[unix_http_server]` and no `[supervisorctl]`, so there is no
+control socket and `supervisorctl status` can only return "no such file". **Check processes with
+`docker exec <container> ps aux`** — that is how `crond` was confirmed running after
+`supervisorctl` had been read as evidence it was down.
 
 ## Rules
 
