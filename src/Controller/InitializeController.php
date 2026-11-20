@@ -248,14 +248,14 @@ class InitializeController extends AbstractController
             // NULL, and the app's `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`)
             // turned that into £0 of TV income. `derivedTvDealPence()` returns null when there
             // is no pool, so this is INERT for every league that authors its deal directly.
-            'tvDeal'            => $leagueSizeResolver->derivedTvDealPence($league) ?? $league->getTvDeal(),
+            'tvDeal'            => $leagueSizeResolver->tvDealFor($league),
             // RESOLVED, the same chain the sync snapshot and the world pack use: a null
             // column inherits the tier-1 base x this tier's ratio x the country factor.
             'prizeMoney'        => $leaguePayoutResolver->prizeFor($league, $gameConfig),
             'leaguePositionPot' => $leaguePayoutResolver->positionPotFor($league, $gameConfig),
             // ADDITIVE. This endpoint is uncached, so unlike the world pack it can carry the
             // two new keys without a WORLD_PACK_VERSION bump.
-            'tvPoolPence'       => $league->getTvPoolPence(),
+            'tvPoolPence'       => $leagueSizeResolver->tvPoolPenceFor($league),
             'clubCount'         => $leagueSizeResolver->sizeOf($league),
             // ── THE COUNT, NOT THE POT (v11, 2026-11-18) ─────────────────────────────────
             //
@@ -286,7 +286,7 @@ class InitializeController extends AbstractController
             // Resolved whole-value, `league ?? gameConfig` — the same resolution the sync
             // snapshot and the season pyramid do, so a client reading any of the three gets
             // one answer.
-            'parachute'         => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
+            'parachute'         => $leaguePayoutResolver->parachuteFor($league, $gameConfig),
             'trophy'            => $league->getTrophy(),
         ], $leagues);
 

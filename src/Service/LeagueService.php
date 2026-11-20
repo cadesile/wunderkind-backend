@@ -35,6 +35,7 @@ class LeagueService
         private readonly \App\Service\Economy\SponsorBandResolver $sponsorBandResolver,
         private readonly \App\Service\Economy\LeaguePayoutResolver $leaguePayoutResolver,
         private readonly StarterAbilityRangeService $abilityRangeService,
+        private readonly StaffAbilityRangeService $staffAbilityRangeService,
     ) {}
 
     /** The deepest pyramid the per-tier config tables describe. */
@@ -104,13 +105,22 @@ class LeagueService
         // against the pyramid as it now stands, not as it was asked for.
         $bands = $this->abilityRangeService->syncToPyramid($country, $tiers);
 
+        // THE STAFF BAND TRACKS THE PYRAMID TOO (A25, 2026-11-20), and for the same reason the
+        // player one does: a tier left behind by a shrunk pyramid reads as a division that
+        // still exists, and a tier added by a grown one would otherwise never be filled. After
+        // the player sync, because a newly added staff tier is seeded FROM the player band for
+        // that tier — which the line above has just written.
+        $staffBands = $this->staffAbilityRangeService->syncToPyramid($country, $tiers);
+
         return [
-            'created'       => $created,
-            'skipped'       => $skipped,
-            'removedTiers'  => $removed['tiers'],
-            'removedClubs'  => $removed['clubs'],
-            'bandsAdded'    => $bands['added'],
-            'bandsRemoved'  => $bands['removed'],
+            'created'           => $created,
+            'skipped'           => $skipped,
+            'removedTiers'      => $removed['tiers'],
+            'removedClubs'      => $removed['clubs'],
+            'bandsAdded'        => $bands['added'],
+            'bandsRemoved'      => $bands['removed'],
+            'staffBandsAdded'   => $staffBands['added'],
+            'staffBandsRemoved' => $staffBands['removed'],
         ];
     }
 
@@ -303,8 +313,7 @@ class LeagueService
                 // `SyncService::buildLeagueSnapshot()` for the full reasoning: a pooled league's
                 // `tvDeal` column is only ever written by an admin save, so publishing it raw
                 // sent NULL and the app paid £0 of TV. Inert where there is no pool.
-                'tvDeal'                        => $this->leagueSizeResolver->derivedTvDealPence($league)
-                    ?? $league->getTvDeal(),
+                'tvDeal'                        => $this->leagueSizeResolver->tvDealFor($league),
                 'sponsorPot'                    => $sponsorPot,
                 // RESOLVED, as the sync snapshot and the world pack now do — a null column
                 // inherits the authored tier-1 base x this tier's ratio x the country factor.
@@ -319,12 +328,12 @@ class LeagueService
                 // divided by, so a client can check the arithmetic rather than trusting it —
                 // and can pay NPC clubs their share, which the backend cannot do (no income
                 // loop here; the device runs the economy).
-                'tvPoolPence'                   => $league->getTvPoolPence(),
+                'tvPoolPence'                   => $this->leagueSizeResolver->tvPoolPenceFor($league),
                 'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
                 // RESOLVED WHOLE-VALUE, `league ?? gameConfig`. Not merged key by key — that
                 // would need the backend to understand the keys, which is exactly what a
                 // verbatim passthrough declines to do.
-                'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
+                'parachute'                     => $this->leaguePayoutResolver->parachuteFor($league, $gameConfig),
                 'clubs'                         => $clubs,
                 'fixtures'                      => $fixtures,
             ];

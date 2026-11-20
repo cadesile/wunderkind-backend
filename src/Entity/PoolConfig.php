@@ -197,13 +197,55 @@ class PoolConfig
     #[ORM\Column(type: 'integer', options: ['default' => 60])]
     private int $coachAgeMax = 60;
 
-    /** Minimum coaching ability on generation. Default: 40 */
+    /**
+     * Ability band for an UNTIERED staff member — the shared hire-market pool, and nothing
+     * else. Default: 40.
+     *
+     * ⚠️ **NARROWED BY A25, 2026-11-20 (owner ruling). THIS PAIR NO LONGER BANDS A CLUB'S
+     * STAFF.** It used to be the only staff ability band there was: two flat global integers
+     * for every country and every tier in the game, against a table authored per country and
+     * per tier for players. On the live dev row the pair reads **4-75**, not the 40-75 this
+     * docblock promised, which made it not a band but noise with a range — a bottom-tier club
+     * could be handed a 75 coach and a top-tier club a 4. Club staff now come from
+     * `$staffAbilityRanges` below, resolved by `StaffAbilityRangeService`.
+     *
+     * **It was narrowed rather than retired, and it is NOT dead config.** A pool staff member
+     * is one row served to every country at every tier, so it has no tier to be banded
+     * against — the same reason `scoutWageMin/Max` survived A24's prediction that it would
+     * become dead (see `PoolConfigController::saveStaffPoolConfig()`). Retiring these two
+     * would only have forced an untiered band to be invented somewhere else.
+     */
     #[ORM\Column(type: 'integer', options: ['default' => 40])]
     private int $coachAbilityMin = 40;
 
-    /** Maximum coaching ability on generation. Default: 75 */
+    /** Maximum ability for an UNTIERED staff member. Default: 75. See the note above. */
     #[ORM\Column(type: 'integer', options: ['default' => 75])]
     private int $coachAbilityMax = 75;
+
+    /**
+     * The authored per-country, per-tier ability band a CLUB's staff are generated from.
+     * Shape `{"EN": {"1": {"min": 38, "max": 72}, ...}}`, keyed by tier as a STRING.
+     *
+     * Added by A25 (`Version20261120150000`) on the owner's ruling, and resolved only through
+     * `StaffAbilityRangeService` — read that class for what a number here MEANS (the player
+     * `current_ability` scale, not potential), where the seeded defaults come from (a measured
+     * fraction of the country's own authored player band), and why `$coachAbilityMin/Max`
+     * above survives beside it.
+     *
+     * ⚠️ **DEPTH IS PART OF THE DATA.** A country carries exactly as many tiers as its pyramid
+     * has — four for SC on the live row, eight for the other 25 — kept in step by
+     * `StaffAbilityRangeService::syncToPyramid()` off the back of `LeagueService`. Padding a
+     * 4-tier country to eight rows would misreport the pyramid, the same defect
+     * `StarterAbilityRangeService::syncToPyramid()` exists to end for the player table.
+     *
+     * Empty `[]` is a valid state and means "nothing authored yet": `resolve()` falls through
+     * to `StaffAbilityRangeService::DEFAULT_TIER_BANDS` and says so in its `source`, so a
+     * missing row never reads as a zero band.
+     *
+     * @var array<string, array<string, array{min: int, max: int}>>
+     */
+    #[ORM\Column(type: 'json', options: ['default' => '{}'])]
+    private array $staffAbilityRanges = [];
 
     // ── Scout Generation ───────────────────────────────────────────────────
 
@@ -469,6 +511,12 @@ class PoolConfig
 
     public function getCoachAbilityMax(): int { return $this->coachAbilityMax; }
     public function setCoachAbilityMax(int $v): static { $this->coachAbilityMax = $v; return $this; }
+
+    /** @return array<string, array<string, array{min: int, max: int}>> */
+    public function getStaffAbilityRanges(): array { return $this->staffAbilityRanges; }
+
+    /** @param array<string, array<string, array{min: int, max: int}>> $v */
+    public function setStaffAbilityRanges(array $v): static { $this->staffAbilityRanges = $v; return $this; }
 
     public function getScoutAgeMin(): int { return $this->scoutAgeMin; }
     public function setScoutAgeMin(int $v): static { $this->scoutAgeMin = $v; return $this; }

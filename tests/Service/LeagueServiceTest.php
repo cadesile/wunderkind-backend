@@ -79,7 +79,26 @@ class LeagueServiceTest extends TestCase
                 $this->starterConfigRepoStub(),
                 $em,
             ),
+            // A REAL StaffAbilityRangeService beside it (A25, 2026-11-20), for the same reason
+            // and on the same stubs: syncToPyramid() for the STAFF band now runs as part of
+            // createLeaguesForCountry() too, and a double would only risk disagreeing with it.
+            // Its PoolConfig repo hands back a fresh PoolConfig, so nothing is authored and
+            // every tier it writes comes from the seed; nothing here asserts on it.
+            new \App\Service\StaffAbilityRangeService(
+                $this->poolConfigRepoStub(),
+                $this->starterConfigRepoStub(),
+                $em,
+            ),
         );
+    }
+
+    /** A PoolConfig repository handing back a fresh entity — see the StaffAbilityRangeService note. */
+    private function poolConfigRepoStub(): \App\Repository\PoolConfigRepository
+    {
+        $repo = $this->createStub(\App\Repository\PoolConfigRepository::class);
+        $repo->method('getConfig')->willReturn(new \App\Entity\PoolConfig());
+
+        return $repo;
     }
 
     /** A StarterConfigRepository stub that answers getConfig() with the column defaults. */

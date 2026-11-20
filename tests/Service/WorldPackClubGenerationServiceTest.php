@@ -74,11 +74,22 @@ class WorldPackClubGenerationServiceTest extends TestCase
         // NAMED, so the next constructor change cannot shift a stub into the wrong slot — which
         // is what removing GameConfigRepository from this service did to every positional
         // argument after it.
+        // A REAL StaffAbilityRangeService over the same stubbed PoolConfig repository (it is
+        // final, and it is pure resolution). With nothing authored it falls through to
+        // DEFAULT_TIER_BANDS, which is all these count-and-wiring tests need — the band
+        // itself is pinned by StaffAbilityRangeServiceTest and StaffGenerationServiceTest.
+        $staffAbilityRanges = new \App\Service\StaffAbilityRangeService(
+            $poolConfigRepo,
+            $this->createStub(\App\Repository\StarterConfigRepository::class),
+            $this->createStub(\Doctrine\ORM\EntityManagerInterface::class),
+        );
+
         $staffGen  = new StaffGenerationService(
             poolConfigRepo: $poolConfigRepo,
             nameGenerator: $nameGen,
             personalityLifecycle: $personalityLifecycle,
             wageModel: $wageModel,
+            staffAbilityRanges: $staffAbilityRanges,
         );
         $scoutGen  = new ScoutGenerationService(
             $poolConfigRepo,
@@ -86,6 +97,7 @@ class WorldPackClubGenerationServiceTest extends TestCase
             $personalityLifecycle,
             new ScoutWageCalculator($poolConfigRepo),
             new ScoutAbilityCalculator(),
+            $staffAbilityRanges,
         );
 
         return new WorldPackClubGenerationService(

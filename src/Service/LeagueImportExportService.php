@@ -63,8 +63,7 @@ class LeagueImportExportService
                 //
                 // `derivedTvDealPence()` returns null when there is no pool, so every league
                 // that authors its deal directly exports exactly what it did before.
-                'tvDeal'               => $this->leagueSizeResolver->derivedTvDealPence($l)
-                    ?? $l->getTvDeal(),
+                'tvDeal'               => $this->leagueSizeResolver->tvDealFor($l),
                 'tvPoolPence'          => $l->getTvPoolPence(),
                 // ⚠️ `slots` IS NOT EXPORTED, AND NOT IMPORTED. Owner ruling, 2026-11-19:
                 // *"Retire slots."* `LeagueSizeResolver::sizeOf()` derives every division size

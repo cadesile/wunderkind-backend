@@ -535,7 +535,7 @@ final class EconomyWageTableCommand extends Command
                 && $here === $above - 1;
 
             $size     = $this->leagueSizeResolver->sizeOf($league);
-            $pool     = $league->getTvPoolPence();
+            $pool     = $this->leagueSizeResolver->tvPoolPenceFor($league);
             $derived  = $this->leagueSizeResolver->derivedTvDealPence($league);
             $cached   = $league->getTvDeal();
             $slots    = $league->getSlots();
@@ -691,7 +691,7 @@ final class EconomyWageTableCommand extends Command
         $pools   = [];
 
         foreach ($leagues as $league) {
-            $pools[$league->getTier()] = $league->getTvPoolPence();
+            $pools[$league->getTier()] = $this->leagueSizeResolver->tvPoolPenceFor($league);
         }
 
         $problems = [];
@@ -858,7 +858,7 @@ final class EconomyWageTableCommand extends Command
             // why check 9 reports the staleness explicitly. Every publication site already
             // resolves this way; the gate reading the raw column was the one reader left in the
             // cache-staleness class.
-            $perClub  = $this->leagueSizeResolver->derivedTvDealPence($league) ?? $league->getTvDeal();
+            $perClub  = $this->leagueSizeResolver->tvDealFor($league);
             $size     = $this->leagueSizeResolver->sizeOf($league);
             $turnover = $scale->turnoverPence;
 
@@ -868,7 +868,7 @@ final class EconomyWageTableCommand extends Command
                 $tier,
                 $size,
                 $perClub === null ? '—' : $this->money($perClub),
-                $league->getTvPoolPence() === null ? '—' : $this->money($league->getTvPoolPence()),
+                $this->leagueSizeResolver->tvPoolPenceFor($league) === null ? '—' : $this->money($this->leagueSizeResolver->tvPoolPenceFor($league)),
                 $turnover > 0 ? $this->money($turnover) : '—',
                 $share === null ? '—' : sprintf('%.1f%%', $share),
             ];
@@ -890,41 +890,22 @@ final class EconomyWageTableCommand extends Command
     }
 
     /**
-     * CHECK 6 — is the TV table scaled by the country factor?
+     * CHECK 6 — is the TV pool authored ONCE, in baseline terms?
      *
-     * ── THE GAP THIS CLOSES ───────────────────────────────────────────────────────────────
+     * ── WHAT THIS CHECK USED TO SAY, AND WHY IT NOW SAYS THE OPPOSITE ─────────────────────────
      *
-     * Every money figure in this economy reaches a country through `EconomyScaleResolver`,
-     * which multiplies a base-year amount by the country factor — **except TV.**
-     * `league.tv_deal` is a STORED ABSOLUTE on a per-country row, authored by an operator, and
-     * no factor is ever applied to it. So setting `country_profile.economy_factor_bp` to 2000
-     * drops a country's turnover, wages and sponsorship to a fifth and leaves its TV money at
-     * 100%: a club paying a fifth of the wages while collecting full English TV money. Not a
-     * cheaper country — a different game, and the same defect the sponsor bands had before they
-     * were country-scaled, except this one cannot be fixed in code because the figure is
-     * authored rather than derived.
+     * Until 2026-11-20 no factor reached TV, so this check told an operator to hand-author a
+     * scaled TV table for every factored country ("re-author Scotland's TV table"). The owner
+     * ruled that everything scales (*"TV, prize, position and parachute"*) and the factor is now
+     * applied where the pool is RESOLVED (`LeagueSizeResolver::tvPoolPenceFor`). So a pool that
+     * an operator pre-scaled by hand would now be scaled a SECOND time — and the old instruction
+     * would have caused exactly that. The check is turned round rather than deleted: it reports
+     * a factored country whose authored pool differs from the baseline country's for the same
+     * tier, because the authored figure is meant to be the one country-blind tier default.
      *
-     * Nothing warned about it. Check 3 does not: TV at 5x its intended share still passes a
-     * bound of 100% of turnover whenever the factor is above about 0.35.
-     *
-     * ── HOW IT IS DETECTED ────────────────────────────────────────────────────────────────
-     *
-     * Turnover IS country-scaled, so for a correctly-authored TV table
-     *
-     *     TV_country / turnover_country  ===  TV_baseline / turnover_baseline
-     *
-     * at every tier — the share is scale-free, which is what makes it comparable at all. The
-     * check therefore reads the baseline country's own `tv_deal` for the tier and asks whether
-     * this country's is the baseline's times the factor. It reports the figure the operator
-     * should author, not merely that something is wrong.
-     *
-     * A country at parity needs no check and is skipped, which is why this is silent on every
-     * box today. Zero baselines is legal and also skipped: with nothing to compare against
-     * there is no claim to make.
-     *
-     * TOLERANCE IS 2%, because a sensible TV table is rounded to a few significant figures and
-     * the factor is basis points. The check is for an unscaled table, not for a rounding
-     * difference.
+     * Compares the RAW authored `tvPoolPence`, never the resolved one (they differ by the factor
+     * by design). A country at parity, the baseline itself, and a tier with no pool on either
+     * side are skipped: there is no claim to make. TOLERANCE IS 2%, as before.
      *
      * @return list<string>
      */
@@ -932,14 +913,12 @@ final class EconomyWageTableCommand extends Command
     {
         $baseline = $this->scaleResolver->baselineCountryCode();
 
-        // Nothing flagged, or this IS the baseline: no comparison to make.
         if ($baseline === null || $baseline === strtoupper(trim($country))) {
             return [];
         }
 
         $factorBp = $this->scaleResolver->countryFactorBp($country);
 
-        // At parity the stored absolute is already correct, which is every country today.
         if ($factorBp === 10000) {
             return [];
         }
@@ -948,44 +927,46 @@ final class EconomyWageTableCommand extends Command
         $rows     = [];
 
         for ($tier = 1; $tier <= $tierCount; $tier++) {
-            $here = $this->leagueRepository->findByCountryAndTier($country, $tier)?->getTvDeal();
-            $base = $this->leagueRepository->findByCountryAndTier($baseline, $tier)?->getTvDeal();
+            $here = $this->leagueRepository->findByCountryAndTier($country, $tier)?->getTvPoolPence();
+            $base = $this->leagueRepository->findByCountryAndTier($baseline, $tier)?->getTvPoolPence();
 
             if ($here === null || $base === null || $base <= 0) {
                 continue;
             }
 
-            $expected = intdiv($base * $factorBp, 10000);
-            $driftPct = $expected > 0 ? abs($here - $expected) * 100 / $expected : 0.0;
+            $resolved = intdiv($here * $factorBp, 10000);
+            $driftPct = abs($here - $base) * 100 / $base;
 
             $rows[] = [
                 $tier,
                 $this->money($base),
-                sprintf('%.2f', $factorBp / 10000),
-                $this->money($expected),
                 $this->money($here),
+                sprintf('%.2f', $factorBp / 10000),
+                $this->money($resolved),
                 sprintf('%.0f%%', $driftPct),
             ];
 
             if ($driftPct > 2.0) {
                 $problems[] = sprintf(
-                    '%s tier %d: TV is %s per club but %s\'s economy factor is %.0f%% of %s, so it should be about %s. '
-                    . '`league.tv_deal` is a stored absolute and no factor reaches it — re-author %s\'s TV table.',
+                    '%s tier %d: the authored TV pool is %s but %s\'s is %s. The pool is authored ONCE, in baseline '
+                    . 'terms, and %s\'s economy factor (%.0f%% of %s) is applied when it is resolved, so this one would be '
+                    . 'scaled twice (to %s). Author the baseline figure, not a pre-scaled one.',
                     $country,
                     $tier,
                     $this->money($here),
+                    $baseline,
+                    $this->money($base),
                     $country,
                     $factorBp / 100,
                     $baseline,
-                    $this->money($expected),
-                    $country,
+                    $this->money($resolved),
                 );
             }
         }
 
         if ($rows !== []) {
-            $io->text(sprintf('TV against the %s baseline (factor %.2f):', $baseline, $factorBp / 10000));
-            $io->table(['T', "{$baseline} per club", 'factor', 'expected', 'authored', 'drift'], $rows);
+            $io->text(sprintf('TV pool against the %s baseline (factor %.2f, applied at resolution):', $baseline, $factorBp / 10000));
+            $io->table(['T', "{$baseline} pool", 'authored', 'factor', 'resolved', 'drift'], $rows);
         }
 
         return $problems;
@@ -1350,8 +1331,7 @@ final class EconomyWageTableCommand extends Command
             // RESOLVED for the same reason check 3 does it: this line is paired with the
             // `sizeOf()` read eight lines above, so a stale cache makes `perClub` and `clubs`
             // disagree about how many ways the pool was split.
-            $tvPerClub     = $this->leagueSizeResolver->derivedTvDealPence($league)
-                ?? $league->getTvDeal()
+            $tvPerClub     = $this->leagueSizeResolver->tvDealFor($league)
                 ?? 0;
             $positionTotal = intdiv($pot * $taperPpm, 1_000_000);
 
@@ -1373,8 +1353,8 @@ final class EconomyWageTableCommand extends Command
                 $this->money($pot),
                 $clubs . ' @ ' . $decrease . '%',
                 sprintf('%.2fx', $taperPpm / 1_000_000),
-                $this->money($league->getTvPoolPence() ?? 0),
-                $this->money(($league->getTvPoolPence() ?? 0) + $positionTotal + $prize),
+                $this->money($this->leagueSizeResolver->tvPoolPenceFor($league) ?? 0),
+                $this->money(($this->leagueSizeResolver->tvPoolPenceFor($league) ?? 0) + $positionTotal + $prize),
                 $this->money($scale->turnoverPence * $clubs),
                 sprintf('%.1f%%', $sharePct),
                 sprintf('%.1f%%', $championPct),

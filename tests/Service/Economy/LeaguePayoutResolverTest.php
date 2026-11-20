@@ -200,10 +200,12 @@ class LeaguePayoutResolverTest extends TestCase
 
     // ── Resolution order ─────────────────────────────────────────────────
 
-    public function testTheLeaguesOwnColumnWinsAndIsNotScaled(): void
+    public function testTheLeaguesOwnColumnWinsOverTheLadderAndIsCountryScaled(): void
     {
-        // An override is somebody's resolved answer. It must survive a ratio retune untouched,
-        // and it must NOT be country-scaled either — it was authored for that division as it is.
+        // CHANGED 2026-11-20 (owner: "everything should scale"). An override still beats the
+        // ratio ladder and survives a ratio retune, but it is now a BASELINE-country figure: the
+        // live export held a cascaded copy of the tier default in all 196 leagues, so "verbatim"
+        // defeated the factor everywhere and protected nothing.
         $config = $this->authored();
         $league = new League('EN', 8, 'League 8');
         $league->setPrizeMoney(777_777_777);
@@ -211,17 +213,49 @@ class LeaguePayoutResolverTest extends TestCase
 
         $resolver = $this->resolver($config, ['EN' => $this->profile('EN', 10000, true), 'ES' => $this->profile('ES', 2000)]);
 
+        // England is the baseline: parity, byte-identical.
         self::assertSame(777_777_777, $resolver->prizeFor($league, $config));
         self::assertSame(123_456_789, $resolver->positionPotFor($league, $config));
 
         $cheap = new League('ES', 8, 'Liga 8');
         $cheap->setPrizeMoney(777_777_777);
+        $cheap->setLeaguePositionPot(123_456_789);
 
+        self::assertSame(155_555_555, $resolver->prizeFor($cheap, $config), '20% of the override');
+        self::assertSame(24_691_357, $resolver->positionPotFor($cheap, $config));
+    }
+
+    public function testParachuteScalesPerSeasonPenceAndNothingElse(): void
+    {
+        $config = $this->authored();
+        $resolver = $this->resolver($config, ['EN' => $this->profile('EN', 10000, true), 'ES' => $this->profile('ES', 1000)]);
+        $block = ['seasons' => 3, 'perSeasonPence' => [7_202_985_402, 4_801_990_268, 2_400_995_134], 'note' => 'kept'];
+
+        $en = new League('EN', 2, 'L2');
+        $en->setParachute($block);
+        $es = new League('ES', 2, 'L2');
+        $es->setParachute($block);
+
+        self::assertSame($block, $resolver->parachuteFor($en, $config), 'England is returned unchanged');
         self::assertSame(
-            777_777_777,
-            $resolver->prizeFor($cheap, $config),
-            'an override is verbatim, country factor included',
+            ['seasons' => 3, 'perSeasonPence' => [720_298_540, 480_199_026, 240_099_513], 'note' => 'kept'],
+            $resolver->parachuteFor($es, $config),
+            'only perSeasonPence is read; seasons and unknown keys pass through',
         );
+        self::assertSame($block['perSeasonPence'], $en->getParachute()['perSeasonPence'], 'the entity is not mutated');
+    }
+
+    public function testParachuteWithNoMoneyKeyOrNoBlockIsLeftAlone(): void
+    {
+        $config = $this->authored();
+        $resolver = $this->resolver($config, ['EN' => $this->profile('EN', 10000, true), 'ES' => $this->profile('ES', 1000)]);
+
+        $none = new League('ES', 1, 'L1');
+        self::assertSame($config->getLeagueParachute(), $resolver->parachuteFor($none, $config));
+
+        $odd = new League('ES', 1, 'L1');
+        $odd->setParachute(['seasons' => 2]);
+        self::assertSame(['seasons' => 2], $resolver->parachuteFor($odd, $config));
     }
 
     public function testZeroIsAnOverrideAndNotAnAbsentOne(): void

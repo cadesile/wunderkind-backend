@@ -11,6 +11,7 @@ use App\Service\Location\CountryGoLiveService;
 use App\Service\CountryContent\CountryContentRegistry;
 use App\Service\CountryContent\CountryNamingContentProvider;
 use App\Service\LeagueService;
+use App\Service\StaffAbilityRangeService;
 use App\Service\StarterAbilityRangeService;
 use App\Service\NpcClubGenerationService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -38,6 +39,7 @@ class BootstrapCountryCommand extends Command
         private readonly LeagueRepository           $leagueRepository,
         private readonly NpcClubGenerationService    $npcClubGenerationService,
         private readonly StarterAbilityRangeService  $abilityRangeService,
+        private readonly StaffAbilityRangeService    $staffAbilityRangeService,
         private readonly CountryProfileRepository    $countryProfileRepository,
         private readonly CountryGoLiveService        $goLiveService,
         private readonly CountryNamingContentProvider $namingContent,
@@ -137,6 +139,16 @@ class BootstrapCountryCommand extends Command
         // by name, and an operator who cannot open a shell needed the same nine lines.
         if ($this->abilityRangeService->seedDefaults($countryCode)) {
             $io->text("Seeded default tier ability ranges for {$countryCode} on StarterConfig.");
+        }
+
+        // ── 3b. Staff ability-band defaults (A25, 2026-11-20) ──────────────
+        //
+        // AFTER the player band above, never before: the staff seed is derived from this
+        // country's own authored player band, so seeding it first would read an empty table
+        // and fall back to the committed defaults for a country that is about to have its
+        // own. Same merge-if-absent promise. See StaffAbilityRangeService.
+        if ($this->staffAbilityRangeService->seedDefaults($countryCode)) {
+            $io->text("Seeded default staff ability bands for {$countryCode} on PoolConfig.");
         }
 
         // ── 4. Pool warm ───────────────────────────────────────────────────

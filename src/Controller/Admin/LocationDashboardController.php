@@ -21,6 +21,7 @@ use App\Service\CountryContent\NamePoolValidator;
 use App\Service\CountryContent\NamingContentService;
 use App\Service\CountryContent\Suggestion\NamePoolUnavailableException;
 use App\Service\CountryContent\Suggestion\NamingContentUnavailableException;
+use App\Service\StaffAbilityRangeService;
 use App\Service\StarterAbilityRangeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -54,6 +55,7 @@ class LocationDashboardController extends AbstractController
         private readonly LocationCapacityService $capacityService,
         private readonly LocationConfigRepository $locationConfigRepository,
         private readonly StarterAbilityRangeService $abilityRangeService,
+        private readonly StaffAbilityRangeService $staffAbilityRangeService,
         private readonly CountryNamingContentProvider $namingContent,
         private readonly NamingContentService $namingContentService,
         private readonly NamePoolService $namePools,
@@ -179,12 +181,19 @@ class LocationDashboardController extends AbstractController
         }
 
         $seeded = $this->abilityRangeService->seedDefaults($code);
+        // AFTER the player band, because the staff seed is derived from it (A25). Reported
+        // separately so "the player band was already there, the staff one was not" reads as
+        // what it is rather than as nothing having happened.
+        $staffSeeded = $this->staffAbilityRangeService->seedDefaults($code);
 
         $this->addFlash(
-            $seeded ? 'success' : 'info',
-            $seeded
-                ? sprintf('Seeded the standard eight-tier ability band for %s.', $code)
-                : sprintf('%s already has an ability band — nothing was changed.', $code),
+            $seeded || $staffSeeded ? 'success' : 'info',
+            match (true) {
+                $seeded && $staffSeeded => sprintf('Seeded the player and staff ability bands for %s.', $code),
+                $seeded                 => sprintf('Seeded the player ability band for %s; it already had a staff band.', $code),
+                $staffSeeded            => sprintf('Seeded the staff ability band for %s; it already had a player band.', $code),
+                default                 => sprintf('%s already has player and staff ability bands — nothing was changed.', $code),
+            },
         );
 
         return $this->backToScreen($code);

@@ -1245,3 +1245,80 @@ a device. **Legitimate under the pack-is-a-census rule**: two more per-scout acc
 ability-shaped census content, not money, the same class as the v12 `ability` bump. Note that
 `scouts[].ability` **moves on this bump under an unchanged key**, which is sanctioned here rather
 than a break: the figure's definition and type are unchanged, its inputs grew.
+
+### `Version20261120150000` — staff ability gets its own authored table (A25, 2026-11-20)
+
+Adds **`pool_config.staff_ability_ranges`** (`json`, default `'{}'`, NOT NULL) and seeds it for
+every country that has an authored player band. Owner ruling, three limbs: staff ability gets its
+own authored per-country/per-tier table replacing both the flat globals and the
+borrow-the-player-band workaround; a staff ability is defined **against the player
+`current_ability` scale**; and a 4-tier country must be authored at four tiers, not padded to
+eight.
+
+⚠️ **DDL, so it MUST be hand-applied to the untracked `wunderkind_test` database** before the
+suite will pass — contrast `Version20261120120000` directly above, which was data-only. Applied as
+`ALTER TABLE pool_config ADD staff_ability_ranges JSON DEFAULT '{}' NOT NULL`.
+
+**What it replaced.** `pool_config.coach_ability_min/max` — two flat global integers for every
+country and every tier in the game. 🔴 **The entity docblock said 40–75; the live dev row says
+4–75.** That is the **fifth** instance of this workstream's governing trap (after
+`bondDecayFloor`, `wageMultiplierTiers`, `incomeAnchoredWages` and `league_ability_ranges` itself,
+whose live EN row reads 40–90 down to 2–7 and not the committed 75–95 down to 10–25). A pair
+spanning 4 to 75 is not a band: a bottom-tier club could be handed a 75 coach and a top-tier club
+a 4. The other half of the defect was a `$abilityRange` parameter that `StarterPackService` and
+both world-pack generators filled with the squad's **PLAYER** band — a POTENTIAL figure, against a
+staff ability that has no potential half.
+
+**The seed, and why it is derived rather than chosen.** Each tier's staff band is
+`[0.45 × midpoint, 0.85 × midpoint]` of **that country's own** authored player band. The two
+fractions are measured, not picked: under the live dev configuration 1,200 generated first-team
+players per tier land at a current ability of almost exactly `0.6 ×` their potential band's
+midpoint, with p25–p95 spanning `0.45×`–`0.85×`, holding to within a point or two at every live
+tier. ⚠️ It is a **fit, not a law** — against the committed default band it runs ~10% high at
+tiers 1–3, because current ability compresses against high potential
+(`PlayerGenerationService::buildAbilityTarget()`'s `abilityTarget` is a fraction of potential).
+Full measurement: `wunderkind-docs/economy-loose-ends/a25-ability-bands-report.md`.
+
+Deriving per country is what makes this a **seed** rather than a tuning decision — it says "staff
+at this tier are worth about what the players at this tier actually deliver", in the country's own
+numbers. Picking different figures is calibration and was explicitly outside A25.
+
+**Depth comes from the player table, not from a club or league count.** A country is seeded with
+exactly the tiers `starter_config.league_ability_ranges` authors for it, because
+`StarterAbilityRangeService::syncToPyramid()` already keeps that table in step with the pyramid and
+the app's country picker already counts its keys as a country's depth — one answer to "how deep is
+this country", not two that can disagree. Verified by running this migration's own SQL against the
+LIVE starter-config export: **SC comes out at four tiers, the other 25 countries at eight**, no
+dead rows. On the dev box (where SC genuinely authors and runs eight tiers) SC is seeded at eight.
+
+**Measured on dev after applying it:** EN seeded to `29–55 / 20–38 / 14–26 / 11–21 / 8–15 / 6–11 /
+3–6 / 2–4` from its live player band, and the countries still on the committed default band
+(including SC and TR here) to `38–72 … 8–15`.
+
+**One statement, in SQL rather than PHP**, so the arithmetic that lands in the column is visible to
+a reader of the migration and cannot drift from `StaffAbilityRangeService::bandFromPlayerBand()` —
+which `StaffAbilityRangeServiceTest` pins against these same figures. `LEAST`/`GREATEST` on the
+pair rather than trusting it, because `league_ability_ranges` is a hand-editable admin grid and a
+transposed row is a real state of it; a tier whose bounds are absent or non-positive is **skipped
+entirely** so it stays unauthored and falls through to `DEFAULT_TIER_BANDS` at read time, rather
+than being written as a zero band that would generate ability-0 staff. **Idempotent**: the seed
+only writes a row whose `staff_ability_ranges` is still `{}`.
+
+**No backfill, and none is attempted.** Every persisted row in `staff` and `scout` is a
+shared-pool row — ⚠️ **`staff` has no `club_id` column at all** — and the untiered band is
+unchanged, so no stored figure is made stale. A club's staff exist only inside cached world packs
+and starter packs. Measured on dev before the change: 9,784 staff at ability 4–75 (mean 39) and
+5,278 scouts, all pool rows.
+
+⚠️ **Paired with `WORLD_PACK_VERSION` 13 → 14** in the same commit, and **the bump is what
+delivers the fix**: a cached v13 pack holds staff generated from the player band, and nothing
+re-derives a staff member the way `app:backfill-scout-abilities` re-derives a scout's `ability` —
+a generated staff member exists nowhere but in the pack that holds it. `staff[].coachingAbility`,
+`staff[].scoutingRange`, `staff[].weeklySalary` and `scouts[].experience`/`ability` therefore all
+take different values for the same club than a v13 pack holds. Legitimate under the
+pack-is-a-census rule: ability-shaped census content, and `staff.weekly_salary` was already written
+here for the backend's non-pack consumers. No key changes shape, type or meaning, and no app change
+is needed.
+
+`down()` drops the column, which is a true reversal — nothing else is changed, and a down-migrated
+database falls back to `coach_ability_min/max` for every staff member exactly as it did before.

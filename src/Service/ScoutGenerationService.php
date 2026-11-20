@@ -22,13 +22,14 @@ class ScoutGenerationService
         private readonly PersonalityLifecycleSubscriber $personalityLifecycle,
         private readonly ScoutWageCalculator $wageCalculator,
         private readonly ScoutAbilityCalculator $abilityCalculator,
+        private readonly StaffAbilityRangeService $staffAbilityRanges,
     ) {}
 
     /**
-     * `$abilityRange` is the club's tier band, and passing it is what keeps a scout at the
-     * club's own level.
+     * `$country` and `$tier` are the club this scout is being generated for, and passing them
+     * is what keeps a scout at the club's own level. The shared pool passes neither.
      *
-     * Without it, experience comes from a single global range
+     * Without a tier, experience comes from a single global range
      * (`PoolConfig::$scoutExperienceMin/Max`, 4-34 on dev) whatever the club — so a tier-8 side
      * got a scout rated 33 standing next to coaches rated 2-7. That is the same defect staff
      * ability had, and scouts were missed when that was fixed because a Scout is its own entity
@@ -42,22 +43,45 @@ class ScoutGenerationService
      * `ability`, which is 70% banded experience, so banding the experience still moves the wage,
      * one step further removed.
      *
-     * Absent, the global range still applies, which is right for the shared pool: a market
-     * scout is one row served to every country and has no tier to be banded against.
+     * ── WHAT A25 CHANGED, AND WHAT IT DELIBERATELY DID NOT (2026-11-20) ─────────────────
      *
-     * @param array{min: int, max: int}|null $abilityRange
+     * ⚠️ **THE BANDED INPUT IS NOW THE AUTHORED STAFF TABLE, NOT THE SQUAD'S PLAYER BAND.**
+     * `$abilityRange` used to be a parameter, and every per-club caller filled it with the
+     * PLAYER band for that country and tier — a POTENTIAL figure, against a scout whose
+     * `ability` is a flat 1-100 quantity with no development curve. It now comes from
+     * `StaffAbilityRangeService::resolve()`, the same per-country/per-tier table a coach is
+     * drawn from, so a club's scouts and its coaches are banded off ONE authored source.
+     * The parameter is gone rather than defaulted, so no caller can put the player band back.
+     *
+     * ⚠️ **`PoolConfig::$scoutExperienceMin/Max` (4-34 live) IS UNTOUCHED, by ruling.** It is
+     * the UNTIERED window — the shared pool, which has no tier to be banded against — and it
+     * is a scouting-gameplay input rather than only a wage input, so A25 was told to leave it
+     * exactly as it is.
+     *
+     * ⚠️ **AND NOTE THE SCALE CONFLATION THAT REMAINS, because it is pre-existing and NOT
+     * A25's to fix.** The banded figure lands on `experience`, which is years-of-experience on
+     * a 0-100 axis, while the staff table is defined against player `current_ability`. The
+     * tiered input was already a different quantity from `experience` before A25 (it was
+     * player potential); this change makes the two sides of the staff comparison agree without
+     * claiming to have settled what a scout's experience axis means. Recorded as an open item
+     * in `wunderkind-docs/economy-loose-ends/a25-ability-bands-report.md`.
      */
-    public function build(?string $nationality = null, ?array $abilityRange = null): Scout
+    public function build(?string $nationality = null, string $country = '', int $tier = 0): Scout
     {
         $cfg = $this->poolConfigRepo->getConfig();
 
-        $expMin = $abilityRange !== null ? (int) $abilityRange['min'] : $cfg->getScoutExperienceMin();
-        $expMax = $abilityRange !== null ? (int) $abilityRange['max'] : $cfg->getScoutExperienceMax();
-
-        // Normalised rather than trusted: `league_ability_ranges` is a hand-editable admin grid
-        // and a transposed pair is a real state of that row.
-        if ($expMin > $expMax) {
-            [$expMin, $expMax] = [$expMax, $expMin];
+        if ($country !== '' && $tier > 0) {
+            $band  = $this->staffAbilityRanges->resolve($country, $tier);
+            $expMin = $band['min'];
+            $expMax = $band['max'];
+        } else {
+            // The untiered window, by ruling. Ordered rather than trusted: it is two
+            // hand-edited admin fields and a transposed pair is a real state of that row.
+            $expMin = $cfg->getScoutExperienceMin();
+            $expMax = $cfg->getScoutExperienceMax();
+            if ($expMin > $expMax) {
+                [$expMin, $expMax] = [$expMax, $expMin];
+            }
         }
 
         $age        = random_int($cfg->getScoutAgeMin(), $cfg->getScoutAgeMax());

@@ -294,6 +294,72 @@ class PoolConfigControllerTest extends WebTestCase
         $this->assertSame(7000, $config->getScoutWageMax());
     }
 
+    /**
+     * ── THE STAFF ABILITY BANDS GRID (A25, 2026-11-20) ──────────────────────────────────
+     *
+     * The authored per-country/per-tier table is editable here, and three properties of the
+     * save are worth pinning because each one is a defect the player grid already had to fix:
+     *
+     *   - a submitted band is STORED, keyed by tier as a string;
+     *   - a country absent from the form KEEPS its band (the grid is built from countries with
+     *     League rows, so a country without a pyramid has no inputs at all — replacing the
+     *     whole column would silently delete its band on any save, undoing the locations
+     *     dashboard's "Seed defaults" button; see DashboardController::saveStarterConfig());
+     *   - a BLANK pair is dropped as unauthored rather than stored as zero, because an
+     *     ability-0 band generates ability-0 staff instead of falling through to the defaults.
+     */
+    public function testSaveStaffPoolConfigPersistsTheStaffAbilityBandsGrid(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $token = $this->seedValidCsrfToken($client, 'save_staff_pool_config');
+
+        $em     = self::getContainer()->get(EntityManagerInterface::class);
+        $config = $this->getConfig();
+        $config->setStaffAbilityRanges(['ZZ' => ['1' => ['min' => 7, 'max' => 9]]]);
+        $em->flush();
+
+        $client->request('POST', '/admin/staff-pool-config/save', [
+            '_token'      => $token,
+            'staffRanges' => [
+                'EN' => [
+                    '1' => ['min' => '29', 'max' => '55'],
+                    '2' => ['min' => '', 'max' => ''],
+                ],
+            ],
+        ]);
+
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $ranges = $this->getConfig()->getStaffAbilityRanges();
+
+        $this->assertSame(['min' => 29, 'max' => 55], $ranges['EN'][1], 'the submitted band must be stored');
+        $this->assertArrayNotHasKey(2, $ranges['EN'], 'a blank pair is unauthored, not a zero band');
+        $this->assertSame(['min' => 7, 'max' => 9], $ranges['ZZ'][1], 'a country absent from the form keeps its band');
+    }
+
+    /** A transposed pair is ordered on the way in, so the stored row never holds one. */
+    public function testTheStaffAbilityGridOrdersATransposedPair(): void
+    {
+        $client = static::createClient();
+        $this->loginAsAdmin($client);
+        $token = $this->seedValidCsrfToken($client, 'save_staff_pool_config');
+
+        $client->request('POST', '/admin/staff-pool-config/save', [
+            '_token'      => $token,
+            'staffRanges' => ['EN' => ['3' => ['min' => '40', 'max' => '12']]],
+        ]);
+
+        $this->assertResponseRedirects();
+
+        self::getContainer()->get(EntityManagerInterface::class)->clear();
+        $this->assertSame(
+            ['min' => 12, 'max' => 40],
+            $this->getConfig()->getStaffAbilityRanges()['EN'][3],
+        );
+    }
+
     public function testSaveStaffPoolConfigRequiresValidCsrfToken(): void
     {
         $client = static::createClient();

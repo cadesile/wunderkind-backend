@@ -831,8 +831,7 @@ class SyncService
             // NULL, and the app's `Math.max(0, league.tvDealPence)` (`seasonFinances.ts:80`)
             // turned that into £0 of TV income. `derivedTvDealPence()` returns null when there
             // is no pool, so this is INERT for every league that authors its deal directly.
-            'tvDeal'                        => $this->leagueSizeResolver->derivedTvDealPence($league)
-                ?? ($league->getTvDeal() !== null ? (int) $league->getTvDeal() : null),
+            'tvDeal'                        => $this->leagueSizeResolver->tvDealFor($league),
             'sponsorPot'                    => (int) $sponsorPot,
             // RESOLVED, `league column ?? base x ratio x country factor`. Same keys, same
             // nullable-int types, same position in the array — so the key-set-and-order parity
@@ -850,12 +849,12 @@ class SyncService
             // a key there forces a bump that invalidates every country. This snapshot is built
             // per sync, so it costs nothing. Same resolution the NPC-club `locationId` work
             // reached, per .context/shared/api-backwards-compatibility.md.
-            'tvPoolPence'                   => $league->getTvPoolPence(),
+            'tvPoolPence'                   => $this->leagueSizeResolver->tvPoolPenceFor($league),
             'clubCount'                     => $this->leagueSizeResolver->sizeOf($league),
             // Resolved whole-value, `league ?? gameConfig`. Null when neither is authored,
             // which is the shipped state — a key an old build does not read, and a new build
             // reads as "no parachute scheme" rather than as an empty one to pay out.
-            'parachute'                     => $league->getParachute() ?? $gameConfig->getLeagueParachute(),
+            'parachute'                     => $this->leaguePayoutResolver->parachuteFor($league, $gameConfig),
             'clubs'                         => array_map(fn(NpcClub $c) => [
                 'id'             => (string) $c->getId(),
                 'name'           => $c->getName(),

@@ -168,93 +168,70 @@ class EconomyTvCountryScalingGuardTest extends KernelTestCase
     }
 
     // ── It fires on the defect ───────────────────────────────────────────
+    //
+    // REVERSED 2026-11-20. The factor is now applied where the TV pool is RESOLVED, so the defect
+    // is no longer "TV was never scaled" — it is a pool an operator PRE-scaled by hand (as the old
+    // message instructed), which would now be scaled a second time.
 
-    public function testAFactoredCountryWithAnUnscaledTvTableIsReported(): void
+    public function testAFactoredCountryWithAPreScaledPoolIsReported(): void
     {
-        // THE DEFECT. Otherland is set to a fifth of the base year and its TV was never
-        // re-authored, so its clubs would pay a fifth of the wages on full baseline TV money.
-        $this->seed(otherFactorBp: 2000);
+        $this->seed(otherFactorBp: 2000, otherTv: 2_720_000_000);   // 20% of £136m, typed in by hand
 
         $out = $this->runGate(self::OTHER)->getDisplay();
 
-        self::assertStringContainsString('TV is', $out);
-        self::assertStringContainsString('stored absolute', $out);
-        // It names the figure to author, not merely that something is wrong: 20% of £136m.
-        self::assertStringContainsString('27,200,000.00', $out);
+        self::assertStringContainsString('scaled twice', $out);
+        // It names the figure that WOULD result, so the operator sees the damage.
+        self::assertStringContainsString('Author the baseline figure', $out);
     }
 
     public function testTheGuardFailsTheCommand(): void
     {
-        // It is a GATE, so this has to change the exit code rather than print a warning.
-        $this->seed(otherFactorBp: 2000);
+        $this->seed(otherFactorBp: 2000, otherTv: 2_720_000_000);
 
         self::assertSame(1, $this->runGate(self::OTHER)->getStatusCode());
     }
 
     public function testItAlsoCatchesAFactorABOVEParity(): void
     {
-        // A country deliberately richer than the base year has the same problem in reverse: its
-        // TV is now UNDER-stated relative to its wages. The guard is about proportion, not
-        // about being cheap.
-        $this->seed(otherFactorBp: 20000);
+        $this->seed(otherFactorBp: 20000, otherTv: 27_200_000_000);   // 2x, pre-scaled
 
-        $out = $this->runGate(self::OTHER)->getDisplay();
-
-        self::assertStringContainsString('stored absolute', $out);
-        self::assertStringContainsString('272,000,000.00', $out);   // 2x £136m
+        self::assertStringContainsString('scaled twice', $this->runGate(self::OTHER)->getDisplay());
     }
 
     // ── It stays silent when it should ───────────────────────────────────
 
     public function testACountryAtParityIsNotReported(): void
     {
-        // Every country on every box today. The stored absolute is already correct at parity,
-        // so a guard that fired here would make the gate unusable.
         $this->seed(otherFactorBp: 10000);
 
-        self::assertStringNotContainsString('stored absolute', $this->runGate(self::OTHER)->getDisplay());
+        self::assertStringNotContainsString('scaled twice', $this->runGate(self::OTHER)->getDisplay());
     }
 
-    public function testACorrectlyScaledTableIsNotReported(): void
+    public function testAPoolAuthoredInBaselineTermsIsNotReported(): void
     {
-        // The state an operator reaches after acting on the message: 20% of £136m = £27.2m.
-        $this->seed(otherFactorBp: 2000, otherTv: 2_720_000_000);   // 20% of £136m = £27,200,000
+        // THE NEW CORRECT STATE: the same pool as the baseline, with the factor applied at
+        // resolution. The table shows the resolved figure and the check stays quiet.
+        $this->seed(otherFactorBp: 2000);
 
-        self::assertStringNotContainsString('stored absolute', $this->runGate(self::OTHER)->getDisplay());
+        $out = $this->runGate(self::OTHER)->getDisplay();
+
+        self::assertStringNotContainsString('scaled twice', $out);
+        self::assertStringContainsString('applied at resolution', $out);
+        self::assertStringContainsString('489,600,000.00', $out);   // seed(): pool = 18 x £136m = £2,448m; x 0.2 = £489.6m
     }
 
     public function testRoundingToSignificantFiguresIsNotAFailure(): void
     {
-        // A sensible TV table is authored at a few significant figures, so the check tolerates
-        // 2%. £27,000,000 against an exact £27,200,000 is 0.7% out and must pass, or the gate
-        // would demand figures no human would type.
-        $this->seed(otherFactorBp: 2000, otherTv: 2_700_000_000);   // £27,000,000 — 0.7% under exact
+        // Two per cent tolerance: £136.9m against £136m is 0.66% out.
+        $this->seed(otherFactorBp: 2000, otherTv: 13_690_000_000);
 
-        self::assertStringNotContainsString('stored absolute', $this->runGate(self::OTHER)->getDisplay());
+        self::assertStringNotContainsString('scaled twice', $this->runGate(self::OTHER)->getDisplay());
     }
 
     public function testTheBaselineCountryIsNeverComparedWithItself(): void
     {
-        // It is parity with itself by definition, whatever factor it stores — the same
-        // normalisation `countryFactorBp()` applies.
         $this->seed(otherFactorBp: 2000);
 
-        self::assertStringNotContainsString('stored absolute', $this->runGate(self::BASE)->getDisplay());
-    }
-
-    // ── Why check 3 is not enough ────────────────────────────────────────
-
-    public function testCheck3CannotCatchThisAndThatIsWhyCheck6Exists(): void
-    {
-        // THE JUSTIFICATION FOR A SEPARATE CHECK, asserted rather than claimed in a comment.
-        // At factor 0.5 an unscaled table is at TWICE its intended share — plainly wrong — but
-        // TV is still only 70% of turnover, so check 3's 100% bound says nothing. Check 6 must
-        // be the one that speaks.
-        $this->seed(otherFactorBp: 5000);
-
-        $out = $this->runGate(self::OTHER)->getDisplay();
-
-        self::assertStringNotContainsString('TV alone is', $out, 'check 3 stays quiet here');
-        self::assertStringContainsString('stored absolute', $out, 'check 6 is what catches it');
+        self::assertStringNotContainsString('scaled twice', $this->runGate(self::BASE)->getDisplay());
     }
 }
