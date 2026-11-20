@@ -40,8 +40,10 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
 
     /**
      * A league whose TV is DERIVED: a pool is authored and the per-club column is NULL, which is
-     * the live state of Scottish tiers 5-8. `slots` is authored so the divisor is deterministic
-     * and this fixture does not depend on how many NPC club rows happen to exist.
+     * the live state of Scottish tiers 5-8. ⚠️ The divisor comes from the NPC club rows this
+     * fixture inserts — `slots` was retired on 2026-11-19 and `POOL_SLOTS` is now the ROW COUNT
+     * the fixture seeds, kept under its old name because the expected `POOL_DERIVED` is
+     * `POOL_PENCE / POOL_SLOTS` and renaming both would obscure that.
      */
     private const POOL_COUNTRY = 'ZP';
     private const POOL_PENCE   = 1_000_000;
@@ -80,7 +82,16 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         return [
             // id and createdAt are server-side identity/bookkeeping; league association is
             // rebuilt from country+tier by relinkClubsToLeagues() rather than serialized.
-            'League'  => [League::class, 'leagues', ['createdAt']],
+            //
+            // ⚠️ `slots` IS EXCLUDED DELIBERATELY, AND IT IS THE ONLY EXCLUSION HERE THAT IS A
+            // DECISION RATHER THAN BOOKKEEPING. Owner ruling, 2026-11-19: *"Retire slots."*
+            // Nothing reads the column — `LeagueSizeResolver::sizeOf()` derives every division
+            // size from the NPC club rows, which this export carries under `clubs`, so the size
+            // DOES round-trip, through the rows. Listing it here rather than emitting it keeps
+            // the round-trip invariant exact instead of carving a second exception into
+            // testWorldSurvivesClearAndReimport. ⚠️ If `slots` is ever read again, it must come
+            // off this list in the same change.
+            'League'  => [League::class, 'leagues', ['createdAt', 'slots']],
             'NpcClub' => [NpcClub::class, 'clubs', ['createdAt', 'league']],
         ];
     }
@@ -227,7 +238,11 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         self::assertSame(3, $after['parachute']['seasons']);
         self::assertSame(['nested' => true], $after['parachute']['appOwnedKey'], 'a key the backend does not know must survive');
         self::assertSame(9_000_000, $after['tvPoolPence']);
-        self::assertSame(18, $after['slots']);
+        // ⚠️ `slots` IS NO LONGER ASSERTED HERE, AND NO LONGER IN THE EXPORT AT ALL — owner
+        // ruling, 2026-11-19, "retire slots". The line it replaces was `assertSame(18,
+        // $after['slots'])`. The division size still round-trips, through the `clubs` rows the
+        // same export carries; see worldEntityProvider()'s exclusion list.
+        self::assertArrayNotHasKey('slots', $after, 'the retired column came back into the export');
         self::assertSame(17, $after['leaguePositionDecreasePercent']);
     }
 
@@ -514,6 +529,8 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
     {
         $league = new League(self::POOL_COUNTRY, 3, 'Pooled Division');
         $league->setPromotionSpots(2);
+        // The retired column, still written so the fixture matches a real row on a box that
+        // was authored before 2026-11-19. It does not reach the divisor — see below.
         $league->setSlots(self::POOL_SLOTS);
         $league->setTvPoolPence(self::POOL_PENCE);
 
@@ -522,6 +539,28 @@ class LeagueImportExportRoundTripTest extends KernelTestCase
         self::assertNull($league->getTvDeal());
 
         $this->em->persist($league);
+
+        // ⚠️ THE DIVISOR COMES FROM THESE ROWS, NOT FROM `setSlots()` ABOVE — owner ruling,
+        // 2026-11-19. `POOL_SLOTS - 1` of them, because tier 3 is the only league this country
+        // has and is therefore its deepest, where `sizeOf()` adds the player's own place: nine
+        // NPC rows plus the player is a division of ten, which is what `POOL_DERIVED` divides
+        // by. Before the ruling this fixture needed no clubs at all, which is exactly the
+        // dependency the ruling removed from the column and gave to the rows.
+        for ($i = 0; $i < self::POOL_SLOTS - 1; $i++) {
+            $club = new NpcClub(
+                sprintf('Pooled %s-%d', self::POOL_COUNTRY, $i),
+                self::POOL_COUNTRY,
+                3,
+                40,
+                '#101010',
+                '#202020',
+                1_000_000,
+                [],
+            );
+            $club->setLeague($league);
+            $this->em->persist($club);
+        }
+
         $this->em->flush();
         $this->em->clear();
     }

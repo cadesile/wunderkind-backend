@@ -260,7 +260,8 @@ contents must own them for its duration rather than assume the shipped defaults.
 **A SIXTH FAILURE WAS RECORDED ON 2026-11-19 AND IS DELIBERATELY NOT ON THIS LIST, BECAUSE IT WAS
 A DEFECT AND IT IS FIXED (A16, same day) — it was never a flake that stopped appearing.**
 `LegacyNewGameFlowTest::testTheEconomyBlockShipsSwitchedOff` ("the turnover table must be
-unauthored") failed because `EconomyAuthoredSizeDriftTest` and `EconomyTvCountryScalingGuardTest`,
+unauthored") failed because `EconomyDerivedSizeDriftTest` (then named
+`EconomyAuthoredSizeDriftTest`, renamed by A23 the same day) and `EconomyTvCountryScalingGuardTest`,
 both landed that day, wrote `38_866_153_952` into the shared `game_config` row in their own
 `seed()` and never put it back. Both now stash the table in `setUp()` and restore it in
 `tearDown()` — in `tearDown()` on purpose, because that runs after a FAILED assertion too, so the

@@ -66,7 +66,16 @@ class LeagueImportExportService
                 'tvDeal'               => $this->leagueSizeResolver->derivedTvDealPence($l)
                     ?? $l->getTvDeal(),
                 'tvPoolPence'          => $l->getTvPoolPence(),
-                'slots'                => $l->getSlots(),
+                // ⚠️ `slots` IS NOT EXPORTED, AND NOT IMPORTED. Owner ruling, 2026-11-19:
+                // *"Retire slots."* `LeagueSizeResolver::sizeOf()` derives every division size
+                // from the NPC club rows, which this file exports under `clubs`, so the size
+                // round-trips through the rows and the column has nothing left to carry.
+                // Emitting it would have meant breaking the round-trip invariant
+                // (`testWorldSurvivesClearAndReimport`: whatever the export emits must come
+                // back) for a field nothing reads — so it is excluded at both ends instead,
+                // registered as such in `worldEntityProvider()`'s exclusion list. The DATABASE
+                // column stays; `app:economy:wage-table`'s check 9 prints it beside the derived
+                // size for anyone reconciling an older export against a running box.
                 'leaguePositionDecreasePercent' => $l->getLeaguePositionDecreasePercent(),
                 'leagueReputationTier' => $l->getLeagueReputationTier()?->value,
                 // ── RESOLVED, NOT THE RAW COLUMN, AND THE KEY NAME IS THE WHOLE POINT ──────
@@ -256,8 +265,12 @@ class LeagueImportExportService
                 // given or the export stops being a backup.
                 if (array_key_exists('parachute', $row))
                     $league->setParachute(is_array($row['parachute']) ? $row['parachute'] : null);
-                if (array_key_exists('slots', $row))
-                    $league->setSlots((int) $row['slots']);
+                // ⚠️ `slots` IS DELIBERATELY NOT RESTORED. It used to be, and the owner retired
+                // the field on 2026-11-19: restoring it would put an authored divisor back into
+                // the database on every world import, where the next reader would find a
+                // populated column and reasonably assume something reads it. The size is
+                // derived from the NPC club rows the same import inserts, so nothing is lost.
+                // The key is still EXPORTED (see `exportWorld()`); the asymmetry is the point.
                 if (array_key_exists('leaguePositionDecreasePercent', $row))
                     $league->setLeaguePositionDecreasePercent(
                         $row['leaguePositionDecreasePercent'] !== null

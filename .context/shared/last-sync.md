@@ -37,6 +37,49 @@
   floats vs `NUMERIC`). Fixed by exact integer arithmetic in the calculator, not by tolerating
   it - see `03_data/output/migrations.md`.
 
+- **A23: `league.slots` retired — every division size is now DERIVED (2026-11-19)**, on
+  `development` on top of `9918839c`. **Stages touched:** 01_overview (`environment.md`), 03_data
+  (`entities.md`, `migrations.md`), 04_interfaces (`services.md`), shared (this file). Report and
+  verbatim evidence: `wunderkind-docs/economy-loose-ends/a23-retire-slots-report.md` and
+  `a23-run-2026-11-19/`.
+
+  **The ruling.** Owner, 2026-11-19: *"Retire slots."* `LeagueSizeResolver`'s docblock argued at
+  length that the field must stay authored, because *"a derived divisor moves whenever somebody
+  clicks Generate"*. The owner heard that and overruled it. ⚠️ **The argument was rewritten, not
+  deleted** — both the resolver's class docblock and `EconomyWageTableCommand`'s check 9 quote it
+  and record what was given up, because a comment contradicting the code is worse than either.
+
+  **What landed.** `sizeOf()` derives always: NPC club rows, plus one at the country's deepest
+  division for the player's own place, and **0 for a tier with no rows at all**. Nothing writes
+  the column any more — the admin quick-edit shows the derived size read-only and the world
+  export/import drops the key at both ends (`worldEntityProvider()`'s exclusion list). The COLUMN
+  is deliberately NOT dropped. Check 9 is rewritten around the two disagreements that remain: a
+  stale world pack (FAILS — now the only way left to show a player a wrong divisor) and a stale
+  `league.tv_deal` column (WARNS — no player reads it, four admin surfaces do).
+
+  **Blast radius, measured off the 2026-11-19 world export (200 leagues / 3,175 clubs).**
+  ⚠️ **All 25 countries checked, not the 2 in scope — 24 are byte-identical** and only **SC**
+  moves, 14 → 12 at all eight tiers. The brief's "23 countries unchecked, out of scope" is
+  therefore closed rather than deferred. England's variant-gate output is byte-identical before
+  and after (`a23-run-2026-11-19/variantGate-EN.{BEFORE,AFTER}.txt`, `diff` empty).
+
+  ⚠️ **A real defect was found and fixed in the same change, by the suite.** The unconditional
+  `+1` turned a tier with NO rows into a division of ONE, so `derivedTvDealPence()` published the
+  whole pool as a single club's share — the exact "divide by a clamped 1" failure the 0 exists to
+  prevent, reached by another route. `EconomyTvCountryScalingGuardTest` caught it.
+
+  ⚠️ **Flagged for the PM, not restructured.** `03_data/output/migrations.md`'s three
+  `Version2026111909/12/15` sections are now historical — the column they fill is unread — and are
+  marked as such at the top of the first rather than pruned. `04_interfaces/output/services.md`'s
+  "a defect this exposes and does NOT fix" is resolved and annotated in place.
+
+  **Suite.** `lando php vendor/bin/phpunit --filter '/^(?!.*AdminShellCoverage).*$/'` → **3,238
+  tests** (baseline 3,233; +5), 155,841 assertions, **3 failures, all three proven pre-existing by
+  stashing and re-running on the clean tree** (`NotificationLogCrudControllerTest`,
+  `CompetitionControllerTest::testShowIncludesResultsOnceRoundsAreProcessed`,
+  `FriendlyResolveSingleMatchTest`). `EconomyAuthoredSizeDriftTest` renamed to
+  `EconomyDerivedSizeDriftTest`.
+
 - **A16: the two `game_config` polluters now own the row for their duration (2026-11-19)**,
   committed on `development` directly on top of `8298cc60`. **Stages touched:** 01_overview
   (`environment.md`), shared (this file). Report and verbatim evidence:

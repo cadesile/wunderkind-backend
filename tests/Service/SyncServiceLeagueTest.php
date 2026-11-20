@@ -163,6 +163,8 @@ class SyncServiceLeagueTest extends TestCase
         $userClub = new Club('Test FC', $user);
         $league   = new League('EN', 8, 'League 8');
         $league->setTvPoolPence(9_000_000);
+        // The retired column, left set at a DIFFERENT value from the derived size on purpose:
+        // if anything reads it again, `clubCount` comes out 18 and this test says so.
         $league->setSlots(18);
         $league->setTvDeal(500_000);
         $userClub->setCurrentLeague($league);
@@ -174,13 +176,15 @@ class SyncServiceLeagueTest extends TestCase
 
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $this->createStub(NpcClubRepository::class));
-        $this->injectSizeResolver($service);
+        // 15 NPC rows in England's deepest tier, plus the player's own place = 16, which is the
+        // deployed England shape (world export, 2026-11-19).
+        $this->injectSizeResolver($service, [(string) $league->getId() => 15], $league);
 
         $result = (new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot'))
             ->invoke($service, $userClub, new GameConfig());
 
         self::assertSame(9_000_000, $result['tvPoolPence']);
-        self::assertSame(18, $result['clubCount'], 'authored slots win over a counted size');
+        self::assertSame(16, $result['clubCount'], 'the divisor must be derived from the rows, not from league.slots');
         // The arithmetic a client can check: pool / clubCount === the published share.
         self::assertSame($result['tvDeal'], intdiv($result['tvPoolPence'], $result['clubCount']));
     }
@@ -296,6 +300,12 @@ class SyncServiceLeagueTest extends TestCase
      * nothing about it. The live state of Scottish tiers 5-8 is a pool with a NULL column,
      * because `syncTvDeal()` only ever runs on an admin save. Publishing that raw NULL made the
      * app compute `Math.max(0, null)` and pay £0 of TV for a whole season.
+     *
+     * ⚠️ **AND IT IS NOW THE 14 -> 12 MOVE, ON THE EXACT TIER THE OWNER SAW.** Scotland tier 8
+     * as deployed: `slots` authored 14, 11 NPC club rows, the player's own place making 12.
+     * Before the 2026-11-19 ruling this published `intdiv(120_000_000, 14)` = £85,714.28 to a
+     * twelve-club division, and £171,428.64 of the £1,200,000 pool reached nobody. It must now
+     * publish `intdiv(120_000_000, 12)` = £100,000.00.
      */
     public function testAPooledLeagueWithNoAuthoredDealPublishesTheDerivedShare(): void
     {
@@ -303,6 +313,7 @@ class SyncServiceLeagueTest extends TestCase
         $userClub = new Club('Test FC', $user);
         $league   = new League('SC', 8, 'Scottish 8');
         $league->setTvPoolPence(120_000_000);
+        // The retired column, at the figure the live box actually holds. Nothing may read it.
         $league->setSlots(14);
         $userClub->setCurrentLeague($league);
 
@@ -316,23 +327,34 @@ class SyncServiceLeagueTest extends TestCase
 
         $repoProp = new \ReflectionProperty(\App\Service\SyncService::class, 'npcClubRepository');
         $repoProp->setValue($service, $this->createStub(NpcClubRepository::class));
-        $this->injectSizeResolver($service);
+        $this->injectSizeResolver($service, [(string) $league->getId() => 11], $league);
 
         $result = (new \ReflectionMethod(\App\Service\SyncService::class, 'buildLeagueSnapshot'))
             ->invoke($service, $userClub, new GameConfig());
 
         self::assertNotNull($result['tvDeal'], 'a pooled league published NULL — the app pays £0 of TV');
+        self::assertSame(12, $result['clubCount'], 'Scotland must divide by 12, not by the authored 14');
         self::assertSame(
-            intdiv(120_000_000, 14),
+            intdiv(120_000_000, 12),
             $result['tvDeal'],
-            'the published share must be the pool divided by the authored size',
+            'the published share must be the pool divided by the DERIVED size',
         );
+        self::assertSame(10_000_000, $result['tvDeal'], '£100,000.00 a club, not the £85,714.28 of a 14-way split');
     }
 
-    private function injectSizeResolver(object $service): void
+    /**
+     * @param array<string, int> $npcCountsByLeagueId the division sizes the resolver derives
+     *                                                from, keyed by league id
+     */
+    private function injectSizeResolver(object $service, array $npcCountsByLeagueId = [], ?League $bottomTier = null): void
     {
+        // ⚠️ THE DIVISOR IS DERIVED FROM THESE COUNTS — owner ruling, 2026-11-19, "retire
+        // slots". A caller that needs a non-zero `clubCount` has to say how many NPC club rows
+        // the league holds; before the ruling it could author `slots` on the League instead.
         $npcRepo    = $this->createStub(NpcClubRepository::class);
+        $npcRepo->method('countsByLeagueForCountry')->willReturn($npcCountsByLeagueId);
         $leagueRepo = $this->createStub(LeagueRepository::class);
+        $leagueRepo->method('findLowestTierForCountry')->willReturn($bottomTier);
         $configRepo = $this->createStub(\App\Repository\GameConfigRepository::class);
         $configRepo->method('getConfig')->willReturn(new \App\Entity\GameConfig());
 

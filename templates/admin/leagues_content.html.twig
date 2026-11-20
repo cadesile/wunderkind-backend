@@ -244,6 +244,7 @@
                                 data-qe-tv="{{ _self.money(league.tvDeal) }}" data-qe-prize="{{ _self.money(league.prizeMoney) }}"
                                 data-qe-pot="{{ _self.money(league.leaguePositionPot) }}" data-qe-sponsors="{{ league.sponsorCount }}"
                                 data-qe-tvpool="{{ _self.money(league.tvPoolPence) }}"
+                                {# The retired column, shown read-only in the dialog. See _league_dialogs.html.twig. #}
                                 data-qe-slots="{{ league.slots > 0 ? league.slots : '' }}"
                                 data-qe-taper="{{ league.leaguePositionDecreasePercent is null ? '' : league.leaguePositionDecreasePercent }}"
                                 data-qe-parachute="{{ league.parachute is null ? '' : league.parachute|json_encode }}"
@@ -453,7 +454,6 @@
             $('#qe-prize').value = b.dataset.qePrize || '';
             $('#qe-pot').value = b.dataset.qePot || '';
             $('#qe-tvpool').value = b.dataset.qeTvpool || '';
-            $('#qe-slots').value = b.dataset.qeSlots || '';
             $('#qe-taper').value = b.dataset.qeTaper || '';
             // Pretty-printed so a multi-season schedule is readable in a 3-row textarea.
             $('#qe-parachute').value = b.dataset.qeParachute
@@ -464,6 +464,13 @@
             // THE SERVER IGNORES A TYPED tvDeal WHILE A POOL IS SET — see
             // LeagueAdminController::quickEdit(). Showing that here rather than letting an
             // operator type into a field whose value will be discarded.
+            // THE DERIVED SIZE, READ-ONLY. `slots` is retired (owner ruling, 2026-11-19) and is
+            // shown only so an older export can be reconciled against this box.
+            var sizeCell = $('[data-qe-size]');
+            if (sizeCell) { sizeCell.textContent = b.dataset.qeClubcount || '—'; }
+            var retiredCell = $('[data-qe-slots-retired]');
+            if (retiredCell) { retiredCell.textContent = b.dataset.qeSlots || 'unset'; }
+
             syncTvDerived(b.dataset.qeClubcount || '0');
             $('#qe-full').href = b.dataset.qeFull;
             $('#qe-title').textContent = b.dataset.qeName.toUpperCase();
@@ -485,12 +492,13 @@
         if (note) {
             note.hidden = !pooled;
             var slot = note.querySelector('[data-qe-clubcount]');
-            if (slot) { slot.textContent = String($('#qe-slots').value || '').trim() || clubCount || '—'; }
+            if (slot) { slot.textContent = String(clubCount || '').trim() || '—'; }
         }
     }
 
-    ['#qe-tvpool', '#qe-slots'].forEach(function (sel) {
-        $(sel).addEventListener('input', function () { syncTvDerived($('#qe-slots').value); });
+    // Only the POOL can change the derived note now: the divisor is not typeable.
+    $('#qe-tvpool').addEventListener('input', function () {
+        syncTvDerived($('[data-qe-size]') ? $('[data-qe-size]').textContent : '');
     });
 
     $('#qe-cancel').addEventListener('click', function () { qeScrim.hidden = true; });

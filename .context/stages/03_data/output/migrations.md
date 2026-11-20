@@ -745,18 +745,25 @@ that would turn an authored decision into "derive". Pinned by `LeagueSlotsCorrec
 runs the migration's own `CORRECT_SQL` constant and covers both the reserved and unreserved
 shapes, the `slots = 0` hands-off case, and idempotency.
 
-### A defect this exposes and does NOT fix
+### A defect this exposes — ⚠️ RESOLVED 2026-11-19 (A23), and it was not a defect
 
-`sizeOf()`'s unconditional `+1` is wrong on any box whose deepest tier was not reserved. It is
-inert wherever `slots` is authored (the authored value wins), so it bites only `slots = 0`
-leagues — on the deployed box that is SC tiers 5–8, which *do* reserve, so nothing is wrong there
-today. **Reported, not fixed: changing the resolver is wider than a data correction.**
+`sizeOf()`'s unconditional `+1` was recorded here as wrong on any box whose deepest tier was not
+reserved, inert wherever `slots` was authored, and "reported, not fixed: changing the resolver is
+wider than a data correction."
 
-**Still not fixed as of A7 (2026-11-19), but no longer silent.** `app:economy:wage-table`'s new
-check 9 compares the resolved size against the real rows using *this* migration's detection rule,
-so a box where the resolver's unconditional `+1` is wrong now prints it as an under-filled tier.
-`EconomyAuthoredSizeDriftTest` pins that, which is what keeps the defect visible until somebody
-decides to change the resolver.
+**A23 changed the resolver, and the `+1` turned out to be right.** The player's own club is in
+the deepest division whether or not the generator left a gap for it, so the table that division
+fields is `rows + 1` either way — which is also what the device assembles (the pack's clubs plus
+its own). **This migration's detection rule was right for deciding what to AUTHOR and is the
+wrong rule for a participant count.** So check 9 keeps the detection and reports an unreserved
+deepest tier as a SHAPE note — the one size the rows alone cannot corroborate — instead of
+treating it as drift. ⚠️ No country in the 2026-11-19 export is in that shape.
+
+⚠️ **One real defect in the derivation WAS found and fixed in the same change**, and it is a
+different one: the unconditional `+1` turned a tier with NO rows into a division of ONE, so
+`derivedTvDealPence()` published the whole pool as a single club's share. `sizeOf()` now returns
+0 for an empty tier, deepest included. `EconomyTvCountryScalingGuardTest` caught it within
+minutes of `slots` stopping being read; `LeagueSizeResolverTest` pins it.
 
 ## `Version20261116180000` + `Version20261116181000` — the league payout ladders (2026-11-16)
 
@@ -998,6 +1005,14 @@ were generated with, so the band-3 change reaches nothing until the bottom two t
 REGENERATED.
 
 ## `Version20261119090000` — author `league.slots` wherever it is still 0
+
+⚠️ **HISTORICAL AS OF 2026-11-19 (A23): the column this fills is no longer read by anything.**
+The owner retired `league.slots` (*"retire slots"*) and `LeagueSizeResolver::sizeOf()` derives
+every division size from the NPC club rows. This migration, `Version20261119120000` and
+`Version20261119150000` all remain applied and correct — a migration that has reached a
+production box has to stay re-runnable — but nothing downstream depends on what they wrote. The
+account below is kept as the record of why the column existed. `LeagueSlotsAuthoringTest` still
+runs the real SQL; one of its assertions changed meaning and was rewritten rather than deleted.
 
 **What it does.** Computes each league's currently derived size in SQL and writes it to
 `league.slots` **only where `slots = 0`** (0 means "derive"), stashing every row's prior value in

@@ -1312,8 +1312,14 @@ From `Version20261112180000`.
 - **`tvDeal` keeps its old meaning**, the PER-CLUB share. Re-interpreting it as the pool would
   be a changed value under an unchanged key, which the BC doc counts as a break — shipped builds
   read it as one club's money.
-- **`slots`** (smallint, default 0) — clubs in this league's table, the pool's divisor.
-  **0 means "work it out"**, not "no clubs" (the `club_funding_minimum_pence` idiom).
+- **`slots`** (smallint, default 0) — ⚠️ **RETIRED 2026-11-19 (A23) and no longer read by
+  anything.** It was the clubs in this league's table, the pool's divisor, with **0 meaning
+  "work it out"**. Owner ruling: *"retire slots."* `LeagueSizeResolver::sizeOf()` derives every
+  division size from the NPC club rows. The column is deliberately NOT dropped — nothing writes
+  it either, and it holds whatever it last held (EN 16, SC 14), which
+  `app:economy:wage-table`'s check 9 prints beside the derived figure so an older world export
+  can be reconciled against a running box. See the ruling under "Why `slots` is authored and
+  not counted" below.
 - **`leaguePositionDecreasePercent`** (smallint, nullable) — per-league override of the
   position-pot taper, resolved `league ?? gameConfig`. Nullable rather than 0-defaulted because
   a taper of zero is a legitimate setting (every position pays the same), so `0` cannot also
@@ -1325,7 +1331,20 @@ Deriving unconditionally could not have been inert: `LeagueService::generateLeag
 creates league rows BEFORE any club exists, so a fresh country would divide by zero or publish
 its whole pool as one club's share.
 
-**Why `slots` is authored and not counted.** A `League` row is a TEMPLATE shared by every save
+**Why `slots` WAS authored and not counted — ⚠️ OVERRULED 2026-11-19, kept because the cost it
+names was accepted rather than refuted.** The owner's ruling: *"the number of clubs in a country
+league tier is something that can change, as we alter the cache and tune the system ahead of go
+live, so there should be no wiring around the amount of clubs, the finances should be dynamic"*,
+and then *"retire slots."* `sizeOf()` derives always. The argument below still correctly describes
+what was given up — a divisor that moves whenever somebody clicks Generate — and what remains
+true about a `League` row. ⚠️ Its concluding table is **stale**: measured on 2026-11-12, before
+the caches were rebuilt. On the 2026-11-19 export all 25 countries reserve a place at their
+deepest tier, the derivation reproduces the authored figure in 24 of them, and only Scotland moves
+(14 → 12 at every tier). Blast radius, the four serve paths that already derived at read time, and
+the `tv_deal` cache this left exposed: `04_interfaces/output/services.md`'s `LeagueSizeResolver`
+section.
+
+A `League` row is a TEMPLATE shared by every save
 in its country and tier — on 2026-11-12 England tier 8 had **147 real, non-spoof player clubs**
 with `current_league_id` pointing at one row (tier 7: 9, tier 6: 5). The eighteen-club table a
 player sees is assembled on their device from the world pack and exists nowhere on the server.
