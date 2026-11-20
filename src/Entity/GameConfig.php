@@ -84,10 +84,19 @@ class GameConfig
 
     /**
      * Bonds at or below this value never decay — the earned baseline is
-     * permanent, and only the surplus above it is at risk. Default: 50
+     * permanent, and only the surplus above it is at risk. Default: 20
+     *
+     * ⚠️ **Was 50, and at 50 neglect decay did not happen at all.** Seeded bonds top out at 45
+     * and organic growth adds 2 a week, so almost every bond the game produces sat AT or BELOW
+     * the floor and nothing was ever at risk — the graph only ratcheted upward. The app's
+     * `DEFAULT_GAME_CONFIG` was lowered to 20 at the time with that reasoning written down, but
+     * this entity and the live config row stayed at 50 and the synced value wins, so the change
+     * never took effect. Two sources for one quantity, with the documentation describing the
+     * losing side. Lowered here 2026-11-20 on the owner's ruling — *"let them fade"* — so both
+     * repos now agree and the recorded reasoning is finally true.
      */
-    #[ORM\Column(type: 'integer', options: ['default' => 50])]
-    private int $bondDecayFloor = 50;
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
+    private int $bondDecayFloor = 20;
 
     /**
      * Weeks without an interaction before a bond above the floor starts
