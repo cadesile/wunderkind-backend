@@ -1182,3 +1182,66 @@ abilities the pack already carries, and v9 and v10 were both bumps of exactly th
 ⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand —
 added nullable, backfilled with the same arithmetic, then set `NOT NULL`. Without it 20 tests
 error on `column "ability" does not exist`. See `01_overview/output/environment.md`.
+
+### `Version20261120120000` — youth/senior age-band judgements for every scout (A27, 2026-11-20)
+
+Owner ruling, asked whether scouting accuracy should vary by the player's age: **"Yes, it
+should."**
+
+🔴 **THIS TURNED ON A FEATURE THAT HAD NEVER RUN ONCE.** The app's `ageGateFor()`
+(`src/engine/scoutNoise.ts`) reads `judgements.youth` for a player under 18 and
+`judgements.senior` at 18 and above. `ScoutGenerationService::build()` — the only path that has
+ever written a persisted scout — wrote neither key, so the function's `: 0` fallback was the only
+branch that had ever executed, for all 5,278 scouts on dev and every scout in every save. With
+`AGE_GATE_WEIGHT` at 0.3 that made every scout's **displayed accuracy 70% of its designed value**
+and left the **real noise band never tightened at all**. Display and behaviour agreed with each
+other, which is why nothing looked broken. **Scouts read visibly better after this — that is the
+fix working, not inflation.**
+
+**NO DDL — `scout.judgements` is a `json` column, so this is a data migration only.** It needed
+no hand-application to the untracked `wunderkind_test` database and cannot put the ORM mapping out
+of sync, unlike `Version20261120100000` which added a column. (That is the exception, not the
+rule: ⚠️ `wunderkind_test` is still not migration-tracked — see
+`01_overview/output/environment.md`.)
+
+Two statements, and **both belong in one migration**:
+
+1. `||` a `jsonb_build_object` of two fresh `random()` rolls onto each row's judgements, bounded by
+   `pool_config.scout_judgement_min/max` (15–90 on dev; the `PoolConfig` entity's own 40/80 are the
+   `COALESCE` fallback, mirroring `PoolConfigRepository::getConfig()` falling back to
+   `new PoolConfig()`). Guarded by `NOT jsonb_exists(…)` on both keys, so it is idempotent and a
+   partial run can be repeated without re-rolling anyone's values.
+2. The `ability` re-derivation, **verbatim from `Version20261120100000`**.
+
+🔴 **STATEMENT 2 IS WHY THIS IS ONE MIGRATION AND NOT TWO.** `ScoutAbilityCalculator` averages
+judgements **over the keys present**, so five keys to seven changes the judgement mean — and
+therefore `ability` — for every scout in the world, and A24 prices a wage off that column. Writing
+the keys without re-deriving the ability would leave the stored figure disagreeing with the formula
+that owns it: one quantity, two sources, nothing saying which is right. The column is never in that
+state for a moment. `app:backfill-scout-abilities --force` was run behind it anyway and reported
+**0 of 5,278 rows changed**, which is the end-to-end proof that this SQL and the PHP formula agree
+on the new seven-key rows.
+
+**Measured on dev, 5,278 scouts** — ability `11–48` (mean 29.13, sd 6.90) → `12–47` (mean 29.11,
+sd 6.76). The mean barely moves because the two new keys are drawn from the same distribution as
+the other five; the spread narrows slightly because a mean of seven draws has less variance than a
+mean of five. All 5,278 rows carry both keys, one distinct key-count across the table.
+
+⚠️ **`jsonb_exists(x, 'key')` is used instead of the `?` operator, and not as a style choice** —
+DBAL's SQL parser treats a bare `?` as a positional bind placeholder, so the operator form reaches
+Postgres as `… jsonb $1 'youth'` and the migration dies on a syntax error.
+
+Two honest notes on what it is **not**: it is **not reproducible** (`random()` rolls each scout's
+values, exactly as `random_int()` does at generation), and it **normalises `judgements` key order**
+(the `jsonb` round-trip needed for `||` sorts keys alphabetically). Nothing reads these by
+position — the mean is order-independent, the app selects by name through its own
+`SCOUT_JUDGEMENTS` list, and the only key-order assertion anywhere
+(`ScoutGenerationServiceTest::testJudgementsAreTheSevenAuthoritativeKeys()`) checks a freshly built
+entity and never touches the database.
+
+⚠️ **Paired with `WORLD_PACK_VERSION` 12 → 13** in the same commit, because judgements ride in the
+pack and a pack cached at v12 carries five keys — so the bump is what actually delivers the fix to
+a device. **Legitimate under the pack-is-a-census rule**: two more per-scout accuracy ratings are
+ability-shaped census content, not money, the same class as the v12 `ability` bump. Note that
+`scouts[].ability` **moves on this bump under an unchanged key**, which is sanctioned here rather
+than a break: the figure's definition and type are unchanged, its inputs grew.

@@ -70,13 +70,33 @@ class ScoutGenerationService
         // Derived from the experience just rolled, not rolled separately — see
         // ScoutWageCalculator for why generation and the backfill must agree.
         $scout->setWeeklySalary($this->wageCalculator->weeklyWageFor($experience, $cfg));
-        // FIVE KEYS, AND THIS IS THE AUTHORITATIVE SET. Every persisted Scout in the world comes
+        // SEVEN KEYS, AND THIS IS THE AUTHORITATIVE SET. Every persisted Scout in the world comes
         // through here — the shared pool via `MarketPoolService::generateScouts()` and club
-        // scouts via `WorldPackClubGenerationService::generateScouts()` — so these five are what
-        // `judgements` means in the database. `GenerateMarketDataCommand` has its own 7-key
-        // builder (adding `youth` and `senior`), which is where the app's 7-key
-        // `ScoutJudgements` type came from; it does not write this table. Anything averaging
-        // these must average over the keys PRESENT, never a fixed divisor.
+        // scouts via `WorldPackClubGenerationService::generateScouts()` — so these seven are what
+        // `judgements` means in the database. Anything averaging them must still average over the
+        // keys PRESENT, never a fixed divisor: `GenerateMarketDataCommand` has its own 7-key
+        // builder for a different population, and a pack cached before v13 carries five.
+        //
+        // ⚠️ **IT WAS FIVE UNTIL 2026-11-20 (A27), AND THE TWO NEW KEYS FIX A DEAD FEATURE.**
+        // Owner ruling, asked whether scouting accuracy should vary by the player's age:
+        // **"Yes, it should."** The app's `ageGateFor()` reads `judgements.youth` for under-18s
+        // and `judgements.senior` otherwise — keys this service had never written, so it resolved
+        // to 0 for every scout that has ever existed. With `AGE_GATE_WEIGHT = 0.3` that made
+        // every scout's DISPLAYED accuracy 70% of its designed value and meant the real noise
+        // band was never tightened at all. Generating the keys here is what turns the gate on;
+        // see `wunderkind-docs/economy-loose-ends/a27-scout-age-gate-report.md`.
+        //
+        // ⚠️ **DELIBERATELY NOT GIVEN THEIR OWN BOUNDS.** They roll from the same
+        // `scoutJudgementMin/Max` as the other five, because they ARE judgements on the same
+        // 0-100 scale: a separate `scoutAgeGateMin/Max` pair would be a second config surface for
+        // one quantity, and `ScoutAbilityCalculator`'s 70/30 weighting was measured against
+        // judgements drawn from this single flat range — banding two of the seven differently
+        // would move the tier spread the owner approved without saying so.
+        //
+        // ⚠️ **ADDING A KEY HERE CHANGES EVERY SCOUT'S `ability`**, because the mean below is
+        // taken over keys present. Any future change to this set needs
+        // `app:backfill-scout-abilities --force` behind it and a `WORLD_PACK_VERSION` bump,
+        // exactly as this one did.
         //
         // ⚠️ NOTE WHAT IS *NOT* BANDED HERE: unlike `$experience` above, judgements are rolled
         // from the flat global `scoutJudgementMin/Max` whatever the club's tier. That asymmetry
@@ -87,6 +107,14 @@ class ScoutGenerationService
             'physical'    => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'mental'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
             'personality' => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+            // The two AGE-BAND keys, split at 18 by `ageGateFor()` — accuracy at reading a youth
+            // prospect and at reading an established senior, rolled independently so a scout can
+            // genuinely be better at one than the other. That independence is the whole point:
+            // deriving either from `potential` would collapse the displayed-accuracy blend
+            // `potential x 0.7 + ageGate x 0.3` back to `potential` and change nothing for
+            // exactly the under-18s the gate exists for.
+            'youth'       => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+            'senior'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
         ];
 
         $scout->setJudgements($judgements);

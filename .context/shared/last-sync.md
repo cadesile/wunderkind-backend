@@ -5,6 +5,58 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A27: the scout age gate made to work, by generating the two keys it reads (2026-11-20)**, on
+  `development`. **Stages touched:** 03_data (`migrations.md`), 04_interfaces (`services.md`),
+  shared (this file). Report:
+  `wunderkind-docs/economy-loose-ends/a27-scout-age-gate-report.md`.
+
+  **The ruling.** Owner, 2026-11-20, asked whether scouting accuracy should vary by the player's
+  age: *"Yes, it should."*
+
+  🔴 **The defect was that a feature had never run once.** The app's `ageGateFor()` reads
+  `judgements.youth` for an under-18 and `judgements.senior` otherwise.
+  `ScoutGenerationService::build()` — the only path that has ever written a persisted scout — wrote
+  five keys and neither of those, so the `: 0` fallback was the only branch that had ever executed,
+  for all 5,278 scouts on dev and every scout in every save. With `AGE_GATE_WEIGHT` at 0.3 that
+  made every scout's **displayed accuracy 70% of its designed value** and left the **real noise
+  band never tightened**. Display and behaviour agreed with each other, so nothing looked broken.
+
+  **What landed.** `build()` now rolls `youth` and `senior` from the same
+  `PoolConfig::$scoutJudgementMin/Max` as the other five, independently of each other and of
+  `potential`; `Version20261120120000` adds both keys to every existing scout and re-derives
+  `ability` behind them in the same migration; `WORLD_PACK_VERSION` 12 → 13.
+
+  **The decision, stated.** The age-band pair deliberately gets **no bounds of its own** — they are
+  judgements on the same 0-100 scale, so a separate pair would be a second config surface for one
+  quantity, and `ScoutAbilityCalculator`'s 70/30 weighting was measured against judgements drawn
+  from this one flat range. Deriving the gate from existing keys was rejected on arithmetic:
+  `youth = potential` collapses the app's blend to `potential` and changes nothing for exactly the
+  under-18s the gate exists for.
+
+  ⚠️ **The interaction with A26 was the thing to get right.** `ScoutAbilityCalculator` averages
+  judgements **over the keys present**, so five keys to seven moved every scout's `ability`, and
+  (from A24) will move every scout's wage. The migration re-derives the column in the same
+  statement set rather than behind it, so stored ability never disagrees with the formula;
+  `app:backfill-scout-abilities --force` was run after and reported **0 of 5,278 rows changed**,
+  the end-to-end proof the SQL and the PHP agree. Dev distribution either side: **11-48 (mean
+  29.13, sd 6.90) → 12-47 (mean 29.11, sd 6.76)** — the mean barely moves (same draw
+  distribution), the spread narrows slightly (a mean of seven has less variance than a mean of
+  five).
+
+  **A26's five-key pin was changed deliberately, not deleted.**
+  `ScoutGenerationServiceTest::testJudgementsAreTheFiveAuthoritativeKeys()` is now
+  `…TheSevenAuthoritativeKeys()`, with the ruling quoted in its docblock and a restated account of
+  what it still guards (that a key change moves every ability and wage). It did its job by making
+  this change impossible to land quietly. A second test pins that the two keys are independent
+  rolls within the configured bounds.
+
+  **No DDL** — `scout.judgements` is a `json` column — so unlike `Version20261120100000` this
+  needed no hand-application to the untracked `wunderkind_test` database.
+
+  **Measured evidence the owner asked for**, real dev scout `01a0e9cd-b789…` (potential 42, youth
+  79, senior 28), real app `scoutAccuracyPercent`: age 17 **29% → 53%**, age 25 **29% → 38%** —
+  identical at both ages before, 15 points apart after.
+
 - **A26 phase 1: scouts get a real `ability`, 1-100 (2026-11-20)**, on `development`.
   **Stages touched:** 01_overview (`environment.md`), 03_data (`entities.md`, `migrations.md`),
   04_interfaces (`services.md`), shared (this file). Report:

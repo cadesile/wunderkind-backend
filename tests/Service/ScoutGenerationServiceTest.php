@@ -146,17 +146,78 @@ class ScoutGenerationServiceTest extends TestCase
     }
 
     /**
-     * The five keys this service writes ARE the authoritative set — see its own comment. Pinned
-     * because `GenerateMarketDataCommand` writes seven for a different population, and anything
-     * averaging judgements over a fixed divisor would silently under-rate every real scout.
+     * The seven keys this service writes ARE the authoritative set — see its own comment. Pinned
+     * because `GenerateMarketDataCommand` writes its own seven for a different population, and
+     * anything averaging judgements over a fixed divisor would silently misrate every real scout.
+     *
+     * ⚠️ **THIS PIN HELD FIVE KEYS UNTIL 2026-11-20 AND WAS CHANGED ON AN OWNER RULING, NOT
+     * BECAUSE IT WAS IN THE WAY.** A26 pinned the five-key set deliberately, so that the 5-vs-7
+     * disagreement between the two repos could not be resolved silently in either direction. It
+     * then did its job: A27 could not add `youth` and `senior` without coming through here.
+     *
+     * The ruling it is changed on, 2026-11-20, asked whether scouting accuracy should vary by the
+     * player's age: **"Yes, it should."** The two keys are what makes that true. The app's
+     * `ageGateFor()` reads `judgements.youth` under 18 and `judgements.senior` at 18 and above,
+     * and this service had never written either — so the gate returned 0 for all 5,278 scouts on
+     * dev and every scout in every save, making each one's displayed accuracy 70% of its designed
+     * value and leaving the noise band permanently untightened.
+     *
+     * ⚠️ **WHAT THIS PIN IS STILL GUARDING, now that the set has grown: adding or removing a key
+     * here changes `ScoutAbilityCalculator`'s judgement mean, and therefore every scout's
+     * `ability` and (from A24) every scout's WAGE**, because the mean is taken over keys present.
+     * So a change to this set needs `app:backfill-scout-abilities --force` behind it and a
+     * `WORLD_PACK_VERSION` bump. If this assertion is failing for you, that is the pin working —
+     * establish the ruling and the backfill before you edit it, as A27 did.
      */
-    public function testJudgementsAreTheFiveAuthoritativeKeys(): void
+    public function testJudgementsAreTheSevenAuthoritativeKeys(): void
     {
         $judgements = $this->makeService()->build('English')->getJudgements();
 
         $this->assertSame(
-            ['potential', 'technical', 'physical', 'mental', 'personality'],
+            ['potential', 'technical', 'physical', 'mental', 'personality', 'youth', 'senior'],
             array_keys($judgements),
+        );
+    }
+
+    /**
+     * The age-band keys must be REAL, INDEPENDENT rolls within the configured judgement bounds —
+     * not a copy of another key, and not a constant.
+     *
+     * Pinned because the cheap alternative was specifically considered and rejected: deriving
+     * `youth` from `potential` collapses the app's displayed-accuracy blend
+     * `potential x 0.7 + ageGate x 0.3` to `potential x 0.7 + potential x 0.3` = `potential`, so
+     * the gate would do nothing for exactly the under-18s it exists for. A scout must be able to
+     * be better at judging youth than seniors, which is what makes accuracy vary with age at all.
+     */
+    public function testTheAgeBandJudgementsAreIndependentRollsWithinTheConfiguredBounds(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutJudgementMin(20);
+        $config->setScoutJudgementMax(70);
+
+        $service  = $this->makeService($config);
+        $differed = false;
+
+        for ($i = 0; $i < 60; $i++) {
+            $judgements = $service->build('English')->getJudgements();
+
+            foreach (['youth', 'senior'] as $key) {
+                $this->assertArrayHasKey($key, $judgements);
+                $this->assertGreaterThanOrEqual(20, $judgements[$key]);
+                $this->assertLessThanOrEqual(70, $judgements[$key]);
+            }
+
+            // Not asserted per-iteration: two independent rolls CAN coincide. Over 60 builds
+            // across a 51-wide band, never differing would mean they are not independent.
+            if ($judgements['youth'] !== $judgements['senior']
+                || $judgements['youth'] !== $judgements['potential']) {
+                $differed = true;
+            }
+        }
+
+        $this->assertTrue(
+            $differed,
+            'youth/senior must be rolled independently, not derived from another judgement',
         );
     }
 
