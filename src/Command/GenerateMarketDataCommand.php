@@ -175,6 +175,7 @@ class GenerateMarketDataCommand extends Command
         private readonly ClubRepository      $clubRepository,
         private readonly \App\Service\Economy\WageModelResolver $wageModel,
         private readonly \App\Service\ScoutWageCalculator $scoutWageCalculator,
+        private readonly \App\Service\ScoutAbilityCalculator $scoutAbilityCalculator,
     ) {
         parent::__construct();
     }
@@ -330,7 +331,14 @@ class GenerateMarketDataCommand extends Command
             $scout->setDob($this->dobFromAge($age));
             $scout->setNationality($this->pick(self::NATIONALITIES));
             $scout->setExperience($experience);
-            $scout->setJudgements($this->buildScoutJudgements($experience));
+            $judgements = $this->buildScoutJudgements($experience);
+            $scout->setJudgements($judgements);
+            // AN ABILITY, DERIVED FROM BOTH, for the same reason the wage below is derived: a
+            // scout this command creates must agree with one `ScoutGenerationService` creates
+            // and with what the migration backfilled. Note this path writes SEVEN judgement keys
+            // where that one writes five — which is precisely why ScoutAbilityCalculator means
+            // over the keys present rather than a fixed divisor.
+            $scout->setAbility($this->scoutAbilityCalculator->abilityFor($experience, $judgements));
             // A WAGE AT ALL, FOR THE FIRST TIME. This command left every scout it created on
             // weeklySalary 0, and BackfillScoutWagesCommand treats 0 as "never priced" — so a
             // pool generated here reported thousands of free scouts and understated every

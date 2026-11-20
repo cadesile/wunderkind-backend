@@ -75,16 +75,17 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *     creates and the only one of the four the TV ladder cannot drown out. The band is 10-50%
  *     rather than the 25-75% first proposed, for a reason the constant's own docblock gives.
  *
- *  9. **Does the AUTHORED division size still agree with the clubs that exist?** `league.slots`
- *     is authored deliberately — a derived divisor moves whenever somebody clicks Generate —
- *     but until this check nothing compared it against reality, so regenerating a tier at a
- *     different size paid the wrong per-club money silently. It FAILS whenever money is
- *     provably being mis-divided — rows over the size, or the size over the rows while a TV
- *     pool exists (measured on SC tier 7: £714,285 of a £5,000,000 pool paid to nobody) — and
- *     WARNS only for an under-filled tier with no pool authored, where nothing is being divided
- *     and a country may simply still be generating. The reserved player place at a
- *     country's deepest tier is DETECTED, not assumed — see the method's own docblock, and do
- *     not "fix" a disagreement by writing `slots`.
+ *  9. **Does the DERIVED division size still agree with everything that should match it?**
+ *     ⚠️ **Rewritten 2026-11-19: the owner retired `league.slots` and `sizeOf()` now derives
+ *     always**, so the old authored-vs-rows comparison has no content left — the method's own
+ *     docblock carries the overruled argument verbatim rather than deleting it. Two
+ *     disagreements remain. It FAILS on a **stale world pack**, the one way left to put a wrong
+ *     divisor in front of a player: the divisor follows the NPC rows instantly and the cached
+ *     pack does not. It WARNS on a **stale `tv_deal` column** (no player reads it — every serve
+ *     path derives — but four admin surfaces do, so the back office and a device would disagree),
+ *     on a **pooled tier with no NPC rows at all**, and on a **deepest tier that reserved no
+ *     place for the player**, which is the one size the rows alone cannot corroborate. It still
+ *     writes nothing: that half of the old prohibition stands.
  *
  * The two deduction-ladder checks inside (5) read country-independent columns and therefore run
  * ONCE for the whole invocation, not once per country argument — see checkDeductionLadders().
@@ -395,113 +396,102 @@ final class EconomyWageTableCommand extends Command
         $problems = [...$problems, ...$this->checkAbsoluteThresholds($io, $country, $tierCount, $config)];
         $problems = [...$problems, ...$this->checkSponsorshipShares($io, $country, $tierCount, $config)];
         $problems = [...$problems, ...$this->checkLeaguePayouts($io, $country, $tierCount, $config)];
-        $problems = [...$problems, ...$this->checkAuthoredSizeAgainstRows($io, $country)];
+        $problems = [...$problems, ...$this->checkDerivedSizeAgainstRows($io, $country)];
 
         return $problems;
     }
 
     /**
-     * CHECK 9 — does the AUTHORED division size still agree with the clubs that exist?
+     * CHECK 9 — does the DERIVED division size still agree with everything that should match it?
      *
-     * ── WHY THIS IS A CHECK AND NOT A CORRECTION ──────────────────────────────────────────
+     * ── ⚠️ THE PROHIBITION THIS DOCBLOCK USED TO CARRY HAS BEEN OVERRULED ─────────────────
      *
-     * `league.slots` is authored on purpose, and `LeagueSizeResolver`'s docblock argues the
-     * case at length: a divisor derived from live NPC rows moves whenever somebody clicks
-     * Generate, silently re-pricing a tier's TV money for every shipped build as a side effect
-     * of an unrelated admin action. That argument is still correct, so **this check does not
-     * write `slots`, and it must never be "fixed" by making `sizeOf()` prefer the row count.**
+     * Until 2026-11-19 this block said, in as many words, that `league.slots` is authored on
+     * purpose and **"this check does not write `slots`, and it must never be 'fixed' by making
+     * `sizeOf()` prefer the row count."** The reasoning was sound and is worth keeping: a
+     * divisor derived from live NPC rows moves whenever somebody clicks Generate, so adding two
+     * clubs to a tier silently re-prices that tier's TV money for every shipped build, as a
+     * side effect of an unrelated admin action.
      *
-     * But the authored number has one weak point, and until now nothing watched it: nothing
-     * anywhere compared `slots` against reality. Regenerate England's cache at 20 clubs a tier
-     * against `slots = 16` and the world pays 16-club money to a 20-club division — the TV pool
-     * split 16 ways and handed to 20 clubs, check 8's per-club divisor wrong by 25%, and
-     * `clubCount` published wrong to every client — **with no error, no warning and no log
-     * line.** The owner has said they will be altering caches to tune ahead of go-live, so this
-     * is the next thing that happens rather than a hypothetical. The job here is to make the
-     * drift LOUD so a human can author a new number.
+     * **The owner heard that argument and ruled against it.** *"The number of clubs in a country
+     * league tier is something that can change, as we alter the cache and tune the system ahead
+     * of go live, so there should be no wiring around the amount of clubs, the finances should be
+     * dynamic."* And then, specifically: *"Retire slots."* `sizeOf()` now derives always.
+     * `LeagueSizeResolver`'s class docblock records the decision and what it cost; this one
+     * records what the check became, because a reader who arrives at a division-size
+     * disagreement needs to know which of the two arguments the code is currently making.
      *
-     * ── ⚠️ THE RESERVED PLAYER SLOT — WHY `slots == rows` IS THE WRONG COMPARISON ─────────
+     * **It is still not a correction, and it still writes nothing.** That half of the old
+     * prohibition survives untouched. What changed is what it compares.
      *
-     * The world generator leaves one place open at a country's deepest tier for the player's
-     * own club, so a correct bottom tier holds `slots - 1` rows BY DESIGN: England runs 16 rows
-     * at tiers 1-7 and 15 at tier 8 against an authored 16 everywhere. A naive `slots == rows`
-     * check therefore fires on every bottom tier in the world and reports nothing but noise.
+     * ── WHAT IS LEFT TO CHECK ONCE NOTHING IS AUTHORED ───────────────────────────────────
      *
-     * **And the reservation is not universal, which is why it is DETECTED and not assumed.**
-     * Measured on the development clone, 2026-11-19: EN reserves, but CA, JP, NG, PL, US and SC
-     * hold the same count at every tier including the deepest. An unconditional `+1` there
-     * claims one more club than the division can field — it would have corrupted six countries'
-     * rows when `Version20261119120000` was dry-run. The rule below is that migration's own
-     * `CORRECT_SQL`, in PHP: `rows + 1` at the deepest tier **only when that tier holds exactly
-     * one fewer row than the tier above it**, i.e. only when a place was demonstrably reserved.
-     * A single-tier country cannot show a reservation and is treated as unreserved, which is
-     * the conservative answer.
+     * The old check compared count 1 (authored `slots`) against count 2 (the NPC rows). That
+     * comparison has no content any more: count 1 IS count 2, by construction, so asserting it
+     * would only prove that `sizeOf()` and this method call the same repository. The two
+     * disagreements that remain are both real and neither involves `slots`:
      *
-     * ── ⚠️ FAIL OR WARN: THE SPLIT IS WHETHER MONEY IS BEING DIVIDED, NOT WHICH WAY ─────
+     *  1. 🔴 **THE CACHED WORLD PACK against the rows it was built from.** A pack is a CACHE of
+     *     `npc_club` rows and **nothing invalidates it when those rows change.** This was always
+     *     the hardest of the three to see and it is now the ONLY one that can put a wrong
+     *     divisor in front of a player: the divisor follows the rows the instant they change,
+     *     and the pack does not. A device fielding a 12-club table while the server divides by
+     *     14 is exactly the 2026-11-19 live defect, and after the ruling a stale pack is the one
+     *     way left to reproduce it. See `comparePackCounts()`. **FAILS.**
      *
-     * The obvious rule is to fail when the rows outnumber the size and warn otherwise, on the
-     * grounds that a half-filled tier is the normal mid-bootstrap state. **A live case retired
-     * that rule by showing what an under-fill actually costs.** Observed on the owner's device,
-     * 2026-11-19 — Scotland tier 7: the table header reads 12 clubs, `slots` is authored 14, and
-     * the displayed TV deal is `intdiv(500000000, 14)` = £357,142. At a true twelve the share is
-     * £416,666, so **every club is 14.3% short and £714,285 of the £5,000,000 pool is paid to
-     * nobody at all.** A pool divided more ways than there are clubs to receive it does not go
-     * somewhere else; it evaporates — and it evaporates silently, which is why no complaint
-     * reaches anybody. That tier is finished, not mid-bootstrap.
+     *  2. 🟡 **THE `league.tv_deal` COLUMN against the share actually published.** This is the
+     *     new one, and it is precisely the cost the owner accepted. Every path that serves a
+     *     device computes the share at read time through `derivedTvDealPence()` —
+     *     `SyncService:834`, `InitializeController:251`, `LeagueService:306`,
+     *     `LeagueImportExportService:66` — so **no player ever sees the stored column.** But
+     *     `syncTvDeal()` is called only from an admin save (`LeagueAdminController:95`/`:201`),
+     *     so once the rows move, the column holds the old figure and four admin surfaces read it
+     *     raw: `LeagueAdminController:127`, `EconomyAdminController:457`,
+     *     `WorldOverviewService:98`, `LeagueTierDefaultDiff:68`. An operator comparing the admin
+     *     screen against a device would see two different TV deals and have no way to tell which
+     *     is live. **WARNS, not fails** — nothing a player can reach is wrong, and the remedy is
+     *     a resave, not a release block.
      *
-     * ⚠️ Which pair disagrees in that specific case is NOT established — it may be the pack
-     * against the rows rather than `slots` against the rows (see the three counts below). The
-     * case is cited for the MECHANISM, which is identical whichever pair it is: once a pool is
-     * authored, a size larger than the clubs that exist is wrong money in the direction nobody
-     * can see.
+     * ── ⚠️ THE RESERVED PLAYER SLOT IS NOW INFORMATIONAL, NOT A CORRECTION INPUT ──────────
      *
-     * So the severity turns on whether money is actually being divided:
+     * `sizeOf()` adds 1 at a country's deepest tier UNCONDITIONALLY, because the player's own
+     * club is in that division whether or not the generator left a gap for it — `rows + 1` is
+     * what the device assembles (the pack's `clubs` array plus the player's club) and so it is
+     * the right divisor either way.
      *
-     *  - **rows > resolved size -> FAILS, always.** The pool is split `size` ways and paid to
-     *    more clubs than that, and nothing adds NPC rows except a generation — there is no
-     *    benign state that produces it.
-     *  - **resolved size > rows, WITH a `tvPoolPence` -> FAILS.** This is the Scotland case.
-     *    A pool exists, so a figure is provably being divided by a number of clubs that do not
-     *    exist, in the direction where the shortfall is invisible because it reaches nobody.
-     *  - **resolved size > rows, with NO pool -> WARNS.** Nothing is being divided, so the only
-     *    consumers are the published `clubCount` and this command's own instruments. That is the
-     *    genuinely ambiguous case — `BootstrapCountryCommand` creates a country's leagues and
-     *    then fills them, so a pool-less unfilled tier is a box partway through a legitimate
-     *    operation, and failing it would redden a gate for a reason nobody can act on.
+     * The old check used a different rule — `rows + 1` at the deepest tier **only when that tier
+     * holds exactly one fewer row than the tier above**, which is `Version20261119120000`'s own
+     * `CORRECT_SQL` in PHP. That rule was right for its job, which was deciding what to AUTHOR;
+     * it is the wrong rule for a participant count. So the detection stays, and the table prints
+     * it, but it no longer decides anything: a deepest tier that is NOT one row short of the
+     * tier above is reported as a SHAPE note, because that is the one configuration where the
+     * reservation cannot be corroborated from the data and a reader puzzled by `size 13` against
+     * a 12-row pack deserves to be told why. ⚠️ **No country in the 2026-11-19 export is in
+     * that shape** — all 25 reserve a place at tier 8 — so this is latent, not live. The
+     * docblock that preceded this one claimed CA, JP, NG, PL, US and SC held a uniform count;
+     * that was measured on 2026-11-12 and the caches have since been rebuilt. It is stale, which
+     * is itself the argument for printing the shape rather than asserting it.
      *
-     * The line that moved is therefore not "which way does the drift run" but "has anybody
-     * authored money against this division yet". Authoring a pool is the act that turns a size
-     * into a divisor, and from that moment a wrong size is wrong money in either direction.
+     * ── AN EMPTY TIER WITH A POOL STILL WARNS ────────────────────────────────────────────
      *
-     * **The table prints either way, and that is the part neither a warning nor a failure
-     * gives:** on a box where everything agrees, an empty finding list is indistinguishable
-     * from a check that never ran. The table is the evidence that it did.
+     * `sizeOf()` returns 0 for a tier with no NPC rows, deliberately, so `derivedTvDealPence()`
+     * can refuse rather than publish a whole pool as one club's share. The consequence is that
+     * such a tier falls back to the stored `tv_deal` column on every serve path — so a pool
+     * authored against an empty tier publishes a figure that has nothing to do with it.
+     * `BootstrapCountryCommand` creates a country's leagues and then fills them, so this is a
+     * normal mid-generation state and **warns** rather than failing.
      *
-     * ── THREE COUNTS EXIST, NOT TWO, AND THIS CHECKS ALL THREE ──────────────────────────
+     * ── THE TABLE PRINTS EITHER WAY, AND IT CARRIES THE RETIRED COLUMN ───────────────────
      *
-     *  1. **AUTHORED** — `league.slots`, read through `sizeOf()`. The divisor every finance uses.
-     *  2. **SERVER ROWS** — `npc_club` rows for that league. What `Version20261119120000`
-     *     authored `slots` from.
-     *  3. **WHAT THE DEVICE PLAYS** — the cached world pack's `clubs` array, plus the player's
-     *     own club. This is the one a human can actually see, and it is the one that was wrong
-     *     on the device above.
+     * On a box where everything agrees, an empty finding list is indistinguishable from a check
+     * that never ran. The table is the evidence that it did.
      *
-     * **Comparing only 1 against 2 would have passed while that defect was live**, because a
-     * pack is a CACHE of the rows and nothing invalidates it when the rows change — a check that
-     * goes green while the money is wrong is worse than no check, since it licenses the belief
-     * that the sizes agree. So the pack's own `clubCount` is compared against the rows it was
-     * built from, using `findAllSummaries()`, which counts the payload in PostgreSQL and never
-     * loads it into PHP.
-     *
-     * **Only CURRENT-version payloads are compared.** A row whose `payload_version` differs from
-     * `WorldInitializationService::WORLD_PACK_VERSION` is already treated as a miss and will be
-     * rebuilt, so reporting it would be noise about a cache that is about to be discarded. A
-     * country can hold more than one pack SET per tier, so each set is reported separately
-     * rather than collapsed — two sets disagreeing with each other is itself worth seeing.
-     *
-     * **The remedy differs from the `slots` case and the message says so:** a pack that
-     * disagrees with the rows is STALE, so it is regenerated. Nobody authors `slots` to make a
-     * cache correct.
+     * ⚠️ It has a `slots (unread)` column, and that is deliberate rather than nostalgic. The
+     * column still exists and still holds whatever it last held — Scotland's 14, England's 16 —
+     * and it is still SERIALISED INTO NOTHING but visible in any `world` export taken before
+     * 2026-11-19. Somebody comparing an old export's `slots 14` against a running box's 12 needs
+     * the two numbers side by side and a word saying which is live. Printing it costs a column;
+     * not printing it costs an afternoon.
      *
      * Scope note: this compares whichever countries were asked for, which is `DEFAULT_COUNTRIES`
      * (EN, SC) unless an operator names others — the rule is general because a general rule is
@@ -509,7 +499,7 @@ final class EconomyWageTableCommand extends Command
      *
      * @return list<string>
      */
-    private function checkAuthoredSizeAgainstRows(SymfonyStyle $io, string $country): array
+    private function checkDerivedSizeAgainstRows(SymfonyStyle $io, string $country): array
     {
         $leagues = $this->leagueRepository->findByCountry($country);
 
@@ -538,114 +528,121 @@ final class EconomyWageTableCommand extends Command
             $here  = $rowsByTier[$tier];
             $above = $rowsByTier[$tier - 1] ?? null;
 
+            // DETECTED, not assumed — and now informational only. See the docblock: `sizeOf()`
+            // adds the place unconditionally because the player is there regardless.
             $reserved = $tier === $deepest
                 && $above !== null
                 && $here === $above - 1;
 
-            $expected = $here + ($reserved ? 1 : 0);
-            $resolved = $this->leagueSizeResolver->sizeOf($league);
-            $authored = $league->getSlots() > 0;
+            $size     = $this->leagueSizeResolver->sizeOf($league);
+            $pool     = $league->getTvPoolPence();
+            $derived  = $this->leagueSizeResolver->derivedTvDealPence($league);
+            $cached   = $league->getTvDeal();
+            $slots    = $league->getSlots();
 
-            // `slots = 0` means derive, so the resolved figure is not somebody's decision and
-            // must not be reported as one. Said on the row rather than inferred from a 0.
-            $source  = $authored ? 'authored' : 'derived';
-            $article = $authored ? 'an authored' : 'a derived';
+            // THE INVARIANT, KEPT AS A TRIPWIRE RATHER THAN DELETED. `sizeOf()` is `$here` plus
+            // at most one, so rows can no longer outnumber the size — the branch that used to
+            // carry the owner's "regenerated at 20 against an authored 16" scenario is
+            // unreachable by construction. It stays because "unreachable by construction" is a
+            // claim about code that can stop being true, and this is the cheapest place to find
+            // out: anything that makes `sizeOf()` read a stored number again lands here first.
+            if ($here > $size) {
+                $verdict    = 'ROWS OVER';
+                $problems[] = sprintf(
+                    '%s tier %d: %d NPC club rows exist against a derived division size of %d — the size is supposed '
+                    . 'to BE the row count, so something is resolving a size from outside the rows. '
+                    . 'Start at LeagueSizeResolver::sizeOf(); it must not be reading league.slots (currently %d) again.',
+                    $country,
+                    $tier,
+                    $here,
+                    $size,
+                    $slots,
+                );
+            } elseif ($size === 0) {
+                // No rows. `derivedTvDealPence()` refuses, so every serve path falls back to the
+                // stored column — a pool authored here publishes a figure unrelated to it.
+                $verdict = $pool === null ? 'empty' : 'EMPTY, POOLED';
+
+                if ($pool !== null) {
+                    $warnings[] = sprintf(
+                        '%s tier %d: a %s TV pool is authored against a tier with NO NPC club rows, so the size '
+                        . 'resolves to 0 and no share can be derived. Every serve path falls back to the stored '
+                        . 'tv_deal column (%s), which this pool did not produce. Normal while a country is still '
+                        . 'being generated; a finding once it is finished.',
+                        $country,
+                        $tier,
+                        $this->money($pool),
+                        $cached === null ? 'null' : $this->money($cached),
+                    );
+                }
+            } elseif ($tier === $deepest && !$reserved) {
+                // THE SHAPE NOTE. The division fields `rows + 1` because the player joins it,
+                // and that is correct — but it is the one tier where the data does not
+                // corroborate the extra place, so it is said out loud rather than left to look
+                // like an off-by-one to the next reader.
+                $verdict    = 'unreserved';
+                $warnings[] = sprintf(
+                    '%s tier %d is the deepest division and holds %d NPC club rows, the same as the tier above '
+                    . '(%s) rather than one fewer — so no place was demonstrably reserved for the player. The size '
+                    . 'is still %d, because the player\'s club joins this division either way and that is the table '
+                    . 'the device assembles. Reported because it is the only tier whose size the rows alone do not '
+                    . 'corroborate.',
+                    $country,
+                    $tier,
+                    $here,
+                    $above === null ? 'there is no tier above' : (string) $above,
+                    $size,
+                );
+            } else {
+                $verdict = 'ok';
+            }
+
+            // ── THE tv_deal CACHE, CHECKED ON EVERY TIER THAT RESOLVES ──────────────────
+            //
+            // Independent of the size verdict above: a tier can be entirely consistent and
+            // still carry a stale column, which is the normal state after any regeneration.
+            $cacheCell = '—';
+
+            if ($derived !== null) {
+                if ($cached === $derived) {
+                    $cacheCell = 'ok';
+                } else {
+                    $cacheCell  = 'STALE';
+                    $warnings[] = sprintf(
+                        '%s tier %d: the stored tv_deal column reads %s but the share every device is served is '
+                        . '%s (%s / %d clubs). No player sees the column — SyncService, InitializeController and '
+                        . 'LeagueService all derive at serve time — but four admin surfaces read it raw, so the '
+                        . 'back office and a device would show different TV money. Resave the league in admin, or '
+                        . 'resync the column, to clear it.',
+                        $country,
+                        $tier,
+                        $cached === null ? 'null' : $this->money($cached),
+                        $this->money($derived),
+                        $this->money((int) $pool),
+                        $size,
+                    );
+                }
+            }
 
             $rows[] = [
                 $tier,
-                $resolved,
-                $source,
+                $size,
                 $here,
                 $reserved ? 'yes' : 'no',
-                $expected,
-                $resolved - $expected,
-                $resolved === $expected
-                    ? 'ok'
-                    : ($here > $resolved
-                        ? 'ROWS OVER'
-                        : ($league->getTvPoolPence() !== null ? 'POOL OVER-DIVIDED' : 'under-filled')),
+                $slots > 0 ? (string) $slots : '—',
+                $pool === null ? '—' : $this->money($pool),
+                $cacheCell,
+                $verdict,
             ];
-
-            if ($resolved === $expected) {
-                continue;
-            }
-
-            $pool = $league->getTvPoolPence();
-
-            if ($here > $resolved) {
-                $problems[] = sprintf(
-                    '%s tier %d: %d NPC club rows exist against %s division size of %d%s — every per-club figure is '
-                    . 'being divided %d ways and paid to %d clubs. Author %s to %d, or regenerate the tier at %d.',
-                    $country,
-                    $tier,
-                    $here,
-                    $article,
-                    $resolved,
-                    $reserved ? ' (a place is reserved for the player, so the size should be rows + 1)' : '',
-                    $resolved,
-                    $here,
-                    $authored ? 'league.slots' : 'league.slots (currently 0 = derive)',
-                    $expected,
-                    $resolved,
-                );
-
-                continue;
-            }
-
-            // UNDER-FILLED. A pool makes this provably wrong money rather than an ambiguous
-            // mid-bootstrap state: the share is computed over clubs that do not exist, so each
-            // real club is short and the remainder reaches nobody. Measured on SC tier 7.
-            if ($pool !== null) {
-                $shortfall  = $resolved > 0 ? intdiv($pool, $resolved) : 0;
-                $correct    = $expected > 0 ? intdiv($pool, $expected) : 0;
-                $evaporated = $pool - ($shortfall * $expected);
-
-                // THE DRIFT IS THE RESIDUE AFTER THE RESERVATION, NOT THE RAW ROW DIFFERENCE,
-                // and the message says both numbers so nobody has to recompute it. Scotland
-                // tier 8 holds 11 rows against an authored 14: one of those three is the
-                // player's reserved place, so the drift is 2 and the division fields 12.
-                $problems[] = sprintf(
-                    '%s tier %d: %s division size %d against a real size of %d (%d NPC club rows%s) — short by %d. '
-                    . 'The %s pool is divided %d ways and paid to %d clubs, so each gets %s instead of %s and %s '
-                    . 'reaches nobody at all. Author league.slots to %d, or generate the missing clubs.',
-                    $country,
-                    $tier,
-                    $article,
-                    $resolved,
-                    $expected,
-                    $here,
-                    $reserved ? ' plus a reserved player place' : '',
-                    $resolved - $expected,
-                    $this->money($pool),
-                    $resolved,
-                    $expected,
-                    $this->money($shortfall),
-                    $this->money($correct),
-                    $this->money($evaporated),
-                    $expected,
-                );
-
-                continue;
-            }
-
-            $warnings[] = sprintf(
-                '%s tier %d: %s size %d against a real size of %d (%d NPC club rows%s) — short by %d. No TV pool is authored here, so '
-                . 'nothing is being divided yet; normal while a country is still being generated, and a finding once '
-                . 'it is finished or a pool is authored.',
-                $country,
-                $tier,
-                $source,
-                $resolved,
-                $expected,
-                $here,
-                $reserved ? ' plus a reserved player place' : '',
-                $resolved - $expected,
-            );
         }
 
-        $io->text('Authored division size against the NPC club rows that exist (the reserved player place is DETECTED, not assumed):');
+        $io->text(
+            'Division size, DERIVED from the NPC club rows that exist (league.slots is retired and no longer read '
+            . '— owner ruling, 2026-11-19; it is printed only so an older export can be reconciled against a '
+            . 'running box). The reserved player place is DETECTED and informational: the +1 is unconditional.',
+        );
         $io->table(
-            ['T', 'resolved size', 'source', 'npc rows', 'reserved', 'real size', 'drift', ''],
+            ['T', 'size', 'npc rows', 'reserved', 'slots (unread)', 'tv pool', 'tv_deal cache', ''],
             $rows,
         );
 
@@ -655,9 +652,9 @@ final class EconomyWageTableCommand extends Command
         $warnings = [...$warnings, ...$packWarnings];
 
         if ($warnings !== []) {
-            // A warning rather than a problem: see the fail-or-warn note above. Printed here,
-            // next to the table that shows it, instead of being pooled into the PROBLEMS list
-            // where a state nobody can act on yet would read as a release blocker.
+            // Warnings rather than problems: see the docblock. Printed here, next to the table
+            // that shows them, instead of being pooled into the PROBLEMS list where a state
+            // nobody can act on yet — or one no player can see — would read as a release blocker.
             $io->warning(implode("\n", $warnings));
         }
 
@@ -669,13 +666,18 @@ final class EconomyWageTableCommand extends Command
      *
      * A pack is a cache of `npc_club` rows and **nothing invalidates it when those rows change**
      * (the known footgun: regenerating NPC clubs leaves every cached pack in place). So the
-     * division a device actually fields can differ from both the authored size and the server
-     * rows, and that is the disagreement a human sees — a league table header reading 12 while
-     * every finance divides by 14.
+     * division a device actually fields can differ from the server rows, and that is the
+     * disagreement a human sees — a league table header reading 12 while every finance divides
+     * by 14.
      *
-     * Compared against the ROWS rather than against `sizeOf()`, because the rows are what the
-     * pack is built from: that makes a disagreement unambiguously a stale cache with a clear
-     * remedy (regenerate), rather than a question about who should have authored what. The
+     * ⚠️ **Since 2026-11-19 this is the ONLY remaining way to get a wrong divisor in front of a
+     * player**, and it got more likely rather than less: `sizeOf()` derives from the rows now,
+     * so the divisor moves the instant they change while the pack stays exactly as it was.
+     *
+     * Compared against the ROWS rather than against `sizeOf()`, which are the same number at
+     * every filled non-deepest tier but not at the deepest, where `sizeOf()` adds the player's
+     * place and the payload does not carry it. The rows are what the pack is built from, so a
+     * disagreement is unambiguously a stale cache with a clear remedy (regenerate). The
      * player's own club is added on the device and is not in the payload, so no reservation
      * adjustment belongs here.
      *
@@ -732,8 +734,9 @@ final class EconomyWageTableCommand extends Command
                 $problems[] = sprintf(
                     '%s tier %d: the cached world pack (set %s) holds %d clubs but %d NPC club rows exist — the device '
                     . 'fields a different division from the one the %s pool is divided by. The pack is a cache and '
-                    . 'nothing invalidates it when clubs are regenerated: REGENERATE the pack, do not author '
-                    . 'league.slots to match a cache.',
+                    . 'nothing invalidates it when clubs are regenerated: REGENERATE the pack. ⚠️ There is no '
+                    . 'longer an authored size to reach for instead — league.slots was retired on 2026-11-19 and '
+                    . 'is not read, so the pack is the only thing here that can be wrong.',
                     $country,
                     $tier,
                     substr($summary['setId'], 0, 8),
@@ -845,13 +848,16 @@ final class EconomyWageTableCommand extends Command
                 continue;
             }
 
-            // RESOLVED, NOT THE RAW COLUMN. `league.tv_deal` is a CACHE of `tvPoolPence / slots`
-            // that `syncTvDeal()` only refreshes on an admin save, so any migration that moves
-            // `slots` leaves it encoding the old divisor — which is exactly what happened on
-            // 2026-11-19 (EN stored pool/18 against a corrected size of 16, so this check read
-            // England's TV income 12.5% low and printed `perClub x size != pool`). Every
-            // publication site already resolves this way; the gate reading the raw column was
-            // the one reader left in the cache-staleness class.
+            // RESOLVED, NOT THE RAW COLUMN. `league.tv_deal` is a CACHE of `tvPoolPence` over
+            // the division size that `syncTvDeal()` only refreshes on an admin save, so
+            // anything that moves the size leaves it encoding the old divisor — which is
+            // exactly what happened on 2026-11-19 (EN stored pool/18 against a corrected size
+            // of 16, so this check read England's TV income 12.5% low and printed
+            // `perClub x size != pool`). ⚠️ **More exposed since the size became derived**: it
+            // now goes stale on every regeneration rather than only on a migration, which is
+            // why check 9 reports the staleness explicitly. Every publication site already
+            // resolves this way; the gate reading the raw column was the one reader left in the
+            // cache-staleness class.
             $perClub  = $this->leagueSizeResolver->derivedTvDealPence($league) ?? $league->getTvDeal();
             $size     = $this->leagueSizeResolver->sizeOf($league);
             $turnover = $scale->turnoverPence;
@@ -1295,8 +1301,8 @@ final class EconomyWageTableCommand extends Command
      * Figures come from `LeaguePayoutResolver`, and the taper sum from its own `taperSumPpm()`,
      * for the reason check 7 states at length: a differently-shaped estimate here would look
      * like a cross-check and would not be one. The club count and the decrease percent come off
-     * this country's own league rows — `slots` is 10 in KR, 14 in BE, 18 in EN and 20 in FR, so
-     * assuming 18 would quietly misreport three quarters of the world.
+     * this country's own league rows — the derived size is 16 in EN, 12 in SC, 14 in BE and 20
+     * in FR (world export, 2026-11-19), so assuming 18 would quietly misreport the world.
      *
      * ── FOUR CONSTRAINTS ──────────────────────────────────────────────────────────────────
      *

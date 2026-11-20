@@ -29,6 +29,34 @@ class Scout
     private int $experience = 0;
 
     /**
+     * The scout's single 1-100 ABILITY — how good they are, as one figure.
+     *
+     * ADDED 2026-11-20 ON AN OWNER RULING, AND IT NAMES A QUANTITY THAT WAS ALREADY BEING
+     * ASSUMED. *"It would help if we added an 'ability' property to scouts, as experience
+     * doesn't match 1 to one."* Three app sites were already treating `experience` AS ability —
+     * `SeasonBudgetService.ts` fed it into the staff wage band as though it were a coach's
+     * `coachingAbility`, and two type comments called it "raw 0-100 ability from backend". So
+     * this column is a correction, not an addition: it gives that quantity a home and lets
+     * `experience` go back to meaning career length.
+     *
+     * DERIVED FROM `experience` + `judgements`, DETERMINISTICALLY, by ScoutAbilityCalculator —
+     * never rolled, for the same reason `weeklySalary` is not: every scout in the world was
+     * generated before this column existed, so the backfill has to compute from what is stored,
+     * and a random roll would make a backfilled scout disagree with an identical freshly
+     * generated one for no reason a player could see. Generation and backfill share one formula.
+     *
+     * NEVER 0. The clamp floor is 1, and the calculator's docblock explains why a zero is a
+     * defect rather than a default here: a wage is derived from this downstream (A24), and 0
+     * would price the scout at the very bottom of the band. The migration backfills every
+     * existing row rather than landing a DEFAULT 0, so the column is never in a lying state.
+     *
+     * READ-ONLY IN THE ADMIN, deliberately — an editable derived field would be a second source
+     * for one quantity with nothing saying which wins. See ScoutCrudController.
+     */
+    #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 1])]
+    private int $ability = 1;
+
+    /**
      * Weekly wage in pence.
      *
      * ADDED 2026-11-05, AND IT CLOSES A REAL HOLE RATHER THAN ADDING DETAIL. Staff carry
@@ -100,6 +128,11 @@ class Scout
 
     public function getExperience(): int { return $this->experience; }
     public function setExperience(int $experience): void { $this->experience = $experience; }
+
+    public function getAbility(): int { return $this->ability; }
+
+    /** Clamped on write as well as in the calculator — the column is unsigned and 0 is not legal. */
+    public function setAbility(int $ability): void { $this->ability = max(1, min(100, $ability)); }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

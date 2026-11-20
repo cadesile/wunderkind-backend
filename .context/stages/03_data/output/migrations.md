@@ -745,18 +745,25 @@ that would turn an authored decision into "derive". Pinned by `LeagueSlotsCorrec
 runs the migration's own `CORRECT_SQL` constant and covers both the reserved and unreserved
 shapes, the `slots = 0` hands-off case, and idempotency.
 
-### A defect this exposes and does NOT fix
+### A defect this exposes — ⚠️ RESOLVED 2026-11-19 (A23), and it was not a defect
 
-`sizeOf()`'s unconditional `+1` is wrong on any box whose deepest tier was not reserved. It is
-inert wherever `slots` is authored (the authored value wins), so it bites only `slots = 0`
-leagues — on the deployed box that is SC tiers 5–8, which *do* reserve, so nothing is wrong there
-today. **Reported, not fixed: changing the resolver is wider than a data correction.**
+`sizeOf()`'s unconditional `+1` was recorded here as wrong on any box whose deepest tier was not
+reserved, inert wherever `slots` was authored, and "reported, not fixed: changing the resolver is
+wider than a data correction."
 
-**Still not fixed as of A7 (2026-11-19), but no longer silent.** `app:economy:wage-table`'s new
-check 9 compares the resolved size against the real rows using *this* migration's detection rule,
-so a box where the resolver's unconditional `+1` is wrong now prints it as an under-filled tier.
-`EconomyAuthoredSizeDriftTest` pins that, which is what keeps the defect visible until somebody
-decides to change the resolver.
+**A23 changed the resolver, and the `+1` turned out to be right.** The player's own club is in
+the deepest division whether or not the generator left a gap for it, so the table that division
+fields is `rows + 1` either way — which is also what the device assembles (the pack's clubs plus
+its own). **This migration's detection rule was right for deciding what to AUTHOR and is the
+wrong rule for a participant count.** So check 9 keeps the detection and reports an unreserved
+deepest tier as a SHAPE note — the one size the rows alone cannot corroborate — instead of
+treating it as drift. ⚠️ No country in the 2026-11-19 export is in that shape.
+
+⚠️ **One real defect in the derivation WAS found and fixed in the same change**, and it is a
+different one: the unconditional `+1` turned a tier with NO rows into a division of ONE, so
+`derivedTvDealPence()` published the whole pool as a single club's share. `sizeOf()` now returns
+0 for an empty tier, deepest included. `EconomyTvCountryScalingGuardTest` caught it within
+minutes of `slots` stopping being read; `LeagueSizeResolverTest` pins it.
 
 ## `Version20261116180000` + `Version20261116181000` — the league payout ladders (2026-11-16)
 
@@ -999,6 +1006,14 @@ REGENERATED.
 
 ## `Version20261119090000` — author `league.slots` wherever it is still 0
 
+⚠️ **HISTORICAL AS OF 2026-11-19 (A23): the column this fills is no longer read by anything.**
+The owner retired `league.slots` (*"retire slots"*) and `LeagueSizeResolver::sizeOf()` derives
+every division size from the NPC club rows. This migration, `Version20261119120000` and
+`Version20261119150000` all remain applied and correct — a migration that has reached a
+production box has to stay re-runnable — but nothing downstream depends on what they wrote. The
+account below is kept as the record of why the column existed. `LeagueSlotsAuthoringTest` still
+runs the real SQL; one of its assertions changed meaning and was rewritten rather than deleted.
+
 **What it does.** Computes each league's currently derived size in SQL and writes it to
 `league.slots` **only where `slots = 0`** (0 means "derive"), stashing every row's prior value in
 `league_slots_pre_authoring_backup` so `down()` is exact. Designed to change nothing on the day it
@@ -1111,3 +1126,59 @@ cached payload whole, so nothing about the pack shape moved here.
 
 ⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand
 AND its value seeded into the pre-existing row — see `01_overview/output/environment.md`.
+
+## `Version20261120100000` — `scout.ability` (2026-11-20)
+
+Adds `scout.ability` (int, unsigned, NOT NULL) — the scout's single **1–100** figure — and
+derives it for **every existing row** from that row's own `experience` + `judgements`. Owner
+ruling: *"add 'ability' value, 1-100, have it driven off experience and judgements, to set a
+single figure, then we'll base wage on that."* A26 phase 1; the wage half is A24 and is NOT wired
+here. Canonical formula: `ScoutAbilityCalculator`.
+
+🔴 **THE BACKFILL IS IN THE MIGRATION, NOT BEHIND IT — a deliberate departure from
+`scout.weekly_salary`'s pattern.** That column (2026-11-05) landed `DEFAULT 0` with
+`app:backfill-scout-wages` behind it, and its own migration called the default "the only safe
+default for a migration but also a lie". For `ability` a zero is worse than a lie: it is **not a
+legal value** (the clamp floor is 1) and **A24 will price a wage off this column**, so any window
+in which every scout read 0 would price the whole world at the bottom of the band. Every row is
+derived in one `UPDATE` inside `up()`, so the column is never in a state anything could misread.
+`app:backfill-scout-abilities` still exists — for re-derivation after a formula or config change
+(`--force`) and for rows a later raw-SQL import leaves at the floor — but on a database that has
+run this migration it is a **no-op, and that is the expected result.**
+
+⚠️ **`up()` RATHER THAN `postUp()`, departing from `api-backwards-compatibility.md`'s checklist
+point 5.** Postgres has transactional DDL, so `ADD COLUMN ... DEFAULT 1` → `UPDATE` → `DROP
+DEFAULT` commits as one unit and is strictly *more* atomic than a `postUp()` pass, which would
+leave a brief window at the floor. `postUp()` is the right shape when the DDL must commit before
+the DML can see it; it does not here.
+
+🔴 **THE SQL IS A FROZEN TRANSCRIPTION OF THE FORMULA, NOT A SECOND HOME FOR IT.** A migration is
+a historical record and must not be edited once applied, so if the weighting is ever retuned this
+statement stays as it is and `--force` re-derives the world. **Do not "fix" this SQL to match a
+later formula.**
+
+⚠️ **PHP AND THIS SQL DID DISAGREE, AND THE FIX IS WORTH KNOWING.** `0.7` and `0.3` are not
+representable in binary floating point, so PHP's `0.7 * e + 0.3 * m` lands just under on inputs
+whose true result is exactly *k*.5, while Postgres `NUMERIC` is exact decimal — **6 of the 5,278
+dev scouts rounded differently** (experience 33 against a judgement mean of 38 is exactly 34.5:
+SQL gave 35, PHP gave 34). Six rows is small; the defect is the workstream's governing one in
+miniature, so it was removed rather than tolerated. `ScoutAbilityCalculator` now multiplies
+through by the weights' denominator — `round((7·e·n + 3·Σj) / 10n)` — and divides **once**, which
+IEEE correctly-rounds, so a true *k*.5 arrives as exactly *k*.5 and both sides round half away
+from zero. Pinned by
+`ScoutAbilityCalculatorTest::testRoundsExactHalvesTheSameWayTheMigrationSqlDoes()`;
+`app:backfill-scout-abilities --force --dry-run` reporting **0 of 5,278** is the end-to-end check.
+
+The judgement mean is taken over `jsonb_each_text`, i.e. **over the keys the row actually has** —
+persisted scouts carry 5, `GenerateMarketDataCommand` writes 7, and a fixed divisor would
+under-rate every real scout by ~29%. A row with no numeric judgements falls back to experience
+alone, never to a fabricated 0 for that half of the blend.
+
+⚠️ **Paired with `WORLD_PACK_VERSION` 11 → 12** in the same commit, because `buildScoutSnapshot()`
+publishes the figure into cached packs. **This does not break v11's "last bump money will ever
+cause" rule** — `ability` is census, not money, the same class of content as the player and staff
+abilities the pack already carries, and v9 and v10 were both bumps of exactly this kind.
+
+⚠️ `wunderkind_test` is not migration-tracked, so this column had to be applied to it by hand —
+added nullable, backfilled with the same arithmetic, then set `NOT NULL`. Without it 20 tests
+error on `column "ability" does not exist`. See `01_overview/output/environment.md`.

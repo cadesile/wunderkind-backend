@@ -5,6 +5,81 @@
 > session-start staleness check (see `SKILL.md`'s Triggers table) to find
 > commits that have landed since `.context/` was last reviewed.
 
+- **A26 phase 1: scouts get a real `ability`, 1-100 (2026-11-20)**, on `development`.
+  **Stages touched:** 01_overview (`environment.md`), 03_data (`entities.md`, `migrations.md`),
+  04_interfaces (`services.md`), shared (this file). Report:
+  `wunderkind-docs/economy-loose-ends/a26-scout-ability-report.md`.
+
+  **The ruling.** Owner, 2026-11-20: *"add 'ability' value, 1-100, have it driven off experience
+  and judgements, to set a single figure, then we'll base wage on that"* - because *"experience
+  doesn't match 1 to one"*. Phase 1 is **the field only**; basing the wage on it is A24 and is
+  blocked behind part B's budget move, so nothing monetary is wired here and no salary moves.
+
+  **What landed.** `Scout::$ability` (int, unsigned, NOT NULL, 1-100) + `ScoutAbilityCalculator`
+  (`clamp(1, 100, round(0.7 x experience + 0.3 x mean(judgements)))`), set at both generation
+  paths, derived on `prePersist` by `ScoutAbilityLifecycleSubscriber` so no creation path can
+  forget it, published on `GET /api/market/data` and in `buildScoutSnapshot()`, exposed
+  READ-ONLY in the admin, and backfilled for all 5,278 dev scouts inside
+  `Version20261120100000` itself rather than behind it. `WORLD_PACK_VERSION` 11 -> 12.
+
+  **The 70/30 weighting is an owner decision, and the reason is BANDING.** `experience` is
+  tier-banded; `judgements` are not (flat global `scoutJudgementMin/Max` at every tier). So
+  weight given to judgements is weight taken from tier separation - which would re-open the
+  £2,230/wk tier-8 scout that banding was added to fix, and A24 prices wage off this figure.
+
+  ⚠️ **The 5-vs-7 judgement disagreement was real in code, and both repos were right.**
+  `ScoutGenerationService` writes 5 keys and is the only path that has ever written a persisted
+  scout (all 5,278 dev rows); `GenerateMarketDataCommand` writes 7 for a population not in the
+  table. The mean is taken over keys PRESENT - a fixed /7 would under-rate every real scout by
+  ~29%.
+
+  ⚠️ **PHP and the migration's SQL disagreed on 6 of 5,278 rows** (exact-.5 rounding: binary
+  floats vs `NUMERIC`). Fixed by exact integer arithmetic in the calculator, not by tolerating
+  it - see `03_data/output/migrations.md`.
+
+- **A23: `league.slots` retired — every division size is now DERIVED (2026-11-19)**, on
+  `development` on top of `9918839c`. **Stages touched:** 01_overview (`environment.md`), 03_data
+  (`entities.md`, `migrations.md`), 04_interfaces (`services.md`), shared (this file). Report and
+  verbatim evidence: `wunderkind-docs/economy-loose-ends/a23-retire-slots-report.md` and
+  `a23-run-2026-11-19/`.
+
+  **The ruling.** Owner, 2026-11-19: *"Retire slots."* `LeagueSizeResolver`'s docblock argued at
+  length that the field must stay authored, because *"a derived divisor moves whenever somebody
+  clicks Generate"*. The owner heard that and overruled it. ⚠️ **The argument was rewritten, not
+  deleted** — both the resolver's class docblock and `EconomyWageTableCommand`'s check 9 quote it
+  and record what was given up, because a comment contradicting the code is worse than either.
+
+  **What landed.** `sizeOf()` derives always: NPC club rows, plus one at the country's deepest
+  division for the player's own place, and **0 for a tier with no rows at all**. Nothing writes
+  the column any more — the admin quick-edit shows the derived size read-only and the world
+  export/import drops the key at both ends (`worldEntityProvider()`'s exclusion list). The COLUMN
+  is deliberately NOT dropped. Check 9 is rewritten around the two disagreements that remain: a
+  stale world pack (FAILS — now the only way left to show a player a wrong divisor) and a stale
+  `league.tv_deal` column (WARNS — no player reads it, four admin surfaces do).
+
+  **Blast radius, measured off the 2026-11-19 world export (200 leagues / 3,175 clubs).**
+  ⚠️ **All 25 countries checked, not the 2 in scope — 24 are byte-identical** and only **SC**
+  moves, 14 → 12 at all eight tiers. The brief's "23 countries unchecked, out of scope" is
+  therefore closed rather than deferred. England's variant-gate output is byte-identical before
+  and after (`a23-run-2026-11-19/variantGate-EN.{BEFORE,AFTER}.txt`, `diff` empty).
+
+  ⚠️ **A real defect was found and fixed in the same change, by the suite.** The unconditional
+  `+1` turned a tier with NO rows into a division of ONE, so `derivedTvDealPence()` published the
+  whole pool as a single club's share — the exact "divide by a clamped 1" failure the 0 exists to
+  prevent, reached by another route. `EconomyTvCountryScalingGuardTest` caught it.
+
+  ⚠️ **Flagged for the PM, not restructured.** `03_data/output/migrations.md`'s three
+  `Version2026111909/12/15` sections are now historical — the column they fill is unread — and are
+  marked as such at the top of the first rather than pruned. `04_interfaces/output/services.md`'s
+  "a defect this exposes and does NOT fix" is resolved and annotated in place.
+
+  **Suite.** `lando php vendor/bin/phpunit --filter '/^(?!.*AdminShellCoverage).*$/'` → **3,238
+  tests** (baseline 3,233; +5), 155,841 assertions, **3 failures, all three proven pre-existing by
+  stashing and re-running on the clean tree** (`NotificationLogCrudControllerTest`,
+  `CompetitionControllerTest::testShowIncludesResultsOnceRoundsAreProcessed`,
+  `FriendlyResolveSingleMatchTest`). `EconomyAuthoredSizeDriftTest` renamed to
+  `EconomyDerivedSizeDriftTest`.
+
 - **A16: the two `game_config` polluters now own the row for their duration (2026-11-19)**,
   committed on `development` directly on top of `8298cc60`. **Stages touched:** 01_overview
   (`environment.md`), shared (this file). Report and verbatim evidence:

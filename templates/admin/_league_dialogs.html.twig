@@ -47,10 +47,17 @@
                            typed. Released builds read THIS key, which is why it still exists. #}
                         <span class="bmc-data" data-qe-tv-derived hidden>Derived: pool ÷ <span data-qe-clubcount>—</span> clubs.</span>
                     </div>
+                    {# ⚠️ READ-ONLY, AND NOT AN INPUT. Owner ruling, 2026-11-19: "Retire slots."
+                       The size is DERIVED from this league's NPC club rows (plus the player's own
+                       place at the country's deepest tier) by LeagueSizeResolver::sizeOf(), and
+                       nothing authors it. An editable box would be one an operator could type
+                       into with no effect. `league.slots` still exists in the database, unread,
+                       and is shown beneath so an older world export can be reconciled against
+                       what this box is running — see LeagueSizeResolver's class docblock. #}
                     <div class="bmc-field-col">
-                        <span class="bmc-lbl">SLOTS</span>
-                        <label class="bmc-num bmc-num--fill"><input type="text" inputmode="numeric" name="slots" id="qe-slots" placeholder="derive"></label>
-                        <span class="bmc-data">Clubs in this league's table, the TV pool's divisor. <strong>Blank = work it out</strong> from NPC rows.</span>
+                        <span class="bmc-lbl">DIVISION SIZE (derived)</span>
+                        <span class="bmc-num bmc-num--fill" data-qe-size>—</span>
+                        <span class="bmc-data">Clubs in this league's table, the TV pool's divisor. <strong>Derived from the NPC club rows</strong> — not authored, and not editable. Retired column <code>slots</code>: <span data-qe-slots-retired>—</span>.</span>
                     </div>
                     <div class="bmc-field-col">
                         <span class="bmc-lbl">POSITION TAPER %</span>

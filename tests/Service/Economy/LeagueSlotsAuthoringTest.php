@@ -28,6 +28,20 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * It runs the migration's OWN statement, required by path and read off
  * `Version20261119090000::AUTHOR_SQL` — `wunderkind_test` is not migration-tracked, so the
  * migration cannot reach it, and a re-typed copy of the SQL would test the copy.
+ *
+ * ── ⚠️ HISTORICAL AS OF 2026-11-19: THE COLUMN THIS MIGRATION FILLS IS NO LONGER READ ────
+ *
+ * The owner retired `league.slots` (*"there should be no wiring around the amount of clubs, the
+ * finances should be dynamic"*), so `sizeOf()` derives always and this migration's product
+ * governs nothing. The file is kept, and still runs the real SQL, because a migration that has
+ * already been applied to production boxes has to stay correct and re-runnable — not because
+ * anything downstream depends on what it wrote.
+ *
+ * ⚠️ **One assertion changed meaning and was rewritten rather than deleted:**
+ * `testAnAuthoredValueIsNeverOverwrittenEvenWhenItDisagreesWithTheCount` used to assert that
+ * `sizeOf()` returned the authored 3 against 3 rows in a bottom tier. It now returns 4, which
+ * is the ruling working. What that test still proves — that the MIGRATION leaves a populated
+ * column alone — is unchanged and is what it now asserts.
  */
 class LeagueSlotsAuthoringTest extends KernelTestCase
 {
@@ -163,13 +177,18 @@ class LeagueSlotsAuthoringTest extends KernelTestCase
         // The SC tier-8 shape exactly: authored 3, derives 4.
         $this->seed([8 => 3], slots: 3);
 
-        self::assertSame([8 => 3], $this->sizesByTier(), 'the authored value wins over the count');
+        // ⚠️ THE RESOLVED SIZE IS 4, NOT THE AUTHORED 3 — owner ruling, 2026-11-19. This line
+        // used to assert 3 ("the authored value wins over the count") and is the one place in
+        // this file where the ruling changed an expectation rather than a comment. The
+        // migration's own promise, which is what this test is for, is unaffected: it must not
+        // overwrite a column somebody populated, whatever the resolver now makes of it.
+        self::assertSame([8 => 4], $this->sizesByTier(), 'the size must be derived, not read off the column');
 
         $this->db->executeStatement($this->authoringSql());
         $this->em->clear();
 
         self::assertSame([8 => 3], $this->slotsByTier(), 'an authored slots was overwritten by the derived count');
-        self::assertSame([8 => 3], $this->sizesByTier());
+        self::assertSame([8 => 4], $this->sizesByTier(), 'the migration moved a resolved size');
     }
 
     /**

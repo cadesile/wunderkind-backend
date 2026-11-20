@@ -97,6 +97,64 @@ cascading through everything that loads a `StarterConfig`. Exactly one was real.
 the danger: it is easy to read a wall of red as "my change broke everything" or, worse, as
 "this suite is always flaky" and push past it.
 
+**It happened again (2026-11-20).** `scout.ability` (`Version20261120100000`, A26) reached
+`wunderkind` but not `wunderkind_test`, and a full run reported **20 errors and 5 failures**.
+
+⚠️ **But the attribution here is different from 2026-11-02's, and that is the more useful
+lesson.** Only **4** of those 20 errors were the missing column (`column "ability" does not
+exist`). The other 16 were an unrelated mistake in the same change — a new constructor argument
+on `ScoutGenerationService`, which two test classes instantiate by hand. Measured by difference:
+adding the column took the run from 20 errors to 16.
+
+So **this failure mode does not always look like a wall of identical red.** 2026-11-02's did (35
+of 36 from one column) and that shape is what this section originally trained people to expect;
+here the missing column was a *minority* of the noise and would have been easy to dismiss as a
+side effect of the real bug. **Check `information_schema.columns` for your new column regardless
+of how the failures look**, because it is a one-command check and the alternative is attributing
+4 errors to the wrong cause.
+
+Applied by hand in the shape this section prescribes and the compat doc's checklist point 5
+requires, since the column is `NOT NULL`:
+
+```bash
+lando php bin/console dbal:run-sql "ALTER TABLE scout ADD COLUMN IF NOT EXISTS ability INT" --env=test
+
+lando php bin/console dbal:run-sql "UPDATE scout s SET ability = GREATEST(1, LEAST(100, ROUND(CASE WHEN j.mean IS NULL THEN GREATEST(1, LEAST(100, s.experience::numeric)) ELSE 0.7 * GREATEST(1, LEAST(100, s.experience::numeric)) + 0.3 * GREATEST(1, LEAST(100, j.mean)) END))) FROM (SELECT sc.id, (SELECT AVG(e.value::numeric) FROM jsonb_each_text(sc.judgements::jsonb) AS e(key, value) WHERE e.value ~ '^-?[0-9]+(\.[0-9]+)?$') AS mean FROM scout sc) AS j WHERE j.id = s.id" --env=test
+
+lando php bin/console dbal:run-sql "UPDATE scout SET ability = 1 WHERE ability IS NULL" --env=test
+lando php bin/console dbal:run-sql "ALTER TABLE scout ALTER COLUMN ability SET NOT NULL" --env=test
+lando php bin/console dbal:run-sql "ALTER TABLE scout ALTER ability SET DEFAULT 1" --env=test
+```
+
+**Nullable → backfill → `NOT NULL` → `SET DEFAULT` is the order that matters**, and it is the
+third time this page has had to record the same lesson: a new column is two jobs, the migration
+and this.
+
+⚠️ **Do not skip the final `SET DEFAULT`.** `Scout::$ability` declares
+`options: ['default' => 1]`, so a database without that default fails
+`SchemaIsInSyncTest::testOrmMappingMatchesTheMigratedDatabase` with
+`ALTER TABLE scout ALTER ability SET DEFAULT 1` outstanding. That test caught the same mistake in
+the migration itself: it ended with `DROP DEFAULT`, copying `Version20261119190000`, whose column
+declares **no** entity default — for that one the DB default IS the drift, and for this one
+dropping it is. **The rule is "the DB must match the entity", not "always drop the default."**
+
+🔴 **The general lesson, since this page now carries three instances of it.** A test database that
+is not migration-tracked is a **standing trap, not an incident**. Every new column is two jobs,
+and the second one has no reminder attached to it: nothing fails at write time, nothing fails in a
+targeted test run, and the suite then fails in a shape that looks like a broken change rather than
+a missing column.
+
+**So after adding a column, check `information_schema.columns` in `wunderkind_test` BEFORE reading
+a single assertion** — one command, and it removes a whole class of misattribution. Do it even
+when the failures look like they have another cause, because as 2026-11-20 shows they may *mostly*
+have another cause and still include this one.
+
+⚠️ **And do not reason about the count from the precedents on this page.** The 2026-11-20 entry
+was first written up here as "nineteen of the errors were the one missing column", by analogy with
+2026-11-02's 35-of-36, before anyone compared the two runs' totals. It was **4 of 20**. The
+numbers in a postmortem are only worth having if they come from the runs rather than from the
+shape of the last incident; corrected the same day.
+
 **`wunderkind_test` is shared across branches, and that is a trap when you switch.**
 There is ONE test database for every branch, so it is only ever in sync with whichever
 branch last synced it — and `master` can sit far behind `development`. Checking out the
@@ -202,7 +260,8 @@ contents must own them for its duration rather than assume the shipped defaults.
 **A SIXTH FAILURE WAS RECORDED ON 2026-11-19 AND IS DELIBERATELY NOT ON THIS LIST, BECAUSE IT WAS
 A DEFECT AND IT IS FIXED (A16, same day) — it was never a flake that stopped appearing.**
 `LegacyNewGameFlowTest::testTheEconomyBlockShipsSwitchedOff` ("the turnover table must be
-unauthored") failed because `EconomyAuthoredSizeDriftTest` and `EconomyTvCountryScalingGuardTest`,
+unauthored") failed because `EconomyDerivedSizeDriftTest` (then named
+`EconomyAuthoredSizeDriftTest`, renamed by A23 the same day) and `EconomyTvCountryScalingGuardTest`,
 both landed that day, wrote `38_866_153_952` into the shared `game_config` row in their own
 `seed()` and never put it back. Both now stash the table in `setUp()` and restore it in
 `tearDown()` — in `tearDown()` on purpose, because that runs after a FAILED assertion too, so the

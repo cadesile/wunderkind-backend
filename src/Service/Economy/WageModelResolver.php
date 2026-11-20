@@ -171,8 +171,8 @@ final class WageModelResolver
         // the product silently became a float and `intdiv()` raised a TypeError. It was always
         // within a factor of about 1.3 of that ceiling; the reference-squad recalibration of
         // 2026-11-19 raised every S_tier roughly fourfold and pushed it over, with
-        // `EconomyAuthoredSizeDriftTest` catching it on a synthetic country whose scale is
-        // steeper still.
+        // `EconomyDerivedSizeDriftTest` (then named `EconomyAuthoredSizeDriftTest`) catching
+        // it on a synthetic country whose scale is steeper still.
         //
         // The two forms agree EXACTLY at the shipped reputation spread of 0, where repBp is
         // 10000 and `intdiv(m x 10000, 10000) === m`; with a spread configured they can differ

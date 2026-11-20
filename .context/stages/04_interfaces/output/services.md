@@ -1012,6 +1012,54 @@ filename alone.
   fix: scout experience 44-88 at tier 1, 15-35 at tier 4, 2-7 at tier 8. **"Staff" includes
   scouts** — see the owner ruling in `01_overview/output/tribal-knowledge.md`, which also
   records why a wrong ability becomes a wrong wage in the app.
+
+  ⚠️ **It writes FIVE judgement keys, and that settles an apparent repo conflict.** `build()`
+  rolls `potential`/`technical`/`physical`/`mental`/`personality` from
+  `PoolConfig::$scoutJudgementMin/Max`, and it is the **only** path that has ever written a
+  persisted `Scout` — so all 5,278 rows on dev carry exactly those five.
+  `GenerateMarketDataCommand::buildScoutJudgements()` writes **seven** (adding `youth`/`senior`)
+  and does not write this table; that is where the app's seven-key `ScoutJudgements` type came
+  from. Both repos were right about different populations. **Anything averaging judgements must
+  average over the keys present** — a fixed `/7` under-rates every real scout by ~29%.
+
+  ⚠️ **AND NOTE WHAT IS NOT BANDED: judgements are rolled from the FLAT GLOBAL range whatever
+  the club's tier.** Only `$experience` takes `$abilityRange`. That asymmetry is load-bearing —
+  it is the reason `ScoutAbilityCalculator` weights experience at 70%, since every point given
+  to judgements is a point taken away from the tier separation this banding exists to create.
+
+- **`ScoutAbilityCalculator`** (2026-11-20) — a scout's single **1–100** `ability`, derived from
+  the `experience` and `judgements` already on the row:
+  `clamp(1, 100, round(0.7 × experience + 0.3 × mean(judgements)))`. Owner ruling — *"experience
+  doesn't match 1 to one"* — and the figure three app sites were already assuming existed (one
+  fed `scout.experience` into the staff wage band; two type comments called it "raw 0-100 ability
+  from backend"). A26 phase 1: the field only, **no wage wired** (that is A24).
+
+  **Deterministic, monotonic in both inputs, clamped 1–100, never 0.** Generation
+  (`ScoutGenerationService`, `GenerateMarketDataCommand`), the `Version20261120100000` backfill
+  and `app:backfill-scout-abilities` all call this one method, so a backfilled scout and an
+  identical freshly generated one never disagree — the same contract `ScoutWageCalculator`
+  records for `weeklySalary`.
+
+  **The 70/30 split is an owner decision (2026-11-20), not a tuning default** — see the banding
+  note above. Measured on EN club scouts, tier 1 vs tier 8: 0.3/0.7 gives a 18-point spread,
+  0.5/0.5 gives 30, **0.7/0.3 gives 42**, which tracks the tier ladder the rest of the economy
+  is built on. Consequence accepted for this phase: the shared pool's experience window (4–34 on
+  dev) caps a **pool** scout at ~48, so the top of the scale belongs to tier-1 club scouts.
+  Widening it is a `PoolConfig` change, not a formula one.
+
+  ⚠️ **It uses exact integer arithmetic, deliberately.** See
+  `03_data/output/migrations.md` — a float blend disagreed with the migration's `NUMERIC` SQL on
+  6 of 5,278 dev scouts, all exact-.5 cases.
+
+- **`ScoutAbilityLifecycleSubscriber`** (2026-11-20) — derives `ability` on `prePersist` for any
+  `Scout`, so no creation path can land the column's floor of 1. Same role and reasoning as
+  `PersonalityLifecycleSubscriber` ("centralises generation across every creation path ... so no
+  construction site can forget it"); the path it actually catches is the **admin create form**,
+  which cannot set `ability` by design. **Unconditional, which is safe because the formula is
+  deterministic** — re-deriving a scout `ScoutGenerationService` just derived gives the identical
+  figure, so unlike the personality subscriber there is no authored value to protect.
+  **prePersist only: an admin EDIT does not re-derive** (nor does it for `weeklySalary`);
+  `app:backfill-scout-abilities --force` is the documented path.
 - **`StaffGenerationService`** — generates one staff member. **`build()` takes an optional
   `$abilityRange`, and passing it is what keeps a club's staff at the club's own level.**
   Without it ability comes from a single global range (`PoolConfig::$coachAbilityMin/Max`,
@@ -1687,18 +1735,25 @@ the code rather than just the factor.
 **Check 9 (added 2026-11-19) is the only thing that compares the AUTHORED division size against
 the clubs that actually exist**, and it exists because that is the one weak point of authoring
 the size: regenerate a tier at 20 clubs against `slots = 16` and the world pays 16-club money to
-a 20-club division with no error, no warning and no log line. ⚠️ **It compares against the
-reserved-place rule, not against the bare row count** — the generator leaves one place open for
-the player's club at a country's deepest tier, so a correct bottom tier holds `slots - 1` rows
-and a naive `slots == rows` check fires on every bottom tier in the world. The reservation is
-**detected** (deepest tier holding exactly one fewer row than the tier above), never assumed,
-because it is absent in CA, JP, NG, PL, US and SC — the same rule as
-`Version20261119120000::CORRECT_SQL`. Rows outnumbering the size **fails** (money is provably
-split too few ways); the size outnumbering the rows **warns** (a half-filled tier is the normal
-mid-bootstrap state, so failing would redden a box doing nothing wrong). The drift table prints
+a 20-club division with no error, no warning and no log line. ⚠️ **REWRITTEN 2026-11-19 (A23),
+because the owner retired `league.slots` and that comparison lost its content** — count 1 IS
+count 2 now, by construction. The method's docblock quotes the overruled prohibition verbatim
+rather than deleting it (*"it must never be 'fixed' by making `sizeOf()` prefer the row count"*),
+so a reader who arrives at a disagreement can see which argument the code is making. What it
+compares instead: a **stale world pack** against the NPC rows (FAILS — now the only way left to
+show a player a wrong divisor, and MORE likely than before, because the divisor follows the rows
+instantly while the pack does not); a **stale `league.tv_deal` column** against the share every
+serve path derives (WARNS — no player reads the column, four admin surfaces do, so the back
+office and a device would disagree); a **pooled tier with no NPC rows at all** (WARNS — the size
+resolves to 0 and every serve path falls back to the stored column); and an **unreserved deepest
+tier** (WARNS — the one size the rows alone cannot corroborate, see below). The table prints
 either way, because on an agreeing box an empty finding list is indistinguishable from a check
-that never ran. ⚠️ **It never writes `slots`, and must not be "fixed" to make `sizeOf()` prefer
-the row count** — that is the defect `LeagueSizeResolver`'s docblock exists to prevent. The other five are (S_tier monotonic; no cross-tier ability inversion; TV a sane
+that never ran, and it carries a `slots (unread)` column so an older export can be reconciled
+against a running box. ⚠️ **It still never writes — not `slots`, not `tv_deal`** — which is the
+half of the old prohibition that survives the ruling, and both halves are pinned by
+`EconomyDerivedSizeDriftTest` (renamed from `EconomyAuthoredSizeDriftTest` in the same change).
+
+The other five are (S_tier monotonic; no cross-tier ability inversion; TV a sane
 fraction of turnover; the squad bill matching its own definition). Check 4 earned its place
 immediately by catching the reference squad being summed over continuous abilities when
 `Player::$currentAbility` is an int — 2.5% out on England's narrow tier-8 band, invisible on a
@@ -1716,18 +1771,42 @@ league", because the obvious query is wrong: **a `League` row is a template shar
 save** in its country and tier, and England tier 8 had 147 real player clubs pointing at one row
 on 2026-11-12. The table a player sees is assembled on their device.
 
-`league.slots` is therefore authored with **0 meaning "derive"**, and the derivation (NPC rows
-plus one for the country's bottom division) is the fallback. The reason the size is stored is not
-the arithmetic — it is that a derived divisor would move whenever an operator clicked Generate,
-silently re-pricing a tier's TV money for every shipped build.
+⚠️ **THE SIZE IS DERIVED, AND `league.slots` IS NO LONGER READ — owner ruling, 2026-11-19
+(A23): *"retire slots"*,** following *"there should be no wiring around the amount of clubs, the
+finances should be dynamic."* `sizeOf()` is NPC rows, plus one at the country's deepest division,
+and **0 for a tier with no rows at all** so `derivedTvDealPence()` can refuse rather than publish
+a whole pool as one club's share.
 
-⚠️ **The derive branch's `+1` at the bottom tier is UNCONDITIONAL, where the migration's rule
-detects the reservation** — so on a country whose deepest tier was never reserved, `sizeOf()`
-claims one more club than the division can field. Latent today (nothing on the deployed box is
-at `slots = 0` except SC tiers 5-8, which do reserve) and **deliberately not fixed in A7**:
-changing the resolver is wider than a check. Check 9 surfaces it as an under-filled tier rather
-than being broken by it, and `EconomyAuthoredSizeDriftTest` pins that behaviour so the defect
-cannot go quiet again.
+This section used to say the opposite, and the overruled argument is worth keeping because its
+cost was accepted rather than refuted: a derived divisor moves whenever an operator clicks
+Generate, silently re-pricing a tier's TV money for every shipped build. **What makes that cost
+smaller than it reads:** every path that serves a device already computes the share at read time
+through `derivedTvDealPence()` and never touches the stored column — `SyncService:834`,
+`InitializeController:251`, `LeagueService:306`, `LeagueImportExportService:66` — so the divisor
+was already dynamic on the wire and only the number it divided BY was authored. The `tv_deal`
+column survives as a cache that four admin surfaces read, and check 9 now watches it for exactly
+that staleness. **And the drift it was protecting against was live anyway:** Scotland authored 14
+at every tier against 12 NPC rows, so the shares a Scottish division credited itself fell
+£86,600,000.36 a season short of the pools authored for it, against £0.00 in England.
+
+**Measured blast radius** (world export 2026-11-19, 200 leagues / 3,175 clubs / 25 countries):
+**24 of 25 countries are byte-identical** — every one reserves a place at its deepest tier, so the
+derivation reproduces the authored figure exactly. Only **SC** moves, 14 → 12 at all eight tiers.
+
+⚠️ **The `+1` at the deepest tier is UNCONDITIONAL, and that is now deliberate rather than a
+latent defect.** The player's own club is in that division whether or not the generator left a
+gap, so the table it fields is `rows + 1` either way — which is also what the device assembles
+(the pack's clubs plus its own). The migration's detection rule (`rows + 1` only when the deepest
+tier holds one fewer row than the tier above) was right for deciding what to AUTHOR and is the
+wrong rule for a participant count, so check 9 keeps the detection and reports it as a SHAPE note
+instead of correcting anything. ⚠️ No country in the 2026-11-19 export is in the unreserved
+shape; the earlier claim that CA, JP, NG, PL, US and SC held a uniform count was measured on
+2026-11-12 and the caches have since been rebuilt.
+
+⚠️ **`league.slots` is NOT dropped.** The column stays in place, unread and unwritten — the
+admin form shows the derived size read-only and the world import no longer restores it (nor does
+the export emit it; it is on `worldEntityProvider()`'s exclusion list). It holds whatever it last
+held, which check 9 prints beside the live figure.
 
 `derivedTvDealPence()` returns **null** for a league with no pool (every league, until somebody
 authors one) and also for a pooled league with no resolvable size — rather than dividing by a

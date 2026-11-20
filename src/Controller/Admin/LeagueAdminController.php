@@ -59,8 +59,17 @@ class LeagueAdminController extends AbstractController
         $league->setLeaguePositionPot($this->parseMoneyToPence($request->request->get('leaguePositionPot')));
         $league->setTvPoolPence($this->parseMoneyToPence($request->request->get('tvPoolPence')));
 
-        $slots = $request->request->get('slots');
-        $league->setSlots(($slots !== null && $slots !== '') ? (int) $slots : 0);
+        // ⚠️ `slots` IS NOT READ FROM THIS FORM, AND THE FIELD IS GONE FROM IT.
+        //
+        // Owner ruling, 2026-11-19: *"Retire slots."* The division size is derived from the NPC
+        // club rows by `LeagueSizeResolver::sizeOf()` and nothing authors it any more, so an
+        // input here would be a box an operator could type into with no effect — which is worse
+        // than no box. The dialog shows the DERIVED size read-only instead, from the
+        // `clubCount` this action already publishes below.
+        //
+        // The COLUMN is deliberately not dropped (see `LeagueSizeResolver`'s docblock), so a
+        // posted `slots` is ignored rather than rejected: an old cached copy of the admin page
+        // still submitting one must not fail the save, and there is nothing for it to corrupt.
 
         // A JSON TEXTAREA, because the backend has no opinion about this block's shape — see
         // League::$parachute. Same treatment as the bankruptcyDeductionTiers textarea on the
@@ -128,6 +137,8 @@ class LeagueAdminController extends AbstractController
                     'prizeMoney'       => $league->getPrizeMoney(),
                     'leaguePositionPot'=> $league->getLeaguePositionPot(),
                     'tvPoolPence'      => $league->getTvPoolPence(),
+                    // THE RETIRED COLUMN, still published so the dialog can show it beside the
+                    // derived `clubCount` below. It is not an input any more; see quickEdit().
                     'slots'            => $league->getSlots(),
                     'leaguePositionDecreasePercent' => $league->getLeaguePositionDecreasePercent(),
                     'parachute'        => $league->getParachute(),

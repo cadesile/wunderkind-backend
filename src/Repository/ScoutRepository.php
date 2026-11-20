@@ -81,7 +81,13 @@ class ScoutRepository extends ServiceEntityRepository
 
     /**
      * Pool breakdown for the admin dashboard, nested on nationality.
-     * Scout carries only `experience` — there is no rating or reputation field.
+     *
+     * Faceted on `experience` — career length — and NOT on `ability`, which Scout also carries
+     * since 2026-11-20. The two are different quantities and the dashboard's buckets
+     * (`StatBuckets::EXPERIENCE_LABELS`) describe the first; adding the second here would mean
+     * new buckets and a wider nested shape, which nothing has asked for. This comment previously
+     * read "Scout carries only `experience` — there is no rating or reputation field", which
+     * stopped being true when `ability` landed.
      *
      * @return array{total: int, facets: array<string, list<array{key: string, count: int}>>, nested: array{dimension: string, children: list<string>, rows: list<array<string, mixed>>}}
      */

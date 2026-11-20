@@ -117,6 +117,14 @@ class MarketDataService
             'dateOfBirth' => $s->getDob()?->format('Y-m-d'),
             'nationality' => $s->getNationality(),
             'experience'  => $s->getExperience(),
+            // ADDITIVE, 2026-11-20. The scout's single 1-100 ability, derived on the backend from
+            // experience + judgements and stored on the row — see ScoutAbilityCalculator. The app
+            // READS this and must never re-derive it; `experience` keeps meaning career length.
+            'ability'     => $s->getAbility(),
+            // STILL DERIVED FROM `experience`, DELIBERATELY. `ability` exists now and is the
+            // better basis, but re-pointing this key would be a changed VALUE under an unchanged
+            // key — a breaking change by `shared/api-backwards-compatibility.md`'s own words. It
+            // stays on experience until something deliberately versions it.
             'tier'        => Tier::fromScore($s->getExperience())->value,
             // ADDITIVE, 2026-11-05, and it closes a hole the setup flow found: a running-cost
             // projection built from this endpoint modelled every scout as free, because Scout
