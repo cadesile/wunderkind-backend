@@ -1008,7 +1008,8 @@ filename alone.
   `WorldInitializationService`, `WarmWorldPackClubMessageHandler` and `StarterPackService`);
   the pool generators (`MarketPoolService::generateScouts()`) deliberately do not, because a
   market scout has no tier. The wage needs no ladder of its own: `ScoutWageCalculator`
-  interpolates on experience, so banding the experience moves it too. Measured on EN after the
+  interpolates on `ability` — **`experience` until A24, 2026-11-20 (owner ruling)** — which is
+  70% banded experience, so banding the experience still moves the wage, one step removed. Measured on EN after the
   fix: scout experience 44-88 at tier 1, 15-35 at tier 4, 2-7 at tier 8. **"Staff" includes
   scouts** — see the owner ruling in `01_overview/output/tribal-knowledge.md`, which also
   records why a wrong ability becomes a wrong wage in the app.
@@ -1087,10 +1088,17 @@ filename alone.
   and **A24 prices a scout's wage off `ability`**, which turns that into a wrong wage found far
   from its cause. Relying on a remembered command is not a mechanism.
 
-  ⚠️ **`weeklySalary` is deliberately NOT treated this way, and the asymmetry is principled.**
-  Its admin help says it is "set by hand here only to override one scout" — an intentional
-  override, which auto-recomputation would destroy. `ability` is intentionally not overridable,
-  so it must be recomputed. **The test is whether the field is an override or a derivation.**
+  ⚠️ **`weeklySalary` IS TREATED THE SAME WAY SINCE A24, 2026-11-20 — the test is unchanged and
+  the answer flipped.** This paragraph previously read, correctly for the world it was written in:
+  *"`weeklySalary` is deliberately NOT treated this way, and the asymmetry is principled. Its
+  admin help says it is 'set by hand here only to override one scout' — an intentional override,
+  which auto-recomputation would destroy."* **The test is still whether the field is an override
+  or a derivation** — but once A24 priced a scout's wage from a rule, the wage stopped being a
+  figure an operator authors. Owner ruling: it is a DERIVATION. So the subscriber derives it from
+  the DERIVED ability (ability first, then the wage — the order is load-bearing), the admin field
+  is read-only, and the help text no longer promises an override. An operator wanting to pin one
+  scout's wage now has no route, which is the ruling rather than an oversight; the honest shape
+  for that would be an explicit `weeklySalaryOverride` column.
 
   A `preUpdate` change does not stick on its own (the changeset is already computed), so the hook
   calls `recomputeSingleEntityChangeSet()`; it early-returns when the derived figure already

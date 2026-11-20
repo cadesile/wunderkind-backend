@@ -2862,6 +2862,14 @@ class GameConfig
      * Tiers are evaluated in order; the first entry whose maxAbility > entity's currentAbility wins.
      * A null maxAbility means "all remaining" (i.e. the default/highest tier).
      *
+     * ⚠️ **THE LAST ROW IS THE CATCH-ALL WHETHER OR NOT ITS maxAbility IS NULL — A24,
+     * 2026-11-20.** The default below carries the null; the LIVE table does not (an admin edit
+     * replaced it with a bounded 60), and 22.34% of all staff already resolve through
+     * WageModelResolver::multipliersFor()'s trailing fallback as a result. Stated here so the
+     * contract matches the code rather than the code depending on an emergent branch. See that
+     * method's docblock and band-ceiling-finding.md; re-banding 60-95 is calibration and is not
+     * A24's to do.
+     *
      * contractValue = currentAbility × rand(contractValueRandMin, contractValueRandMax) × playerMultiplier
      *
      * @var array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}>

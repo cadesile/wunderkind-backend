@@ -491,8 +491,8 @@ final class WageModelResolver
      * curve — see PlayerBrowseSerializer.
      *
      * Nothing stored changes. That is what keeps `ScoutWageCalculator` reproducible from
-     * `(experience, PoolConfig)` alone, which `BackfillScoutWagesCommand --force` depends on to
-     * re-derive every scout in the world.
+     * `(ability, PoolConfig)` alone — `experience` until A24, 2026-11-20 — which
+     * `BackfillScoutWagesCommand --force` depends on to re-derive every scout in the world.
      */
     public function scalePoolWagePence(int $storedPence, string $country, int $tier): int
     {
@@ -508,10 +508,29 @@ final class WageModelResolver
      * the live bands (15/25/40/60) an ability-15 player gets x6, not x4. Every row in the world
      * was priced that way.
      *
-     * The trailing `end($tiers)` fallback is also kept: the live table has no null catch-all
-     * row, so an ability at or above the last `maxAbility` falls out of the loop and lands on
-     * the last row by accident rather than by design. Changing that would re-price every elite
-     * player.
+     * ⚠️ **THE TRAILING `end($tiers)` IS THE DOCUMENTED CATCH-ALL, NOT AN ACCIDENT — RESTATED
+     * 2026-11-20 (A24).** This paragraph used to say the live table "lands on the last row by
+     * accident rather than by design", and that was an honest description of a real hole: the
+     * committed default ends `['maxAbility' => null, ...]`, both this repo's contract
+     * (`GameConfig::$wageMultiplierTiers`) and the app's say a `null` means "all remaining", and
+     * an admin edit replaced that catch-all with a bounded `60`. So the fallback was load-bearing
+     * while nothing said it was allowed to be.
+     *
+     * **How reachable, measured rather than assumed:** `coach_ability_max` is 75, every one of
+     * the 26 live countries authors a player tier whose max exceeds 60 (global authored max 95),
+     * and **2,186 of 9,784 staff — 22.34% — already sit at or above 60.** Full counts in
+     * `wunderkind-docs/economy-loose-ends/band-ceiling-finding.md`.
+     *
+     * **The rule, stated so the code no longer depends on an emergent branch: the LAST ROW IS
+     * THE CATCH-ALL, whether or not its `maxAbility` is `null`.** Nothing about the resolved
+     * multipliers changed when that was written down — the same abilities resolve to the same
+     * row, before and after. Restoring the `null` in live config is an equivalent fix and is an
+     * admin edit rather than a release.
+     *
+     * ⚠️ **RE-BANDING THE 60-95 RANGE IS CALIBRATION AND WAS DELIBERATELY NOT DONE HERE.** The
+     * owner has not ruled on what multiplier the top 37% of the ability scale deserves, and
+     * changing it would re-price every elite player and ~2,186 staff. Measure first — A24
+     * extended the app's CHECKS panel so the gap is visible on a real save.
      *
      * @return array{player: float, staff: float}
      */
@@ -528,6 +547,9 @@ final class WageModelResolver
             }
         }
 
+        // THE CATCH-ALL. Behaviour-identical to a table whose last row carries
+        // `maxAbility: null`, which is what the contract asks for and what the committed
+        // default has. See the docblock.
         $last = end($tiers);
 
         return [

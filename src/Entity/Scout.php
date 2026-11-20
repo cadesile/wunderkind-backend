@@ -65,11 +65,26 @@ class Scout
      * That is the gap that blocked the funding floor on POST /api/club/fund; see
      * docs/api/setup-flow.md.
      *
-     * DERIVED FROM `experience`, DETERMINISTICALLY, by ScoutWageCalculator — not rolled. Every
+     * DERIVED FROM `ability`, DETERMINISTICALLY, by ScoutWageCalculator — not rolled. Every
      * scout in the world was generated before this column existed, so the backfill has to
      * compute a wage from what was stored; a random roll would make the backfilled figure
      * unreproducible and would differ from what the same scout would be worth if generated
      * today. Generation and backfill therefore share one formula.
+     *
+     * ⚠️ **THE INPUT WAS `experience` UNTIL A24, 2026-11-20.** Owner ruling: price a scout off
+     * the `ability` column A26 added, and let `experience` go back to meaning career length. The
+     * app's mirror (`fallbackScoutWeeklyWagePence`) moved in the same change.
+     *
+     * ⚠️ **A DERIVATION, NOT AN OVERRIDE, SINCE THE SAME PASS.** It re-derives on every write
+     * (`ScoutAbilityLifecycleSubscriber`) and is read-only in the admin. See that subscriber's
+     * docblock for the test and for why the answer flipped.
+     *
+     * ⚠️ **AND IT IS NOT WHAT A CLUB PAYS.** This column is tier-blind, so it is authoritative
+     * for exactly one population: the shared hire-market pool on `GET /api/market/data`, one row
+     * served to every country. A scout AT a club is priced on the device from
+     * `wageMultiplierTiers[].staffMultiplier` against that club's own tier, identically to a
+     * coach — `CLAUDE.md`'s pack-is-a-census rule, which is why `buildScoutSnapshot` sends no
+     * wage at all.
      */
     #[ORM\Column(type: 'integer', options: ['unsigned' => true, 'default' => 0])]
     private int $weeklySalary = 0;

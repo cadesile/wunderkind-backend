@@ -6,11 +6,13 @@ namespace App\Tests\EventSubscriber;
 
 use App\Entity\Scout;
 use App\Service\ScoutAbilityCalculator;
+use App\Service\ScoutWageCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * THE WIRE between `ScoutAbilityCalculator` and Doctrine, exercised through a real flush.
+ * THE WIRE between `ScoutAbilityCalculator`, `ScoutWageCalculator` and Doctrine, exercised
+ * through a real flush.
  *
  * ⚠️ **Why this is a functional test and not a unit test, and why it exists at all.**
  * `ScoutAbilityCalculatorTest` proves the formula. `debug:container` proves the listener is
@@ -30,11 +32,20 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * ⚠️ **If every test here errors with `column "ability" does not exist`, the test database is the
  * cause, not this change.** `wunderkind_test` is not migration-tracked — see
  * `.context/stages/01_overview/output/environment.md` for the five commands.
+ *
+ * ⚠️ **A24, 2026-11-20: `weeklySalary` IS DERIVED HERE TOO NOW.** Owner ruling — once a wage is
+ * priced from a rule it is a derivation, not an override, so it gets the same `preUpdate`
+ * treatment `ability` has and the admin field is read-only. The cases at the bottom of this file
+ * are that half, and they are the ones that catch a wage left stale behind an edited input, which
+ * is the exact failure the `ability` half was added to prevent one layer up. **No schema change
+ * was needed** — both columns already exist, so the hand-migration note above does not apply to
+ * A24.
  */
 class ScoutAbilityLifecycleSubscriberTest extends KernelTestCase
 {
     private EntityManagerInterface $em;
     private ScoutAbilityCalculator $calculator;
+    private ScoutWageCalculator $wageCalculator;
 
     /** @var Scout[] */
     private array $cleanup = [];
@@ -53,6 +64,7 @@ class ScoutAbilityLifecycleSubscriberTest extends KernelTestCase
         self::bootKernel();
         $this->em         = self::getContainer()->get(EntityManagerInterface::class);
         $this->calculator = self::getContainer()->get(ScoutAbilityCalculator::class);
+        $this->wageCalculator = self::getContainer()->get(ScoutWageCalculator::class);
     }
 
     protected function tearDown(): void
@@ -180,6 +192,105 @@ class ScoutAbilityLifecycleSubscriberTest extends KernelTestCase
         self::assertSame(60, $scout->getAbility());
     }
 
+    // ── A24: the wage half ────────────────────────────────────────────────────────────────
+
+    /**
+     * 🔴 **THE CORE A24 ASSERTION.** A scout persisted with its inputs set and `weeklySalary`
+     * left at the column's DEFAULT 0 must come out priced. Nothing in the admin request can set
+     * it — the field is read-only by design since A24 — so the subscriber is the only thing that
+     * can, exactly as for `ability`.
+     *
+     * A 0 here is not a harmless placeholder: a free scout understates every club's running
+     * costs, which is the projection `POST /api/club/fund` reports.
+     */
+    public function testPersistingAScoutDerivesItsWeeklySalary(): void
+    {
+        $scout = $this->persistScout(80, self::JUDGEMENTS);
+
+        self::assertSame(68, $scout->getAbility());
+        self::assertNotSame(0, $scout->getWeeklySalary(), 'a 0 means the subscriber did not fire');
+        self::assertSame(
+            $this->wageCalculator->weeklyWageFor(68),
+            $scout->getWeeklySalary(),
+            'the wage must be exactly what the calculator derives from the DERIVED ability',
+        );
+    }
+
+    /**
+     * 🔴 **THE WAGE IS PRICED OFF ABILITY, NOT EXPERIENCE.** The regression this pins is the whole
+     * of A24's ruling, and it is invisible to a type checker: both are 0-100 ints, so feeding the
+     * wrong one produces a plausible wage that disagrees with every other scout in the game.
+     * 80 and 68 are deliberately different here for exactly that reason.
+     */
+    public function testTheWageIsDerivedFromAbilityAndNotFromExperience(): void
+    {
+        $scout = $this->persistScout(80, self::JUDGEMENTS);
+
+        self::assertSame($this->wageCalculator->weeklyWageFor(68), $scout->getWeeklySalary());
+        self::assertNotSame($this->wageCalculator->weeklyWageFor(80), $scout->getWeeklySalary());
+    }
+
+    /**
+     * ⚠️ The case the `--force` backfill was being relied on for, and an operator remembering to
+     * run a command is not a mechanism. An admin edits `experience`, `ability` re-derives — and
+     * before A24 the WAGE did not follow, so the row's three figures disagreed with nothing in
+     * the schema or the UI saying so.
+     */
+    public function testChangingExperienceReDerivesTheWageOnUpdate(): void
+    {
+        $scout = $this->persistScout(80, self::JUDGEMENTS);
+        $before = $scout->getWeeklySalary();
+
+        $scout->setExperience(20);
+        $this->em->flush();
+
+        // 0.7 * 20 + 0.3 * 40 = 26.
+        self::assertSame(26, $scout->getAbility());
+        self::assertSame($this->wageCalculator->weeklyWageFor(26), $scout->getWeeklySalary());
+        self::assertLessThan($before, $scout->getWeeklySalary(), 'a worse scout must cost less');
+
+        $this->em->clear();
+        $reloaded = $this->em->find(Scout::class, $scout->getId());
+        self::assertSame(
+            $this->wageCalculator->weeklyWageFor(26),
+            $reloaded->getWeeklySalary(),
+            'and must have been WRITTEN, not just set on the object',
+        );
+    }
+
+    /**
+     * A DERIVATION, NOT AN OVERRIDE — the owner's ruling, enforced rather than merely documented.
+     *
+     * The help text this replaces promised the field was "set by hand here only to override one
+     * scout". A live-looking admin field nothing honours is the defect class this workstream
+     * exists to remove, so the promise had to go in the same change as the behaviour.
+     */
+    public function testAWageWrittenByHandIsCorrectedRatherThanHonoured(): void
+    {
+        $scout = $this->persistScout(80, self::JUDGEMENTS);
+
+        $scout->setWeeklySalary(999_999);
+        $this->em->flush();
+
+        self::assertSame(
+            $this->wageCalculator->weeklyWageFor(68),
+            $scout->getWeeklySalary(),
+            'the derivation wins; there is one source for a wage',
+        );
+    }
+
+    /** An update that touches neither input leaves the wage alone, same as `ability`. */
+    public function testAnUnrelatedUpdateLeavesTheWageUntouched(): void
+    {
+        $scout = $this->persistScout(80, self::JUDGEMENTS);
+        $before = $scout->getWeeklySalary();
+
+        $scout->setName('Renamed Scout');
+        $this->em->flush();
+
+        self::assertSame($before, $scout->getWeeklySalary());
+    }
+
     /** @param array<string, int> $judgements */
     private function persistScout(int $experience, array $judgements): Scout
     {
@@ -196,3 +307,4 @@ class ScoutAbilityLifecycleSubscriberTest extends KernelTestCase
         return $scout;
     }
 }
+

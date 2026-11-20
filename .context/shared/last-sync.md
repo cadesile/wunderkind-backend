@@ -1904,3 +1904,73 @@
 
   `app:economy:wage-table` is byte-identical before and after (verified by md5 across a stash)
   — this touched no authored figure.
+
+---
+
+## 2026-11-20 — A24: a scout's wage is priced off `ability`, and is a DERIVATION (backend `development`)
+
+**Stages touched:** `04_interfaces/output/services.md`, `03_data/output/schema.md`,
+`03_data/output/entities.md` (corrections only — no stage regenerated).
+**No migration. No schema change.** Both columns already existed, so `wunderkind_test`'s
+hand-migration trap does not apply to A24 — stated in the subscriber test so nobody goes looking.
+
+Two owner rulings, 2026-11-20, in the same pass.
+
+**1. `ScoutWageCalculator` interpolates `ability`, not `experience`.** *"Give scouts a real ability
+and price on that"* — `experience` goes back to meaning career length and scouting effectiveness.
+A26 built the column and A27 backfilled it, and `ScoutAbilityCalculator`'s docblock already named
+A24 as its consumer. `weeklyWageForScout()` reads `getAbility()`. The arithmetic is untouched, so
+every value assertion in `ScoutWageCalculatorTest` held verbatim; **what moved is which of two
+0-100 ints is fed in**, which is invisible to a type checker, so the entity-overload test now sets
+them to DIFFERENT values (experience 50, ability 30) and asserts 30 and NOT 50.
+
+⚠️ **`ScoutGenerationService` had to REORDER.** `setWeeklySalary()` sat immediately after
+`setExperience()`; `ability` does not exist until the judgements are rolled, so pricing there would
+have silently used the entity's floor of 1 and put every generated scout at the very bottom of the
+band. The wage is now set after `setAbility()`, and the generation test asserts it is neither the
+floor's price nor experience's. `GenerateMarketDataCommand` names its local `$ability` for the same
+reason.
+
+**2. `Scout::$weeklySalary` is a DERIVATION, not an override.** `ScoutAbilityLifecycleSubscriber`
+now derives it on **`prePersist` AND `preUpdate`**, from the DERIVED ability (ability first, then
+the wage — the order is load-bearing: a wage off a stale ability is a plausible-looking wrong
+number), and the admin field is **read-only** with the help text rewritten. ⚠️ **The old help text
+promised *"set by hand here only to override one scout"*, and `services.md`'s paragraph arguing
+that asymmetry was CORRECT for the world it was written in — it is quoted and corrected there
+rather than deleted.** The test is unchanged ("override or derivation?"); the answer flipped,
+because once a wage is priced from a rule it stops being a figure an operator authors. An operator
+who genuinely wants to pin one scout's wage now has no route; that is the ruling, and the honest
+shape for it would be an explicit `weeklySalaryOverride` column. `--force` on
+`app:backfill-scout-wages` is now only for raw-SQL rows and formula/range changes — there is no
+hand-set figure left to protect.
+
+**🔴 `PoolConfig::$scoutWageMin/Max` does NOT become dead config, contrary to A24's brief.** The
+app now prices a scout at a CLUB from `GameConfig::$wageMultiplierTiers[].staffMultiplier` against
+that club's own tier, exactly as it prices a coach. But the band resolves on the paying club's
+tier, and a hire-market row has no paying club — one pool row is served to every country, which is
+why `MarketDataService::scalePoolWage()` exists at all. So this pair still prices the shared pool,
+and **that is the same treatment a market COACH gets** (`weeklySalary` mapped straight through), so
+the two roles remain treated the same. Said at `PoolConfigController`, on the entity, and in
+`routes.md` app-side.
+
+**The band ceiling, written down rather than changed.**
+`WageModelResolver::multipliersFor()`'s docblock said the live table *"lands on the last row by
+accident rather than by design"*. It now states the rule — **the LAST ROW IS THE CATCH-ALL whether
+or not its `maxAbility` is `null`** — with the measured reachability (2,186 of 9,784 staff, 22.34%;
+`coach_ability_max` 75; 26 of 26 countries authoring a tier max above 60; global authored max 95)
+and a pointer to `band-ceiling-finding.md`. `GameConfig::$wageMultiplierTiers`'s contract says the
+same. **Nothing about the resolved multipliers changed** — a 61+ ability takes the same branch it
+always took. Restoring the `null` in the live row is the equivalent fix and is the owner's admin
+edit; the app carries a test proving the two tables are identical at every edge, which is the proof
+that edit is safe. **60–95 was NOT re-banded**: calibration, unruled, and the app's CHECKS panel
+now prints the gap so it can be measured first.
+
+**Tests: +6, all attributable.** `ScoutAbilityLifecycleSubscriberTest` +5 (the wage is derived on
+persist; it comes off ability and not experience; an edited input re-derives it and the new figure
+is WRITTEN not just set; a hand-written wage is corrected; an unrelated update leaves it alone) and
+`ScoutGenerationServiceTest` +1 (banding the experience still moves the wage, through ability).
+`ScoutWageCalculatorTest` renamed its cases, no count change.
+
+**Full report, with the live before/after across all 5,278 dev scouts and the band's own figures:**
+`/Users/courtneyadesile/Documents/WunderkindFactory/docs/economy-loose-ends/a24-wage-bands-report.md`
+

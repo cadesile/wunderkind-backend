@@ -22,10 +22,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * is precisely the projection POST /api/club/fund reports. So the column needs this pass behind
  * it, and the migration says so.
  *
- * ACTS ONLY ON ZERO, so re-running is a no-op and an admin who deliberately set a scout's wage
- * to something is not overwritten. `--force` re-prices every row instead, for the one case the
- * default cannot cover: an operator who changed the PoolConfig wage range and wants the
- * existing world to follow it.
+ * ACTS ONLY ON ZERO, so re-running is a no-op. `--force` re-prices every row instead.
+ *
+ * ⚠️ **WHAT `--force` IS FOR CHANGED WITH A24, 2026-11-20.** Its old reason was "an admin who
+ * deliberately set a scout's wage to something is not overwritten" — but `weeklySalary` is a
+ * DERIVATION now, not an override (owner ruling; see ScoutAbilityLifecycleSubscriber), it is
+ * read-only in the admin, and it re-derives on every write. So there is no hand-set figure left
+ * to protect. `--force` remains for the two cases ordinary edits cannot reach: a row inserted by
+ * raw SQL, and a change to the FORMULA or the configured range, where nothing touches the row at
+ * all and so nothing re-derives it.
  *
  * ZERO IS INDISTINGUISHABLE FROM A DELIBERATE ZERO, and that is accepted rather than solved.
  * A genuinely free scout is not a state anything creates — generation always writes a figure
@@ -34,7 +39,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'app:backfill-scout-wages',
-    description: 'Derive weekly_salary from experience for scouts that have none',
+    description: 'Derive weekly_salary from ability for scouts that have none',
 )]
 final class BackfillScoutWagesCommand extends Command
 {

@@ -548,7 +548,10 @@ migrations are the change log (see `migrations.md`).
   scout and an identical freshly generated one always agree:
 
   - **`weeklySalary`** (int, unsigned, default 0) — pence/week, from `experience` via
-    `ScoutWageCalculator`. Added 2026-11-05.
+    `ScoutWageCalculator`. Added 2026-11-05. ⚠️ **Derived from `ability` since A24,
+    2026-11-20** (`experience` before), re-derived on every write, and read-only in the
+    admin — a DERIVATION, not an override. It prices only the shared hire-market pool; a
+    scout at a club is priced on the device from `wageMultiplierTiers[].staffMultiplier`.
   - **`ability`** (int, unsigned, default 1) — the scout's single **1–100** figure, from
     `experience` + `judgements` via `ScoutAbilityCalculator`:
     `clamp(1, 100, round(0.7 × experience + 0.3 × mean(judgements)))`. Added 2026-11-20

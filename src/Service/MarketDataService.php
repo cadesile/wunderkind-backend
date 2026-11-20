@@ -55,7 +55,8 @@ class MarketDataService
      *
      * POOL ROWS CANNOT BE PRICED AT GENERATION. One coach row is served to every country at
      * every tier, so a stored country factor would be meaningless — and `ScoutWageCalculator`
-     * has to stay reproducible from `(experience, PoolConfig)` alone, because
+     * has to stay reproducible from `(ability, PoolConfig)` alone — `experience` until A24,
+     * 2026-11-20 — because
      * `BackfillScoutWagesCommand --force` re-derives every scout in the world from exactly
      * those two inputs. So the factor is applied HERE, on the way out, and nothing stored
      * changes.
