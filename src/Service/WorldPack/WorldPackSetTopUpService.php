@@ -76,6 +76,27 @@ class WorldPackSetTopUpService
     }
 
     /**
+     * The country's stock broken into claimable vs in-flight, against the configured target.
+     *
+     * Exists so a caller can tell the two ways of being "not short" apart. `needsTopUp()`
+     * answers false both for a country holding its full buffer and for one holding nothing a
+     * device can use while builds are counted in flight — and reporting those two the same way
+     * is the defect this is here to make impossible. See WorldPackSetService::stock().
+     *
+     * @return array{target:int, claimable:int, building:int, deficit:int, starved:bool}
+     */
+    public function stock(string $country): array
+    {
+        return $this->setService->stock($country, $this->targetSetCount());
+    }
+
+    /** Marks $country's stranded BUILDING sets FAILED. See WorldPackSetService::reapStaleBuilding(). */
+    public function reapStaleBuilding(string $country): int
+    {
+        return $this->setService->reapStaleBuilding($country);
+    }
+
+    /**
      * Builds up to $max sets for $country, stopping as soon as it is at target.
      *
      * @return WorldPackSet[] The sets actually built — empty is the normal, healthy answer.
@@ -84,7 +105,26 @@ class WorldPackSetTopUpService
     {
         $target = $this->targetSetCount();
 
-        if ($this->setService->deficit($country, $target) <= 0) {
+        $stock = $this->setService->stock($country, $target);
+
+        if ($stock['deficit'] <= 0) {
+            if ($stock['starved']) {
+                // Not the healthy no-op. The country has nothing a device can claim and is
+                // only "at target" because BUILDING rows are counted in flight — and a
+                // stranded one of those is exactly how this goes quiet for half an hour. At
+                // WARNING so prod's fingers_crossed monolog actually writes it; the healthy
+                // case stays at INFO, where it is correctly invisible.
+                $this->logger->warning('world_pack_set.topup.starved', [
+                    'country'   => $country,
+                    'target'    => $target,
+                    'claimable' => $stock['claimable'],
+                    'building'  => $stock['building'],
+                    'hint'      => 'no claimable set; counted at target only by builds in flight',
+                ]);
+
+                return [];
+            }
+
             $this->logger->info('world_pack_set.topup.at_target', [
                 'country' => $country,
                 'target'  => $target,

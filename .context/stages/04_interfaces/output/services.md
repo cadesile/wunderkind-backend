@@ -1410,8 +1410,19 @@ filename alone.
   otherwise have the retry claim a SECOND set and leak the first. `deficit()` counts
   ready-and-claimable plus recently-BUILDING, the second half **time-bounded**
   (`BUILD_STALE_AFTER`) because one worker killed mid-build would otherwise leave a row that
-  suppresses every future top-up for its country permanently. `deleteUnclaimed()` spares
-  CLAIMED sets — a device mid-initialisation still has tiers to fetch.
+  suppresses every future top-up for its country permanently. 🔴 **The time bound narrows that
+  window; it does not close it, and inside the window the gate lies.** A set is persisted
+  BUILDING before its first tier is built, so a stranded row makes a country with ZERO
+  claimable sets report a deficit of zero for thirty minutes — and every top-up path reads that
+  gate. Demonstrated on the dev stack 2026-11-21: EN at 0 claimable of 2 with two BUILDING
+  rows, `app:worldpack:maintain` printing "EN at target". So `deficit()` now delegates to
+  **`stock()`**, which returns `target`/`claimable`/`building`/`deficit` plus a **`starved`**
+  flag (`claimable < target` with `deficit === 0`) that callers must report differently from
+  being stocked, and **`reapStaleBuilding()`** marks a BUILDING set older than
+  `BUILD_STALE_AFTER` as FAILED with a reason — at ERROR level, which matters because prod's
+  monolog is fingers_crossed and the INFO "at target" no-op wrote nothing at all.
+  `deleteUnclaimed()` spares CLAIMED sets — a device mid-initialisation still has tiers to
+  fetch.
 - **`WorldPackSetTopUpService`** — adds ONE set, clears nothing; the unattended counterpart
   of the admin regenerate. Dispatched on every game initialisation and by
   `app:worldpack:maintain`. **Deliberately does not go through `WorldPackGenerationRun`**:
@@ -1423,7 +1434,9 @@ filename alone.
   dispatcher, a deficit **re-read on drain** (the clamp that makes the pipeline safe to re-run,
   same reasoning as `TopUpStarterPoolMessageHandler`'s), and a per-country
   `pg_try_advisory_lock` so a burst of 50 inits costs 49 instant no-ops. `rebuild()` is the
-  `app:worldpack:warm` path: clear unclaimed, then build N unconditionally.
+  `app:worldpack:warm` path: clear unclaimed, then build N unconditionally. `stock()` and
+  `reapStaleBuilding()` pass through to `WorldPackSetService`, and `topUp()` logs a starved
+  country at **WARNING** rather than folding it into the INFO `at_target` no-op.
 - **`WorldPackCacheService`** — **now entirely set-scoped**, and that is a correctness
   requirement rather than a rename. It used to resolve rows through
   `findOneBy(['country','tier'])`, correct for exactly as long as a country had one world; a

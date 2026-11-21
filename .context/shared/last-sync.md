@@ -2194,3 +2194,41 @@ and `AGENTS.md` is the gitignored pointer — it carries no figures, so **no re-
 `07_synthesis/current-focus.md` still describing 2026-11-18 as the current focus.
 
 **Report:** `/Users/courtneyadesile/Documents/WunderkindFactory/docs/economy-loose-ends/ctx-backend-report.md`
+
+---
+
+## Pass — B2, world-pack dispatch defect, 2026-11-21, at `d731db22`
+
+**Scope:** `04_interfaces` only, and only where this pass's own change made the text wrong.
+
+**Corrected — `04_interfaces/routes.md`:** `POST /admin/worldpack-cache/top-up` now reaps the
+country's stranded BUILDING sets, returns `claimable`/`target`/`building`/`reaped` on every
+answer, and **refuses a STARVED country with `409` + `success: false`** — nothing claimable, yet
+a zero deficit because BUILDING rows are counted in flight. That case previously answered
+`success: true, reason: 'already at target'` while the screen's own stock column read
+`0/2 SHORT`.
+
+**Corrected — `04_interfaces/services.md`:** `WorldPackSetService` now exposes **`stock()`**
+(`target`/`claimable`/`building`/`deficit` + a **`starved`** flag) and
+**`reapStaleBuilding()`**; `deficit()` delegates to `stock()` so the gate and the reported
+figures cannot drift. `WorldPackSetTopUpService` passes both through and logs a starved country
+at WARNING rather than the previously invisible INFO `at_target`. The entry's existing claim
+that `BUILD_STALE_AFTER` stops a killed worker suppressing top-ups "permanently" is kept and
+qualified: the bound narrows that window, it does not close it, and inside the window the gate
+reports a starved country as stocked.
+
+🔴 **FLAGGED, NOT EDITED — one claim in this file and two stages are now contradicted by
+measurement.** The entry above in this same document, `07_synthesis/architecture-notes.md`'s
+"Keeping the buffer stocked" bullet, and `01_overview/deployment.md`'s trap #2 all state that
+the async world-pack build does not run on the dev stack. **It does.** Two sets were built on
+dev through the queue alone on 2026-11-21 — SC `01a1ff72…` (18:51:03 → ready 18:51:10) and EN
+`01a1ff79…` (queued 18:58:04, picked up 18:59:00, ready 18:59:17) — with `messenger:consume
+worldpack` and `worldpackset` both in `ps aux`, queue depth zero and nothing world-pack-shaped
+in the failure transport. Trap #1 (the rebuild sparing CLAIMED sets) is unaffected and stands.
+Status and review are the PM's, so the three places are listed in the report rather than
+rewritten here.
+
+**Not done, deliberately:** nothing restructured, pruned or deleted; no stage outside
+`04_interfaces` touched.
+
+**Report:** `/Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-docs/economy-loose-ends/b2-worldpack-dispatch-report.md`

@@ -287,8 +287,14 @@ so a token minted before the fix starts working without re-authentication. See
   **It has no pool-supply failure**: starter squads are generated, so a run always starts every
   set it was asked for — the `startedSets`/`partial` keys in the response can no longer disagree
   and are kept only because the admin JS reads them),
-  `POST /admin/worldpack-cache/top-up` (queues one `TopUpWorldPackSetMessage` — the same
-  message every game init dispatches — and answers `queued: false` when already at target),
+  `POST /admin/worldpack-cache/top-up` (reaps the country's stranded BUILDING sets, then
+  queues one `TopUpWorldPackSetMessage` — the same message every game init dispatches. It
+  answers `queued: false` with `claimable`/`target`/`building`/`reaped` when genuinely at
+  target, and **`409` with `success: false` when the country is STARVED**: nothing claimable,
+  yet a zero deficit because BUILDING rows are counted in flight. ⚠️ That second case used to
+  answer `success: true, reason: 'already at target'` while the screen's own stock column said
+  `0/2 SHORT` — a no-op reported as success, and it silently invalidated about three hours of
+  device testing on 2026-11-20. A refusal naming the numbers is the contract now),
   `GET /admin/worldpack-cache/set-status/{country}` (the poll the TOP UP button needs: a
   top-up creates no `WorldPackGenerationRun`, so `run-status` cannot see it at all),
   `GET /admin/worldpack-cache/run-status/{country}`,
