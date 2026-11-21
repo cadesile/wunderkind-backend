@@ -2232,3 +2232,53 @@ rewritten here.
 `04_interfaces` touched.
 
 **Report:** `/Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-docs/economy-loose-ends/b2-worldpack-dispatch-report.md`
+
+---
+
+## A32 — the flat judgement term in a scout's `ability` (2026-11-21)
+
+**Backend change: a docblock only. No code, no config, no migration, no pack version bump.**
+`src/Service/ScoutAbilityCalculator.php` — three corrections and the A32 measurements, recorded
+beside the 70/30 ruling with an explicit note that **the ruling is not the defect**:
+
+1. 🔴 It said the banded input comes from *"the club's own `league_ability_ranges` window"* — that
+   is the **PLAYER** table and a POTENTIAL figure. A25 moved it to
+   `StaffAbilityRangeService::resolve($country, $tier)` on 2026-11-20 and removed the parameter so
+   no caller can put the player band back.
+2. 🔴 It said `ScoutGenerationService` rolls *"all five"* judgements and that *"all 5,278 scouts in
+   the dev database carry exactly these five"*. **A27 made both populations seven** on 2026-11-20.
+   Measured the same day: `SELECT cardinality(…), count(*) FROM scout GROUP BY 1` returns the
+   single row `7|5278`. The *rule* the passage supports — average over the keys PRESENT — is right
+   and unchanged; only its evidence had moved, which mattered because that evidence is the
+   argument against a fixed divisor.
+3. The predicted risk, recorded as having happened and measured.
+
+**The finding.** `0.3 × mean(judgements)` is a **flat 15.75 points** on every scout at every tier
+(the live window is `scoutJudgementMin/Max` = **15/90**, not the entity's 40/80), and the banded
+term cannot reach it. Live EN staff band (`poolConfig.staffAbilityRanges.EN`): t1 29–55, t8 **2–4**.
+So t1 is `0.7×42 = 29.40` banded + 15.75 flat = 45.15 against a coach's 42 — 34.9% flat, and the
+two roles stay comparable. t8 is `0.7×3 = 2.10` + 15.75 = **17.85 against a coach's 3** — 88.2%
+flat. Priced through the app's band rung (`ability^k`, k = 2.5 live, times the authored band ratio)
+that 5.95× ability gap becomes **65.6×** in money. Reproduced to the penny on the owner's own fresh
+EN t8 save: 12 coaches £1,141.14/wk beside one ability-19 scout on £9,740.57/wk, **89.5%** of
+£10,881.71. ⚠️ **This docblock predicted exactly that figure** — *"0.7/0.3 gives 61 vs 19"* — so
+tier 8 landing at 19 was known and accepted. What changed is that A24 then priced the wage off
+`ability` through a power law.
+
+**Unruled as of 2026-11-21 at `3ff5a312`. Nothing was taken.** `WEIGHT_EXPERIENCE` /
+`WEIGHT_JUDGEMENTS` are untouched, `WORLD_PACK_VERSION` stays **14**, and no pack needs rebuilding
+for this change. The four levers, the curve of the outcome against the judgement weight at both
+ends of the pyramid, and the pack/version answer either way are in
+`wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`.
+
+🔴 **Flagged for the PM, not edited — a THIRD copy of the 70/30 blend.** The brief and
+`scoutAbility.ts` both name two (the calculator and the app mirror). There is a third:
+`migrations/Version20261120100000.php:86-87` does the same arithmetic in Postgres NUMERIC. It has
+already run everywhere, so it is historical for existing databases — **but a fresh database
+replaying migrations would backfill the OLD abilities**, and only
+`app:backfill-scout-abilities --force` would then correct them. Any change to the weights must
+touch all three. Worth its own small task: have the migration call the calculator, or document it
+as frozen at v1.
+
+**Not done, deliberately:** no stage `output/` touched (nothing in it is made wrong by a docblock
+edit), nothing restructured or pruned, no header bullet changed.
