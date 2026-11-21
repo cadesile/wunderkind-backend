@@ -288,6 +288,53 @@ class PoolConfig
     #[ORM\Column(type: 'integer', options: ['default' => 80])]
     private int $scoutJudgementMax = 80;
 
+    /**
+     * How good a CLUB scout is at judging players, relative to the staff level of the tier
+     * they work in. Basis points: 10000 = exactly the tier's own staff ability band.
+     *
+     * ── WHY THIS EXISTS (A32, owner ruling 2026-11-21) ───────────────────────────────────
+     *
+     * Owner, asked directly: ***"Lower tier scouts genuinely worse at judging players is the
+     * expectation."*** Until A32 the pair above was the WHOLE story for every scout at every
+     * tier — one global window, so a tier-8 scout judged exactly as well as a tier-1 one.
+     * `ScoutGenerationService` now bands a CLUB scout's judgements off
+     * `StaffAbilityRangeService::resolve($country, $tier)`, **the same authored per-country,
+     * per-tier table its `experience` and a coach's `coachingAbility` already come from**, and
+     * this scalar stretches that band.
+     *
+     * 🔴 **ONE AUTHORED SOURCE FOR STAFF-LEVEL-BY-TIER, AND THIS IS DELIBERATELY NOT A SECOND
+     * TABLE.** A per-country, per-tier judgement grid would be a second surface for
+     * "how good is a person at this tier", which is the defect class the economy workstream
+     * exists to remove. The band comes from the staff table; this one number says how scouts
+     * sit against it, and it is the dial rather than the data.
+     *
+     * ── WHAT A NUMBER HERE MEANS, AND WHY 10000 IS THE SHIPPED DEFAULT ───────────────────
+     *
+     * The judgement window becomes `[bp/10000 × band.min, bp/10000 × band.max]`, clamped to
+     * 1-100 and ordered. At 10000 a scout's judgements are drawn from exactly the band their
+     * club's coaches are drawn from, so `ability` — `0.7 × experience + 0.3 × mean(judgements)`
+     * — becomes tier-consistent with a coach's by construction, which is the whole point.
+     * Above 10000 scouts judge better than their tier's staff level; below it, worse.
+     *
+     * ⚠️ **The owner has DEFERRED the number deliberately** (2026-11-21): *we can worry about
+     * the bands after we've tested that the process of matching the scaling to the tier is
+     * correctly implemented, because we can then view the raw data against the scouts' reviews
+     * and make a judgment call.* So 10000 is a STARTING POINT, not a verdict — it is the one
+     * value that needs no new figure to be authored. **Measured consequence to know before
+     * tuning:** at 10000 an EN tier-1 scout's judgement mean is 42 against today's 52.5, so
+     * their displayed accuracy reads 42% rather than 53%. **12500 holds tier 1's judgement
+     * mean at exactly today's 52.5** while still banding every tier below it — that figure is
+     * derived (52.5 ÷ 42), not chosen, and is the obvious first alternative.
+     * Full measurement: `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`.
+     *
+     * ⚠️ **IT DOES NOT TOUCH THE SHARED POOL.** A pool scout has no tier to be banded against,
+     * so `ScoutGenerationService` keeps it on the flat `$scoutJudgementMin/Max` pair above —
+     * the same ruling that left `$scoutExperienceMin/Max` alone as the untiered window. The
+     * pair above is therefore NOT dead config; it is the untiered band.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 10000])]
+    private int $scoutJudgementBandBp = 10000;
+
     // ── Agent Generation ───────────────────────────────────────────────────
 
     /** Minimum reputation for generated agents. Default: 30 */
@@ -541,6 +588,15 @@ class PoolConfig
 
     public function getScoutJudgementMax(): int { return $this->scoutJudgementMax; }
     public function setScoutJudgementMax(int $v): static { $this->scoutJudgementMax = $v; return $this; }
+
+    public function getScoutJudgementBandBp(): int { return $this->scoutJudgementBandBp; }
+
+    /**
+     * Floored at 1 rather than 0: a zero would roll every club scout's judgements at the 1-100
+     * clamp's floor and make every scout in the pyramid blind, which is not a state this dial
+     * means to be able to express. An admin typing 0 gets the lowest real band instead.
+     */
+    public function setScoutJudgementBandBp(int $v): static { $this->scoutJudgementBandBp = max(1, $v); return $this; }
 
     public function getAgentReputationMin(): int { return $this->agentReputationMin; }
     public function setAgentReputationMin(int $v): static { $this->agentReputationMin = $v; return $this; }

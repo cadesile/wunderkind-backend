@@ -30,10 +30,34 @@ use App\Entity\Scout;
  * **The 70/30 split is the owner's ruling (2026-11-20), not a tuning default, and the reason is
  * BANDING — which is the one thing to understand before touching these weights.**
  *
- * `experience` is TIER-BANDED: `ScoutGenerationService::build()` (lines 51-52) draws it from the
- * club's own `league_ability_ranges` window when one is passed. `judgements` are NOT: lines 72-77
- * of the same method roll all five from the flat global `PoolConfig::$scoutJudgementMin/Max`
- * (15-90 on dev), with no band in sight, whatever the club's tier.
+ * `experience` is TIER-BANDED: `ScoutGenerationService::build()` draws it from
+ * `StaffAbilityRangeService::resolve($country, $tier)` — the authored per-country, per-tier STAFF
+ * table a coach is drawn from — whenever a country and tier are passed, which every per-club
+ * caller does. (⚠️ **Corrected 2026-11-21, A32.** This used to say "the club's own
+ * `league_ability_ranges` window", which was the PLAYER table and a POTENTIAL figure; A25 moved
+ * it to the staff table on 2026-11-20 and removed the parameter so no caller can put the player
+ * band back.) `judgements` are NOT banded: the same method rolls **all seven** from the flat
+ * global `PoolConfig::$scoutJudgementMin/Max` (15-90 on dev, measured 2026-11-21), with no band
+ * in sight, whatever the club's tier.
+ *
+ * 🔴 **A32, 2026-11-21 — THE RISK THIS DOCBLOCK PREDICTED HAS HAPPENED, AND IT IS MEASURED.**
+ * `0.3 x mean(judgements)` is a FLAT ~15.75 points on every scout at every tier, and the banded
+ * term cannot reach it. On the LIVE EN staff band: t1 is `0.7x42 = 29.40` banded + 15.75 flat =
+ * 45.15 against a coach's 42 — the flat term is 34.9% of the figure and the two roles stay
+ * comparable. t8 is `0.7x3 = 2.10` + 15.75 = **17.85 against a coach's 3**, and the flat term is
+ * 88.2% of it. Priced through `tierStaffWeeklyWagePence` (`ability^k`, k = 2.5 live, times the
+ * band ratio) that 5.95x ability gap becomes **65.6x in money** — reproduced to the penny on the
+ * owner's own fresh EN t8 save: 12 coaches on GBP 1,141.14/wk beside one ability-19 scout on
+ * GBP 9,740.57/wk, 89.5% of the bill. Across the English pyramid the scout/coach WAGE ratio runs
+ * 1.19x at t1 and 117.58x at t8 at the band midpoints.
+ * ⚠️ **The 70/30 ruling below is NOT the defect and is not to be "tidied" away by a later
+ * reader.** It was sound for what it decided, and this docblock said so in advance: *"0.7/0.3
+ * gives 61 vs 19"* — **tier 8 landing at 19 was predicted and accepted.** What changed is that
+ * A24 then priced the wage off `ability` through a power law, so an accepted compression of the
+ * ability ladder became a distortion of the WAGE ladder. Every candidate fix is an owner ruling;
+ * the measurements, the four levers and the curve of the outcome against the judgement weight are
+ * in `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`. **Unruled as of
+ * 2026-11-21 at `3ff5a312`; nothing here has been changed.**
  *
  * So every point of weight given to judgements is a point taken away from tier separation. The
  * failure that protects against is recorded, not hypothetical — `ScoutGenerationService`'s own
@@ -74,17 +98,26 @@ use App\Entity\Scout;
  * The two repos appeared to disagree about how many judgement categories exist, and BOTH were
  * right about different populations:
  *
- *   - `ScoutGenerationService::build()` writes **5** keys (potential, technical, physical,
+ *   - `ScoutGenerationService::build()` wrote **5** keys (potential, technical, physical,
  *     mental, personality). It is the only path that has ever written a persisted Scout — the
- *     shared pool and club/world-pack scouts both go through it — and all 5,278 scouts in the
- *     dev database carry exactly these five.
- *   - `GenerateMarketDataCommand::buildScoutJudgements()` writes **7**, adding `youth` and
+ *     shared pool and club/world-pack scouts both go through it.
+ *   - `GenerateMarketDataCommand::buildScoutJudgements()` wrote **7**, adding `youth` and
  *     `senior`, which is where the app's 7-key `ScoutJudgements` type came from.
  *
- * So the mean is taken over the keys the row ACTUALLY HAS. A hardcoded `/7` would have divided
- * five stored values by seven and under-rated every real scout by about 29% — silently, since
- * the result is still a plausible-looking number. Non-numeric values are skipped rather than
- * coerced, because a `null` counted as 0 is the same bug in miniature.
+ * ⚠️ **BOTH POPULATIONS NOW CARRY SEVEN, AND THIS PASSAGE SAID FIVE UNTIL 2026-11-21 (A32).**
+ * A27 added `youth` and `senior` to `ScoutGenerationService` on 2026-11-20 and backfilled the
+ * existing rows (`Version20261120120000`), which is what turned `ageGateFor()` on. **Measured on
+ * the dev database, 2026-11-21: all 5,278 scouts carry exactly seven keys, none carries five**
+ * (`SELECT cardinality(...) , count(*) FROM scout GROUP BY 1` returns the single row `7|5278`).
+ * The stale sentence mattered because it is the evidence this class cites for averaging over the
+ * keys PRESENT — the rule is right, the population it named had moved.
+ *
+ * So the mean is taken over the keys the row ACTUALLY HAS, which is what makes this survive a
+ * key-set change like A27's at all. A hardcoded `/7` would have divided five stored values by
+ * seven and under-rated every pre-A27 scout by about 29% — silently, since the result is still a
+ * plausible-looking number — and a hardcoded `/5` would now over-rate every scout by 40%.
+ * Non-numeric values are skipped rather than coerced, because a `null` counted as 0 is the same
+ * bug in miniature.
  */
 final class ScoutAbilityCalculator
 {
