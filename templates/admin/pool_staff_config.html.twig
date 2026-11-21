@@ -295,7 +295,7 @@
             {% for r in [
                 {label: 'AGE',        a: 'scoutAgeMin',        b: 'scoutAgeMax',        lo: 18, hi: 80,  unit: 'yrs', help: 'Age range for new scouts.'},
                 {label: 'EXPERIENCE', a: 'scoutExperienceMin', b: 'scoutExperienceMax', lo: 0,  hi: 100, unit: '',    help: 'Years of experience at generation. Wage is interpolated across this.'},
-                {label: 'JUDGEMENT',  a: 'scoutJudgementMin',  b: 'scoutJudgementMax',  lo: 0,  hi: 100, unit: '',    help: 'How reliable a scout report is.'},
+                {label: 'JUDGEMENT',  a: 'scoutJudgementMin',  b: 'scoutJudgementMax',  lo: 0,  hi: 100, unit: '',    help: 'How reliable a scout report is — the UNTIERED window, for the shared hire pool only. A club scout bands off its own tier; see below.'},
             ] %}
                 <div class="bmc-setting" data-bmc-setting>
                     <div class="bmc-setting__text">
@@ -331,7 +331,26 @@
                     <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
                 </div>
             </div>
-            <div class="bmc-note" style="padding:12px"><i data-lucide="triangle-alert" class="ink-warning"></i><span>Changing the wage range does not reprice existing scouts — run <code>app:backfill-scout-wages --force</code> for that.</span></div>
+            {# A32, owner ruling 2026-11-21: "Lower tier scouts genuinely worse at judging players
+               is the expectation." A CLUB scout's judgements band off its own tier's STAFF
+               ABILITY band — the same grid above that a coach is drawn from — and this one dial
+               says how scouts sit against it. 10000 = x1.00 = exactly that band. The owner
+               deferred the number deliberately so it could be tuned after watching real scout
+               reports, which is why it is a field here and not a literal in the generator. #}
+            {% set jb = config.scoutJudgementBandBp %}
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">JUDGEMENT vs TIER</span>
+                    <span class="bmc-setting__help">How well a CLUB scout judges, against the staff ability band of its own tier. 10000 = exactly that band, so a scout rates like the coaches beside it. Lower makes lower-tier scouts worse; higher makes every scout better than its tier.</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 10000 (x1.00). 12500 holds England's tier 1 at today's judgement mean of 52.5."></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--76"><input name="scoutJudgementBandBp" inputmode="numeric" value="{{ jb }}" data-saved="{{ jb }}" data-min="1" data-max="100000" aria-label="scout judgement band basis points"></label>
+                    <span class="bmc-unitword" style="width:60px">bp</span>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved" aria-label="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+            <div class="bmc-note" style="padding:12px"><i data-lucide="triangle-alert" class="ink-warning"></i><span>Neither the wage range nor the judgement dial reprices or re-rolls existing people. Wages: <code>app:backfill-scout-wages --force</code>. Judgements are the person rather than a price and are never re-rolled, so the dial lands on newly generated scouts — which means a fresh world pack. Watch it land on Debug &rarr; CHECKS, <em>Scout judgement vs the tier it works in</em>.</span></div>
         </section>
     </div>
 

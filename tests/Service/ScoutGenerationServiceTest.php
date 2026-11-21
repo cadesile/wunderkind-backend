@@ -154,10 +154,22 @@ class ScoutGenerationServiceTest extends TestCase
      * priced before that would silently use the entity's floor of 1 and put every generated scout
      * at the very bottom of the band. `assertNotSame` against the floor is what catches it; the
      * banding half is still asserted, one step removed, because ability is 70% banded experience.
+     *
+     * ⚠️ **THE SETUP CHANGED IN A32 (2026-11-21) AND THE REASON MATTERS MORE THAN THE CHANGE.**
+     * This authored a single-point band of 5-5 and then asserted the wage was not what ability 5
+     * would cost. That worked only while judgements were drawn from a different window: now that
+     * a club scout's judgements band off the SAME row, `0.7 x 5 + 0.3 x 5` is exactly 5, so
+     * `ability` and `experience` COINCIDE on a single-point band at the default dial and the
+     * assertion could no longer tell "priced on ability" from "priced on experience". **The
+     * guard's intent is unchanged and it is still discriminating** — the dial is set off x1.00
+     * so the two quantities genuinely differ (band 5-5 at x2.00 gives judgements of 10, so
+     * `round(0.7 x 5 + 0.3 x 10) = 7`), which is the only honest way to keep asserting it. The
+     * coincidence itself is pinned separately, below, so nobody later "fixes" this setup back.
      */
     public function testTheWageIsDerivedFromTheDerivedAbility(): void
     {
         $config = new PoolConfig();
+        $config->setScoutJudgementBandBp(20000);
         $service = $this->makeServiceBandedAt(5, 5, $config);
         $calculator = new ScoutWageCalculator($this->makePoolConfigRepo($config));
 
@@ -344,5 +356,152 @@ class ScoutGenerationServiceTest extends TestCase
             $this->assertGreaterThanOrEqual(60, $value);
             $this->assertLessThanOrEqual(65, $value);
         }
+    }
+    // ── A32: the judgements are banded off the tier too (owner ruling, 2026-11-21) ────────
+    //
+    // ***"Lower tier scouts genuinely worse at judging players is the expectation."*** Before
+    // A32 all seven categories rolled from the flat global pair whatever the club's tier, so
+    // `0.3 x mean(judgements)` was a constant ~15.75 points inside a tier-relative `ability` —
+    // 88.2% of an EN tier-8 scout's figure, which `ability^k` turned into 65.6x a coach's wage.
+    // These cases pin the mechanism, not the calibration: the dial's VALUE is the owner's and
+    // is deliberately deferred.
+
+    public function testAClubScoutsJudgementsComeFromItsOwnTierBandAtTheDefaultDial(): void
+    {
+        // The default dial is x1.00, so the judgement window IS the staff band — which is what
+        // makes `ability` tier-consistent with a coach's by construction.
+        $config  = new PoolConfig();
+        $this->assertSame(10000, $config->getScoutJudgementBandBp(), 'the shipped default must be x1.00');
+
+        $service = $this->makeServiceBandedAt(2, 4, $config);
+
+        for ($i = 0; $i < 40; $i++) {
+            $judgements = $this->buildBanded($service)->getJudgements();
+            $this->assertCount(7, $judgements);
+            foreach ($judgements as $key => $value) {
+                $this->assertGreaterThanOrEqual(2, $value, "judgement {$key} below the tier band");
+                $this->assertLessThanOrEqual(4, $value, "judgement {$key} above the tier band");
+            }
+        }
+    }
+
+    public function testTheDialStretchesTheBandRatherThanReplacingIt(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutJudgementBandBp(20000);           // x2.00
+
+        $service = $this->makeServiceBandedAt(10, 20, $config);
+
+        for ($i = 0; $i < 40; $i++) {
+            foreach ($this->buildBanded($service)->getJudgements() as $value) {
+                $this->assertGreaterThanOrEqual(20, $value);
+                $this->assertLessThanOrEqual(40, $value);
+            }
+        }
+    }
+
+    /**
+     * 🔴 The floor is load-bearing. A deep pyramid's bottom band is 2-4, so any dial under x0.5
+     * rounds it to 0 or below — and `scoutNoise.ts` reads a 0 accuracy as a perfectly blind
+     * scout rather than as missing data. The window is clamped into 1-100 instead.
+     */
+    public function testADialSmallEnoughToRoundTheBandToZeroStillYieldsALegalJudgement(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutJudgementBandBp(1);               // x0.0001
+
+        $service = $this->makeServiceBandedAt(2, 4, $config);
+
+        for ($i = 0; $i < 20; $i++) {
+            $scout = $this->buildBanded($service);
+            foreach ($scout->getJudgements() as $value) {
+                $this->assertSame(1, $value, 'a judgement of 0 is not a legal value');
+            }
+            // And the ability it blends into is still legal, which is the reason the floor is here.
+            $this->assertGreaterThanOrEqual(1, $scout->getAbility());
+        }
+    }
+
+    /**
+     * ⚠️ **THE POOL IS UNTIERED AND MUST STAY ON THE FLAT PAIR.** Same ruling that left
+     * `scoutExperienceMin/Max` alone: a pool scout has no tier to be banded against. This is
+     * also what keeps `scoutJudgementMin/Max` from becoming dead config after A32.
+     */
+    public function testAPoolScoutKeepsTheUntieredJudgementWindow(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutJudgementMin(15);
+        $config->setScoutJudgementMax(90);
+        $config->setScoutJudgementBandBp(100);             // x0.01 — would crush a banded scout
+        // A band IS authored, so this proves the pool path ignores it rather than merely that
+        // no band was available to use.
+        $config->setStaffAbilityRanges([
+            self::BAND_COUNTRY => [(string) self::BAND_TIER => ['min' => 2, 'max' => 4]],
+        ]);
+
+        $service = $this->makeService($config);
+        $seen    = [];
+
+        for ($i = 0; $i < 60; $i++) {
+            foreach ($service->build('English')->getJudgements() as $value) {
+                $this->assertGreaterThanOrEqual(15, $value);
+                $this->assertLessThanOrEqual(90, $value);
+                $seen[] = $value;
+            }
+        }
+
+        // Over 420 draws across a 76-wide window, at least one must land above the banded
+        // ceiling the dial would have imposed — otherwise this test would pass on a build that
+        // had quietly banded the pool too.
+        $this->assertGreaterThan(4, max($seen), 'the pool must not be banded off a club tier');
+    }
+
+    /** A transposed band must not survive the scaling either. */
+    public function testATransposedBandIsNormalisedForJudgementsToo(): void
+    {
+        $config = new PoolConfig();
+        $config->setScoutJudgementBandBp(10000);
+
+        $service = $this->makeServiceBandedAt(7, 2, $config);   // authored backwards
+
+        for ($i = 0; $i < 20; $i++) {
+            foreach ($this->buildBanded($service)->getJudgements() as $value) {
+                $this->assertGreaterThanOrEqual(2, $value);
+                $this->assertLessThanOrEqual(7, $value);
+            }
+        }
+    }
+
+    /**
+     * The point of the whole change, as a relationship rather than a value: at the default dial
+     * a club scout's ABILITY lands inside the band its coaches are drawn from. Before A32 a
+     * scout banded at 2-4 came out at ~18 against coaches on 2-4.
+     */
+    public function testAtTheDefaultDialAScoutsAbilityLandsInsideItsCoachBand(): void
+    {
+        $service = $this->makeServiceBandedAt(2, 4);
+
+        for ($i = 0; $i < 50; $i++) {
+            $ability = $this->buildBanded($service)->getAbility();
+            $this->assertGreaterThanOrEqual(2, $ability);
+            $this->assertLessThanOrEqual(4, $ability);
+        }
+    }
+    /**
+     * 🔴 **THE COINCIDENCE THE TEST ABOVE HAD TO WORK AROUND, PINNED AS A PROPERTY.** At the
+     * default dial a club scout's judgements come from the same row as its experience, so on a
+     * single-point band `0.7 x e + 0.3 x e = e` exactly and `ability === experience`. That is
+     * the change doing what the ruling asked, not a conflation returning: the two are still
+     * different quantities and still read from different fields — they merely agree when the
+     * band they share has no width. **If this ever fails, the judgements have stopped banding
+     * off the staff table and `testTheWageIsDerivedFromTheDerivedAbility` needs re-reading
+     * before anything is "fixed".**
+     */
+    public function testAtTheDefaultDialASinglePointBandMakesAbilityEqualExperience(): void
+    {
+        $scout = $this->buildBanded($this->makeServiceBandedAt(5, 5));
+
+        $this->assertSame(5, $scout->getExperience());
+        $this->assertSame(5, $scout->getAbility());
     }
 }

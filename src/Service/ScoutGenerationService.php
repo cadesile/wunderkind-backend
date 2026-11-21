@@ -74,6 +74,9 @@ class ScoutGenerationService
             $band  = $this->staffAbilityRanges->resolve($country, $tier);
             $expMin = $band['min'];
             $expMax = $band['max'];
+            // A32: the JUDGEMENTS are banded off the same resolved row, stretched by the one
+            // authored dial. See `judgementWindow()` for the ruling and the arithmetic.
+            [$judMin, $judMax] = self::judgementWindow($band, $cfg->getScoutJudgementBandBp());
         } else {
             // The untiered window, by ruling. Ordered rather than trusted: it is two
             // hand-edited admin fields and a transposed pair is a real state of that row.
@@ -81,6 +84,15 @@ class ScoutGenerationService
             $expMax = $cfg->getScoutExperienceMax();
             if ($expMin > $expMax) {
                 [$expMin, $expMax] = [$expMax, $expMin];
+            }
+            // ⚠️ **THE UNTIERED JUDGEMENT WINDOW, BY THE SAME RULING THAT KEPT THE EXPERIENCE
+            // ONE.** A pool scout has no tier to be banded against, so the flat global pair is
+            // what it draws from — which is why `scoutJudgementMin/Max` is NOT dead config
+            // after A32: it is the untiered band. Ordered for the same reason as the pair above.
+            $judMin = $cfg->getScoutJudgementMin();
+            $judMax = $cfg->getScoutJudgementMax();
+            if ($judMin > $judMax) {
+                [$judMin, $judMax] = [$judMax, $judMin];
             }
         }
 
@@ -109,35 +121,42 @@ class ScoutGenerationService
         // band was never tightened at all. Generating the keys here is what turns the gate on;
         // see `wunderkind-docs/economy-loose-ends/a27-scout-age-gate-report.md`.
         //
-        // ⚠️ **DELIBERATELY NOT GIVEN THEIR OWN BOUNDS.** They roll from the same
-        // `scoutJudgementMin/Max` as the other five, because they ARE judgements on the same
-        // 0-100 scale: a separate `scoutAgeGateMin/Max` pair would be a second config surface for
-        // one quantity, and `ScoutAbilityCalculator`'s 70/30 weighting was measured against
-        // judgements drawn from this single flat range — banding two of the seven differently
-        // would move the tier spread the owner approved without saying so.
+        // ⚠️ **DELIBERATELY NOT GIVEN THEIR OWN BOUNDS.** They roll from the same window as the
+        // other five, because they ARE judgements on the same 0-100 scale: a separate
+        // `scoutAgeGateMin/Max` pair would be a second config surface for one quantity, and
+        // `ScoutAbilityCalculator`'s 70/30 weighting was measured against judgements drawn from
+        // ONE range — banding two of the seven differently would move the tier spread the owner
+        // approved without saying so. **That still holds after A32**: all seven moved together
+        // onto the tier's band, so the weighting still sees one window.
         //
         // ⚠️ **ADDING A KEY HERE CHANGES EVERY SCOUT'S `ability`**, because the mean below is
         // taken over keys present. Any future change to this set needs
         // `app:backfill-scout-abilities --force` behind it and a `WORLD_PACK_VERSION` bump,
         // exactly as this one did.
         //
-        // ⚠️ NOTE WHAT IS *NOT* BANDED HERE: unlike `$experience` above, judgements are rolled
-        // from the flat global `scoutJudgementMin/Max` whatever the club's tier. That asymmetry
-        // is exactly why `ScoutAbilityCalculator` weights experience at 70% — see its docblock.
+        // ✅ **THE ASYMMETRY THIS COMMENT USED TO DESCRIBE IS GONE (A32, 2026-11-21).** It read:
+        // *"unlike `$experience` above, judgements are rolled from the flat global
+        // `scoutJudgementMin/Max` whatever the club's tier. That asymmetry is exactly why
+        // `ScoutAbilityCalculator` weights experience at 70%."* Both halves of `ability` are now
+        // banded off the SAME resolved row for a club scout, so `0.3 x mean(judgements)` is no
+        // longer a flat 15.75-point term sitting inside a tier-relative figure. The 70/30
+        // weighting is UNTOUCHED and is still the owner's ruling — it simply no longer has a
+        // flat term to hold back. ⚠️ The asymmetry remains REAL for a POOL scout, which has no
+        // tier and draws both halves from the untiered globals, and that is correct.
         $judgements = [
-            'potential'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            'technical'   => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            'physical'    => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            'mental'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            'personality' => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+            'potential'   => random_int($judMin, $judMax),
+            'technical'   => random_int($judMin, $judMax),
+            'physical'    => random_int($judMin, $judMax),
+            'mental'      => random_int($judMin, $judMax),
+            'personality' => random_int($judMin, $judMax),
             // The two AGE-BAND keys, split at 18 by `ageGateFor()` — accuracy at reading a youth
             // prospect and at reading an established senior, rolled independently so a scout can
             // genuinely be better at one than the other. That independence is the whole point:
             // deriving either from `potential` would collapse the displayed-accuracy blend
             // `potential x 0.7 + ageGate x 0.3` back to `potential` and change nothing for
             // exactly the under-18s the gate exists for.
-            'youth'       => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
-            'senior'      => random_int($cfg->getScoutJudgementMin(), $cfg->getScoutJudgementMax()),
+            'youth'       => random_int($judMin, $judMax),
+            'senior'      => random_int($judMin, $judMax),
         ];
 
         $scout->setJudgements($judgements);
@@ -159,6 +178,67 @@ class ScoutGenerationService
         $this->personalityLifecycle->fill($scout);
 
         return $scout;
+    }
+
+    /**
+     * The judgement window for a CLUB scout: the tier's own staff band, stretched by the
+     * authored dial. Ordered, clamped to 1-100, and never empty.
+     *
+     * ── THE RULING (owner, 2026-11-21) ───────────────────────────────────────────────────
+     *
+     * Asked directly: ***"Lower tier scouts genuinely worse at judging players is the
+     * expectation."*** Before A32 all seven categories rolled from the flat global
+     * `PoolConfig::$scoutJudgementMin/Max` (15-90 live) whatever the tier, so a tier-8 scout
+     * judged players exactly as well as a tier-1 one.
+     *
+     * ── WHY THE BAND IS THE STAFF TABLE AND NOT A TABLE OF ITS OWN ───────────────────────
+     *
+     * `$band` is whatever `StaffAbilityRangeService::resolve($country, $tier)` returned for
+     * this club — **the same authored row the `$experience` above and a coach's
+     * `coachingAbility` both come from.** Banding off it keeps ONE authored source for
+     * "how good is a person at this tier", and makes `ability`
+     * (`0.7 x experience + 0.3 x mean(judgements)`) tier-consistent with a coach's by
+     * construction rather than by coincidence. A per-country, per-tier judgement grid was
+     * considered and rejected: it is a second surface for one quantity, which is the defect
+     * class this workstream exists to remove, and it would need 26 x 8 new figures authored
+     * before anything could ship.
+     *
+     * ── THE DIAL, AND WHY IT IS A DIAL ───────────────────────────────────────────────────
+     *
+     * `PoolConfig::$scoutJudgementBandBp`, admin-editable on Staff Pool Rules, 10000 = x1.00 =
+     * exactly the tier's staff band. The owner deferred the NUMBER on purpose, the same day:
+     * *we can worry about the bands after we've tested that the process of matching the scaling
+     * to the tier is correctly implemented, because we can then view the raw data against the
+     * scouts' reviews and make a judgment call.* So the shipped 10000 is a starting point, and
+     * tuning it is a data edit rather than a release. **Do not replace it with a literal.**
+     *
+     * ⚠️ **Measured at the TOP of the pyramid, because the ruling only spoke about the
+     * bottom:** at 10000 an EN tier-1 scout's judgement mean is 42 against today's 52.5, so
+     * displayed accuracy reads 42% rather than 53%. 12500 holds tier 1's mean at exactly 52.5
+     * while still banding every tier below it (52.5 / 42, derived not chosen). The curve at
+     * both ends is in
+     * `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`.
+     *
+     * ── THE FLOOR IS 1 AND IT IS LOAD-BEARING ────────────────────────────────────────────
+     *
+     * A deep pyramid's bottom band can be 2-4, and a dial below x1 can take that under 1. A
+     * judgement of 0 is not a legal value on a 1-100 score and `scoutNoise.ts`'s
+     * `clamp01(accuracy / 100)` would read it as a perfectly blind scout — so the window is
+     * clamped into 1-100, exactly as `ScoutAbilityCalculator` clamps the figures it blends.
+     * The two bounds are also re-ordered after scaling, because a band stored transposed is a
+     * real state of a hand-edited admin grid and `resolve()` only normalises what it read.
+     *
+     * @param array{min: int, max: int, source: string} $band
+     * @return array{0: int, 1: int}
+     */
+    private static function judgementWindow(array $band, int $bandBp): array
+    {
+        $scale = max(1, $bandBp) / 10000;
+
+        $min = (int) max(1, min(100, round($band['min'] * $scale)));
+        $max = (int) max(1, min(100, round($band['max'] * $scale)));
+
+        return $min <= $max ? [$min, $max] : [$max, $min];
     }
 
     private function dobFromAge(int $age): \DateTimeImmutable

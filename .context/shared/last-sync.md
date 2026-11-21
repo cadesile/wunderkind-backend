@@ -2282,3 +2282,91 @@ as frozen at v1.
 
 **Not done, deliberately:** no stage `output/` touched (nothing in it is made wrong by a docblock
 edit), nothing restructured or pruned, no header bullet changed.
+
+---
+
+## A32b — scout judgements are banded by tier, and the band is one authored dial (2026-11-21)
+
+**Owner ruling, asked directly:** ***"Lower tier scouts genuinely worse at judging players is the
+expectation."*** And, on being offered band numbers: *we can worry about the bands after we've
+tested that the process of matching the scaling to the tier is correctly implemented, because we
+can then view the raw data against the scouts' reviews and make a judgment call.* **So the
+mechanism shipped and the number did not.**
+
+**What changed.** `ScoutGenerationService::build()` now bands all seven judgement categories off
+`StaffAbilityRangeService::resolve($country, $tier)` — **the same authored row the `experience`
+and a coach's `coachingAbility` already come from** — stretched by one new dial,
+`PoolConfig::$scoutJudgementBandBp` (basis points, 10000 = ×1.00 = exactly that band). Admin →
+Staff Pool Rules → SCOUT GENERATION → "JUDGEMENT vs TIER". `Version20261121220000`.
+
+🔴 **Deliberately NOT a second per-country/per-tier table.** That would be a second authored
+surface for "how good is a person at this tier" — the defect class this workstream exists to
+remove — and would need 26 × 8 new figures before anything could ship. One source for the band,
+one dial for the relationship. ⚠️ **The cost of that choice, stated:** the staff table is shared,
+so it cannot be moved to change scouts without moving coaches. That is what the dial is for.
+
+⚠️ **The shared pool is untouched, by the same ruling that left `scoutExperienceMin/Max` alone.**
+A pool scout has no tier, so it keeps the flat `scoutJudgementMin/Max` — **which is therefore NOT
+dead config after A32: it is the untiered band.** Measured, the complete call graph is two
+callers: `WorldPackClubGenerationService:148` (banded) and `MarketPoolService:354` (untiered).
+
+**Measured on real generation**, 400 scouts per tier through the service itself at the shipped
+default: every EN tier's scout `ability` now lands inside its own staff band — t8 **2–4** against
+coaches on 2–4, where it was ~18 — and the pool row is byte-for-byte the old behaviour
+(experience 4–34, judgements 15–90, ability 13–45). On the owner's own club the scout's share of
+the staff bill goes **89.5% → 6.0%** and **65.6× → 0.49×** a coach; tier 1 goes 1.19× → 1.00×.
+
+⚠️ **One consequence at the TOP of the pyramid, since the ruling only spoke about the bottom:** at
+×1.00 an EN tier-1 scout's judgement mean is 42 against today's 52.5, so displayed accuracy reads
+42% rather than 53%. **12500 holds tier 1 at exactly 52.5** while still banding every tier below
+it (52.5 ÷ 42, derived not chosen). Flagged to the owner; not taken.
+
+**Nothing re-rolls an existing scout.** Judgements are the person, not a price; no migration
+touches them and `app:backfill-scout-abilities` re-derives `ability` from stored inputs. This
+lands on new saves and newly generated scouts. The 70/30 weights are untouched in all three of
+their copies, and the app's `fallbackScoutAbility` mirror needs no change — it mirrors the
+FORMULA, and A32 changed which values are ROLLED.
+
+✅ **PACK: `WORLD_PACK_VERSION` 14 → 15, BUMPED — owner ruling 2026-11-21, granted after the
+recommendation below. In the SAME commit as the generator change, deliberately:** bump first and
+every country rebuilds at v15 with the old flat-judgement scouts baked in; generate first and new
+sets are stamped v14 beside existing v14 sets, so two scout populations share one version number
+and the pack indicator cannot distinguish them. The v15 docblock records both orderings.
+✅ **No backfill is needed and none is wanted — measured.** `WorldPackClubGenerationService`
+builds pack scouts *"fresh, in-memory, never persisted"*, so the bump regenerating the pack IS how
+they are replaced; and every persisted Scout row is a shared-pool row on the unchanged untiered
+window — **all 5,278 rows carry `experience` inside 4–34, none above it**, where a persisted club
+scout would read up to 55 at EN t1. `app:backfill-scout-abilities` would be a no-op, so there is
+no ordering hazard against the bump (unlike `BackfillPersonalitiesCommand`'s documented one).
+✅ **The pool keeps its flat window**, mirroring the `scoutExperienceMin/Max` ruling rather than
+re-ruling it; pinned by a test that authors a band AND a ×0.01 dial and proves the pool ignores
+both. So `scoutJudgementMin/Max` is NOT dead config — it is the untiered band.
+✅ **One site, verified:** `WorldInitializationService:277` is the only literal; all 57 other
+references read the constant, tests included, and the app gates nothing on it
+(`worldPackVersionIsAdvisory.test.ts`). **A fresh save after the deploy should read `15`,
+single** — `MIXED: 14, 15` is reachable if a save is created while the deploy is still rolling.
+
+**The recommendation as it was made, kept because the evidence is the useful part:**
+`WorldPackSnapshotBuilder:292` publishes `judgements`, so existing v14 sets hold old scouts.
+Verified here rather than assumed: **both `countReadyUnclaimed` and `claimOldestReady` filter on
+`payload_version`**, so a bump makes v14 sets uncountable (→ deficit → the per-init top-up
+rebuilds, 16 s for a full 8-tier England) *and* unclaimable, so no save can be handed an old-scout
+set. Without it, each country must be Regenerated by hand and a half-regenerated world is the
+MIXED state that cost three hours on 2026-11-20. The *"v11 is the last money bump"* rule is not
+breached: judgements and ability are census, and the reason here is a gameplay ruling.
+
+⚠️ **FOURTH INSTANCE OF THE `wunderkind_test` TRAP, and `01_overview/environment.md` §"NOT
+migration-tracked" is what caught it.** The first full run went red in a cluster around tests
+500–549; `information_schema.columns` showed the new column absent from the test database. The run
+was **stopped rather than read** — a suite measuring a schema the entity does not match is not
+evidence. Fixed in the prescribed nullable → backfill → `NOT NULL` → `SET DEFAULT` order (22 rows
+updated, which is that database's documented leaked `pool_config` population);
+`SchemaIsInSyncTest` green afterwards. **A new column is two jobs** and the second has no reminder
+attached — worth considering whether that page's warning should sit on the migration template too,
+which is the PM's call.
+
+**Not done, deliberately:** no stage `output/` touched; no second authored table; no pack
+regenerated and no version bumped; `agent-standing-notes.md` left alone (it has two entries' worth
+of material from this pass and curation is the PM's).
+
+**Report:** `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md` (Part Two).

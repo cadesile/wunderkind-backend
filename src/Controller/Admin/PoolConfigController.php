@@ -252,6 +252,10 @@ class PoolConfigController extends AbstractController
         $config->setScoutWageMax($this->wagePence($request, 'scoutWagePoundsMax', 'scoutWageMax', 7000));
         $config->setScoutJudgementMin((int) $request->request->get('scoutJudgementMin', 40));
         $config->setScoutJudgementMax((int) $request->request->get('scoutJudgementMax', 80));
+        // A32, 2026-11-21. The default here is the ENTITY's default, not a second opinion about
+        // it: a form posted without the field must not silently re-band every club scout in the
+        // world. The setter floors it at 1 — a 0 would make every club scout blind.
+        $config->setScoutJudgementBandBp((int) $request->request->get('scoutJudgementBandBp', 10000));
 
         // Pool targets
         $config->setCoachPoolTarget((int) $request->request->get('coachPoolTarget', 10));

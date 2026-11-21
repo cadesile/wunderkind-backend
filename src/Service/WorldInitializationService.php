@@ -273,8 +273,47 @@ class WorldInitializationService
      *     `wunderkind-docs/economy-loose-ends/a25-ability-bands-report.md`: the `staff` and
      *     `scout` TABLES need no backfill at all, because every persisted row in them is a
      *     shared-pool row and the untiered band is unchanged.
+     *
+     * v15 (2026-11-21, A32) — **`scouts[].judgements` and `scouts[].ability` move, under
+     *     unchanged keys, because a club scout's judgements are now banded by tier.** Owner
+     *     ruling, asked directly: ***"Lower tier scouts genuinely worse at judging players is the
+     *     expectation."*** All seven categories rolled from the flat global
+     *     `pool_config.scout_judgement_min/max` (15-90 live) whatever the club; they now come
+     *     from `StaffAbilityRangeService::resolve($country, $tier)` — the same authored row the
+     *     scout's `experience` and a coach's `coachingAbility` already use — stretched by
+     *     `pool_config.scout_judgement_band_bp` (`Version20261121220000`, 10000 = x1.00 = exactly
+     *     that band). `ability` follows because it is `0.7 x experience + 0.3 x
+     *     mean(judgements)`, and `scouts[].weeklySalary` follows from `ability`.
+     *
+     *     Census, not money. No key changes shape, type or meaning; no app change is needed. The
+     *     defect it closes: `0.3 x mean(judgements)` was a FLAT ~15.75 points on every scout at
+     *     every tier, 88.2% of an EN tier-8 scout's ability against a coach's 2-4, which
+     *     `ability^k` turned into a 65.6x wage gap — GBP 9,740.57 of a GBP 10,881.71 weekly staff
+     *     bill on the owner's own club. Measured after: every EN tier's scout ability lands
+     *     inside its own staff band (t8 2-4), and that bill falls to 6.0%.
+     *
+     *     ⚠️ **THE BUMP IS WHAT DELIVERS THE FIX, FOR THE SAME REASON AS v14** — a pack-generated
+     *     scout exists nowhere but in the pack that holds it (`WorldPackClubGenerationService`
+     *     builds them *"fresh, in-memory, never persisted"*), so a cached v14 pack keeps the old
+     *     flat-window scouts indefinitely. ⚠️ **AND IT MUST LAND IN THE SAME COMMIT AND DEPLOY AS
+     *     THE GENERATOR CHANGE.** Bump first and every country rebuilds immediately with the OLD
+     *     scouts baked in at v15, so the version claims packs are current when they are not;
+     *     generator first and new sets are stamped v14 beside the existing v14 sets, so two
+     *     populations share one version and the pack indicator cannot tell them apart — which is
+     *     worse than a MIXED reading, because MIXED at least warns.
+     *
+     *     ✅ **NO BACKFILL IS NEEDED, AND NONE IS WANTED — measured, not assumed.** Judgements are
+     *     the person rather than a price, nothing re-rolls them, and the only writers are
+     *     `ScoutGenerationService` (generation) and `GenerateMarketDataCommand` (a different,
+     *     untiered population). Every persisted Scout row is a shared-pool row, so the untiered
+     *     window governs it and both its judgements and its derived `ability` are already
+     *     correct: on dev all **5,278** rows carry `experience` inside **4-34**, the pool window
+     *     exactly, with none above it — a persisted club scout would read up to 55 at EN tier 1.
+     *     So `app:backfill-scout-abilities` has nothing to do here and there is no ordering
+     *     hazard against the bump, unlike `BackfillPersonalitiesCommand`'s.
+     *     Full account: `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`.
      */
-    public const WORLD_PACK_VERSION = 14;
+    public const WORLD_PACK_VERSION = 15;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
