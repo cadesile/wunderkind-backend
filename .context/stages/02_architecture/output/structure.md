@@ -191,9 +191,28 @@ import file per bundle: `api_platform.yaml`, `easyadmin.yaml`,
   it is the only thing that restocks after a deploy or a `WORLD_PACK_VERSION`
   bump — which makes every existing set unclaimable at once. Offset to :20 to
   stay clear of both the :00 cluster and :35, which queues the pool work).
+  🔴 **ON THE DEV STACK THIS SWEEP'S ASYNC BUILD DOES NOT RUN AT ALL** (established 2026-11-20 by
+  elimination, after three wrong theories — orphan cache rows, a claimed-set deadlock, `crond`
+  being down — were each disproved). Dispatch succeeds, `crond` IS running, `deficit()` is
+  version-aware so a stale set never blocks a top-up, and the write path stamps
+  `WORLD_PACK_VERSION` correctly. **And yet nothing is ever written.** The defect is in the
+  consumer or the handler on that stack, not in the generation code, and the cause is still
+  unknown. **The workaround is `php bin/console app:worldpack:warm <CC>`, which builds INLINE and
+  worked first time** (EN to 2 ready sets of 8 tiers, SC to 2 of 4). ⚠️ **So on dev this is NOT the
+  self-healing backstop the sentence above describes** — it silently invalidated roughly three
+  hours of device testing, because the admin "rebuild" reported success while writing nothing and
+  every save then read a stale or mixed pack. Full account in
+  `01_overview/output/deployment.md`.
   See `01_overview/output/deployment.md` and `docs/deploy/hetzner.md`.
 - **`docker/supervisord.conf`** — runs `php-fpm`, `nginx`, and `crond`
   together inside the container, all logging to stdout/stderr.
+  🔴 **`supervisorctl` DOES NOT WORK ON THIS IMAGE, AND THAT IS BY CONSTRUCTION RATHER THAN A
+  FAULT** (established 2026-11-20, after it was read as evidence that `crond` was down). This
+  file defines no `[unix_http_server]` and no `[supervisorctl]`, so there is **no control
+  socket** and `supervisorctl status` can only return "no such file". **Check processes with
+  `docker exec <container> ps aux` instead** — which is how `crond -f -l 8` was confirmed
+  running, PID 103 under supervisord, on the box where a failing world-pack build was being
+  wrongly blamed on cron.
 - **`docker-compose.dev.yml` / `docker-compose.prod.yml`** — near-identical
   single-`app` + single-`postgres` stacks per environment (image tags
   `:dev`/`:prod` from `ghcr.io/cadesile/wunderkind-backend`), each Postgres
@@ -279,6 +298,20 @@ DB override layer over `CountryContentRegistry`'s PHP consts **without replacing
 registry's statics are still called from enum methods that have no container. And
 `src/Service/` gained `StarterAbilityRangeService`, lifted out of `app:country:bootstrap`
 so an admin button and the command cannot drift.
+
+**Its staff-side twin arrived 2026-11-20 (`a818a60b`): `src/Service/StaffAbilityRangeService.php`**
+— the ONLY resolver for `pool_config.staff_ability_ranges`, the authored per-country/per-tier staff
+ability band, with its own `syncToPyramid()` off `LeagueService` mirroring what
+`StarterAbilityRangeService` does for players. It is authored on the **existing** Staff pool screen
+(`/admin/staff-pool-config`) as a Twig grid card titled **STAFF ABILITY BANDS**, saved through the
+existing `admin_staff_pool_config_save` POST — **no new route and no new entity**, because the
+per-country/per-tier ability table in this backend is a JSON column on a singleton config entity
+with a grid and a POST handler, and this one belongs beside the pool config it is read with.
+`StaffGenerationService` and `ScoutGenerationService` take `(country, tier)` and resolve the band
+themselves; ⚠️ **the `$abilityRange` parameter both used to accept is REMOVED, not defaulted** — a
+caller that can pass a band can pass the wrong one, and every per-club caller had been passing the
+squad's PLAYER (potential) band. `pool_config.coach_ability_min/max` survives, **narrowed** to the
+untiered shared hire market, which has no tier to be banded against.
 
 **The same directory then gained the person-name equivalent, 2026-11-12**:
 `NamePoolRegistry` (2,492 lines — the pool constant lifted verbatim out of

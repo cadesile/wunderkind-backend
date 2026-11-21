@@ -128,13 +128,77 @@ class WorldPackSetService
      */
     public function deficit(string $country, int $target): int
     {
-        $ready    = $this->setRepository->countReadyUnclaimed($country, WorldInitializationService::WORLD_PACK_VERSION);
-        $building = $this->setRepository->countBuildingSince(
+        // Delegated to stock() so the gate and the figures the admin screen reports can never
+        // drift apart — they disagreeing is exactly how a starved country came to be reported
+        // as stocked.
+        return $this->stock($country, $target)['deficit'];
+    }
+
+    /**
+     * How much of $country's stock is actually claimable right now, and how much is only
+     * counted as stock because a build is in flight.
+     *
+     * One place for the two numbers, because the admin button, the hourly sweep and the
+     * handler all have to be able to tell the two apart and they used to each ask separately.
+     * `claimable` is the only figure a device can start a game from; `deficit` is what the
+     * top-up gate reads, and it counts `building` in. **The dangerous state is
+     * `claimable < $target` with `deficit === 0`** — a country with nothing to serve that
+     * every top-up path declares stocked.
+     *
+     * @return array{target:int, claimable:int, building:int, deficit:int, starved:bool}
+     */
+    public function stock(string $country, int $target): array
+    {
+        $claimable = $this->setRepository->countReadyUnclaimed($country, WorldInitializationService::WORLD_PACK_VERSION);
+        $building  = $this->setRepository->countBuildingSince(
+            $country,
+            new \DateTimeImmutable(self::BUILD_STALE_AFTER),
+        );
+        $deficit = max(0, $target - ($claimable + $building));
+
+        return [
+            'target'    => $target,
+            'claimable' => $claimable,
+            'building'  => $building,
+            'deficit'   => $deficit,
+            'starved'   => $claimable < $target && $deficit === 0,
+        ];
+    }
+
+    /**
+     * Marks every BUILDING set for $country that is older than BUILD_STALE_AFTER as FAILED,
+     * and returns how many went. Zero is the normal answer.
+     *
+     * A set is persisted BUILDING before its first tier is built, so a worker lost mid-build
+     * — PHP fatal, OOM kill, container recreate on deploy — leaves a row that nothing is
+     * working on and nothing will ever finish or fail. Left alone it stays `building` for
+     * ever: it drops out of deficit() after thirty minutes but goes on claiming a line on the
+     * admin screen that reads as work in progress, and for those thirty minutes it makes every
+     * top-up path report the country stocked while it has nothing claimable.
+     *
+     * markFailed() logs at ERROR, which matters more than it looks: prod's monolog is
+     * fingers_crossed at error level, so an INFO "at target" no-op writes nothing at all,
+     * while this leaves a line in prod.log and a reason on the screen. That is the whole
+     * point — the failure mode this reaps was invisible, and invisible is what cost the time.
+     */
+    public function reapStaleBuilding(string $country): int
+    {
+        $stale = $this->setRepository->findBuildingBefore(
             $country,
             new \DateTimeImmutable(self::BUILD_STALE_AFTER),
         );
 
-        return max(0, $target - ($ready + $building));
+        foreach ($stale as $set) {
+            $this->markFailed($set, sprintf(
+                'Build never completed — stranded BUILDING since %s, longer than %s. '
+                . 'No worker is finishing it (a PHP fatal, an OOM kill or a container restart '
+                . 'during generation leaves this). Regenerate the country to clear it.',
+                $set->getGeneratedAt()->format('Y-m-d H:i:s'),
+                trim(self::BUILD_STALE_AFTER, '-'),
+            ));
+        }
+
+        return count($stale);
     }
 
     /**

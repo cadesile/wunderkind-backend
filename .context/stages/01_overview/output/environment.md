@@ -233,7 +233,11 @@ hunting:
    and #3 only), which is consistent with the range below rather than evidence it is fixed.
 
 ⚠️ **THE RANGE IS THEREFORE THREE TO FIVE**, because #4 and #5 each join and leave the list on their
-own. ⚠️ **It is NOT "~31".** That figure is `app:economy:wage-table`'s own `31 check(s) failed`
+own. **This file is the OWNER of that figure** — the app's `environment.md` explicitly defers to it,
+and the range is about **FAILURES in the backend PHPUnit suite**, never about a test COUNT and never
+about the app (`npm test`, where the baseline is ZERO on an idle machine). Three sessions in one day
+judged `npm test` against this backend figure; see `docs/economy-loose-ends/agent-standing-notes.md`.
+⚠️ **It is NOT "~31".** That figure is `app:economy:wage-table`'s own `31 check(s) failed`
 output on the development clone — a gate result, not a test result — and it reached at least one
 agent brief as a test baseline. Judging a suite run against 31 would silently absorb about 27 real
 regressions.
@@ -276,6 +280,51 @@ through the real admin save, so the full run was green by accident of two tests 
 same shared row. A10 saw it fail because it ran the suite in 20-file batches, where that accident
 does not hold. **So "it passes in a full run" is not evidence that a shared-row leak is harmless.**
 
+
+### Test COUNTS through 2026-11-20 — and one unexplained gap that is still open
+
+**Name the commit beside any count.** These are the full-suite collections measured on
+`development` during the 2026-11-20 economy pass, newest last, each quoted from the session that
+ran it:
+
+| commit | collected/run | failures | errors | wall-clock | measured by |
+|---|---|---|---|---|---|
+| `6c5e4ad5` | **3,271** | 3 | — | — | A24 (`Assertions: 157033`) |
+| `a818a60b` | **3,290** | 3 (same three, by name) | — | — | A25, twice |
+| `a818a60b` | **3,359** | 3 | 1 | 292 s | country-scaling session, re-measured on a quiet machine |
+| `c11c7f2d` | **3,366** | 3 | 1 | 301 s | country-scaling session |
+
+Both of the last two were run alone, `--colors=never`, through Lando, serially, on the same test
+database, with the machine confirmed quiet first. Raw output:
+`docs/economy-loose-ends/evidence/country-scaling/suite-a818a60b.txt` and `suite-c11c7f2d.txt`.
+
+🔴 **THE 3,290 AT `a818a60b` DOES NOT REPRODUCE, AND NOBODY HAS EXPLAINED THE 69-TEST GAP.** Two
+runs by one session at that commit both returned 3,290 with the same three named failures. A later
+run by another session at **that same commit** returned **3,359**. ⚠️ **Both figures claim the same
+tree, so one of them is wrong and it is NOT YET KNOWN WHICH** — the candidate explanations on the
+record are a different counting convention and a different checkout state when 3,290 was taken,
+neither verified. **This is recorded rather than resolved on purpose: do not quietly pick one.**
+
+**What to do until it is settled: re-measure the baseline yourself at the commit you are building
+on, and quote your own figure.** That is exactly what surfaced the gap rather than absorbing it —
+reconciling `c11c7f2d` against the pinned 3,290 would have shown a spurious **+76** instead of the
+exact **3,359 + 7 = 3,366** that the change's own extract reconciles to (`CountryScalingTest` +6
+new, `LeaguePayoutResolverTest` +2 net, `EconomyTvCountryScalingGuardTest` −1).
+
+⚠️ **Contention moves TIMING, not a COUNT.** A25's two 3,290 runs agree with each other and A24's
+3,271 reconciles against the then-baseline (3,265 + 6 = 3,271, + 19 = 3,290), so "the machine was
+busy" is not available as an explanation for a count that does not reconcile. An unexplained count
+means investigate; an unexplained *slow failure* may just be load.
+
+⚠️ **A FINER EXCLUSION THAN THE ONE BELOW WORKS, AND IT IS WHY THESE COUNTS ARE HIGHER THAN 3,233.**
+The section below filters out the whole of `AdminShellCoverageTest` (72 tests). Only **one test
+case** actually OOMs — `::testThePageIsOnTheRedesignedShell"admin_logs"`, which `file()`s the whole
+of `var/log/dev.log` (**4,108,724,354 bytes** on 2026-11-20) into a 3.828 GiB container and is
+SIGKILLed at exit 137 about 189 tests in, reproduced three times. The two runs above used
+`--exclude-filter admin_logs` and kept the other 71. ⚠️ **It is not a regression in anything and the
+fix is log rotation, not a code change**; `var/log/` also holds a 2.0 GB `dev.log.2026-11-12.bak`.
+Rotating it, and capping the read in `DashboardController::logs()`, are both open and the owner's
+call.
 
 **One caveat, and it bites more than once: `schema:create` builds structure, not content.**
 Operator-authored content lives in tables the suite does not seed, so a fresh per-branch DB
@@ -329,6 +378,11 @@ on 2026-11-19 before it was written down.
 # a clean full run of 3,233 tests — everything except AdminShellCoverageTest
 lando php vendor/bin/phpunit --filter '/^(?!.*AdminShellCoverage).*$/'
 ```
+
+⚠️ **A NARROWER EXCLUSION IS AVAILABLE AND KEEPS 71 OF THE 72 TESTS** — only the `admin_logs`
+case OOMs. See "Test COUNTS through 2026-11-20" above, which is also where the suite's actual
+collections are recorded, and **always pass `--colors=never` when you intend to read the summary
+numbers**: PHPUnit colourises those fields.
 
 Run that file on its own if you need it covered.
 

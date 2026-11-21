@@ -200,6 +200,14 @@ client-side escape.
 - Every `POST /api/initialize/starter` dispatches `TopUpWorldPackSetMessage` — gated on
   `needsTopUp()` so a healthy country writes nothing to the queue, and wrapped so a transport
   failure can never fail an initialisation.
+- 🔴 **NONE OF THE ASYNC MACHINERY IN THIS SECTION ACTUALLY RUNS ON THE DEV STACK** (established
+  2026-11-20 by elimination). Dispatch succeeds, `crond` is running, `deficit()` is version-aware,
+  the write path stamps the version — **and nothing is ever written.** Cause unknown; the defect is
+  in the consumer or handler on that stack, not in the generation code. **`php bin/console
+  app:worldpack:warm <CC>` builds inline and works.** Read the rest of this section as the design,
+  not as what you will observe on dev, and see `01_overview/output/deployment.md` for the two
+  operational traps (this one, and the admin rebuild sparing claimed sets) before concluding
+  anything from a device reading.
 - `app:worldpack:maintain` (hourly, `docker/worldpack-maintain.sh`) is the backstop for that
   best-effort dispatch, and the only thing that restocks after a deploy or a
   `WORLD_PACK_VERSION` bump — which makes **every existing set unclaimable at once**, since the
@@ -232,12 +240,27 @@ client-side escape.
 3b. **Staff AND SCOUTS are generated per tier (staff 2026-11-17, scouts 2026-11-18).**
    "Staff" means both — an owner ruling, recorded in `tribal-knowledge.md` — but a `Scout` is a
    separate entity with its own generator, so a fix that follows `StaffRole` skips it. That
-   happened once already. Scout EXPERIENCE now takes the club's band through
+   happened once already. Scout EXPERIENCE is banded through
    `ScoutGenerationService::build()`. It matters more than it looks because the app splits a
    club's wage reservation in proportion to ability, so one out-of-band member takes most of
-   the budget. For staff, ability comes from
-   the club's band (`StaffGenerationService::build()`'s `$abilityRange`) and the legacy role
-   band is scaled by `Economy\TierBandScaleResolver`. Before that a tier-8 club paid ~£1,000/wk
+   the budget. The legacy role band is scaled by `Economy\TierBandScaleResolver`.
+
+   🔴 **CORRECTED 2026-11-20 (`a818a60b`): STAFF ABILITY NO LONGER COMES FROM THE CLUB'S BAND, AND
+   `StaffGenerationService::build()`'s `$abilityRange` PARAMETER IS GONE.** This entry described
+   the workaround, which was the other half of the defect A25 removed: `StarterPackService` and
+   both world-pack generators filled that parameter with the squad's **PLAYER** band, and that
+   table is **POTENTIAL**. A staff member has no current/potential split, so a coach handed a
+   potential band sits AT that figure while the players beside him sit well below it — both sides
+   of every staff-vs-player comparison were different quantities. Both generators now take
+   `(country, tier)` and resolve the band themselves through **`StaffAbilityRangeService`**, the
+   only reader of `pool_config.staff_ability_ranges`, whose numbers are on the player **current
+   ability** scale. ⚠️ **The parameter was REMOVED rather than defaulted to null**, deliberately:
+   a caller that can pass a band can pass the wrong one, and leaving the hole open is how the
+   workaround survived this long. `scouts[]` are covered by the same move — the banded input is now
+   the staff table, though a scout's `ability` remains derived from experience and judgements.
+   `WORLD_PACK_VERSION` 13 → 14 is what delivers it, since a generated staff member exists nowhere
+   but in the pack that holds it. See `04_interfaces/output/services.md` and
+   `03_data/output/migrations.md`'s `Version20261120150000`. Before that a tier-8 club paid ~£1,000/wk
    in staff against ~£165/wk for its whole squad. The scaling is applied to the BAND, never
    inside `legacyStaffPence()`, which is pinned byte-for-byte by `WageModelLegacyParityTest`.
 4. **Never price a player inside `PlayerSnapshotSerializer`.** `WorldPackSnapshotBuilder`

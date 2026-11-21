@@ -1183,6 +1183,53 @@ abilities the pack already carries, and v9 and v10 were both bumps of exactly th
 added nullable, backfilled with the same arithmetic, then set `NOT NULL`. Without it 20 tests
 error on `column "ability" does not exist`. See `01_overview/output/environment.md`.
 
+### `Version20261120110000` — `bond_decay_floor` 50 → 20, so neglected bonds actually decay (2026-11-20)
+
+⚠️ **This entry was MISSING from this document until 2026-11-20 night** and is added here by the
+documentation pass, not by the commit that shipped it (`d8376d94`). It is the only migration on
+disk with no entry; everything else through `Version20261120150000` is recorded.
+
+Owner ruling, asked whether a manager's bonds should hold the level they have earned or fade when
+neglected — *"let them fade."*
+
+🔴 **AT 50 NEGLECT DECAY DID NOT HAPPEN AT ALL.** Only the portion of a bond ABOVE the floor is at
+risk; seeded bonds top out at 45 and organic growth adds 2 a week, so virtually every bond the game
+produces sat at or below 50 and nothing was ever eroded. The relationship graph only ratcheted
+upward, which is not what `decayNeglectedBonds` exists to do.
+
+⚠️ **AND THE REASONING HAD BEEN WRITTEN DOWN A WHILE AGO WITHOUT EVER TAKING EFFECT**, which is the
+transferable half. `wunderkind-app`'s `DEFAULT_GAME_CONFIG.bondDecayFloor` was already 20, with a
+docblock explaining exactly the above — but that constant is a **pre-sync fallback only**, and a
+synced value always beats it. The entity default and the live `game_config` row both stayed 50, so
+the app's own documentation had been describing the losing side of a two-source disagreement. Same
+class as the trap the rest of this day's migrations keep hitting: **never read a config value off a
+repo's default.** Changing the entity alone would have repeated it — an entity default governs new
+installs only — hence the `UPDATE`.
+
+Two statements:
+
+```sql
+ALTER TABLE game_config ALTER bond_decay_floor SET DEFAULT 20
+UPDATE game_config SET bond_decay_floor = 20 WHERE bond_decay_floor = 50
+```
+
+⚠️ **The `UPDATE` is deliberately conditional on the OLD DEFAULT.** `WHERE bond_decay_floor = 50`
+moves boxes that never changed the value and leaves alone any box where an operator chose a figure
+on purpose; this column is admin-editable, so a blanket `SET` would silently discard a deliberate
+setting. The DB default is **changed, not dropped**, because `GameConfig::$bondDecayFloor` declares
+`options: ['default' => 20]` — see `Version20261120100000`'s docblock: the rule is "the DB must
+match the entity", not "always drop the default".
+
+**NO DDL on a column, so no hand-application to `wunderkind_test` was needed** — but it does alter
+a column DEFAULT, so an untracked test database keeps the old default until that one statement is
+run there. `down()` is a true reversal of both halves.
+
+Gameplay consequence, recorded so it is not a surprise: bonds above 20 now erode by
+`bond_positive_decay_per_week` (1) after `bond_neglect_weeks` (8) without an interaction, so a
+youth graduate's 50–60 settles at 20 rather than holding near 50 — which reduces the steady state
+of the manager-opinion bond bias by the same proportion. Measured in
+`docs/economy-loose-ends/a28-manager-opinion-noise.md`.
+
 ### `Version20261120120000` — youth/senior age-band judgements for every scout (A27, 2026-11-20)
 
 Owner ruling, asked whether scouting accuracy should vary by the player's age: **"Yes, it

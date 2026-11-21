@@ -17,6 +17,13 @@
 #
 # memory_limit is generous for the same reason worldpack-consume.sh's is: buildTierPack()
 # materialises a league's entire squad set in memory before serialising it.
+#
+# ⚠️ NOT `-q`, and this is load-bearing. It used to be, alone among the consumers, and the one
+# queue whose message means "build a whole country" was therefore the one queue that drained in
+# silence: a handler that threw, or a PHP fatal that never reached the failure transport at
+# all, left no line in this log. Measured 2026-11-21: 1,414 lines covering 23 hours, all of
+# them start/done pairs, with no channel for anything in between. The output is two or three
+# lines a run; the trade was never worth it.
 
 CONSOLE=/var/www/html/bin/console
 LOCKFILE=/tmp/worldpackset-consume.lock
@@ -33,7 +40,7 @@ if ! flock -n 9; then
 fi
 
 log "=== worldpackset-consume start ==="
-if $PHP "$CONSOLE" messenger:consume worldpackset --time-limit=50 --limit=3 --no-interaction -q; then
+if $PHP "$CONSOLE" messenger:consume worldpackset --time-limit=50 --limit=3 --no-interaction; then
     log "=== worldpackset-consume done ==="
 else
     status=$?

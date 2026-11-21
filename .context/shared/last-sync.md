@@ -2108,3 +2108,127 @@ expected, not a regression. Full suite run DEFERRED (machine loaded by orphaned 
 suites green. Report: `docs/economy-loose-ends/country-scaling-report.md`.
 **For the PM:** `stages/04_interfaces/output/services.md` and `docs/api/economy-config.md`'s parachute
 paragraph ("serves verbatim") — the latter I amended; the former not checked.
+
+## 2026-11-20 — Documentation pass: `.context` brought into line with the day's five commits (backend `development`)
+
+**Documentation only. No application code changed, no migration run, no database touched** — every
+schema fact below was confirmed by reading the migration and the entity.
+
+Pass commit range: `c05d54a7`, `3e1555c5`, `6c5e4ad5`, `a818a60b`, `c11c7f2d` (plus `d8376d94`,
+found undocumented). `c05d54a7`, `3e1555c5`, `6c5e4ad5` and `a818a60b` had each already updated the
+stages they touched and those entries were checked and found accurate. **`c11c7f2d` (country
+scaling) updated only this file**, which is where most of this pass went.
+
+**Corrected — country scaling (`c11c7f2d`):**
+- `04_interfaces/services.md` — the `LeaguePayoutResolver` paragraph said an explicit prize/pot
+  override is used **"verbatim — no ratio, no country factor"**. 🔴 **That is retired**: it is now a
+  baseline-country figure scaled via `scaleExplicit()`. This is the claim the country-scaling
+  session flagged for the PM and could not check; it was in `services.md` as the prize/pot override
+  rather than as the parachute.
+- `04_interfaces/services.md` — **check 6 now means the opposite of what the file said.** It used to
+  tell an operator to hand-author a scaled TV table; that would now scale twice. Old text kept as
+  the history that explains the check's name. Struck the claim that `league.tv_deal` is *"the one
+  money figure the country factor never reaches"* — after this commit there is no such figure.
+- `04_interfaces/services.md` — `LeagueSizeResolver` gained `tvPoolPenceFor()` and `tvDealFor()`,
+  and `derivedTvDealPence()` now divides the **scaled** pool. Recorded, with the "publish this,
+  never `getTvPoolPence()`" rule, the raw-pool-in-the-authoring-surface exception, and the
+  pre-change `tv_deal` cache that check 9 will flag for SC until those rows are re-saved.
+- `04_interfaces/services.md` + `03_data/entities.md` — the youth scholarship anchor and floor are
+  scaled. Recorded **why it was country-blind by construction** (the factor cancels in
+  `anchor × avg(tier) / avg(tier 1)`) rather than as an omission.
+- `03_data/entities.md` — the parachute section said **"SERVED VERBATIM … without reading
+  inside"**. Narrowed to one key: `parachuteFor()` scales `perSeasonPence` and passes everything
+  else through. The passthrough argument itself is NOT withdrawn.
+- `04_interfaces/services.md` — the export's three resolved keys are now scaled (raw `*Override`
+  keys still unscaled, which is what keeps the round-trip exact); `WorldOverviewService` takes
+  `LeagueSizeResolver` and caches for an hour.
+- `07_synthesis/current-focus.md` — struck "verbatim" from its parachute line.
+
+**Corrected — staff ability bands (`a818a60b`) and the pack version:**
+- `07_synthesis/architecture-notes.md` trap 3b described **the workaround as the design**: staff
+  ability from the club's PLAYER band via `StaffGenerationService::build()`'s `$abilityRange`. That
+  parameter is **removed, not defaulted**, and `StaffAbilityRangeService` is the only resolver.
+- `02_architecture/structure.md` — `StaffAbilityRangeService` recorded beside its player twin, with
+  the STAFF ABILITY BANDS grid on the **existing** `/admin/staff-pool-config` screen and save route.
+- `04_interfaces/controllers.md` — `PoolConfigController` entry gained the grid, and the note that
+  `coach_ability_min/max` is **narrowed to the untiered hire market, not dead config**.
+- `04_interfaces/services.md` — **`WORLD_PACK_VERSION` read 11 here while the constant was 14.**
+  ⚠️ That line has now been stale twice (it read 9 at 10 before), which is the argument for reading
+  `WorldInitializationService:277`. Recorded v12/v13/v14 as ability-shaped census content, so v11's
+  "last bump money will ever cause" stands — **but qualified in three places** (`services.md`
+  twice, `01_overview/tribal-knowledge.md`): a pack's census content is frozen at build time, so
+  re-authoring `pool_config.staff_ability_ranges` reaches a cached country only through a rebuild.
+  "Re-authoring any figure needs no bump" is a claim about **price**, not a general licence.
+
+**Added — `03_data/migrations.md`:** an entry for **`Version20261120110000`** (`d8376d94`,
+`bond_decay_floor` 50 → 20), which was the only migration on disk with no entry. Not one of the
+five commits this pass was briefed on; found by diffing `migrations/` against the document.
+
+**Recorded — `01_overview/environment.md`, new "Test COUNTS through 2026-11-20" section:**
+3,271 at `6c5e4ad5`; 3,290 at `a818a60b`; **3,359 at `a818a60b` re-measured**; 3,366 at `c11c7f2d`.
+🔴 **The 69-test gap at the same commit is recorded as OPEN and UNEXPLAINED — not resolved in
+either direction**, because both figures claim the same tree and it is not known which is wrong.
+The guidance recorded is to re-measure at the commit you build on and quote your own figure, which
+is what surfaced the gap rather than absorbing it (3,359 + 7 = 3,366 reconciles exactly; against
+3,290 it would have read as a spurious +76). Also recorded: this file is the **owner** of the
+three-to-five range, that the range is about **failures and never a count**, the narrower
+`--exclude-filter admin_logs` (keeps 71 of 72 against the whole-class filter below it), and
+`--colors=never` when the summary numbers are to be read.
+
+**Recorded — the two world-pack operational traps**, in `01_overview/deployment.md` as their own
+section, with pointers from `02_architecture/structure.md` and
+`07_synthesis/architecture-notes.md`:
+1. 🔴 **The admin "rebuild the world pack cache" spares CLAIMED sets by design** (`deleteUnclaimed`).
+   After a day of testing every set is claimed, so it deletes nothing, **reports success**, and the
+   stale packs survive. `app:worldpack:warm <CC>` builds inline and works.
+2. 🔴 **On the dev stack the async build does not run at all.** Dispatch succeeds, `crond` is
+   confirmed running, `deficit()` is version-aware, the version is stamped — and nothing is written.
+   Cause unknown. ⚠️ **`supervisorctl` cannot work on that image**: `docker/supervisord.conf`
+   defines no control socket, so "no such file" is by construction, not a fault — use
+   `docker exec <container> ps aux`.
+
+**Not done, deliberately:** nothing was restructured, pruned or deleted. Superseded text was
+corrected in place or kept with the correction beside it. `CLAUDE.md` does not exist in this repo
+and `AGENTS.md` is the gitignored pointer — it carries no figures, so **no re-mirror was needed**.
+**What I believe is wrong but did not rewrite** is listed for the PM in the report, including
+`07_synthesis/current-focus.md` still describing 2026-11-18 as the current focus.
+
+**Report:** `/Users/courtneyadesile/Documents/WunderkindFactory/docs/economy-loose-ends/ctx-backend-report.md`
+
+---
+
+## Pass — B2, world-pack dispatch defect, 2026-11-21, at `d731db22`
+
+**Scope:** `04_interfaces` only, and only where this pass's own change made the text wrong.
+
+**Corrected — `04_interfaces/routes.md`:** `POST /admin/worldpack-cache/top-up` now reaps the
+country's stranded BUILDING sets, returns `claimable`/`target`/`building`/`reaped` on every
+answer, and **refuses a STARVED country with `409` + `success: false`** — nothing claimable, yet
+a zero deficit because BUILDING rows are counted in flight. That case previously answered
+`success: true, reason: 'already at target'` while the screen's own stock column read
+`0/2 SHORT`.
+
+**Corrected — `04_interfaces/services.md`:** `WorldPackSetService` now exposes **`stock()`**
+(`target`/`claimable`/`building`/`deficit` + a **`starved`** flag) and
+**`reapStaleBuilding()`**; `deficit()` delegates to `stock()` so the gate and the reported
+figures cannot drift. `WorldPackSetTopUpService` passes both through and logs a starved country
+at WARNING rather than the previously invisible INFO `at_target`. The entry's existing claim
+that `BUILD_STALE_AFTER` stops a killed worker suppressing top-ups "permanently" is kept and
+qualified: the bound narrows that window, it does not close it, and inside the window the gate
+reports a starved country as stocked.
+
+🔴 **FLAGGED, NOT EDITED — one claim in this file and two stages are now contradicted by
+measurement.** The entry above in this same document, `07_synthesis/architecture-notes.md`'s
+"Keeping the buffer stocked" bullet, and `01_overview/deployment.md`'s trap #2 all state that
+the async world-pack build does not run on the dev stack. **It does.** Two sets were built on
+dev through the queue alone on 2026-11-21 — SC `01a1ff72…` (18:51:03 → ready 18:51:10) and EN
+`01a1ff79…` (queued 18:58:04, picked up 18:59:00, ready 18:59:17) — with `messenger:consume
+worldpack` and `worldpackset` both in `ps aux`, queue depth zero and nothing world-pack-shaped
+in the failure transport. Trap #1 (the rebuild sparing CLAIMED sets) is unaffected and stands.
+Status and review are the PM's, so the three places are listed in the report rather than
+rewritten here.
+
+**Not done, deliberately:** nothing restructured, pruned or deleted; no stage outside
+`04_interfaces` touched.
+
+**Report:** `/Users/courtneyadesile/Documents/WunderkindFactory/wunderkind-docs/economy-loose-ends/b2-worldpack-dispatch-report.md`

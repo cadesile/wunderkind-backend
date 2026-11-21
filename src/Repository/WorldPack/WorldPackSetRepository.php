@@ -205,6 +205,35 @@ class WorldPackSetRepository extends ServiceEntityRepository
             ->execute();
     }
 
+    /**
+     * @return WorldPackSet[] BUILDING sets for $country generated before $before — builds that
+     *                        no worker ever finished.
+     *
+     * The counterpart to countBuildingSince(). That one asks "what is legitimately in flight";
+     * this one asks "what has been in flight too long to believe". A set is persisted BUILDING
+     * before its first tier is generated (WorldPackSetTopUpService::buildOneSet()), so anything
+     * that takes the worker out mid-build — a PHP fatal, an OOM kill, a container recreate on
+     * deploy — leaves a row in that state with nothing left running to finish or fail it.
+     *
+     * Those rows are not inert. deficit() counts BUILDING towards stock, so a stranded one
+     * suppresses every top-up for its country until it ages past BUILD_STALE_AFTER, during
+     * which the admin screen, the per-init dispatch and the hourly sweep all report the
+     * country stocked while it has nothing claimable. Reaping them is what turns that silence
+     * into a FAILED row with a reason on it.
+     */
+    public function findBuildingBefore(string $country, \DateTimeImmutable $before): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.country = :country')
+            ->andWhere('s.status = :building')
+            ->andWhere('s.generatedAt < :before')
+            ->setParameter('country', $country)
+            ->setParameter('building', WorldPackSetStatus::BUILDING)
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return WorldPackSet[] Claimed sets whose payloads are older than $before — the prune candidates. */
     public function findClaimedBefore(\DateTimeImmutable $before): array
     {

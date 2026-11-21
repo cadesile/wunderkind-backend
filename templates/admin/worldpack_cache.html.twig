@@ -451,22 +451,35 @@
             var res  = await fetch(TOP_UP_URL, { method: 'POST', body: body });
             var data = await res.json();
 
+            // A 409 lands here: the endpoint refuses rather than reporting a success it did
+            // not perform. Say the numbers, because the operator's next move depends on them.
             if (!data.success) {
-                btn.textContent = 'FAILED';
+                btn.textContent = 'REFUSED';
+                btn.disabled = false;
                 if (note) { note.textContent = country + ': ' + (data.error || 'top-up refused'); }
                 return;
             }
 
             if (!data.queued) {
+                // Only reachable now when the country genuinely holds its buffer -- the
+                // starved case is the 409 above. Still prints the figure rather than the bare
+                // word, so this can never again be the only thing an operator is told.
                 btn.textContent = 'AT TARGET';
-                if (note) { note.textContent = country + ' is already at target -- nothing queued.'; }
+                if (note) {
+                    note.textContent = country + ' already at target: ' + data.claimable + '/'
+                        + data.target + ' claimable -- nothing queued.';
+                }
                 return;
             }
 
             btn.textContent = 'QUEUED';
             if (note) {
-                note.textContent = country + ' queued. The worker picks it up within a minute; '
-                    + 'a country takes 8-18s to build.';
+                // "Within a minute" was wrong and it mattered: the per-minute crontab entry
+                // measurably runs every OTHER minute (1,414 log lines over 23h on dev,
+                // 2026-11-21 -- busybox crond will not start a tick while it still has the
+                // previous child), so pickup is up to ~2 minutes before any build begins.
+                note.textContent = country + ' queued (' + data.claimable + '/' + data.target
+                    + ' claimable now). Pickup takes up to ~2 minutes, then 8-18s to build.';
             }
             pollSetStatus(country, btn);
         } catch (e) {
@@ -480,7 +493,10 @@
     // generation keeps failing would hammer the endpoint for as long as the tab stayed open.
     async function pollSetStatus(country, btn) {
         var attempts = 0;
-        var MAX      = 40; // ~100s at 2.5s
+        // ~200s at 2.5s. Was 40 (~100s) against a comment claiming pickup "within a minute";
+        // the consumer measurably runs every other minute, so the old budget could expire
+        // before the build had started and reported STILL SHORT on a queue that was fine.
+        var MAX      = 80;
 
         var tick = async function () {
             attempts++;
@@ -492,6 +508,23 @@
                     btn.textContent = 'AT TARGET';
                     return;
                 }
+
+                // A FAILED set carries the reason generation gave. Surfacing it is the
+                // difference between "STILL SHORT" after three minutes and knowing why --
+                // including the reaped-stranded-build reason, which is the one that used to
+                // be invisible.
+                var failed = (data.sets || []).filter(function (s) { return s.status === 'failed'; });
+                if (failed.length > 0) {
+                    btn.textContent = 'FAILED';
+                    btn.disabled = false;
+                    var note = $('#top-up-note');
+                    if (note) {
+                        note.textContent = country + ': ' + failed.length + ' set(s) FAILED -- '
+                            + (failed[0].errorMessage || 'no reason recorded');
+                    }
+                    return;
+                }
+
                 btn.textContent = 'BUILDING...';
             } catch (e) {
                 // A failed poll is not a failed build; let the next tick try.

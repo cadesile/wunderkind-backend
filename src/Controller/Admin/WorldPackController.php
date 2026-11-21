@@ -164,21 +164,75 @@ class WorldPackController extends AbstractController
             return $this->json(['success' => false, 'error' => 'Invalid country code'], 400);
         }
 
-        // Queued, not built inline: a set is 20-40s of generation and an admin request must
-        // not hold a worker open for it. The same message the init endpoint dispatches, so the
-        // handler's deficit re-read makes a double-click harmless.
-        if (!$this->topUpService->needsTopUp($country)) {
+        // A stranded BUILDING row is counted as stock by deficit(), so reap before reading the
+        // gate: an operator pressing this button is the moment to turn a build nothing is
+        // working on into a FAILED row with a reason, rather than let it go on suppressing
+        // top-ups for the rest of its thirty-minute window.
+        $reaped = $this->topUpService->reapStaleBuilding($country);
+
+        $stock = $this->topUpService->stock($country);
+
+        // 🔴 THE TWO WAYS OF NOT BEING SHORT ARE NOT THE SAME ANSWER, AND REPORTING THEM
+        // ALIKE IS WHAT THIS BLOCK EXISTS TO PREVENT. deficit() counts BUILDING sets towards
+        // the buffer (correctly — it stops a burst of inits queueing one build each), so a
+        // country with ZERO claimable sets and two builds in flight is "not short". It is also
+        // unable to serve a single new game. The screen's own stock column says `0/2 SHORT`
+        // and enables this button on exactly that test, so answering `success: true,
+        // queued: false, reason: already at target` told an operator the opposite of what the
+        // row beside the button said — and wrote nothing. That no-op silently invalidated
+        // about three hours of device testing on 2026-11-20. A refusal that names the numbers
+        // is worth far more than a success that means nothing.
+        if ($stock['starved']) {
             return $this->json([
-                'success' => true,
-                'queued'  => false,
-                'country' => $country,
-                'reason'  => 'already at target',
+                'success'   => false,
+                'queued'    => false,
+                'country'   => $country,
+                'error'     => sprintf(
+                    '%s has %d claimable set(s) of %d and %d build(s) counted in flight, so the '
+                    . 'top-up gate reports it stocked and NOTHING was queued. Either wait for '
+                    . 'those builds to finish or to go stale (%s), or use Regenerate to clear '
+                    . 'them now.',
+                    $country,
+                    $stock['claimable'],
+                    $stock['target'],
+                    $stock['building'],
+                    trim(WorldPackSetService::BUILD_STALE_AFTER, '-'),
+                ),
+                'reason'    => 'starved: no claimable set, counted at target by builds in flight',
+                'claimable' => $stock['claimable'],
+                'building'  => $stock['building'],
+                'target'    => $stock['target'],
+                'reaped'    => $reaped,
+            ], 409);
+        }
+
+        if ($stock['deficit'] <= 0) {
+            return $this->json([
+                'success'   => true,
+                'queued'    => false,
+                'country'   => $country,
+                'reason'    => 'already at target',
+                'claimable' => $stock['claimable'],
+                'building'  => $stock['building'],
+                'target'    => $stock['target'],
+                'reaped'    => $reaped,
             ]);
         }
 
+        // Queued, not built inline: a set is 20-40s of generation and an admin request must
+        // not hold a worker open for it. The same message the init endpoint dispatches, so the
+        // handler's deficit re-read makes a double-click harmless.
         $this->messageBus->dispatch(new TopUpWorldPackSetMessage($country));
 
-        return $this->json(['success' => true, 'queued' => true, 'country' => $country]);
+        return $this->json([
+            'success'   => true,
+            'queued'    => true,
+            'country'   => $country,
+            'claimable' => $stock['claimable'],
+            'building'  => $stock['building'],
+            'target'    => $stock['target'],
+            'reaped'    => $reaped,
+        ]);
     }
 
     // ── Set stock per country (AJAX, for the top-up button's poll) ────────

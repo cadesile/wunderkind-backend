@@ -95,37 +95,81 @@ class MaintainWorldPackSetsCommand extends Command
             );
         }
 
-        $rows    = [];
-        $queued  = 0;
-        $built   = 0;
+        $rows     = [];
+        $queued   = 0;
+        $built    = 0;
+        $reaped   = 0;
+        $starved  = [];
 
         foreach ($countries as $country) {
-            $deficit = $this->setService->deficit($country, $target);
+            // Reap first, so the deficit below is read against stock that something is
+            // actually working on. A set is persisted BUILDING before its first tier is
+            // built, so a worker lost mid-build — fatal, OOM, container recreate on deploy —
+            // leaves a row that deficit() counts as stock and nothing will ever finish. This
+            // sweep is the backstop for exactly that, and it could not see it before.
+            if (!$dryRun) {
+                $reaped += $this->setService->reapStaleBuilding($country);
+            }
+
+            $stock   = $this->setService->stock($country, $target);
+            $deficit = $stock['deficit'];
+            $label   = sprintf('%d/%d claimable', $stock['claimable'], $stock['target'])
+                . ($stock['building'] > 0 ? sprintf(' (+%d building)', $stock['building']) : '');
 
             if ($deficit <= 0) {
-                $rows[] = [$country, 'at target', '-'];
+                // 🔴 "At target" used to cover this case too, which made the one job that
+                // exists to notice a country running dry the last place it would show up. A
+                // country with nothing claimable is not stocked, however many builds are
+                // counted in flight.
+                if ($stock['starved']) {
+                    $starved[] = $country;
+                    $rows[]    = [$country, $label, 'STARVED — nothing queued'];
+                    continue;
+                }
+
+                $rows[] = [$country, $label, '-'];
                 continue;
             }
 
             if ($dryRun) {
-                $rows[] = [$country, "short by {$deficit}", 'would queue'];
+                $rows[] = [$country, $label, "would queue {$deficit}"];
                 continue;
             }
 
             if ($sync) {
                 $made = $this->topUpService->topUp($country, $deficit);
                 $built += count($made);
-                $rows[] = [$country, "short by {$deficit}", sprintf('built %d', count($made))];
+                $rows[] = [$country, $label, sprintf('built %d', count($made))];
                 continue;
             }
 
             $this->messageBus->dispatch(new TopUpWorldPackSetMessage($country, $deficit));
             $queued++;
-            $rows[] = [$country, "short by {$deficit}", 'queued'];
+            $rows[] = [$country, $label, "queued {$deficit}"];
         }
 
         if ($rows !== []) {
             $io->table(['Country', 'Stock', 'Action'], $rows);
+        }
+
+        if ($reaped > 0) {
+            // Loud on purpose: every one of these is a build that died without saying so, and
+            // for up to thirty minutes it made this country look stocked to every top-up path.
+            $io->warning(sprintf(
+                'Reaped %d stranded BUILDING set(s) — marked FAILED with a reason. '
+                . 'Each was a build no worker finished (PHP fatal, OOM kill, or a container '
+                . 'restart mid-generation).',
+                $reaped,
+            ));
+        }
+
+        if ($starved !== []) {
+            $io->error(sprintf(
+                'STARVED: %s — no claimable set, yet counted at target by builds in flight, so '
+                . 'nothing was queued. A device cannot start a game in these countries. If the '
+                . 'builds are not genuinely running, regenerate the country.',
+                implode(', ', $starved),
+            ));
         }
 
         if (!$input->getOption('no-prune') && !$dryRun) {
@@ -144,9 +188,17 @@ class MaintainWorldPackSetsCommand extends Command
         if ($dryRun) {
             $io->success('Dry run — nothing changed.');
         } else {
-            $io->success(sprintf('Queued %d country(ies), built %d set(s) inline.', $queued, $built));
+            $io->success(sprintf(
+                'Queued %d country(ies), built %d set(s) inline, reaped %d stranded build(s).',
+                $queued,
+                $built,
+                $reaped,
+            ));
         }
 
-        return Command::SUCCESS;
+        // A starved country is a failure of the thing this command exists to guarantee, so the
+        // exit code says so — the cron wrapper logs a FAILED line on a non-zero exit, which is
+        // the only channel an unattended sweep has.
+        return $starved === [] ? Command::SUCCESS : Command::FAILURE;
     }
 }

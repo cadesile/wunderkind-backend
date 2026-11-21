@@ -493,8 +493,16 @@ filename alone.
   `Version20261118120000` NULLed the columns to inherit from the ppm ladder, the raw-column export
   read **£0** and every gate run needed a hand-patch.
 
+  ⚠️ **AND ALL THREE RESOLVED KEYS ARE COUNTRY-SCALED SINCE `c11c7f2d` (2026-11-20)**, including
+  the case where the league holds a non-null prize/pot override — an explicit figure is now a
+  baseline-country figure. The **raw** columns (`prizeMoneyOverride`, `leaguePositionPotOverride`,
+  `tvDealOverride`, `tvPoolPence`, `parachute`) are still exported unscaled, which is what keeps
+  the round-trip exact; `import()` reads only those. See the `LeaguePayoutResolver` and
+  `LeagueSizeResolver` entries below.
+
   ⚠️ **AND SO IS `tvDeal`, AS OF THE SAME DAY — THREE KEYS, NOT TWO (2026-11-19).** `export()`
-  emits `tvDeal` as `LeagueSizeResolver::derivedTvDealPence($l) ?? $l->getTvDeal()`, with the raw
+  emits `tvDeal` through `LeagueSizeResolver` — `derivedTvDealPence($l) ?? $l->getTvDeal()` when
+  this was written, `tvDealFor($l)` since `c11c7f2d` — with the raw
   column under **`tvDealOverride`**. The cause is NOT the payouts' cause and is worth stating
   separately: a NULL `prizeMoney` *means* inherit, whereas a NULL `tvDeal` means **nobody ever
   wrote it**. `syncTvDeal()` is called only from `LeagueAdminController:95`/`:201` — an admin
@@ -1331,10 +1339,19 @@ filename alone.
   `docs/api/user-ledger.md`. See "Centralized User Ledger" in CLAUDE.md.
 - **`WorldInitializationService`** — initializes a country's world data
   (players/staff/scouts pools, starter configs) on first access.
-  **`WORLD_PACK_VERSION` is 11 (2026-11-18) and must be bumped for *any* payload shape
+  **`WORLD_PACK_VERSION` is 14 (2026-11-20) and must be bumped for *any* payload shape
   change, not just the three snapshot builders.** (It read 9 here while the constant was
-  already 10 — the R2 authoring bump — so treat the constant as the source of truth and this
-  line as a mirror.) ⚠️ **v11 took ALL money out of the pack and is recorded in the
+  already 10 — the R2 authoring bump — and 11 while the constant was already 14, so treat the
+  constant as the source of truth and this line as a mirror. ⚠️ **This line has now been stale
+  twice**, which is the argument for reading `WorldInitializationService:277` rather than this
+  file.) **Three bumps have landed since v11, all of them ABILITY-shaped census content and
+  none of them money** — v12 (scouts gain a derived `ability`), v13 (`3e1555c5`, two age-gated
+  judgement keys join the five), v14 (`a818a60b`, staff ability comes off the new authored
+  per-country/per-tier table). ⚠️ **v14 is the one that qualifies "money is the only thing a
+  bump is for"**: a club's staff exist nowhere but in cached world packs and starter packs, and
+  nothing re-derives a staff member the way `app:backfill-scout-abilities` re-derives a scout,
+  so **re-authoring `pool_config.staff_ability_ranges` reaches an existing cached country only
+  through a rebuild.** It is still not money, so v11's docblock claim stands as written. ⚠️ **v11 took ALL money out of the pack and is recorded in the
   constant's own docblock as the last bump money will ever cause**: re-authoring a wage,
   balance, payout, land price or sponsor band now reaches a new save with no bump and no
   regeneration, because the device resolves every monetary figure from live config.
@@ -1378,7 +1395,10 @@ filename alone.
   See `docs/api/npc-club-staff-scouts.md`.
 - **`WorldOverviewService`** — builds world overview figures, consumed
   both by `GET /api/world/overview` and directly by `LandingController`
-  for server-rendering.
+  for server-rendering. **Takes `LeagueSizeResolver` since `c11c7f2d` (2026-11-20)** so its
+  `tvDeal` and `tvPoolPence` are the country-scaled figures rather than the raw columns.
+  ⚠️ **It caches for an hour**, so a factor or pool change shows here only once that cache
+  expires — do not read a stale overview as evidence that scaling did not apply.
 - **`WorldPackSetService`** — the reader's half of the world-pack buffer: claims a
   `WorldPackSet` for a club, reads a tier out of one, counts a country's stock.
   **`claimForClub()` returns null as a NORMAL answer**, meaning "this country has no stock",
@@ -1390,8 +1410,19 @@ filename alone.
   otherwise have the retry claim a SECOND set and leak the first. `deficit()` counts
   ready-and-claimable plus recently-BUILDING, the second half **time-bounded**
   (`BUILD_STALE_AFTER`) because one worker killed mid-build would otherwise leave a row that
-  suppresses every future top-up for its country permanently. `deleteUnclaimed()` spares
-  CLAIMED sets — a device mid-initialisation still has tiers to fetch.
+  suppresses every future top-up for its country permanently. 🔴 **The time bound narrows that
+  window; it does not close it, and inside the window the gate lies.** A set is persisted
+  BUILDING before its first tier is built, so a stranded row makes a country with ZERO
+  claimable sets report a deficit of zero for thirty minutes — and every top-up path reads that
+  gate. Demonstrated on the dev stack 2026-11-21: EN at 0 claimable of 2 with two BUILDING
+  rows, `app:worldpack:maintain` printing "EN at target". So `deficit()` now delegates to
+  **`stock()`**, which returns `target`/`claimable`/`building`/`deficit` plus a **`starved`**
+  flag (`claimable < target` with `deficit === 0`) that callers must report differently from
+  being stocked, and **`reapStaleBuilding()`** marks a BUILDING set older than
+  `BUILD_STALE_AFTER` as FAILED with a reason — at ERROR level, which matters because prod's
+  monolog is fingers_crossed and the INFO "at target" no-op wrote nothing at all.
+  `deleteUnclaimed()` spares CLAIMED sets — a device mid-initialisation still has tiers to
+  fetch.
 - **`WorldPackSetTopUpService`** — adds ONE set, clears nothing; the unattended counterpart
   of the admin regenerate. Dispatched on every game initialisation and by
   `app:worldpack:maintain`. **Deliberately does not go through `WorldPackGenerationRun`**:
@@ -1403,7 +1434,9 @@ filename alone.
   dispatcher, a deficit **re-read on drain** (the clamp that makes the pipeline safe to re-run,
   same reasoning as `TopUpStarterPoolMessageHandler`'s), and a per-country
   `pg_try_advisory_lock` so a burst of 50 inits costs 49 instant no-ops. `rebuild()` is the
-  `app:worldpack:warm` path: clear unclaimed, then build N unconditionally.
+  `app:worldpack:warm` path: clear unclaimed, then build N unconditionally. `stock()` and
+  `reapStaleBuilding()` pass through to `WorldPackSetService`, and `topUp()` logs a starved
+  country at **WARNING** rather than folding it into the INFO `at_target` no-op.
 - **`WorldPackCacheService`** — **now entirely set-scoped**, and that is a correctness
   requirement rather than a rename. It used to resolve rows through
   `findOneBy(['country','tier'])`, correct for exactly as long as a country had one world; a
@@ -1651,9 +1684,21 @@ see `docs/api/economy-config.md`. `TicketPriceResolverTest`.
 **`LeaguePayoutResolver` — the champion's prize and the position pot, added 2026-11-16.** The
 third resolver in this family and the first for figures that were already published as stored
 absolutes. `prizeFor(League, ?GameConfig)` and `positionPotFor(...)` resolve **the league's own
-column when it is NOT NULL (an override, verbatim — no ratio, no country factor), else the tier-1
-base × this tier's ratio × the country factor, else null**. `null` means unauthored and is not
-`0`; the publish sites render it `—`.
+column when it is NOT NULL (an override — no ratio, but SINCE 2026-11-20 with the country factor,
+via `scaleExplicit()`), else the tier-1 base × this tier's ratio × the country factor, else
+null**. `null` means unauthored and is not `0`; the publish sites render it `—`.
+
+⚠️ **THIS PARAGRAPH SAID "VERBATIM — NO RATIO, NO COUNTRY FACTOR" UNTIL `c11c7f2d`
+(2026-11-20), AND THAT IS RETIRED** by the owner's ruling *"everything should scale. TV, prize,
+position and parachute."* An explicit per-league figure is now a **baseline-country** figure.
+The old wording was not protecting anything: measured on the live export, **all 196 leagues hold
+a non-null override and every one is a cascaded copy of the country-blind tier default**, so
+"verbatim" was defeating the factor for the whole world rather than preserving one hand-authored
+division. The cost, stated because it is a real one: the admin's per-league override field now
+means *"in England's terms"*, so a future genuinely hand-authored Scottish override must be typed
+at the baseline scale. England's factor is exactly 10000, so every England figure is unchanged.
+`parachuteFor(League, ?GameConfig)` joined the class in the same commit — see the parachute entry
+in `03_data/output/entities.md`.
 
 **NULL NOW MEANS INHERIT**, which is the change that makes the ladder reachable.
 `Version20261116181000` cleared the column on every league precisely because every one held a
@@ -1784,6 +1829,14 @@ the published tier wage scale at init, so flipping the wage model, or re-authori
 it reads, no longer needs a `WORLD_PACK_VERSION` bump at all. See `tribal-knowledge.md`'s
 superseded-ruling block for the full account.
 
+⚠️ **READ "ANY FIGURE IT READS" AS "ANY MONEY FIGURE IT READS" (noted 2026-11-20).** The claim
+is about PRICE and it is still exactly true. It is not a general licence to re-author without a
+bump: a pack is still a census, and a pack's census content is still frozen at build time. The
+live case is **`pool_config.staff_ability_ranges`** (`a818a60b`) — authored config, read at
+generation, baked into the pack, and `WORLD_PACK_VERSION` 13 → 14 is what delivered it to a
+device at all. Ability is an input to a wage, so an authoring change there DOES need a rebuild
+even though no amount is in the pack.
+
 The ORIGINAL text, kept because the shared-pool half below is still live and still correct:
 per-country rows are generated for a known country and tier, so they are priced at generation
 and stored, which is why flipping the model needs a `WORLD_PACK_VERSION` bump. That population
@@ -1842,15 +1895,36 @@ authored and both new columns default to 0 (= off, the old flat-plus-cap behavio
 1,047x, so a £1,500 anchor would put a tier-8 scholar on £873 against an average professional's
 £127. Floor before cap, because the floor is a preference and the cap is the invariant.
 
+⚠️ **THE ANCHOR AND THE FLOOR ARE COUNTRY-SCALED SINCE `c11c7f2d` (2026-11-20), AND BEFORE THAT
+THE LADDER WAS COUNTRY-BLIND BY CONSTRUCTION — not by omission.** Both columns are absolute
+pence, and the tier's share is `anchor × avg(tier) / avg(tier 1)`, so a country factor applied to
+the wages **cancels in that ratio**: Scotland paid England's scholarship at every tier, measured
+live at 150000 on both. `youthScholarshipPenceUnder()` now multiplies both the anchor and the
+floor by `countryFactorBp($country)` before the clamp. An authored anchor is floored at 1p so it
+can never scale into reading as unauthored (0 means *no anchor*, which takes the flat branch).
+England's factor is 10000: a no-op there.
+
 **`app:economy:wage-table` is the gate, not a debugging aid.** It reads the live config rows and
 exits non-zero on NINE checks. (⚠️ This sentence read SIX while the command already had eight;
-corrected to nine when check 9 was added, 2026-11-19.) Check 6 is the newest and the only guard on **`league.tv_deal`,
-the one money figure the country factor never reaches** — it is a stored absolute an operator
+corrected to nine when check 9 was added, 2026-11-19.) Check 6 was the only guard on **`league.tv_deal`,
+the one money figure the country factor never reaches** — it was a stored absolute an operator
 types in, so a factored country would pay a fifth of the wages and bank full baseline TV. Check 3
 cannot see it (TV at 5x its intended share still passes a 100%-of-turnover bound), so check 6
-compares against the BASELINE country's own figure times the factor and reports what to author.
+compared against the BASELINE country's own figure times the factor and reported what to author.
 Needed `EconomyScaleResolver::baselineCountryCode()`, since comparing against the base year needs
 the code rather than just the factor.
+
+🔴 **CHECK 6 NOW MEANS THE OPPOSITE OF WHAT IT MEANT, AS OF `c11c7f2d` (2026-11-20), AND THE
+PARAGRAPH ABOVE IS KEPT ONLY AS THE HISTORY THAT EXPLAINS ITS NAME.** TV scales at resolution
+now (`LeagueSizeResolver::tvPoolPenceFor()`), so a hand-authored pre-scaled per-country table —
+exactly what the old check told an operator to go and write — **would be scaled a second time.**
+The check is reversed: it reports a FACTORED country whose authored pool differs from the
+baseline's, which is the mis-authoring rather than the fix. `EconomyTvCountryScalingGuardTest`
+went 8 tests to 7 on that reversal. ⚠️ **Nothing here says "the one money figure the country
+factor never reaches" any more** — after `c11c7f2d` there is no such figure among TV, prize,
+position pot, parachute or the youth scholarship; what is left unscaled is facilities, upkeep and
+ground cost, deliberately and by the owner's ruling (*"leave facilities for now"*), with the known
+consequence that Scottish clubs read insolvent.
 
 **Check 9 (added 2026-11-19) is the only thing that compares the AUTHORED division size against
 the clubs that actually exist**, and it exists because that is the one weak point of authoring
@@ -1927,6 +2001,28 @@ shape; the earlier claim that CA, JP, NG, PL, US and SC held a uniform count was
 admin form shows the derived size read-only and the world import no longer restores it (nor does
 the export emit it; it is on `worldEntityProvider()`'s exclusion list). It holds whatever it last
 held, which check 9 prints beside the live figure.
+
+⚠️ **AND THE POOL IT DIVIDES IS THE SCALED POOL, NOT THE AUTHORED ONE, SINCE `c11c7f2d`
+(2026-11-20).** Two methods joined the class on the owner's *"everything should scale"* ruling:
+
+- **`tvPoolPenceFor(League)`** — the authored `tvPoolPence` times `countryFactorBp(country)`, one
+  `intdiv` on the exact product. ⚠️ **Publish THIS, never `getTvPoolPence()`**, wherever a device
+  or a preview reads the pool: the invariant `pool ÷ clubs == tvDeal` holds only while both sides
+  are the same figure, and `derivedTvDealPence()` now divides this.
+- **`tvDealFor(League)`** — the derived share when a pool is authored, else the legacy
+  directly-authored per-club `tvDeal` scaled, else null. No live league takes the legacy branch
+  (all 196 carry a pool); it is scaled so that no path leaves a TV figure country-blind. When a
+  pool IS authored but the table is empty (mid-bootstrap, `sizeOf` = 0) the stored column is the
+  cache `syncTvDeal()` wrote from the already-scaled derivation, so it is returned as it stands
+  rather than scaled twice.
+
+**The admin league editor and the league export keep the RAW authored pool deliberately** — they
+are the authoring surface and must round-trip — and the TIER DEFAULTS screen still authors one
+country-blind figure per tier. ⚠️ **A `league.tv_deal` cache written BEFORE this change holds the
+UNSCALED derivation for a factored country**, so the gate's cache check (check 9) will flag SC
+rows until they are re-saved; no device reads that column while a pool exists.
+`EconomyScaleResolver` is constructor-optional on this class ONLY so the many two-argument
+fixtures keep compiling — the container always supplies it, and null means parity.
 
 `derivedTvDealPence()` returns **null** for a league with no pool (every league, until somebody
 authors one) and also for a pooled league with no resolvable size — rather than dividing by a
