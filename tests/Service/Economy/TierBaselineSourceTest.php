@@ -99,6 +99,19 @@ class TierBaselineSourceTest extends TestCase
         );
     }
 
+    public function testTheCountryFactorIsPublishedAndParityWithNoCountry(): void
+    {
+        // The app scales its own flat ladders (NPC starting balances) by this, so it must be
+        // present on every read and must be parity when no country resolved.
+        foreach ([null, '', 'EN', 'SC'] as $country) {
+            $block = $this->publisher()->clientBlock(new GameConfig(), $country)['economyTierBaseline'];
+
+            self::assertArrayHasKey('countryFactorBp', $block, var_export($country, true));
+            self::assertIsInt($block['countryFactorBp']);
+        }
+        self::assertSame(10_000, $this->publisher()->clientBlock(new GameConfig(), null)['economyTierBaseline']['countryFactorBp']);
+    }
+
     // ───────────────────────────── plumbing ─────────────────────────────
 
     private function publisher(): EconomyConfigPublisher
