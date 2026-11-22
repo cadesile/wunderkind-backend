@@ -593,6 +593,8 @@ class DashboardController extends AbstractDashboardController
         $config->setSignOnFeePercentMin((int) $request->request->get('signOnFeePercentMin', 0));
         $config->setSignOnFeePercentMax((int) $request->request->get('signOnFeePercentMax', 10));
         $config->setFreeTransfersPerSeason((int) $request->request->get('freeTransfersPerSeason', 3));
+        $config->setPlayerTransferOutOfReachTierGap((int) $request->request->get('playerTransferOutOfReachTierGap', 3));
+        $config->setPlayerTransferWagePremiumPerTier((float) $request->request->get('playerTransferWagePremiumPerTier', 1.0));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
