@@ -303,6 +303,8 @@ class WorldPackController extends AbstractController
         $run         = $result['run'];
         $startedSets = count($result['sets']);
 
+        $keptClaimed = $result['keptClaimedSets'];
+
         return $this->json([
             'success'       => true,
             'country'       => $country,
@@ -313,6 +315,28 @@ class WorldPackController extends AbstractController
             // starts every set it was asked for. The key stays because the admin JS reads it and
             // removing it would be a shape change for no gain.
             'partial'       => $startedSets < $result['requestedSets'],
+            // ── WHAT THE CLEAR ACTUALLY DID, SAID RATHER THAN LEFT TO BE INFERRED ───────────
+            //
+            // ADDITIVE. `delete-country` has always reported its spared claimed sets in a flash
+            // message; this action cleared the same way and reported nothing, so the only
+            // evidence an operator had was the cache table still listing rows at the old
+            // payload version once the run read COMPLETED. That reads as a partial rebuild and
+            // was reported as one (2026-11-22). It is not: a spared set is unclaimable and its
+            // rows are unservable — both filters are named in the orchestrator's comment.
+            'clearedSets'     => $result['clearedSets'],
+            'keptClaimedSets' => $keptClaimed,
+            'note'            => $keptClaimed > 0
+                ? sprintf(
+                    'Cleared %d unclaimed set(s). Kept %d claimed set(s) — a device mid-'
+                    . 'initialisation still needs its tiers. Their payload rows stay in the '
+                    . 'cache table at the version they were built at and are NEVER served: the '
+                    . 'claim and the per-row read both filter on pack version %d. The hourly '
+                    . 'app:worldpack:maintain prunes them once the claim is old enough.',
+                    $result['clearedSets'],
+                    $keptClaimed,
+                    WorldInitializationService::WORLD_PACK_VERSION,
+                )
+                : sprintf('Cleared %d unclaimed set(s). No claimed sets to spare.', $result['clearedSets']),
         ]);
     }
 

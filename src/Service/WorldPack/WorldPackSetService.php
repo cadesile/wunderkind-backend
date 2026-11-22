@@ -221,6 +221,24 @@ class WorldPackSetService
         return $deleted;
     }
 
+    /**
+     * How many CLAIMED sets $country holds — the ones `deleteUnclaimed()` deliberately spares.
+     *
+     * Exists so a regenerate can SAY it spared them. A claimed set keeps its tier payload rows
+     * at whatever `payload_version` it was built at, so after a version bump the admin cache
+     * table still lists rows at the old version once the rebuild has finished, and an operator
+     * reading that reasonably concludes the rebuild was partial. It was not: those rows are
+     * unreachable by both filters that matter — the claim (`countReadyUnclaimed`/
+     * `claimForClub` both filter on the current version) and the read
+     * (`WorldPackCacheService::readTier`). Reporting the count is what makes the difference
+     * between "spared on purpose" and "missed" visible without the operator having to know
+     * either filter exists.
+     */
+    public function countClaimed(string $country): int
+    {
+        return $this->setRepository->countByStatus($country, WorldPackSetStatus::CLAIMED);
+    }
+
     /** Flips $set to READY, stamping readyAt. Only a complete set should reach this. */
     public function markReady(WorldPackSet $set): void
     {
