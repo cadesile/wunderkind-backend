@@ -6,6 +6,7 @@ namespace App\Service\Admin;
 
 use App\Enum\Country;
 use App\Enum\NationalityGroup;
+use App\Repository\Location\CountryProfileRepository;
 use App\Repository\PlayerRepository;
 use App\Repository\ScoutRepository;
 use App\Repository\StaffRepository;
@@ -35,9 +36,10 @@ final class NationalityPoolCounts
         private readonly StaffRepository  $staffRepository,
         private readonly ScoutRepository  $scoutRepository,
         private readonly NamePoolProvider $namePools,
+        private readonly CountryProfileRepository $countryProfiles,
     ) {}
 
-    /** @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool}>> */
+    /** @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool, live: bool}>> */
     public function forPlayers(): array
     {
         return $this->group($this->playerRepository->countPoolByNationality());
@@ -49,7 +51,7 @@ final class NationalityPoolCounts
      * Summed because the picker is one list: a job is role × nationality, and the operator is
      * choosing the nationality half. The per-role split the six tiles need is staffByRole().
      *
-     * @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool}>>
+     * @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool, live: bool}>>
      */
     public function forStaff(): array
     {
@@ -101,7 +103,7 @@ final class NationalityPoolCounts
 
     /**
      * @param  array<string, int> $counts nationality => count, misses meaning zero
-     * @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool}>>
+     * @return array<string, list<array{nationality: string, code: string, count: int, hasNamePool: bool, live: bool}>>
      */
     private function group(array $counts): array
     {
@@ -111,6 +113,12 @@ final class NationalityPoolCounts
         // asking per nationality inside the loop is seventy-one queries a page load, which is
         // the N+1 this file exists to avoid. One query answers all of them.
         $hasPool = $this->namePools->hasMap();
+
+        // LIVE, read off the country profile, which is the one place "open to players" is
+        // recorded (see CountryProfileRepository::liveCountryCodes()). Drives the picker's
+        // ENABLED COUNTRIES button, so going live in the Countries screen is all it takes for
+        // a new country to join it. One projected query, hoisted for the same reason.
+        $live = array_flip($this->countryProfiles->liveCountryCodes());
 
         foreach (Country::nationalityMap() as $code => $nationality) {
             $group = NationalityGroup::forCountry(Country::from($code));
@@ -128,6 +136,7 @@ final class NationalityPoolCounts
                 'count'       => $counts[$nationality] ?? 0,
                 // False means generation falls back to English names for this nationality.
                 'hasNamePool' => $hasPool[$nationality] ?? false,
+                'live'        => isset($live[$code]),
             ];
         }
 
