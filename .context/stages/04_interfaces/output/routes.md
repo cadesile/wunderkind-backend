@@ -286,7 +286,13 @@ so a token minted before the fix starts working without re-authentication. See
   target; `409` while a run is already active for the country, `404` with no leagues seeded.
   **It has no pool-supply failure**: starter squads are generated, so a run always starts every
   set it was asked for — the `startedSets`/`partial` keys in the response can no longer disagree
-  and are kept only because the admin JS reads them),
+  and are kept only because the admin JS reads them. **Additive 2026-11-22: `clearedSets`,
+  `keptClaimedSets` and a prose `note`.** The clear spares CLAIMED sets, which keep their tier
+  payload rows at the version they were built at — so after a `WORLD_PACK_VERSION` bump a run
+  that reads `COMPLETED` still leaves rows at the OLD version in the cache table, and that was
+  read as a partial rebuild on 2026-11-22. It is not: a stale set is unclaimable and a stale row
+  is unservable, both filtered on the current version. The response now says so, and the admin
+  panel prints the note above the per-tier progress),
   `POST /admin/worldpack-cache/top-up` (reaps the country's stranded BUILDING sets, then
   queues one `TopUpWorldPackSetMessage` — the same message every game init dispatches. It
   answers `queued: false` with `claimable`/`target`/`building`/`reaped` when genuinely at

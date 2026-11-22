@@ -1422,7 +1422,17 @@ filename alone.
   `BUILD_STALE_AFTER` as FAILED with a reason — at ERROR level, which matters because prod's
   monolog is fingers_crossed and the INFO "at target" no-op wrote nothing at all.
   `deleteUnclaimed()` spares CLAIMED sets — a device mid-initialisation still has tiers to
-  fetch.
+  fetch, and **`countClaimed()` (2026-11-22) exists so a rebuild can SAY it spared them.** A
+  spared set keeps its tier payload rows at the version it was built at, so after a
+  `WORLD_PACK_VERSION` bump a FINISHED regenerate still leaves rows at the old version in
+  `country_world_pack_cache`. On 2026-11-22 that was reported as the rebuild having left v14
+  elements behind. ⚠️ **It had not**: a stale set is unclaimable (the claim and
+  `countReadyUnclaimed()` filter on the current version) and a stale ROW is unservable
+  (`WorldPackCacheService::readTier` filters again, per row). The thing missing was the
+  rebuild saying so — `WorldPackGenerationOrchestrator::startRun()` now returns `clearedSets`
+  / `keptClaimedSets` and the admin response carries both plus a prose note. The `MIXED: 14,
+  15` CHECKS row that prompted it is app-side: `worldPackVersion.ts`'s module cache survives
+  `Start New Game`. Full account: `wunderkind-docs/economy-loose-ends/mixed-pack-version-report.md`.
 - **`WorldPackSetTopUpService`** — adds ONE set, clears nothing; the unattended counterpart
   of the admin regenerate. Dispatched on every game initialisation and by
   `app:worldpack:maintain`. **Deliberately does not go through `WorldPackGenerationRun`**:

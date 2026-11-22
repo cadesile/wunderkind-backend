@@ -58,9 +58,13 @@ class WorldPackGenerationOrchestrator
      * @param int[] $tiers    Tiers to generate. Tiers with no League for $country are skipped.
      * @param ?int  $setCount How many sets to build; defaults to the configured buffer target.
      *
-     * @return array{run: WorldPackGenerationRun, sets: WorldPackSet[], requestedSets: int}
+     * @return array{run: WorldPackGenerationRun, sets: WorldPackSet[], requestedSets: int,
+     *               clearedSets: int, keptClaimedSets: int}
      *         `sets` always has `requestedSets` entries: the squads are generated, so there is
      *         no supply that can run out part-way through a run.
+     *         `clearedSets` / `keptClaimedSets` are what the clear below actually did, so the
+     *         caller can say it rather than let the operator infer it from the cache table —
+     *         see the comment there.
      *
      * @throws WorldPackGenerationAlreadyRunningException
      */
@@ -89,7 +93,19 @@ class WorldPackGenerationOrchestrator
         // Clear the old stock BEFORE drawing, so the country is not briefly holding four sets
         // and so the pool rows the outgoing sets consumed are not counted against the new
         // draw. Claimed sets survive — a device mid-initialisation still needs its tiers.
-        $this->setService->deleteUnclaimed($country);
+        //
+        // 🔴 BOTH FIGURES ARE RETURNED, AND THAT IS THE POINT, NOT BOOKKEEPING. A spared
+        // claimed set keeps its tier payload rows at the version it was built at, so after a
+        // WORLD_PACK_VERSION bump a FINISHED regenerate still leaves rows at the old version
+        // in `country_world_pack_cache` — which is exactly what an operator sees on the admin
+        // screen and reasonably reads as "the rebuild did not finish the job". It did: a stale
+        // set is unclaimable (`countReadyUnclaimed`/`claimForClub` filter on the current
+        // version) and a stale ROW is unservable (`WorldPackCacheService::readTier` filters
+        // again, per row, because the two stamps are written at different moments). Nothing
+        // can ever hand those bytes to a device. Saying how many were spared, at the moment
+        // the rebuild is started, is cheaper than the operator discovering those two filters.
+        $clearedSets     = $this->setService->deleteUnclaimed($country);
+        $keptClaimedSets = $this->setService->countClaimed($country);
 
         $bottomTier = $this->starterPackService->resolveStarterTier($country);
 
@@ -121,15 +137,23 @@ class WorldPackGenerationOrchestrator
         }
 
         $this->logger->info('world_pack_set.generate.started', [
-            'country'       => $country,
-            'runId'         => (string) $run->getId(),
-            'requestedSets' => $setCount,
-            'startedSets'   => count($sets),
-            'tiers'         => $tiers,
-            'tierRuns'      => count($tierRuns),
+            'country'         => $country,
+            'runId'           => (string) $run->getId(),
+            'requestedSets'   => $setCount,
+            'startedSets'     => count($sets),
+            'tiers'           => $tiers,
+            'tierRuns'        => count($tierRuns),
+            'clearedSets'     => $clearedSets,
+            'keptClaimedSets' => $keptClaimedSets,
         ]);
 
-        return ['run' => $run, 'sets' => $sets, 'requestedSets' => $setCount];
+        return [
+            'run'             => $run,
+            'sets'            => $sets,
+            'requestedSets'   => $setCount,
+            'clearedSets'     => $clearedSets,
+            'keptClaimedSets' => $keptClaimedSets,
+        ];
     }
 
     /**

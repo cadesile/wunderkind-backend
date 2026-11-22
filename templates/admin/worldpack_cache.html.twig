@@ -562,6 +562,16 @@
         }
 
         $('#progress-empty').hidden = true;
+
+        // The clear's own report, rendered ABOVE the per-tier progress and left there for the
+        // run. A spared claimed set keeps its tier rows at the version it was built at, so
+        // after a WORLD_PACK_VERSION bump a FINISHED rebuild still leaves STALE rows in the
+        // table below — which was read as a partial rebuild (2026-11-22). It is not: those
+        // rows are never served. Saying so here is cheaper than the operator finding the two
+        // version filters in the code.
+        ensurePanel(country);
+        activePanels[country].note = data.note || '';
+
         beginPolling(country);
     }
 
@@ -642,13 +652,18 @@
     function renderPanel(country, run) {
         var panel = ensurePanel(country);
         var name  = escHtml(COUNTRY_NAMES[country] || country);
+        // Re-emitted on every poll, because this function replaces the panel's innerHTML
+        // wholesale — a note appended once would survive exactly until the first tick.
+        var note  = activePanels[country].note
+            ? '<div class="bmc-celltext" style="margin-bottom:8px">' + escHtml(activePanels[country].note) + '</div>'
+            : '';
 
         if (!run) {
-            panel.innerHTML = '<span class="bmc-data">' + name + ' (' + escHtml(country) + ') — no run found.</span>';
+            panel.innerHTML = note + '<span class="bmc-data">' + name + ' (' + escHtml(country) + ') — no run found.</span>';
             return;
         }
 
-        panel.innerHTML =
+        panel.innerHTML = note +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
                 '<span class="bmc-celltext">' + name + '</span>' +
                 '<span class="bmc-data">' + escHtml(country) + '</span>' +
