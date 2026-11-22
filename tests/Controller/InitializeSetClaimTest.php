@@ -24,10 +24,9 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  * does: initialise against a country that HAS stock, and get a world nobody else will ever be
  * given.
  *
- * Two properties, and they pull in opposite directions, which is why they are tested together:
- * every club must get a DIFFERENT world, and every retry by the same club must get the SAME
- * one. Satisfying the first alone is easy and useless — it is what deleting the row on serve
- * would do, and it would hand a device a mismatched world the moment a response was lost.
+ * Every club must get a DIFFERENT world, and once a tier has been handed over the server keeps
+ * no copy: a claimed pack lives on the device only (Courtney, 2026-11-22). The starter squad
+ * still replays from the club row, because it is small and is the club's own record.
  */
 class InitializeSetClaimTest extends WebTestCase
 {
@@ -111,11 +110,12 @@ class InitializeSetClaimTest extends WebTestCase
         self::assertTrue($starterAgainA['body']['replayed'] ?? false);
         self::assertSame($starterA['body']['ampStarter'], $starterAgainA['body']['ampStarter']);
 
-        $tierAgainA = $this->call('POST', '/api/initialize/league/' . self::TIER, $clubA);
+        // ── 3. a served tier is gone from the server ─────────────────────────────────────
+        $conn = self::getContainer()->get(Connection::class);
         self::assertSame(
-            $tierA['body']['data'],
-            $tierAgainA['body']['data'],
-            'a retried tier call must return byte-identical data, not the other set',
+            0,
+            (int) $conn->fetchOne('SELECT count(*) FROM country_world_pack_cache WHERE country = :c', ['c' => self::COUNTRY]),
+            'a claimed pack lives on the device: every served tier row must be deleted',
         );
 
         // ── and the bookkeeping underneath ───────────────────────────────────────────────
@@ -134,6 +134,10 @@ class InitializeSetClaimTest extends WebTestCase
             [(string) $claimedA->getId(), (string) $claimedB->getId()],
         );
         self::assertSame(WorldPackSetStatus::CLAIMED, $claimedA->getStatus());
+        self::assertTrue(
+            $em->find(Club::class, $clubA)->isWorldInitialized(),
+            'a club whose set has handed out every tier is world-initialised',
+        );
 
         // The country is now out of stock, which is the state that makes the next club fall
         // back to a live draw rather than being handed a world somebody is already playing.

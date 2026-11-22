@@ -92,16 +92,20 @@ class WorldPackController extends AbstractController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
-        // UNCLAIMED sets only. A claimed set belongs to a device that may still be part-way
-        // through downloading its tiers; deleting it would leave that save with a world it can
-        // never finish and no way to ask for another. The flash says how many were spared so
-        // this does not read as a partial failure.
-        $kept    = $this->setRepository->countByStatus($country, WorldPackSetStatus::CLAIMED);
-        $deleted = $this->setService->deleteUnclaimed($country);
+        // Every cache row for the country goes, claimed sets included. It used to stop at
+        // unclaimed sets, which left every claimed set's tiers in the table — the rows that
+        // survived this button. A device mid-initialisation is not stranded by losing them:
+        // the tier endpoint builds a missing tier inline. Claimed SET rows are kept, because a
+        // club points at its set; only their payloads go. See WorldPackSetService.
+        $r = $this->setService->deleteAllForCountry($country);
 
-        $this->addFlash('success', $kept > 0
-            ? "Deleted {$deleted} unclaimed set(s) for {$country}. Kept {$kept} claimed set(s) — those belong to clubs still initialising."
-            : "Deleted {$deleted} unclaimed set(s) for {$country}.");
+        if ($r['rowsRemaining'] > 0) {
+            $this->addFlash('warning', "Deleted {$r['rowsDeleted']} of {$r['rowsBefore']} cache row(s) for {$country}; "
+                . "{$r['rowsRemaining']} remain — something wrote new rows while this ran (a top-up or regenerate). Run it again once that finishes.");
+        } else {
+            $this->addFlash('success', "Deleted all {$r['rowsDeleted']} cache row(s) for {$country}: "
+                . "{$r['setsDeleted']} unclaimed set(s) removed, {$r['claimedSetsCleared']} claimed set(s) emptied. 0 rows remain.");
+        }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
     }
