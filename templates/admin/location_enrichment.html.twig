@@ -386,6 +386,7 @@
     {% else %}
         <form method="post" action="{{ path('admin', {routeName: 'admin_location_enrich_subset'}) }}">
             <input type="hidden" name="_token" value="{{ csrf_token('location_enrichment_subset') }}">
+            <input type="hidden" name="_delete_token" value="{{ csrf_token('location_enrichment_delete') }}">
             <div style="overflow-x:auto">
                 <table class="bmc-minitable" style="min-width:720px">
                     <thead><tr>
@@ -421,7 +422,12 @@
             </div>
             <div class="bmc-card__band" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                 <button type="submit" class="bmc-btn bmc-btn--blue" {{ connection.ok ? '' : 'disabled' }}><span>RE-ENRICH SELECTED</span></button>
-                <span class="bmc-data">An explicit retry is the only path past the attempt cap.</span>
+                <button type="submit" class="bmc-btn bmc-btn--red"
+                        formaction="{{ path('admin', {routeName: 'admin_location_delete_subset'}) }}"
+                        data-bmc-dialog-title="DELETE THE SELECTED TOWNS?"
+                        data-bmc-dialog-message="This cannot be undone. Their unclaimed plots, enrichment attempts and rival rows go with them. Any town with a plot claim, a club, an NPC club or a live plot hold is kept, and you will be told why."
+                        data-bmc-dialog-confirm="DELETE" data-bmc-dialog-variant="red"><span>DELETE SELECTED</span></button>
+                <span class="bmc-data">An explicit retry is the only path past the attempt cap. Delete is for towns that can never be placed.</span>
             </div>
         </form>
     {% endif %}

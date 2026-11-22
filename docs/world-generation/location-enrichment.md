@@ -200,6 +200,16 @@ explains its own exclusions.** All fields rejected lands it in `failed`.
 admin sets that field's lock, and enrichment skips locked fields for ever after. A re-run can
 never undo a human correction.
 
+**Some towns can never be placed, and those are deleted, not retried.** The "Needs a human"
+queue on the Enrichment screen has **Delete selected** beside **Re-enrich selected**, for rows
+like a made-up "Placeholder" town filed under the wrong country. It asks for confirmation, and
+`LocationDeletionService` only deletes a `failed` / `needs_review` town that nothing real
+depends on. A town is **kept**, with the reason in a flash, if it has any plot claim (released
+ones too, since claims carry money), a user club calls it home, an NPC club is placed there, or a
+player holds one of its plots right now. Retire those instead. A deleted town takes its unclaimed
+plots, spent holds, enrichment attempts, stadium estimates and rival rows with it. Towns that
+listed it as a rival are marked stale for the next rivals pass, and the country is re-banded.
+
 ---
 
 ## 4a. Two registries: curated towns, and everything else
