@@ -279,6 +279,13 @@ final class EconomyConfigPublisher
             // only when something is wrong.
             'source'              => $code === null ? 'fallback' : 'country',
             'tierCount'           => $tierCount,
+            // THE COUNTRY'S OWN FACTOR, normalised against the baseline country (England =
+            // 10000), for the money the app still prices from flat app-side ladders — NPC
+            // starting balances and the like (owner, 2026-11-22: "everything economic scales").
+            // Every figure above already carries it; a client must apply it ONLY to a flat
+            // figure that came from nowhere in this block, never to one of these. 10000 for a
+            // no-country read, which is also what `source: 'fallback'` says.
+            'countryFactorBp'     => $code === null ? 10_000 : $this->resolver->countryFactorBp($code),
             // COUNTRY-LEVEL, NOT PER-TIER, and deliberately narrower than the wage chain: a
             // league's tier variation is already expressed by how many sponsors it has and
             // which size bands they draw from, so applying the tier factor here too would
