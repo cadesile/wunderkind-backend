@@ -53,6 +53,30 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         return array_column($qb->getQuery()->getArrayResult(), 'tier');
     }
 
+    /** Drops $set's row for $tier, whatever its version. Returns 0 or 1. */
+    public function deleteForSetAndTier(WorldPackSet $set, int $tier): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->delete()
+            ->where('c.set = :set')
+            ->andWhere('c.tier = :tier')
+            ->setParameter('set', $set)
+            ->setParameter('tier', $tier)
+            ->getQuery()
+            ->execute();
+    }
+
+    /** How many tier rows $set still holds, at any version. */
+    public function countForSet(WorldPackSet $set): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->where('c.set = :set')
+            ->setParameter('set', $set)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     public function deleteBySet(WorldPackSet $set): int
     {
         return (int) $this->createQueryBuilder('c')
@@ -67,11 +91,10 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      * Drops the payload rows of every set claimed before $before, leaving the set rows
      * themselves as the audit trail of which club was served which generation.
      *
-     * This is what stops the table growing by a whole country's worth of large JSON per new
-     * game, forever. The payloads are dead the moment the device has them — the client writes
-     * every tier into its own SQLite and `Club::$starterPackJson` holds the squad — but they
-     * cannot be dropped at serve time, because a retried tier call replays from them and a
-     * client's initialisation can span an app kill and resume.
+     * A BACKSTOP now. Each tier row is deleted the moment it is served
+     * (`InitializeController::tier()`), so a save that finishes loading leaves nothing behind.
+     * What reaches this is a claim whose device never fetched every tier — an abandoned or
+     * failed initialisation — whose leftover rows would otherwise stay for ever.
      */
     public function deletePayloadsForSetsClaimedBefore(\DateTimeImmutable $before): int
     {
@@ -86,6 +109,38 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
                    )
             SQL,
             ['before' => $before->format('Y-m-d H:i:s')],
+        );
+    }
+
+    /** Every payload row for $country, whatever set it belongs to. */
+    public function countForCountry(string $country): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            <<<'SQL'
+            SELECT count(*) FROM country_world_pack_cache c
+             WHERE c.country = :country
+                OR c.set_id IN (SELECT id FROM world_pack_set WHERE country = :country)
+            SQL,
+            ['country' => $country],
+        );
+    }
+
+    /**
+     * Drops every payload row for $country, claimed sets included, and returns the count.
+     *
+     * Matches on the row's own `country` AND on its set's, so a row can never survive by the
+     * two disagreeing. The set rows themselves are left alone: a claimed one is the record of
+     * which club was served which generation, and a club points at it.
+     */
+    public function deleteAllForCountry(string $country): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            <<<'SQL'
+            DELETE FROM country_world_pack_cache
+             WHERE country = :country
+                OR set_id IN (SELECT id FROM world_pack_set WHERE country = :country)
+            SQL,
+            ['country' => $country],
         );
     }
 

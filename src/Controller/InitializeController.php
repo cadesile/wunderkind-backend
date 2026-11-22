@@ -143,9 +143,9 @@ class InitializeController extends AbstractController
         // A set is a whole world — the starter squad below PLUS a payload for every league
         // tier — generated as one unit and claimable by exactly one club. Claiming it here
         // rather than at the first tier call is what makes the rest of initialisation
-        // coherent and retry-safe: `tier()` reads from the club's claimed set, so a retried
-        // tier call returns the same payload and a device's tiers can never be mixed across
-        // two generation runs.
+        // coherent: `tier()` reads from the club's claimed set, so a device's tiers all come
+        // from one generation run. Each tier row is deleted as it is served — the pack then
+        // lives on the device only.
         //
         // A null claim is a NORMAL answer, not an error. It means this country has no stock
         // right now, and the club gets exactly what every club got before sets existed: a
@@ -347,8 +347,9 @@ class InitializeController extends AbstractController
      * POST /api/initialize/league/{tier}
      *
      * Step 3: Returns NPC clubs + squads + fixtures for one league tier.
-     * Generates and caches on first call; subsequent calls (including retries) return cached data.
-     * Sets worldInitializedAt once all tiers for the country are cached.
+     * Serves the tier from the club's claimed set and then deletes that row: the pack lives on
+     * the device from here. A tier with no row (no set, already served, stale) is built inline.
+     * Sets worldInitializedAt once the club's set has handed out every tier.
      */
     #[Route('/league/{tier}', name: 'api_initialize_league_tier', requirements: ['tier' => '\d+'], methods: ['POST'])]
     public function tier(int $tier): JsonResponse
@@ -381,9 +382,8 @@ class InitializeController extends AbstractController
         $startedAt = microtime(true);
         $set       = $club->getWorldPackSet();
 
-        // Served from the club's own set: the ordinary path, and the one that makes a retry
-        // safe. The payload is whatever that set was built with, so re-POSTing this tier
-        // returns the same bytes and the device's tiers all come from one generation.
+        // Served from the club's own set: the ordinary path. The row is deleted once served
+        // (below), so a re-POST of a tier already handed over is built inline instead.
         $payload = $set !== null
             ? $this->worldPackSetService->tierPayload($set, $tier)
             : null;
@@ -434,19 +434,17 @@ class InitializeController extends AbstractController
             'payloadBytes' => strlen((string) json_encode($payload)),
         ]);
 
-        // Mark the world fully initialized once THIS CLUB'S set holds every tier.
-        //
-        // It used to ask whether the COUNTRY was fully cached, which a club could satisfy on
-        // the strength of packs generated for somebody else — so the flag could be set before
-        // this device had fetched anything. Asking about the club's own set is the question
-        // the field's name always implied. A club with no set (the inline path above) never
-        // gets it set, which is correct: there is no stored world to be complete.
-        if (!$club->isWorldInitialized() && $set !== null) {
-            $allTiers = array_map(
-                fn($l) => $l->getTier(),
-                $this->leagueRepository->findByCountry($country)
-            );
-            if ($this->worldPackCacheService->allTiersPresent($set, $allTiers)) {
+        // A claimed pack lives on the device, not here. Once a tier has been handed over its row
+        // goes, so the server holds nothing for a save that has finished loading. Deleted
+        // whether or not it was servable: a stale-version row was answered inline above, and
+        // leaving it would keep a dead copy for the retention sweep to find a week later.
+        if ($set !== null) {
+            $this->worldPackCacheService->consumeTier($set, $tier);
+
+            // The world is complete once the club's set has nothing left to hand out — every
+            // tier has gone to the device. It used to ask whether the set still held every
+            // tier, which can no longer be true once served tiers are removed.
+            if (!$club->isWorldInitialized() && $this->worldPackCacheService->isEmpty($set)) {
                 $club->setWorldInitializedAt(new \DateTimeImmutable());
                 $this->em->flush();
             }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Service\WorldPack;
 
 use App\Entity\Club;
+use App\Entity\CountryWorldPackCache;
 use App\Entity\User;
 use App\Entity\WorldPack\WorldPackSet;
 use App\Enum\WorldPack\WorldPackSetStatus;
@@ -234,6 +235,52 @@ class WorldPackSetClaimTest extends KernelTestCase
             'the claimed set must survive — its club is still fetching tiers from it',
         );
         $this->assertNull($this->em->find(WorldPackSet::class, (string) $spare->getId()));
+    }
+
+    /**
+     * "Delete all for country" must leave the country with ZERO cache rows. It used to stop at
+     * unclaimed sets, so every claimed set's tiers survived the button.
+     */
+    public function testDeleteAllForCountryRemovesEveryCacheRowIncludingClaimedSets(): void
+    {
+        $claimedSet = $this->makeReadySet();
+        $spare      = $this->makeReadySet();
+        $stale      = $this->makeReadySet(WorldInitializationService::WORLD_PACK_VERSION - 1);
+
+        foreach ([$claimedSet, $spare, $stale] as $set) {
+            foreach ([1, 2, 3] as $tier) {
+                $this->em->persist(new CountryWorldPackCache(
+                    $set, $tier, ['clubs' => []], $set->getPayloadVersion(),
+                ));
+            }
+        }
+        $this->em->flush();
+
+        $club = $this->makeClub('delall');
+        $this->service->claimForClub($club, $this->country);
+
+        $result = $this->service->deleteAllForCountry($this->country);
+        $this->em->clear();
+
+        $this->assertSame(9, $result['rowsBefore']);
+        $this->assertSame(9, $result['rowsDeleted']);
+        $this->assertSame(0, $result['rowsRemaining']);
+        $this->assertSame(2, $result['setsDeleted']);
+        $this->assertSame(1, $result['claimedSetsCleared']);
+
+        $left = (int) $this->em->getConnection()->fetchOne(
+            'SELECT count(*) FROM country_world_pack_cache WHERE country = :c', ['c' => $this->country],
+        );
+        $this->assertSame(0, $left, 'no cache row may survive a delete-all');
+
+        $kept = $this->em->find(WorldPackSet::class, (string) $claimedSet->getId());
+        $this->assertNotNull($kept, 'the claimed SET row stays — its club points at it');
+        $this->assertNull(
+            $this->service->tierPayload($kept, 1),
+            'its tiers are gone, so the tier endpoint builds them inline at the current version',
+        );
+        $this->assertNull($this->em->find(WorldPackSet::class, (string) $spare->getId()));
+        $this->assertNull($this->em->find(WorldPackSet::class, (string) $stale->getId()));
     }
 
     private function makeReadySet(
