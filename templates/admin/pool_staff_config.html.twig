@@ -104,6 +104,7 @@
                         <span class="bmc-lbl bmc-lbl--ink">PICKED</span>
                         <span style="flex:1"></span>
                         <button type="button" class="bmc-quick-btn" data-pick="home" title="English, Scottish, Welsh, Northern Irish">HOME NATIONS</button>
+                        <button type="button" class="bmc-quick-btn" data-pick="live" title="Every country set to Live in the Countries screen">ENABLED COUNTRIES</button>
                         <button type="button" class="bmc-quick-btn" data-pick="thin" title="The five with the fewest in the pool">THINNEST 5</button>
                         <button type="button" class="bmc-quick-btn" data-pick="none">CLEAR</button>
                     </div>
@@ -122,7 +123,7 @@
                             {% set share = clearN > 0 ? min(100, (row.count / clearN * 100)|round) : 0 %}
                             <button type="button" class="bmc-pick-row" role="checkbox" aria-checked="false"
                                     data-nat="{{ row.nationality }}" data-code="{{ row.code }}"
-                                    data-count="{{ row.count }}" data-region="{{ heading }}"
+                                    data-count="{{ row.count }}" data-region="{{ heading }}" data-live="{{ row.live ? '1' : '0' }}"
                                     {{ row.hasNamePool ? '' : 'title="No name pool — generation falls back to English names"' }}>
                                 <span class="bmc-tile"></span>
                                 <span class="bmc-vchip__code">{{ row.code }}</span>
@@ -490,7 +491,7 @@
             var thin = rows.slice().sort(function (a, c) { return (+a.dataset.count) - (+c.dataset.count); })
                            .slice(0, 5).map(function (r) { return r.dataset.nat; });
             rows.forEach(function (r) {
-                var on = k === 'home' ? home.indexOf(r.dataset.nat) !== -1 : k === 'thin' ? thin.indexOf(r.dataset.nat) !== -1 : false;
+                var on = k === 'home' ? home.indexOf(r.dataset.nat) !== -1 : k === 'live' ? r.dataset.live === '1' : k === 'thin' ? thin.indexOf(r.dataset.nat) !== -1 : false;
                 r.setAttribute('aria-checked', on ? 'true' : 'false');
                 $('.bmc-tile', r).classList.toggle('is-on', on);
             });
