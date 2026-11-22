@@ -22,6 +22,7 @@ use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use Doctrine\DBAL\Connection;
 use App\Service\Location\LocationImportExportService;
 use App\Service\Location\LocationDashboardService;
+use App\Service\Location\LocationDeletionService;
 use App\Service\Location\LocationSeedService;
 use App\Message\Location\SuggestTownsBatchMessage;
 use App\Service\Location\Suggestion\TownSuggestionService;
@@ -68,6 +69,7 @@ class LocationEnrichmentController extends AbstractController
         private readonly CacheInterface                      $cache,
         private readonly CountryProfileEnrichmentService     $countryEnrichment,
         private readonly CountryProfileRepository            $countryProfileRepository,
+        private readonly LocationDeletionService             $deletionService,
     ) {}
 
     /**
@@ -317,6 +319,60 @@ class LocationEnrichmentController extends AbstractController
         }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_location_enrichment']));
+    }
+
+    /**
+     * Delete hand-picked towns from the review queue — the ones enrichment can never place.
+     *
+     * The second button on the "Needs a human" form, posting the same checkbox list. It spends
+     * no money but it cannot be undone, so it carries its own CSRF token (the re-enrich token
+     * must not double as a delete token) and a confirm dialog in the template.
+     * LocationDeletionService decides what is safe: towns with claims, clubs, NPC clubs or an
+     * open hold are kept and the flash says why, rather than orphaning that data.
+     */
+    #[Route('/admin/locations/enrichment/delete', name: 'admin_location_delete_subset', methods: ['POST'])]
+    public function deleteSubset(Request $request): Response
+    {
+        $back = $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_location_enrichment']));
+
+        if (!$this->isCsrfTokenValid('location_enrichment_delete', (string) $request->request->get('_delete_token'))) {
+            $this->addFlash('danger', 'Invalid CSRF token — nothing was deleted.');
+
+            return $back;
+        }
+
+        /** @var list<string> $ids */
+        $ids = array_values(array_filter((array) $request->request->all('locations')));
+
+        if ($ids === []) {
+            $this->addFlash('warning', 'No locations selected — nothing was deleted.');
+
+            return $back;
+        }
+
+        $result = $this->deletionService->deleteUnenrichable($ids);
+
+        if ($result['deleted'] !== []) {
+            $this->logger->info('Admin deleted unenrichable locations', [
+                'towns' => $result['deleted'],
+                'admin' => $this->currentAdmin()?->getUserIdentifier(),
+            ]);
+            $this->addFlash('success', \sprintf(
+                'Deleted %d town(s): %s.',
+                \count($result['deleted']),
+                implode(', ', $result['deleted']),
+            ));
+        }
+
+        foreach ($result['blocked'] as $town => $why) {
+            $this->addFlash('warning', \sprintf('Kept %s: %s.', $town, $why));
+        }
+
+        if ($result['deleted'] === [] && $result['blocked'] === []) {
+            $this->addFlash('warning', 'None of the selected towns exist any more — nothing was deleted.');
+        }
+
+        return $back;
     }
 
     /**
