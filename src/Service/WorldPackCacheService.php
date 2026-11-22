@@ -103,10 +103,41 @@ class WorldPackCacheService
         $this->em->flush();
     }
 
+    /**
+     * Drops $set's row for $tier once it has been handed to the claiming device.
+     *
+     * A claimed pack lives on the device, not here: the client writes each tier into its own
+     * SQLite as it arrives. Keeping the row would only hold a copy nobody reads. A retried call
+     * for a tier whose response was lost finds no row and gets the tier built inline at the
+     * current version, which is what any club without a set gets.
+     */
+    public function consumeTier(WorldPackSet $set, int $tier): void
+    {
+        $this->cacheRepository->deleteForSetAndTier($set, $tier);
+    }
+
+    /** Whether every tier row of $set has been handed out (or never existed). */
+    public function isEmpty(WorldPackSet $set): bool
+    {
+        return $this->cacheRepository->countForSet($set) === 0;
+    }
+
     /** Drops every payload row belonging to $set. The set row itself is left alone. */
     public function deleteBySet(WorldPackSet $set): int
     {
         return $this->cacheRepository->deleteBySet($set);
+    }
+
+    /** How many payload rows $country holds, across every set. */
+    public function countForCountry(string $country): int
+    {
+        return $this->cacheRepository->countForCountry($country);
+    }
+
+    /** Drops every payload row for $country, claimed sets included. Set rows are left alone. */
+    public function deleteAllForCountry(string $country): int
+    {
+        return $this->cacheRepository->deleteAllForCountry($country);
     }
 
     /**

@@ -222,6 +222,46 @@ class WorldPackSetService
     }
 
     /**
+     * The admin "Delete all for country": every cache entry for $country goes, and the result
+     * says how many rows went and how many remain (zero, unless something wrote one meanwhile).
+     *
+     * Unclaimed sets are deleted outright, their rows cascading. Claimed sets lose their
+     * payload rows but keep the set row, which a club points at and which records which
+     * generation that club was served. This used to stop at the unclaimed sets, so every
+     * claimed set's tiers stayed in the table — the rows an operator saw surviving the button.
+     *
+     * A device still part-way through initialising from a claimed set is not stranded by
+     * this: `InitializeController::tier()` builds any tier the set no longer holds inline, at
+     * the current version, exactly as for a club that never had a set.
+     *
+     * @return array{setsDeleted:int, claimedSetsCleared:int, rowsBefore:int, rowsDeleted:int, rowsRemaining:int}
+     */
+    public function deleteAllForCountry(string $country): array
+    {
+        $rowsBefore = $this->cacheService->countForCountry($country);
+        $claimed    = $this->countClaimed($country);
+
+        $this->em->wrapInTransaction(function () use ($country, &$setsDeleted, &$payloadRows): void {
+            $setsDeleted = $this->setRepository->deleteUnclaimed($country);
+            $payloadRows = $this->cacheService->deleteAllForCountry($country);
+        });
+
+        $rowsRemaining = $this->cacheService->countForCountry($country);
+
+        $result = [
+            'setsDeleted'        => (int) $setsDeleted,
+            'claimedSetsCleared' => $claimed,
+            'rowsBefore'         => $rowsBefore,
+            'rowsDeleted'        => $rowsBefore - $rowsRemaining,
+            'rowsRemaining'      => $rowsRemaining,
+        ];
+
+        $this->logger->info('world_pack_set.delete_all_for_country', ['country' => $country] + $result);
+
+        return $result;
+    }
+
+    /**
      * How many CLAIMED sets $country holds — the ones `deleteUnclaimed()` deliberately spares.
      *
      * Exists so a regenerate can SAY it spared them. A claimed set keeps its tier payload rows
