@@ -131,6 +131,8 @@ class GameConfigController extends AbstractController
             'playerFeeMultiplier'               => $config->getPlayerFeeMultiplier(),
             'playerWageMultiplier'              => $config->getPlayerWageMultiplier(),
             'freeTransfersPerSeason'            => $config->getFreeTransfersPerSeason(),
+            'playerTransferOutOfReachTierGap'   => $config->getPlayerTransferOutOfReachTierGap(),
+            'playerTransferWagePremiumPerTier'  => $config->getPlayerTransferWagePremiumPerTier(),
             'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
             'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
 

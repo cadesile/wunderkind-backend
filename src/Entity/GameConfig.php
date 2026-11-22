@@ -559,6 +559,25 @@ class GameConfig
     #[ORM\Column(type: 'integer', options: ['default' => 3])]
     private int $freeTransfersPerSeason = 3;
 
+    /**
+     * How many tiers (app 0-3 scale: local, regional, national, elite) the selling club may sit
+     * above the buyer before its players refuse outright, whatever the wage. 3 = only
+     * local-vs-elite is blocked; 2 also blocks local-vs-national and regional-vs-elite;
+     * 4 or more = never blocked. Read by the app's transferGating / SignPlayerPanel.
+     * Default: 3
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 3])]
+    private int $playerTransferOutOfReachTierGap = 3;
+
+    /**
+     * Wage premium per tier the buyer sits below the player's current club, when a wage offer
+     * is used to win over an uninterested player. Tempting wage = base x (1 + tiersBelow x this):
+     * 1.0 gives 2x at one tier and 3x at two; 0.5 gives 1.5x and 2x. Read by the app's PlayerBrain.
+     * Default: 1.0
+     */
+    #[ORM\Column(type: 'float', options: ['default' => 1.0])]
+    private float $playerTransferWagePremiumPerTier = 1.0;
+
     // ── Guardian Complaints ───────────────────────────────────────────────
 
     /** Player morale boost when manager convinces a guardian. Default: 5 */
@@ -821,6 +840,12 @@ class GameConfig
 
     public function getFreeTransfersPerSeason(): int { return $this->freeTransfersPerSeason; }
     public function setFreeTransfersPerSeason(int $v): static { $this->freeTransfersPerSeason = max(0, $v); return $this; }
+
+    public function getPlayerTransferOutOfReachTierGap(): int { return $this->playerTransferOutOfReachTierGap; }
+    public function setPlayerTransferOutOfReachTierGap(int $v): static { $this->playerTransferOutOfReachTierGap = max(1, $v); return $this; }
+
+    public function getPlayerTransferWagePremiumPerTier(): float { return $this->playerTransferWagePremiumPerTier; }
+    public function setPlayerTransferWagePremiumPerTier(float $v): static { $this->playerTransferWagePremiumPerTier = max(0.0, $v); return $this; }
 
     public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
     public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }
