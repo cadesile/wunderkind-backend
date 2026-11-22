@@ -147,6 +147,21 @@ class NationalityPoolCountsTest extends KernelTestCase
         self::assertTrue($english['hasNamePool']);
     }
 
+    public function testRowsAreFlaggedLiveExactlyWhenTheirCountryProfileIsLive(): void
+    {
+        // The ENABLED COUNTRIES button ticks these, so it must follow the profile status and
+        // not a list of its own.
+        $live = array_flip(
+            self::getContainer()->get(\App\Repository\Location\CountryProfileRepository::class)->liveCountryCodes(),
+        );
+
+        foreach ($this->counts->forStaff() as $rows) {
+            foreach ($rows as $row) {
+                self::assertSame(isset($live[$row['code']]), $row['live'], $row['nationality']);
+            }
+        }
+    }
+
     private function player(string $nationality, RecruitmentSource $source): Player
     {
         return new Player('Nat', self::MARKER, new \DateTimeImmutable('2000-01-01'), $nationality, PlayerPosition::MIDFIELDER, $source);
