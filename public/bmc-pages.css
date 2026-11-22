@@ -238,10 +238,11 @@
 .bmc-rows--scroll-216 { max-height: 216px; overflow-y: auto; }
 .bmc-rows--scroll-200 { max-height: 200px; overflow-y: auto; }
 .bmc-rows--flush { border: 0; }
-.bmc-rows > * { display: grid; gap: 10px; align-items: center; min-height: 36px; padding: 2px 10px; border-bottom: 1px solid var(--wk-stroke); }
+.bmc-rows > * { flex-shrink: 0; display: grid; gap: 10px; align-items: center; min-height: 36px; padding: 2px 10px; border-bottom: 1px solid var(--wk-stroke); }
 .bmc-rows > *:nth-child(even) { background: rgba(0,0,0,.15); }
 .bmc-rows > *:last-child { border-bottom: 0; }
 .bmc-jobrow { grid-template-columns: 104px minmax(0,1fr) 80px; }
+.bmc-jobrow__note { grid-column: 2 / -1; margin-top: -6px; padding-bottom: 4px; white-space: normal; overflow-wrap: anywhere; }
 .bmc-logrow { grid-template-columns: 78px 20px minmax(0,1fr) 96px 90px; min-height: 34px !important; padding: 0 12px !important; }
 .bmc-cellnum { font: var(--text-body-step); color: var(--wk-text); text-align: right; white-space: nowrap; }
 .bmc-celltext { font: var(--text-body-step); color: var(--wk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

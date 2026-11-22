@@ -341,7 +341,12 @@
                 '<div><span class="bmc-badge bmc-badge--' + b[1] + '">' + b[0] + '</span></div>' +
                 '<span class="bmc-celltext">' + j.label + ' <span class="bmc-data">' + j.code + '</span></span>' +
                 '<span class="bmc-cellnum ink-dim">' + n(j.towns) + '</span>' +
-                '<span class="bmc-data' + (j.status === 'failed' ? ' ink-danger' : '') + '">' + (j.message || '') + '</span>' +
+                // The step's own report goes on a line of its own under the country, spanning the
+                // name and count columns. As a fourth child of a three-column grid it used to fall
+                // into an implicit second row's 104px badge column and spill over its neighbours.
+                (j.message
+                    ? '<span class="bmc-data bmc-jobrow__note' + (j.status === 'failed' ? ' ink-danger' : ' ink-dim') + '">' + j.message + '</span>'
+                    : '') +
                 '</div>';
         }).join('');
     }
