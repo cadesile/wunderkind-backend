@@ -47,7 +47,7 @@ class LeagueServiceConcludeSeasonTest extends KernelTestCase
 
     public function testSeasonLeadersAndSeasonFixturesAreArchivedVerbatim(): void
     {
-        $country = $this->randomCountryCode();
+        $country = $this->unusedCountryCode();
         $league  = $this->persist(new League($country, 3, 'Test Tier'));
 
         $user = $this->persist(new User(bin2hex(random_bytes(8)) . '@conclude.test'));
@@ -91,9 +91,19 @@ class LeagueServiceConcludeSeasonTest extends KernelTestCase
         $this->assertSame($seasonFixtures, $data['seasonFixtures']);
     }
 
-    private function randomCountryCode(): string
+    /** uq_league_country_tier spans only 676 two-letter codes — don't collide with a leaked row. */
+    private function unusedCountryCode(): string
     {
-        return chr(random_int(65, 90)) . chr(random_int(65, 90));
+        $repo = self::getContainer()->get(\App\Repository\LeagueRepository::class);
+
+        for ($i = 0; $i < 50; $i++) {
+            $code = chr(random_int(65, 90)) . chr(random_int(65, 90));
+            if ($repo->findByCountry($code) === []) {
+                return $code;
+            }
+        }
+
+        self::fail('could not find an unused country code');
     }
 
     /** @template T of object @param T $entity @return T */

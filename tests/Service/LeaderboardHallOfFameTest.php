@@ -55,7 +55,7 @@ class LeaderboardHallOfFameTest extends KernelTestCase
 
     public function testTitlesProduceATierWeightedScoreOnTheLeaderboard(): void
     {
-        $country = $this->randomCountryCode();
+        $country = $this->unusedCountryCode();
         $topTier = $this->persist(new League($country, 1, 'Test Top Flight'));
         $lowTier = $this->persist(new League($country, 4, 'Test Fourth Tier'));
 
@@ -122,7 +122,7 @@ class LeaderboardHallOfFameTest extends KernelTestCase
 
     public function testSyncAllClubsMirrorsTheScoreOntoTheClub(): void
     {
-        $country = $this->randomCountryCode();
+        $country = $this->unusedCountryCode();
         $league  = $this->persist(new League($country, 2, 'Test Second Tier'));
         $club    = $this->persistClub('HoF Mirror FC');
 
@@ -187,9 +187,19 @@ class LeaderboardHallOfFameTest extends KernelTestCase
         );
     }
 
-    private function randomCountryCode(): string
+    /** uq_league_country_tier spans only 676 two-letter codes — don't collide with a leaked row. */
+    private function unusedCountryCode(): string
     {
-        return chr(random_int(65, 90)) . chr(random_int(65, 90));
+        $repo = self::getContainer()->get(\App\Repository\LeagueRepository::class);
+
+        for ($i = 0; $i < 50; $i++) {
+            $code = chr(random_int(65, 90)) . chr(random_int(65, 90));
+            if ($repo->findByCountry($code) === []) {
+                return $code;
+            }
+        }
+
+        self::fail('could not find an unused country code');
     }
 
     private function persistClub(string $name): Club

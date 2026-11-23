@@ -45,6 +45,13 @@ class WorldPackSetClaimTest extends KernelTestCase
 
     protected function tearDown(): void
     {
+        // Detach everything first. A test that read a tier payload back leaves the
+        // CountryWorldPackCache row managed, and removing its WorldPackSet below then makes
+        // the next flush re-discover the removed set through `CountryWorldPackCache#set` and
+        // report it as a new, un-persisted entity. Nothing here needs the identity map: the
+        // loops re-find by id.
+        $this->em->clear();
+
         // Sets first: a club cannot go while a set still points at it.
         foreach ($this->cleanup as $entity) {
             if ($entity instanceof WorldPackSet) {
