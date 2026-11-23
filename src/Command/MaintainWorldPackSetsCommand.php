@@ -46,7 +46,9 @@ use App\Message\WorldPack\TopUpWorldPackSetMessage;
  * sane" job and runs on the same cadence. It drops the tier payloads of sets claimed more
  * than `StarterConfig::$worldPackClaimedRetentionDays` ago, keeping the set row as the
  * record of which club was served which generation. Without it the table grows by a whole
- * country's worth of large JSON per new game, forever.
+ * country's worth of large JSON per new game, forever. It also clears the rows of every world
+ * that finished loading more than `FINISHED_WORLD_GRACE` ago — the ordinary path; the
+ * claimed-retention prune is the backstop for loads that never finish.
  */
 #[AsCommand(
     name: 'app:worldpack:maintain',
@@ -54,6 +56,12 @@ use App\Message\WorldPack\TopUpWorldPackSetMessage;
 )]
 class MaintainWorldPackSetsCommand extends Command
 {
+    /**
+     * How long a finished world's tier rows are kept after its last tier was handed over, so a
+     * retry of the last tier, or a load restarted just after finishing, still replays it.
+     */
+    public const FINISHED_WORLD_GRACE = '1 hour';
+
     public function __construct(
         private readonly CountryProfileRepository $countryProfileRepository,
         private readonly StarterConfigRepository  $starterConfigRepository,
@@ -182,6 +190,19 @@ class MaintainWorldPackSetsCommand extends Command
                 $pruned,
                 $before->format('Y-m-d H:i'),
                 $days,
+            ));
+
+            // A claimed pack lives on the device once it has finished loading (Courtney,
+            // 2026-11-22). Served rows are kept for a short grace so a retried or restarted
+            // load replays the same world, then go here. The claimed-retention prune above is
+            // the backstop for loads that never finish.
+            $finishedBefore = new \DateTimeImmutable('-' . self::FINISHED_WORLD_GRACE);
+            $cleared        = $this->cacheService->pruneWorldsInitialisedBefore($finishedBefore);
+
+            $io->text(sprintf(
+                'Cleared %d tier payload row(s) from worlds that finished loading before %s. Set rows kept.',
+                $cleared,
+                $finishedBefore->format('Y-m-d H:i'),
             ));
         }
 

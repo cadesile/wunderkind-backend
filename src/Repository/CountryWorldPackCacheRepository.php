@@ -53,20 +53,31 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         return array_column($qb->getQuery()->getArrayResult(), 'tier');
     }
 
-    /** Drops $set's row for $tier, whatever its version. Returns 0 or 1. */
-    public function deleteForSetAndTier(WorldPackSet $set, int $tier): int
+    /**
+     * Stamps $set's row for $tier as served, keeping the first time it was handed over.
+     * The row is NOT deleted: a retry must replay the same bytes. Returns 0 or 1.
+     */
+    public function markServed(WorldPackSet $set, int $tier, \DateTimeImmutable $at): int
     {
-        return (int) $this->createQueryBuilder('c')
-            ->delete()
-            ->where('c.set = :set')
-            ->andWhere('c.tier = :tier')
-            ->setParameter('set', $set)
-            ->setParameter('tier', $tier)
-            ->getQuery()
-            ->execute();
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE country_world_pack_cache SET served_at = COALESCE(served_at, :at) WHERE set_id = :set AND tier = :tier',
+            ['at' => $at->format('Y-m-d H:i:s'), 'set' => (string) $set->getId(), 'tier' => $tier],
+        );
     }
 
-    /** How many tier rows $set still holds, at any version. */
+    /** How many tier rows $set holds that have not yet been handed to its club. */
+    public function countUnservedForSet(WorldPackSet $set): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->where('c.set = :set')
+            ->andWhere('c.servedAt IS NULL')
+            ->setParameter('set', $set)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /** How many tier rows $set holds, served or not, at any version. */
     public function countForSet(WorldPackSet $set): int
     {
         return (int) $this->createQueryBuilder('c')
@@ -75,6 +86,32 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
             ->setParameter('set', $set)
             ->getQuery()
             ->getSingleScalarResult();
+    }
+
+    /**
+     * Drops the payload rows of every world that finished loading before $before.
+     *
+     * "Finished" is the claiming club's `world_initialized_at`, set once every tier has been
+     * served. The grace between that and $before is what lets a retry of the LAST tier, or a
+     * load restarted just after finishing, still replay the same world. After it the pack
+     * lives on the device only (Courtney, 2026-11-22). Set rows are kept as the record of
+     * which club got which generation.
+     */
+    public function deletePayloadsForWorldsInitialisedBefore(\DateTimeImmutable $before): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            <<<'SQL'
+            DELETE FROM country_world_pack_cache
+             WHERE set_id IN (
+                     SELECT s.id FROM world_pack_set s
+                       JOIN club c ON c.id = s.claimed_by_club_id
+                      WHERE s.status = 'claimed'
+                        AND c.world_initialized_at IS NOT NULL
+                        AND c.world_initialized_at < :before
+                   )
+            SQL,
+            ['before' => $before->format('Y-m-d H:i:s')],
+        );
     }
 
     public function deleteBySet(WorldPackSet $set): int
@@ -91,10 +128,10 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      * Drops the payload rows of every set claimed before $before, leaving the set rows
      * themselves as the audit trail of which club was served which generation.
      *
-     * A BACKSTOP now. Each tier row is deleted the moment it is served
-     * (`InitializeController::tier()`), so a save that finishes loading leaves nothing behind.
-     * What reaches this is a claim whose device never fetched every tier — an abandoned or
-     * failed initialisation — whose leftover rows would otherwise stay for ever.
+     * A BACKSTOP. A world that finishes loading is cleared by
+     * `deletePayloadsForWorldsInitialisedBefore()` within the hour. What reaches this is a claim
+     * whose device never fetched every tier — an abandoned or failed initialisation — whose
+     * rows would otherwise stay for ever.
      */
     public function deletePayloadsForSetsClaimedBefore(\DateTimeImmutable $before): int
     {
@@ -112,6 +149,29 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
         );
     }
 
+    /**
+     * The subquery for sets whose club is still loading: claimed, and the club not yet
+     * world-initialised. Their rows are the only copy of a world a device is part-way through
+     * downloading, so a bulk delete must leave them alone.
+     */
+    private const LOADING_SETS_SQL = <<<'SQL'
+        SELECT s.id FROM world_pack_set s
+          JOIN club c ON c.id = s.claimed_by_club_id
+         WHERE s.status = 'claimed'
+           AND c.world_initialized_at IS NULL
+        SQL;
+
+    /** Payload rows for $country that belong to a world a device is still loading. */
+    public function countLoadingForCountry(string $country): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            'SELECT count(*) FROM country_world_pack_cache WHERE (country = :country'
+            . ' OR set_id IN (SELECT id FROM world_pack_set WHERE country = :country))'
+            . ' AND set_id IN (' . self::LOADING_SETS_SQL . ')',
+            ['country' => $country],
+        );
+    }
+
     /** Every payload row for $country, whatever set it belongs to. */
     public function countForCountry(string $country): int
     {
@@ -126,20 +186,21 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
     }
 
     /**
-     * Drops every payload row for $country, claimed sets included, and returns the count.
+     * Drops every payload row for $country, claimed sets included, EXCEPT a world a device is
+     * still loading, and returns the count.
      *
      * Matches on the row's own `country` AND on its set's, so a row can never survive by the
-     * two disagreeing. The set rows themselves are left alone: a claimed one is the record of
-     * which club was served which generation, and a club points at it.
+     * two disagreeing. A loading world is spared because its rows are the only copy of it:
+     * deleting them would leave that device unable to finish without being handed tiers from
+     * another generation. The set rows themselves are left alone: a claimed one is the record
+     * of which club was served which generation, and a club points at it.
      */
     public function deleteAllForCountry(string $country): int
     {
         return (int) $this->getEntityManager()->getConnection()->executeStatement(
-            <<<'SQL'
-            DELETE FROM country_world_pack_cache
-             WHERE country = :country
-                OR set_id IN (SELECT id FROM world_pack_set WHERE country = :country)
-            SQL,
+            'DELETE FROM country_world_pack_cache WHERE (country = :country'
+            . ' OR set_id IN (SELECT id FROM world_pack_set WHERE country = :country))'
+            . ' AND set_id NOT IN (' . self::LOADING_SETS_SQL . ')',
             ['country' => $country],
         );
     }

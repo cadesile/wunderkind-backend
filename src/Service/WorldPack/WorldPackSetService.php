@@ -230,16 +230,18 @@ class WorldPackSetService
      * generation that club was served. This used to stop at the unclaimed sets, so every
      * claimed set's tiers stayed in the table — the rows an operator saw surviving the button.
      *
-     * A device still part-way through initialising from a claimed set is not stranded by
-     * this: `InitializeController::tier()` builds any tier the set no longer holds inline, at
-     * the current version, exactly as for a club that never had a set.
+     * **A world a device is still loading is spared** (its club is not yet world-initialised).
+     * Those rows are the only copy of that world; deleting them would leave the device unable
+     * to finish without tiers from another generation, which is a mixed world. They are
+     * reported as `rowsSpared`, and go by themselves within the hour of the load finishing.
      *
-     * @return array{setsDeleted:int, claimedSetsCleared:int, rowsBefore:int, rowsDeleted:int, rowsRemaining:int}
+     * @return array{setsDeleted:int, claimedSetsCleared:int, rowsBefore:int, rowsDeleted:int, rowsSpared:int, rowsRemaining:int}
      */
     public function deleteAllForCountry(string $country): array
     {
         $rowsBefore = $this->cacheService->countForCountry($country);
         $claimed    = $this->countClaimed($country);
+        $spared     = $this->cacheService->countLoadingForCountry($country);
 
         $this->em->wrapInTransaction(function () use ($country, &$setsDeleted, &$payloadRows): void {
             $setsDeleted = $this->setRepository->deleteUnclaimed($country);
@@ -253,7 +255,9 @@ class WorldPackSetService
             'claimedSetsCleared' => $claimed,
             'rowsBefore'         => $rowsBefore,
             'rowsDeleted'        => $rowsBefore - $rowsRemaining,
-            'rowsRemaining'      => $rowsRemaining,
+            'rowsSpared'         => $spared,
+            // What survived that SHOULD have gone: anything beyond the spared loading worlds.
+            'rowsRemaining'      => max(0, $rowsRemaining - $spared),
         ];
 
         $this->logger->info('world_pack_set.delete_all_for_country', ['country' => $country] + $result);
