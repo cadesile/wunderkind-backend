@@ -127,7 +127,10 @@ actually *does* (which service/repo it calls), not restated route paths.
 - **`DashboardController`** — EasyAdmin dashboard root and the largest
   single controller: config import/export, social scheduling, developer
   tools (age-trigger, entity cleanup, leaderboard regen, database reset/
-  "nuclear reset"), logs. Also wires the CRUD menu.
+  "nuclear reset"), logs. Also wires the CRUD menu. The logs page
+  (`logs()`) tails the last `lines` (50–2000, default 500) non-empty lines
+  backwards in 8 KiB chunks via `tailLines()` (`c66a310`), so memory follows
+  the lines asked for, not the log's size; it used to `file()` the whole log.
 - **`AdminStatsController`** — dashboard growth/leaderboard/pool stats
   via `DashboardStatsService`.
 - **`DeleteAdminController`** — club/user deletion with confirmation info,

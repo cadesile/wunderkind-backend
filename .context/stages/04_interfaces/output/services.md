@@ -1005,7 +1005,11 @@ filename alone.
   stat-category/period substitutions.
 - **`SocialPostingService`** — publishes to connected social platforms
   via `HttpClientInterface`, raising `SocialPostingException` on failure.
-- **`ScoutGenerationService`** — generates one scout. **`build()` takes `$country` and `$tier`
+- **`ScoutGenerationService`** — generates one scout. **A CLUB scout's judgements are banded
+  (A32b, 2026-11-21):** drawn from `StaffAbilityRangeService::resolve($country, $tier)` stretched
+  by `PoolConfig::$scoutJudgementBandBp` (default 10000 = the tier's own staff band, a starting
+  point the owner deferred), clamped 1-100. A shared-pool scout keeps the flat
+  `$scoutJudgementMin/Max`. `WORLD_PACK_VERSION` 14 → 15. **`build()` takes `$country` and `$tier`
   and resolves the authored STAFF table for the banded input, which lands on EXPERIENCE — the
   `$abilityRange` parameter is GONE as of A25, 2026-11-20.** A club's scouts and its coaches are
   now banded off ONE authored source. ⚠️ **`PoolConfig::$scoutExperienceMin/Max` (4-34 live) is
@@ -1421,8 +1425,12 @@ filename alone.
   being stocked, and **`reapStaleBuilding()`** marks a BUILDING set older than
   `BUILD_STALE_AFTER` as FAILED with a reason — at ERROR level, which matters because prod's
   monolog is fingers_crossed and the INFO "at target" no-op wrote nothing at all.
-  `deleteUnclaimed()` spares CLAIMED sets — a device mid-initialisation still has tiers to
-  fetch, and **`countClaimed()` (2026-11-22) exists so a rebuild can SAY it spared them.** A
+  `deleteUnclaimed()` spares CLAIMED sets (the regenerate path still uses it), and
+  **`countClaimed()` (2026-11-22) exists so a rebuild can SAY it spared them.** The admin
+  delete-country button instead calls **`deleteAllForCountry()`** (2026-11-22): unclaimed sets
+  deleted, claimed sets emptied of their payload rows but kept — **except a world a device is
+  still loading, whose rows are spared** (`rowsSpared`, 2026-11-23) — and a count of rows before /
+  deleted / remaining so a concurrent top-up shows as a warning rather than a silent survivor. A
   spared set keeps its tier payload rows at the version it was built at, so after a
   `WORLD_PACK_VERSION` bump a FINISHED regenerate still leaves rows at the old version in
   `country_world_pack_cache`. On 2026-11-22 that was reported as the rebuild having left v14
@@ -1457,7 +1465,11 @@ filename alone.
   only so two cold callers could not both insert and collide on `uq_country_tier`, and the
   no-set path now builds inline and writes nothing, so there is no insert left to race on.
   What remains is `readTier()`, `hasTier()`, `allTiersPresent()`, `replaceWithPayload()`,
-  `deleteBySet()` and `prunePayloadsClaimedBefore()`.
+  `deleteBySet()`, `prunePayloadsClaimedBefore()`, and (2026-11-23) **`readClaimedTier()`** (a
+  claimed set's row at any version), **`markServed()`** / **`allServed()`** (the row's
+  `served_at`; served rows are KEPT so a retry replays), **`pruneWorldsInitialisedBefore()`** (the
+  hourly clear of finished worlds) and the country-wide count/delete used by
+  `deleteAllForCountry()`, which spares loading worlds.
   **RETIRED, 2026-11-17 — do not reintroduce.** Until sets, a cache miss was serialized
   behind a session-level `pg_advisory_lock` on (country, tier) and re-checked under it,
   because two concurrent `POST /api/initialize/league/{tier}` calls for one tier both missed,
@@ -2058,9 +2070,11 @@ construction. That is the `youthScholarshipWagePence` lesson commented in `SyncS
 client guards with `?? fallback` rather than falsiness, so a restated `0` sails past it and
 silently becomes the live value.
 
-**What the app gets and what it deliberately does not.** `economyTierBaseline` carries resolved
-absolutes for one country — turnover and wage scale per tier — and **no country factor**.
-Publishing one would invite the client to apply it a second time to an already-scaled figure.
+**What the app gets.** `economyTierBaseline` carries resolved absolutes for one country — turnover
+and wage scale per tier — and, since `eb31662` (2026-11-22), **`countryFactorBp`**: the country's
+factor normalised against England (10000; 10000 on a no-country read). ⚠️ Every published figure
+already carries it; the app applies it only to money it prices from its own flat ladders (NPC
+starting balances and the like, `countryScale.ts`), never to a published row.
 `resolvable: false` distinguishes "the operator has not authored this tier" from "this tier is
 worth nothing", which a bare `0` cannot express, and the first is the shipped state.
 
@@ -2152,6 +2166,14 @@ See `docs/api/economy-config.md`.
   `LocationEnrichmentService` (the lease, the dispatch, the write-back),
   `LocationEnrichmentOrchestrator` (the three admin triggers, with a stacked-sweep guard
   copying `StarterPoolAuditService`'s undrained-queue count).
+- **`Location\LocationDeletionService`** (2026-11-22) — deletes failed / needs-review towns from
+  the review queue, but only those nothing real depends on: a plot claim, a user club's home town,
+  a placed NPC club or a live plot hold keeps the town, and the flash says why. Unclaimed plots,
+  spent holds, attempts, estimates and rival rows go with it; neighbours that named it as a rival
+  are marked stale and the country is re-banded.
+- **`Admin\NationalityPoolCounts`** also backs the pool generators' **ENABLED COUNTRIES** quick
+  select (2026-11-22): every nationality whose country profile is LIVE, read from the same status
+  `liveCountryCodes()` uses.
 - **`CountryEnrichment\*`** — the same seven-file shape one level up, for the COUNTRY row:
   `CountryProfileEnricherInterface`, `ClaudeCountryProfileEnricher`, `Unconfigured…`, a
   factory on the same `LOCATION_ENRICHER_*` trio, `CountryProfileValidator`,

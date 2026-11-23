@@ -11,6 +11,7 @@ use App\Entity\WorldPack\WorldPackSet;
 use App\Enum\WorldPack\WorldPackSetStatus;
 use App\Repository\WorldPack\WorldPackSetRepository;
 use App\Service\WorldInitializationService;
+use App\Service\WorldPackCacheService;
 use App\Service\WorldPack\WorldPackSetService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -44,6 +45,13 @@ class WorldPackSetClaimTest extends KernelTestCase
 
     protected function tearDown(): void
     {
+        // Detach everything first. A test that read a tier payload back leaves the
+        // CountryWorldPackCache row managed, and removing its WorldPackSet below then makes
+        // the next flush re-discover the removed set through `CountryWorldPackCache#set` and
+        // report it as a new, un-persisted entity. Nothing here needs the identity map: the
+        // loops re-find by id.
+        $this->em->clear();
+
         // Sets first: a club cannot go while a set still points at it.
         foreach ($this->cleanup as $entity) {
             if ($entity instanceof WorldPackSet) {
@@ -238,16 +246,18 @@ class WorldPackSetClaimTest extends KernelTestCase
     }
 
     /**
-     * "Delete all for country" must leave the country with ZERO cache rows. It used to stop at
-     * unclaimed sets, so every claimed set's tiers survived the button.
+     * "Delete all for country" removes every cache row, claimed sets included — EXCEPT a world a
+     * device is still loading. Those rows are its only copy; deleting them would force the
+     * device onto tiers from another generation, a mixed world (Courtney, 2026-11-23).
      */
-    public function testDeleteAllForCountryRemovesEveryCacheRowIncludingClaimedSets(): void
+    public function testDeleteAllForCountryClearsEveryRowButAWorldStillLoading(): void
     {
-        $claimedSet = $this->makeReadySet();
-        $spare      = $this->makeReadySet();
-        $stale      = $this->makeReadySet(WorldInitializationService::WORLD_PACK_VERSION - 1);
+        $finishedSet = $this->makeReadySet();
+        $loadingSet  = $this->makeReadySet();
+        $spare       = $this->makeReadySet();
+        $stale       = $this->makeReadySet(WorldInitializationService::WORLD_PACK_VERSION - 1);
 
-        foreach ([$claimedSet, $spare, $stale] as $set) {
+        foreach ([$finishedSet, $loadingSet, $spare, $stale] as $set) {
             foreach ([1, 2, 3] as $tier) {
                 $this->em->persist(new CountryWorldPackCache(
                     $set, $tier, ['clubs' => []], $set->getPayloadVersion(),
@@ -256,31 +266,63 @@ class WorldPackSetClaimTest extends KernelTestCase
         }
         $this->em->flush();
 
-        $club = $this->makeClub('delall');
-        $this->service->claimForClub($club, $this->country);
+        // Oldest ready set first, so the first club gets $finishedSet and the second $loadingSet.
+        $finishedClub = $this->makeClub('delall-done');
+        $this->assertSame((string) $finishedSet->getId(), (string) $this->service->claimForClub($finishedClub, $this->country)->getId());
+        $finishedClub->setWorldInitializedAt(new \DateTimeImmutable());
+        $loadingClub = $this->makeClub('delall-loading');
+        $this->assertSame((string) $loadingSet->getId(), (string) $this->service->claimForClub($loadingClub, $this->country)->getId());
+        $this->em->flush();
 
         $result = $this->service->deleteAllForCountry($this->country);
         $this->em->clear();
 
-        $this->assertSame(9, $result['rowsBefore']);
+        $this->assertSame(12, $result['rowsBefore']);
         $this->assertSame(9, $result['rowsDeleted']);
-        $this->assertSame(0, $result['rowsRemaining']);
+        $this->assertSame(3, $result['rowsSpared'], 'the loading world keeps all three tiers');
+        $this->assertSame(0, $result['rowsRemaining'], 'nothing beyond the loading world survives');
         $this->assertSame(2, $result['setsDeleted']);
-        $this->assertSame(1, $result['claimedSetsCleared']);
+        $this->assertSame(2, $result['claimedSetsCleared']);
 
-        $left = (int) $this->em->getConnection()->fetchOne(
-            'SELECT count(*) FROM country_world_pack_cache WHERE country = :c', ['c' => $this->country],
-        );
-        $this->assertSame(0, $left, 'no cache row may survive a delete-all');
+        $finished = $this->em->find(WorldPackSet::class, (string) $finishedSet->getId());
+        $this->assertNotNull($finished, 'a claimed SET row stays — its club points at it');
+        $this->assertNull($this->service->tierPayload($finished, 1), 'a finished world is emptied');
 
-        $kept = $this->em->find(WorldPackSet::class, (string) $claimedSet->getId());
-        $this->assertNotNull($kept, 'the claimed SET row stays — its club points at it');
-        $this->assertNull(
-            $this->service->tierPayload($kept, 1),
-            'its tiers are gone, so the tier endpoint builds them inline at the current version',
-        );
+        $loading = $this->em->find(WorldPackSet::class, (string) $loadingSet->getId());
+        $this->assertNotNull($this->service->tierPayload($loading, 1), 'a loading world keeps its tiers');
+
         $this->assertNull($this->em->find(WorldPackSet::class, (string) $spare->getId()));
         $this->assertNull($this->em->find(WorldPackSet::class, (string) $stale->getId()));
+    }
+
+    /**
+     * The hourly sweep clears a world only once it finished loading longer ago than the grace,
+     * so a retry of the last tier just after finishing still replays it.
+     */
+    public function testFinishedWorldsAreClearedOnlyAfterTheGrace(): void
+    {
+        $oldSet = $this->makeReadySet();
+        $newSet = $this->makeReadySet();
+        foreach ([$oldSet, $newSet] as $set) {
+            $this->em->persist(new CountryWorldPackCache($set, 1, ['clubs' => []], $set->getPayloadVersion()));
+        }
+        $this->em->flush();
+
+        $oldClub = $this->makeClub('grace-old');
+        $this->service->claimForClub($oldClub, $this->country);
+        $oldClub->setWorldInitializedAt(new \DateTimeImmutable('-2 hours'));
+        $newClub = $this->makeClub('grace-new');
+        $this->service->claimForClub($newClub, $this->country);
+        $newClub->setWorldInitializedAt(new \DateTimeImmutable('-5 minutes'));
+        $this->em->flush();
+
+        $cache   = self::getContainer()->get(WorldPackCacheService::class);
+        $cleared = $cache->pruneWorldsInitialisedBefore(new \DateTimeImmutable('-1 hour'));
+        $this->em->clear();
+
+        $this->assertSame(1, $cleared);
+        $this->assertNull($this->service->tierPayload($this->em->find(WorldPackSet::class, (string) $oldSet->getId()), 1));
+        $this->assertNotNull($this->service->tierPayload($this->em->find(WorldPackSet::class, (string) $newSet->getId()), 1));
     }
 
     private function makeReadySet(

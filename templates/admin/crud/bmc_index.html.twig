@@ -117,7 +117,14 @@
                     <tbody>
                         {% for entity in entities %}
                             {% if entity.isAccessible %}
-                                <tr>
+                                {# Row identity and row-click-to-detail, carried over verbatim from
+                                   EasyAdmin's own crud/index.html.twig. Without these a page moved
+                                   onto this template silently loses both: the rows become
+                                   unaddressable (`tr[data-id=...]`) and clicking one does nothing,
+                                   even where the CRUD config asked for it with
+                                   `->setDefaultAction()` / clickable rows. #}
+                                <tr data-id="{{ entity.primaryKeyValueAsString }}"
+                                    {% if entity.defaultActionUrl %}data-default-action-url="{{ entity.defaultActionUrl }}" role="link" tabindex="0"{% endif %}>
                                     {% if batch_actions|length > 0 %}
                                         <td class="bmc-sel">
                                             <label class="bmc-selbox">

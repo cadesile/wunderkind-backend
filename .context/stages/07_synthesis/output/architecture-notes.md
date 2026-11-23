@@ -176,11 +176,27 @@ pressed Regenerate, as ROUTINE restocking. Hence a third transport. `app:worldpa
   `club.starter_pack_json` in one flush.
 - `POST /api/initialize/league/{tier}` serves the tier **out of that club's claimed set**.
 
-Claiming the whole set at step one is **load-bearing, not tidiness**: the client treats an empty
-or truncated 2xx as a retryable transport failure, so a retried tier call must return the same
-payload, and a device's eight tiers must never be mixed across two generation runs (different
-fixtures, different NPC ids). Claiming per tier would satisfy "unique" and still hand out an
-incoherent world.
+Claiming the whole set at step one is **load-bearing, not tidiness**: a device's eight tiers must
+come from one generation run (same fixtures, same NPC ids). Claiming per tier would satisfy
+"unique" and still hand out an incoherent world.
+
+**A served tier is STAMPED, not deleted (2026-11-23).** Owner: *"we should never get mixed
+worlds"*, and once a pack is claimed it lives on the device only. Both hold like this:
+
+- `tier()` reads the club's set with `readClaimedTier()` (any version: a claimed set is one world,
+  so a version bump mid-load still serves the rest of THAT world) and stamps the row's
+  `served_at`. A retried or restarted load replays the same bytes, because the client treats an
+  empty or truncated 2xx as retryable and the app's own client assumes replay.
+- The club is world-initialised once every row of its set is served (`allServed()`).
+- `app:worldpack:maintain` clears the rows of worlds that finished loading more than
+  `FINISHED_WORLD_GRACE` (1 hour) ago, so a finished save leaves nothing on the server.
+- A claimed set missing a tier answers **410 `world_pack_tier_unavailable`** and logs at ERROR. It
+  is never rebuilt inline, because a rebuilt tier is another generation.
+- Admin delete-all spares a world a device is still loading.
+
+⚠️ **Do not go back to delete-on-serve** (`df3cae1`, 2026-11-22, reverted the next day): a lost
+response or a restarted load then rebuilt the tier from a fresh generation, a mixed world.
+`InitializeSetClaimTest` pins the replay.
 
 The claim is **one SQL statement** —
 `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED) RETURNING id`. Select-then-update hands
@@ -214,8 +230,8 @@ client-side escape.
   claim filters on the version. It queues rather than generates, so one slow country cannot
   stall the sweep. It also **prunes** the tier payloads of sets claimed longer ago than
   `StarterConfig::$worldPackClaimedRetentionDays` (default 7), keeping the set row as the record
-  of which club got which world. Without the prune the table grows by a country's worth of
-  large JSON per new game, forever.
+  of which club got which world. It is only the backstop for abandoned initialisations: a world
+  that finishes loading is cleared by the same command an hour later (`FINISHED_WORLD_GRACE`).
 - Live countries come from `CountryProfileRepository::liveCountryCodes()`. **On a box where no
   country profile is LIVE this sweep tops up nothing and the admin SET STOCK table is empty** —
   that is correct, not broken.

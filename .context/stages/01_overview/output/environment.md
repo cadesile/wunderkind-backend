@@ -349,6 +349,23 @@ docker exec wunderkindbackend_database_1 bash -c \
 `master` has far fewer content-dependent tests than `development` (1148 vs 1576 in
 `tests/Service`), so a fresh DB looking clean on one branch does not mean it will on the other.
 
+#### Three columns synced on 2026-11-23
+
+A full run on `development` opened with **1,606 errors and 22 failures**, and all but six were
+`wunderkind_test` drift — three columns the entities had and the test DB did not:
+
+```text
+country_world_pack_cache.served_at
+game_config.player_transfer_out_of_reach_tier_gap
+game_config.player_transfer_wage_premium_per_tier
+```
+
+All three took a plain `doctrine:schema:update --force --env=test` (each has a SQL default, so
+the "contains null values" abort did not apply). `MATCH_NARRATIVE` content was missing too — 87
+rows in `wunderkind`, **0** in `wunderkind_test` — which empties every narrative timeline;
+`lando php bin/console app:seed-match-narrative --env=test` restores it. That is the
+content-not-structure trap below, and the narrative templates belong on its list.
+
 **Syncing the test DB:**
 
 1. `lando php bin/console doctrine:schema:update --dump-sql --env=test` — shows the real diff.
@@ -366,7 +383,22 @@ docker exec wunderkindbackend_database_1 bash -c \
 The same applies to any FK/nullability change: `Version20261102140000` (competition_entrant) had
 to be applied to `wunderkind_test` by hand before its regression test could pass.
 
-### A full run is OOM-killed by `AdminShellCoverageTest` — filter it out (2026-11-19)
+### A full run is OOM-killed by `AdminShellCoverageTest` — **FIXED 2026-11-23, no filter needed**
+
+✅ **`DashboardController::logs()` no longer reads the whole file.** It now tails the last
+`$lines` lines backwards in 8 KiB chunks (`DashboardController::tailLines()`), so memory is
+proportional to the lines asked for, not to file size, and a plain
+`lando php vendor/bin/phpunit` completes all 3,399 tests with `var/log/dev.log` still at 4.0 GB.
+**The exclusions below are history — do not pass them.**
+
+⚠️ **Log rotation is still unaddressed and is still the owner's call**: `var/log/dev.log`
+is 4.0 GB and `var/log/dev.log.2026-11-12.bak` another 2.0 GB. Nothing fails because of them
+now; they are just 6 GB of disk.
+
+The write-up below is kept for the diagnosis, which was correct, and because the
+`--exclude-filter` shape is worth recognising if a page ever reads a whole file again.
+
+### (HISTORY) A full run is OOM-killed by `AdminShellCoverageTest` — filter it out (2026-11-19)
 
 **A plain `lando php vendor/bin/phpunit` dies at roughly 183/3,305 with exit 137** (the container
 is OOM-killed, `docker inspect ... OOMKilled: true`, 3.83 GiB VM). ⚠️ **It is an ENVIRONMENT

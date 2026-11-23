@@ -1820,8 +1820,7 @@ class DashboardController extends AbstractDashboardController
                 $error = "Cannot read '{$selectedFile}.log' — check file permissions.";
             } else {
                 $fileSize = filesize($logPath);
-                $all      = file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-                $logLines = array_slice($all, -$lines);
+                $logLines = self::tailLines($logPath, $lines);
             }
         }
 
@@ -1835,6 +1834,54 @@ class DashboardController extends AbstractDashboardController
             'fileSize'     => $fileSize,
             'error'        => $error,
         ]);
+    }
+
+    /**
+     * The last $lines non-empty lines of a file, read backwards in chunks.
+     *
+     * This page used to call file() and slice the tail off the result, which
+     * allocated the WHOLE file first: on a dev box whose var/log/dev.log had
+     * grown to 4 GB that exhausted the memory limit and killed the PHP process
+     * outright — taking the admin page, and the test suite, down with it.
+     * Reading from the end keeps memory proportional to $lines, not file size.
+     *
+     * @return list<string>
+     */
+    private static function tailLines(string $path, int $lines): array
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return [];
+        }
+
+        $pos    = (int) (filesize($path) ?: 0);
+        $buffer = '';
+        $tail   = [];
+
+        while ($pos > 0 && \count($tail) <= $lines) {
+            $read = (int) min(8192, $pos);
+            $pos -= $read;
+            fseek($handle, $pos);
+            $buffer = (string) fread($handle, $read) . $buffer;
+
+            // The first element is a partial line until we have read further back.
+            $parts  = explode("\n", $buffer);
+            $buffer = (string) array_shift($parts);
+            $tail   = array_merge($parts, $tail);
+        }
+
+        fclose($handle);
+
+        if ($pos === 0 && $buffer !== '') {
+            array_unshift($tail, $buffer);
+        }
+
+        $tail = array_values(array_filter(
+            array_map(static fn (string $line): string => rtrim($line, "\r"), $tail),
+            static fn (string $line): bool => $line !== '',
+        ));
+
+        return \count($tail) > $lines ? \array_slice($tail, -$lines) : $tail;
     }
 
     // ── Telemetry Config ──────────────────────────────────────────────────

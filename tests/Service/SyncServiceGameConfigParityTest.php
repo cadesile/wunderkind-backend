@@ -167,15 +167,37 @@ class SyncServiceGameConfigParityTest extends TestCase
         }
     }
 
-    public function testTheBlockDoesNotLeakACountryFactor(): void
+    public function testTheBlockLeaksNoFactorBeyondTheTopLevelCountryOne(): void
     {
-        // The app must never need to know a country factor — publishing one invites the client
-        // to apply it a second time to a figure that is already scaled.
-        $json = json_encode($this->publisher()->clientBlock(new GameConfig(), 'EN'));
+        // The app must never need to apply a factor to a figure IN this block — every one of
+        // them already carries it, and republishing a per-tier or combined factor invites the
+        // client to scale an already-scaled figure a second time.
+        //
+        // `countryFactorBp` is the single, deliberate exception, added 2026-11-22 (eb316624)
+        // for the flat ladders the app still prices itself (NPC starting balances and the
+        // like) — TierBaselineSourceTest requires it to be there. It is top-level only, which
+        // is what the count below pins: one occurrence, not one per tier. This assertion used
+        // to forbid the substring outright, and that older contract is what eb316624 changed.
+        $block = $this->publisher()->clientBlock(new GameConfig(), 'EN');
+        $json  = json_encode($block);
 
         self::assertIsString($json);
-        self::assertStringNotContainsString('countryFactor', $json);
         self::assertStringNotContainsString('combinedFactor', $json);
+        self::assertSame(
+            1,
+            substr_count($json, 'countryFactor'),
+            'countryFactorBp is published once, at block level, and never per tier',
+        );
+
+        foreach ($block['economyTierBaseline']['tiers'] as $row) {
+            foreach (array_keys($row) as $key) {
+                self::assertStringNotContainsString(
+                    'actor',
+                    (string) $key,
+                    "tier {$row['tier']} must publish no factor of its own",
+                );
+            }
+        }
     }
 
     public function testTheShippedDefaultsPublishNoTicketPrice(): void
