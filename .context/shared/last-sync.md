@@ -6,7 +6,7 @@
 > commits that have landed since `.context/` was last reviewed.
 
 
-- **Commit:** 5d162c11c8af3c409c1b1d8790a0253b1b13be14
+- **Commit:** af87ee0311b9f8057edb974e23e289a3a67d4c26
 - **Date:** 2026-11-23
 - **Stages touched this pass:** `01_overview`, `03_data`, `04_interfaces`, `07_synthesis`, shared
 
@@ -16,6 +16,15 @@
 > `wunderkind-docs/context-archive/backend-shared-last-sync-history.md` on 2026-11-23. Keep roughly
 > the last few passes here; add new passes directly below this note, newest first.
 
+## 2026-11-23 — A retried world pack tier replays its own world (`af87ee0`, backend `development`)
+
+Owner: *"we should never get mixed worlds."* Reverts `df3cae1`'s delete-on-serve: a served row is
+stamped `served_at` (`Version20261123120000`) and kept, a retry replays it, a claimed set missing a
+tier answers 410 instead of a rebuild, delete-all spares loading worlds, and `app:worldpack:maintain`
+clears finished worlds after an hour. Stages: `03_data`, `04_interfaces`, `07_synthesis`, `01_overview`
+(`deployment.md`), shared (compatibility log). **Tests written but not run in this session** (no PHP
+8.5 or database here): `InitializeSetClaimTest`, `WorldPackSetClaimTest`.
+
 ## 2026-11-23 — Correctness pass over the nine commits since `5f1aff4` (backend `development`)
 
 **Documentation only.** Reviewed against `5d162c1`.
@@ -24,7 +33,7 @@
   (`deleteAllForCountry`), and `tier()` deletes each row once served (`consumeTier`). Corrected in
   `architecture-notes.md` ("The claim", "Keeping the buffer stocked"), `routes.md`, `services.md`,
   `deployment.md` trap 1 and the compatibility log. ⚠️ A retried tier is no longer a replay; it is
-  built inline from a fresh generation. Recorded as an open question for the owner.
+  built inline from a fresh generation. Fixed the same day, entry above.
 - **`countryFactorBp` is published (`eb31662`):** `services.md` said the opposite; corrected.
 - **Migrations recorded:** `Version20261121220000` (A32b, `scoutJudgementBandBp`, pack v15) and
   `Version20261122230000` (the two GameConfig transfer dials, `5d162c1`), with `entities.md`.
