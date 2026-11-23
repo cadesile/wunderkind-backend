@@ -176,11 +176,17 @@ pressed Regenerate, as ROUTINE restocking. Hence a third transport. `app:worldpa
   `club.starter_pack_json` in one flush.
 - `POST /api/initialize/league/{tier}` serves the tier **out of that club's claimed set**.
 
-Claiming the whole set at step one is **load-bearing, not tidiness**: the client treats an empty
-or truncated 2xx as a retryable transport failure, so a retried tier call must return the same
-payload, and a device's eight tiers must never be mixed across two generation runs (different
-fixtures, different NPC ids). Claiming per tier would satisfy "unique" and still hand out an
-incoherent world.
+Claiming the whole set at step one is **load-bearing, not tidiness**: a device's eight tiers must
+come from one generation run (same fixtures, same NPC ids). Claiming per tier would satisfy
+"unique" and still hand out an incoherent world.
+
+**A served tier is deleted (`df3cae1`, 2026-11-22; owner: once a pack is claimed it lives on the
+device only).** `tier()` calls `WorldPackCacheService::consumeTier()` after serving, and marks the
+club world-initialised once `isEmpty($set)`. ⚠️ **So a retry is no longer a replay:** the client
+treats an empty or truncated 2xx as retryable, and a retried tier whose row is gone is BUILT INLINE
+at the current version — a different generation from the rest of the device's world. This was the
+guarantee the per-set claim existed for; it is now kept only on first delivery. Open question for
+the owner (2026-11-23): accept it, or keep a row until the device confirms receipt.
 
 The claim is **one SQL statement** —
 `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED) RETURNING id`. Select-then-update hands
@@ -214,8 +220,8 @@ client-side escape.
   claim filters on the version. It queues rather than generates, so one slow country cannot
   stall the sweep. It also **prunes** the tier payloads of sets claimed longer ago than
   `StarterConfig::$worldPackClaimedRetentionDays` (default 7), keeping the set row as the record
-  of which club got which world. Without the prune the table grows by a country's worth of
-  large JSON per new game, forever.
+  of which club got which world. Since served tiers are deleted on serve, the prune is only the
+  backstop for abandoned initialisations.
 - Live countries come from `CountryProfileRepository::liveCountryCodes()`. **On a box where no
   country profile is LIVE this sweep tops up nothing and the admin SET STOCK table is empty** —
   that is correct, not broken.

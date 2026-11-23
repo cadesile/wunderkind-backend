@@ -133,7 +133,11 @@ any number underneath it.**
 
 ### 1. "Rebuild the world pack cache" does not rebuild CLAIMED sets, and a tester has claimed them all
 
-`admin_worldpack_delete_country` calls **`deleteUnclaimed($country)`**. **Claimed sets are spared
+✅ **Largely closed 2026-11-22:** delete-country now calls `deleteAllForCountry()`, which empties
+claimed sets too, and a served tier is deleted on serve. The regenerate path still spares claimed
+sets (`deleteUnclaimed`), so what follows still applies to regenerate. The original account:
+
+`admin_worldpack_delete_country` called **`deleteUnclaimed($country)`**. **Claimed sets are spared
 by design** — a device may still be downloading its tiers — and that protection is correct. The
 trap is that **every save a tester creates claims a set**, so after a day of testing every set in
 the country is claimed, the rebuild **deletes nothing, reports success, and the stale packs

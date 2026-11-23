@@ -908,7 +908,10 @@ migrations are the change log (see `migrations.md`).
 
 Each is effectively a single global-config row.
 
-- **`GameConfig`** — very large singleton (~100+ scalar/array fields)
+- **`GameConfig`** — very large singleton (~100+ scalar/array fields). Two transfer dials added
+  2026-11-22 (`Version20261122230000`, published by `GET /api/game-config`):
+  `playerTransferOutOfReachTierGap` (int, 3) and `playerTransferWagePremiumPerTier` (float, 1.0) —
+  the app's tier-refusal rule, defaults equal to the behaviour that shipped hardcoded
   covering clique, bond/morale, injury, coaching, facility, transfer,
   sponsor/investor, youth, cooldown, squad-role, and social-post tuning
   constants. **Money fields are PENCE in the column and POUNDS in the admin
@@ -946,6 +949,9 @@ Each is effectively a single global-config row.
 - **`PoolConfig`** — singleton tuning for recruitment-pool generation
   ranges (player/coach/scout/agent age/ability/height/weight ranges and
   pool targets per role). No relations.
+  **`scoutJudgementBandBp`** (int, default 10000, `Version20261121220000`, A32b) stretches the
+  staff band a CLUB scout's judgements are drawn from; floored at 1 by the setter. The flat
+  `scoutJudgementMin/Max` pair stays as the untiered shared-pool band, not dead config.
   **`staffAbilityRanges`** (json, default `{}`, `Version20261120150000`, A25 2026-11-20) is
   **the authored per-country/per-tier ability band a CLUB's staff and scouts are generated
   from** — shape `{"EN": {"1": {"min": 29, "max": 55}, …}}`, keyed by tier as a string, the
