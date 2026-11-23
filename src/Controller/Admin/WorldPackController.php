@@ -92,19 +92,22 @@ class WorldPackController extends AbstractController
             return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));
         }
 
-        // Every cache row for the country goes, claimed sets included. It used to stop at
-        // unclaimed sets, which left every claimed set's tiers in the table — the rows that
-        // survived this button. A device mid-initialisation is not stranded by losing them:
-        // the tier endpoint builds a missing tier inline. Claimed SET rows are kept, because a
-        // club points at its set; only their payloads go. See WorldPackSetService.
+        // Every cache row for the country goes, claimed sets included, EXCEPT a world a device
+        // is still loading: those rows are its only copy, and losing them would hand that
+        // device tiers from another generation. They go by themselves within the hour of the
+        // load finishing. Claimed SET rows are kept, because a club points at its set; only
+        // their payloads go. See WorldPackSetService.
         $r = $this->setService->deleteAllForCountry($country);
 
         if ($r['rowsRemaining'] > 0) {
             $this->addFlash('warning', "Deleted {$r['rowsDeleted']} of {$r['rowsBefore']} cache row(s) for {$country}; "
                 . "{$r['rowsRemaining']} remain — something wrote new rows while this ran (a top-up or regenerate). Run it again once that finishes.");
         } else {
-            $this->addFlash('success', "Deleted all {$r['rowsDeleted']} cache row(s) for {$country}: "
-                . "{$r['setsDeleted']} unclaimed set(s) removed, {$r['claimedSetsCleared']} claimed set(s) emptied. 0 rows remain.");
+            $this->addFlash('success', "Deleted {$r['rowsDeleted']} cache row(s) for {$country}: "
+                . "{$r['setsDeleted']} unclaimed set(s) removed, claimed sets emptied."
+                . ($r['rowsSpared'] > 0
+                    ? " Kept {$r['rowsSpared']} row(s) of world(s) a device is still loading; they clear themselves within an hour of the load finishing."
+                    : ' 0 rows remain.'));
         }
 
         return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_worldpack_cache']));

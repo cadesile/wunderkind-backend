@@ -1665,7 +1665,9 @@ into cached packs and therefore has to be reversible. See
   takes from a shared population. Verified on dev — generating two full EN sets left `player`
   and `staff` row counts unchanged. There is correspondingly nothing a set can be SHORT of, which
   is why it carries no shortfall column: a field that can never be non-zero is a trap.
-- **`CountryWorldPackCache`** — persisted (DB-backed, not in-memory) payload for ONE tier of
+- **`CountryWorldPackCache`** — `servedAt` (nullable, 2026-11-23): when the tier was first handed to the
+  claiming club. Served rows are kept so a retry replays; see `07_synthesis/output/architecture-notes.md`.
+  Persisted (DB-backed, not in-memory) payload for ONE tier of
   ONE `WorldPackSet`. `set:WorldPackSet` (NOT NULL, CASCADE), `country`, `tier`,
   `payload:array`, `generatedAt`, `payloadVersion`. See also `state.md`.
   **The uniqueness key is `(set_id, tier)`, not `(country, tier)`** — that was a table

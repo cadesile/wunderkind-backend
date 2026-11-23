@@ -1428,7 +1428,8 @@ filename alone.
   `deleteUnclaimed()` spares CLAIMED sets (the regenerate path still uses it), and
   **`countClaimed()` (2026-11-22) exists so a rebuild can SAY it spared them.** The admin
   delete-country button instead calls **`deleteAllForCountry()`** (2026-11-22): unclaimed sets
-  deleted, claimed sets emptied of their payload rows but kept, and a count of rows before /
+  deleted, claimed sets emptied of their payload rows but kept — **except a world a device is
+  still loading, whose rows are spared** (`rowsSpared`, 2026-11-23) — and a count of rows before /
   deleted / remaining so a concurrent top-up shows as a warning rather than a silent survivor. A
   spared set keeps its tier payload rows at the version it was built at, so after a
   `WORLD_PACK_VERSION` bump a FINISHED regenerate still leaves rows at the old version in
@@ -1464,9 +1465,11 @@ filename alone.
   only so two cold callers could not both insert and collide on `uq_country_tier`, and the
   no-set path now builds inline and writes nothing, so there is no insert left to race on.
   What remains is `readTier()`, `hasTier()`, `allTiersPresent()`, `replaceWithPayload()`,
-  `deleteBySet()`, `prunePayloadsClaimedBefore()`, and (2026-11-22) **`consumeTier()`** (deletes a
-  tier row once `InitializeController::tier()` has served it), **`isEmpty()`** and the
-  country-wide count/delete used by `deleteAllForCountry()`.
+  `deleteBySet()`, `prunePayloadsClaimedBefore()`, and (2026-11-23) **`readClaimedTier()`** (a
+  claimed set's row at any version), **`markServed()`** / **`allServed()`** (the row's
+  `served_at`; served rows are KEPT so a retry replays), **`pruneWorldsInitialisedBefore()`** (the
+  hourly clear of finished worlds) and the country-wide count/delete used by
+  `deleteAllForCountry()`, which spares loading worlds.
   **RETIRED, 2026-11-17 — do not reintroduce.** Until sets, a cache miss was serialized
   behind a session-level `pg_advisory_lock` on (country, tier) and re-checked under it,
   because two concurrent `POST /api/initialize/league/{tier}` calls for one tier both missed,

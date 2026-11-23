@@ -134,7 +134,8 @@ any number underneath it.**
 ### 1. "Rebuild the world pack cache" does not rebuild CLAIMED sets, and a tester has claimed them all
 
 ✅ **Largely closed 2026-11-22:** delete-country now calls `deleteAllForCountry()`, which empties
-claimed sets too, and a served tier is deleted on serve. The regenerate path still spares claimed
+claimed sets too (sparing only a world a device is still loading), and finished worlds are cleared
+an hour after loading. The regenerate path still spares claimed
 sets (`deleteUnclaimed`), so what follows still applies to regenerate. The original account:
 
 `admin_worldpack_delete_country` called **`deleteUnclaimed($country)`**. **Claimed sets are spared

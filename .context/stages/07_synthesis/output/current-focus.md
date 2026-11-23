@@ -12,9 +12,6 @@
 
 ## 🔴 1. Open questions for the owner
 
-- **A retried world-pack tier is no longer coherent.** Since `df3cae1` a served tier row is deleted,
-  so a retry after a lost response is built inline from a fresh generation. Accept, or keep the row
-  until the device confirms? See `architecture-notes.md` "The claim".
 - **The scout judgement band (`PoolConfig::$scoutJudgementBandBp`) is a placeholder at 10000**, by
   the owner's deferral until the tier scaling is verified on device. 12500 is the derived first
   alternative. The 70/30 `ability` weights (A32) are also unruled. Report:

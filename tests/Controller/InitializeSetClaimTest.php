@@ -24,9 +24,12 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  * does: initialise against a country that HAS stock, and get a world nobody else will ever be
  * given.
  *
- * Every club must get a DIFFERENT world, and once a tier has been handed over the server keeps
- * no copy: a claimed pack lives on the device only (Courtney, 2026-11-22). The starter squad
- * still replays from the club row, because it is small and is the club's own record.
+ * Two properties, tested together because they pull in opposite directions: every club must get
+ * a DIFFERENT world, and every retry by the same club must get the SAME one. Deleting a row on
+ * serve satisfies the first and breaks the second — a lost response then got a tier from another
+ * generation, a mixed world (Courtney, 2026-11-23: "we should never get mixed worlds"). So a
+ * served row is stamped and kept; `app:worldpack:maintain` clears it an hour after the world
+ * finished loading, so the pack still ends up living on the device only.
  */
 class InitializeSetClaimTest extends WebTestCase
 {
@@ -110,12 +113,28 @@ class InitializeSetClaimTest extends WebTestCase
         self::assertTrue($starterAgainA['body']['replayed'] ?? false);
         self::assertSame($starterA['body']['ampStarter'], $starterAgainA['body']['ampStarter']);
 
-        // ── 3. a served tier is gone from the server ─────────────────────────────────────
+        $tierAgainA = $this->call('POST', '/api/initialize/league/' . self::TIER, $clubA);
+        self::assertSame(200, $tierAgainA['status']);
+        self::assertSame(
+            $tierA['body']['data'],
+            $tierAgainA['body']['data'],
+            'a retried tier call must return byte-identical data, never a tier from another generation',
+        );
+
+        // ── 3. a served tier is stamped, not deleted ─────────────────────────────────────
         $conn = self::getContainer()->get(Connection::class);
         self::assertSame(
             0,
+            (int) $conn->fetchOne(
+                'SELECT count(*) FROM country_world_pack_cache WHERE country = :c AND served_at IS NULL',
+                ['c' => self::COUNTRY],
+            ),
+            'both clubs\' only tier has been served, so no row is unserved',
+        );
+        self::assertSame(
+            2,
             (int) $conn->fetchOne('SELECT count(*) FROM country_world_pack_cache WHERE country = :c', ['c' => self::COUNTRY]),
-            'a claimed pack lives on the device: every served tier row must be deleted',
+            'served rows are kept for replay until the sweep clears finished worlds',
         );
 
         // ── and the bookkeeping underneath ───────────────────────────────────────────────
@@ -149,6 +168,27 @@ class InitializeSetClaimTest extends WebTestCase
                 ['c' => self::COUNTRY],
             ),
         );
+    }
+
+    /**
+     * A club that owns a world whose tier is gone (an abandoned load past the retention
+     * backstop) is refused with 410. It must never be handed a freshly built tier, which would
+     * come from another generation than the rest of its world.
+     */
+    public function testAMissingTierOfAClaimedWorldIsRefusedNotRebuilt(): void
+    {
+        $this->seedLeague();
+        $this->seedReadySet('charlie');
+
+        $club = $this->seedClub('c');
+        self::assertSame(200, $this->call('POST', '/api/initialize/starter', $club)['status']);
+
+        $conn = self::getContainer()->get(Connection::class);
+        $conn->executeStatement('DELETE FROM country_world_pack_cache WHERE country = :c', ['c' => self::COUNTRY]);
+
+        $tier = $this->call('POST', '/api/initialize/league/' . self::TIER, $club);
+        self::assertSame(410, $tier['status']);
+        self::assertSame('world_pack_tier_unavailable', $tier['body']['error'] ?? null);
     }
 
     // ── fixtures ────────────────────────────────────────────────────────────────────────────

@@ -104,22 +104,35 @@ class WorldPackCacheService
     }
 
     /**
-     * Drops $set's row for $tier once it has been handed to the claiming device.
+     * The payload for one tier of a set a club has CLAIMED, at whatever version it was built.
      *
-     * A claimed pack lives on the device, not here: the client writes each tier into its own
-     * SQLite as it arrives. Keeping the row would only hold a copy nobody reads. A retried call
-     * for a tier whose response was lost finds no row and gets the tier built inline at the
-     * current version, which is what any club without a set gets.
+     * Unlike `readTier()` this does not filter on the current version. A claimed set is one
+     * world: every tier was built in the same run, so if a version bump lands while a device is
+     * loading, the coherent answer is the rest of THAT world, not a fresh tier at the new
+     * version. A mixed world is the one outcome that must never happen (Courtney, 2026-11-23).
      */
-    public function consumeTier(WorldPackSet $set, int $tier): void
+    public function readClaimedTier(WorldPackSet $set, int $tier): ?array
     {
-        $this->cacheRepository->deleteForSetAndTier($set, $tier);
+        return $this->cacheRepository->findForSetAndTier($set, $tier)?->getPayload();
     }
 
-    /** Whether every tier row of $set has been handed out (or never existed). */
-    public function isEmpty(WorldPackSet $set): bool
+    /**
+     * Records that $set's row for $tier has been handed to the claiming device.
+     *
+     * The row is KEPT so a retried or restarted load replays the same bytes. It is deleted by
+     * `pruneWorldsInitialisedBefore()` once the whole world has been handed over and the grace
+     * period has passed, so a finished save still leaves nothing on the server.
+     */
+    public function markServed(WorldPackSet $set, int $tier): void
     {
-        return $this->cacheRepository->countForSet($set) === 0;
+        $this->cacheRepository->markServed($set, $tier, new \DateTimeImmutable());
+    }
+
+    /** Whether every tier row of $set has been handed to its club at least once. */
+    public function allServed(WorldPackSet $set): bool
+    {
+        return $this->cacheRepository->countForSet($set) > 0
+            && $this->cacheRepository->countUnservedForSet($set) === 0;
     }
 
     /** Drops every payload row belonging to $set. The set row itself is left alone. */
@@ -134,10 +147,28 @@ class WorldPackCacheService
         return $this->cacheRepository->countForCountry($country);
     }
 
-    /** Drops every payload row for $country, claimed sets included. Set rows are left alone. */
+    /**
+     * Drops every payload row for $country, claimed sets included, except a world a device is
+     * still loading. Set rows are left alone.
+     */
     public function deleteAllForCountry(string $country): int
     {
         return $this->cacheRepository->deleteAllForCountry($country);
+    }
+
+    /** Payload rows for $country that belong to a world a device is still loading. */
+    public function countLoadingForCountry(string $country): int
+    {
+        return $this->cacheRepository->countLoadingForCountry($country);
+    }
+
+    /**
+     * Drops the payload rows of every world that finished loading before $before.
+     * See CountryWorldPackCacheRepository::deletePayloadsForWorldsInitialisedBefore().
+     */
+    public function pruneWorldsInitialisedBefore(\DateTimeImmutable $before): int
+    {
+        return $this->cacheRepository->deletePayloadsForWorldsInitialisedBefore($before);
     }
 
     /**

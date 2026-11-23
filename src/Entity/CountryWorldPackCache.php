@@ -70,6 +70,19 @@ class CountryWorldPackCache
     #[ORM\Column(type: 'smallint', options: ['default' => 0])]
     private int $payloadVersion;
 
+    /**
+     * When this tier was first handed to the club that claimed its set, or null if never.
+     *
+     * A served row is KEPT, not deleted, so a retried call replays the exact same bytes: the
+     * client treats an empty or truncated 2xx as retryable, and a restarted load asks again
+     * from the top. Deleting on serve made a retry build a fresh tier from a different
+     * generation, which is a mixed world (Courtney, 2026-11-23: "we should never get mixed
+     * worlds"). The rows go once the whole world has been handed over and a grace period has
+     * passed — see `CountryWorldPackCacheRepository::deletePayloadsForWorldsInitialisedBefore()`.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $servedAt = null;
+
     public function __construct(WorldPackSet $set, int $tier, array $payload, int $payloadVersion = 0)
     {
         $this->id             = new UuidV7();
@@ -88,4 +101,6 @@ class CountryWorldPackCache
     public function getPayload(): array { return $this->payload; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
     public function getPayloadVersion(): int { return $this->payloadVersion; }
+    public function getServedAt(): ?\DateTimeImmutable { return $this->servedAt; }
+    public function markServed(\DateTimeImmutable $at): void { $this->servedAt ??= $at; }
 }

@@ -1187,7 +1187,7 @@ error on `column "ability" does not exist`. See `01_overview/output/environment.
 
 ⚠️ **This entry was MISSING from this document until 2026-11-20 night** and is added here by the
 documentation pass, not by the commit that shipped it (`d8376d94`). It is the only migration on
-disk with no entry at the time; everything through `Version20261122230000` is now recorded.
+disk with no entry at the time; everything through `Version20261123120000` is now recorded.
 
 Owner ruling, asked whether a manager's bonds should hold the level they have earned or fade when
 neglected — *"let them fade."*
@@ -1292,6 +1292,13 @@ a device. **Legitimate under the pack-is-a-census rule**: two more per-scout acc
 ability-shaped census content, not money, the same class as the v12 `ability` bump. Note that
 `scouts[].ability` **moves on this bump under an unchanged key**, which is sanctioned here rather
 than a break: the figure's definition and type are unchanged, its inputs grew.
+
+### `Version20261123120000` — `country_world_pack_cache.served_at` (2026-11-23)
+
+Adds a nullable `served_at` timestamp. Owner: *"we should never get mixed worlds."* The tier
+endpoint had deleted each row on serve (`df3cae1`), so a retry built a fresh tier from another
+generation; it now stamps the row and replays it, and `app:worldpack:maintain` clears worlds an
+hour after they finish loading. Additive; existing rows read as unserved. `down()` drops it.
 
 ### `Version20261122230000` — two player transfer dials on `game_config` (2026-11-22)
 
