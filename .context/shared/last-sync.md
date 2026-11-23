@@ -8,13 +8,23 @@
 
 - **Commit:** af87ee0311b9f8057edb974e23e289a3a67d4c26
 - **Date:** 2026-11-23
-- **Stages touched this pass:** `01_overview`, `03_data`, `04_interfaces`, `07_synthesis`, shared
+- **Stages touched this pass:** `04_interfaces`
 
 > ⚠️ **The three bullets above are what the staleness check reads** (`SKILL.md`, Triggers table:
 > `git log <Commit>..HEAD -- . ':!.context' ':!.agents'`). Keep them at the top and update them on
 > every pass. Older passes were rotated, verbatim, to
 > `wunderkind-docs/context-archive/backend-shared-last-sync-history.md` on 2026-11-23. Keep roughly
 > the last few passes here; add new passes directly below this note, newest first.
+
+## 2026-11-23 — Review of the owner's suite fixes (`c66a310`, backend `development`)
+
+**Documentation only.** The owner ran the full suite (3,399 tests, green) and fixed six failures in
+`c66a310`, which also updated `environment.md` itself. Reviewed the code: the logs page now tails
+instead of reading the whole file (`controllers.md` updated), `bmc_index.html.twig` rows carry
+EasyAdmin's `data-id` and row-click attributes again (matches EasyAdmin 5.7.0's own template), the
+GameConfig parity test now allows the one top-level `countryFactorBp` (agrees with `services.md`),
+and three tests no longer collide on a shared test DB. `InitializeSetClaimTest` and
+`WorldPackSetClaimTest` from the entry below now pass; nothing in the world pack behaviour changed.
 
 ## 2026-11-23 — A retried world pack tier replays its own world (`af87ee0`, backend `development`)
 
