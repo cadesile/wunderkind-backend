@@ -133,6 +133,8 @@ class GameConfigController extends AbstractController
             'freeTransfersPerSeason'            => $config->getFreeTransfersPerSeason(),
             'playerTransferOutOfReachTierGap'   => $config->getPlayerTransferOutOfReachTierGap(),
             'playerTransferWagePremiumPerTier'  => $config->getPlayerTransferWagePremiumPerTier(),
+            'playerContractMaxYears'            => $config->getPlayerContractMaxYears(),
+            'playerContractRenewalCooldownWeeks' => $config->getPlayerContractRenewalCooldownWeeks(),
             'defaultMoraleMin'                  => $config->getDefaultMoraleMin(),
             'defaultMoraleMax'                  => $config->getDefaultMoraleMax(),
 
