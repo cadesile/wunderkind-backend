@@ -3,7 +3,12 @@ namespace App\Tests\Form;
 
 use App\Form\Type\AppearanceType;
 use Symfony\Component\Form\Test\TypeTestCase;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+// TypeTestCase::setUp() creates an EventDispatcherInterface mock we neither asked for nor
+// assert on — it is Symfony's fixture, in vendor code, so the double cannot be made a stub
+// here. This is the opt-out PHPUnit's own notice points at.
+#[AllowMockObjectsWithoutExpectations]
 class AppearanceTypeTest extends TypeTestCase
 {
     // Real HTTP form submissions simply omit an unchecked checkbox's key

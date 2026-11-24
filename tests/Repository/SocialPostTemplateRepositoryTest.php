@@ -26,7 +26,9 @@ class SocialPostTemplateRepositoryTest extends KernelTestCase
             ->disableOriginalConstructor()
             ->onlyMethods(['createQueryBuilder'])
             ->getMock();
-        $repo->method('createQueryBuilder')->with('t')->willReturn($qb);
+        // expects() is what makes with() an assertion; PHPUnit 13 deprecates a bare
+        // with() and PHPUnit 14 drops it. findAllOrdered() builds exactly one builder.
+        $repo->expects($this->once())->method('createQueryBuilder')->with('t')->willReturn($qb);
 
         $result = $repo->findAllOrdered();
         $this->assertSame([], $result);

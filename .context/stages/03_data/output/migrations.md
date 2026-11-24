@@ -30,6 +30,38 @@ That drift is gone. It was three separate things:
 noisy again, that is a signal, not background noise** — something was added to
 the database without being described in the mapping.
 
+### The six `*_backup` stash tables — dropped from the local dev DB 2026-11-24
+
+`doctrine:schema:update --dump-sql` on `wunderkind` had been reporting nine `DROP`s for a while,
+and they were **not** drift in the sense above: six stash tables, plus three owned sequences, that
+the economy/slots migrations create in their own `up()` — `league_payout_pre_ratio_backup`,
+`economy_r2_pre_authoring_backup`, `league_slots_pre_authoring_backup`,
+`bankruptcy_weeks_pre_authoring_backup`, `league_slots_pre_correction_backup`,
+`league_tv_deal_pre_resync_backup`. No entity maps them, so SchemaTool proposes dropping them, the
+same way it would the migrations table if that were not excluded.
+
+They were dropped on the owner's instruction (483 rows in all), **and the cost is specific: the
+`down()` of `Version20261116181000`, `…118120000`, `…119090000`, `…119091000`, `…119120000` and
+`…119150000` restores from its stash and never recomputes, so on this database those six can no
+longer be rolled back.** A `pg_dump` of all six, schema and data, was taken first:
+
+```bash
+# var/ is gitignored, so this file is local to the checkout that made it
+docker exec -i wunderkindbackend_database_1 psql -U wunderkind -d wunderkind \
+  < var/economy-backup-tables-2026-11-24.sql
+```
+
+A fresh database is unaffected — each `up()` recreates its own stash, so rollback works there as
+documented.
+
+**The dev diff is now empty again.** The one line left after the drop was `COMMENT ON COLUMN
+npc_club.land_plot_id IS ''` — a leftover `(DC2Type:uuid)` comment written by hand in
+`Version20261108120000`, which DBAL 4 no longer emits, so the mapping never described it. Exactly
+the third bullet's class above, and cleared the same way: `Version20261124140000`, a migration
+rather than a local `psql`, because the comment is on every database those location migrations
+reached, not just this checkout's. `schema:update --dump-sql` on `wunderkind` reports "Nothing to
+update".
+
 ## Archive
 
 `migrations/archive/` holds 29 old MySQL-era migrations plus a

@@ -189,6 +189,24 @@ class GameConfigController extends AbstractController
             'squadSizeMin' => $config->getSquadSizeMin(),
             'squadSizeMax' => $config->getSquadSizeMax(),
 
+            // Morale / Motivation — keys match the client's GameConfig exactly.
+            'moraleNormalLevel'                          => $config->getMoraleNormalLevel(),
+            'moraleDriftAboveNormalPerWeek'              => $config->getMoraleDriftAboveNormalPerWeek(),
+            'moraleDriftBelowNormalPerWeek'              => $config->getMoraleDriftBelowNormalPerWeek(),
+            'motivationReversionPerWeek'                 => $config->getMotivationReversionPerWeek(),
+            'motivationGameTimeBonus'                    => $config->getMotivationGameTimeBonus(),
+            'motivationGameTimeBonusFullShare'           => $config->getMotivationGameTimeBonusFullShare(),
+            'motivationTeamFormMatches'                  => $config->getMotivationTeamFormMatches(),
+            'motivationTeamFormMaxBonus'                 => $config->getMotivationTeamFormMaxBonus(),
+            'motivationTeamFormMaxPenalty'               => $config->getMotivationTeamFormMaxPenalty(),
+            'motivationTeamFormNeutralPpg'               => $config->getMotivationTeamFormNeutralPpg(),
+            'motivationShareStartsAcrossSquad'           => $config->isMotivationShareStartsAcrossSquad(),
+            'motivationGameTimePenaltyWeightByRole'      => $config->getMotivationGameTimePenaltyWeightByRole(),
+            'playerPromiseGrantMotivationMin'            => $config->getPlayerPromiseGrantMotivationMin(),
+            'playerPromiseGrantMotivationMax'            => $config->getPlayerPromiseGrantMotivationMax(),
+            'gametimePromiseBrokenMotivationDelta'       => $config->getGametimePromiseBrokenMotivationDelta(),
+            'playerContractPromiseBrokenMotivationDelta' => $config->getPlayerContractPromiseBrokenMotivationDelta(),
+
             // Squad Roles
             'squadRoleAppearanceExpectations' => $config->getSquadRoleAppearanceExpectations(),
             'squadRoleMoraleDecayPerWeek'     => $config->getSquadRoleMoraleDecayPerWeek(),

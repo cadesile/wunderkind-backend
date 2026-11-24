@@ -13,6 +13,7 @@ use App\Service\InboxService;
 use App\Repository\SponsorRepository;
 use App\Repository\InvestorRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
 class InboxServiceTest extends TestCase
@@ -65,6 +66,8 @@ class InboxServiceTest extends TestCase
         $this->assertNotNull($message->getRespondedAt());
     }
 
+    // builds its own EntityManager mock and asserts on that one; setUp’s is unused here.
+    #[AllowMockObjectsWithoutExpectations]
     public function testAcceptSponsorOfferCreatesActiveSponsor(): void
     {
         $user    = new User('test@example.com');
@@ -136,6 +139,8 @@ class InboxServiceTest extends TestCase
         $this->assertSame(30, $club->getReputation());
     }
 
+    // throws before the service reaches the EntityManager, so there is nothing to assert.
+    #[AllowMockObjectsWithoutExpectations]
     public function testAcceptMessageThrowsDomainExceptionWhenAlreadyProcessed(): void
     {
         $user    = new User('dup@example.com');
