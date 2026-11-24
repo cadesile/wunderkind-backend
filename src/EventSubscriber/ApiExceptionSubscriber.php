@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use App\Exception\ClubMismatchException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -89,7 +90,7 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
             'type'   => 'about:blank',
             'title'  => Response::$statusTexts[$status] ?? 'Error',
             'status' => $status,
-            'error'  => $this->errorSlug($status, $violations !== []),
+            'error'  => $this->errorSlug($status, $violations !== [], $throwable),
             'detail' => $detail,
         ];
         if ($violations !== []) {
@@ -153,10 +154,17 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         return [];
     }
 
-    private function errorSlug(int $status, bool $hasViolations): string
+    private function errorSlug(int $status, bool $hasViolations, ?\Throwable $throwable = null): string
     {
         if ($hasViolations) {
             return 'validation_failed';
+        }
+
+        // A 403 about ONE request (it named a club this account does not own), not about the
+        // account. The app signs out on an account-level 403 and must not on this one, since
+        // logging back in cannot change the answer, so it needs a slug of its own.
+        if ($throwable instanceof ClubMismatchException) {
+            return 'club_mismatch';
         }
 
         return match ($status) {

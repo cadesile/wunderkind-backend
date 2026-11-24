@@ -332,7 +332,10 @@ class SyncService
             'guardianIgnoreGuardianDemandIncrease'       => $gameConfig->getGuardianIgnoreGuardianDemandIncrease(),
             'guardianIgnoreSiblingMoralePenalty'         => $gameConfig->getGuardianIgnoreSiblingMoralePenalty(),
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => $gameConfig->getGuardianIgnoreSiblingLoyaltyTraitPenalty(),
-            'debugLoggingEnabled'                        => $gameConfig->isDebugLoggingEnabled(),
+            // Same rule as GET /api/game-config and /api/club/status (global || this account's
+            // override). This used to send the global switch alone, and the app applies every
+            // sync's block, so each sync switched a per-account debug panel back off.
+            'debugLoggingEnabled'                        => DebugLoggingResolver::resolve($gameConfig, $user),
             // Youth
             'youthScholarshipWagePence'     => $gameConfig->getYouthScholarshipWagePence(),
             // League finances
@@ -416,7 +419,7 @@ class SyncService
             'guardianIgnoreGuardianDemandIncrease'       => 2,
             'guardianIgnoreSiblingMoralePenalty'         => 5,
             'guardianIgnoreSiblingLoyaltyTraitPenalty'   => 2,
-            'debugLoggingEnabled'                        => false,
+            'debugLoggingEnabled'                        => $user->isDebugLoggingEnabled(),
             // Youth
             //
             // READ from the entity, never restated — and pointedly NOT 0 like the sponsor
