@@ -17,11 +17,18 @@ use App\Repository\AudienceGroupMemberRepository;
 use App\Service\AdminMessageService;
 use App\Service\AudienceCriteriaEvaluator;
 use Doctrine\DBAL\Connection;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerInterface;
 
+// setUp() builds one service out of five doubles and every test uses it. Three tests assert on
+// a double — the never() pair in testBroadcastSkipsGroupEvaluationEntirely, the Connection in
+// testAcknowledgeIssuesASingleUpsertKeyedOnTheUser, the sanitizer in
+// testSanitizeDelegatesToTheConfiguredSanitizer — so those three stay MockObjects. For the other
+// nine they are collaborators that merely have to exist, which is what this allows.
+#[AllowMockObjectsWithoutExpectations]
 class AdminMessageServiceTest extends TestCase
 {
     private AdminMessageRepository&Stub $messageRepository;

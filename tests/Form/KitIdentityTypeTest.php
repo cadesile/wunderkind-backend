@@ -4,6 +4,10 @@ namespace App\Tests\Form;
 use App\Form\Type\KitIdentityType;
 use Symfony\Component\Form\Test\TypeTestCase;
 
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+
+// Same as AppearanceTypeTest: the unasserted mock is TypeTestCase's own dispatcher.
+#[AllowMockObjectsWithoutExpectations]
 class KitIdentityTypeTest extends TypeTestCase
 {
     public function testSubmitMapsToNestedIdentityArray(): void

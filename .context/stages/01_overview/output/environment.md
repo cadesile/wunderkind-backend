@@ -366,6 +366,43 @@ rows in `wunderkind`, **0** in `wunderkind_test` — which empties every narrati
 `lando php bin/console app:seed-match-narrative --env=test` restores it. That is the
 content-not-structure trap below, and the narrative templates belong on its list.
 
+#### Sixteen columns synced on 2026-11-24 — the whole run was the trap
+
+A full run on `development` reported **192 errors and 89 failures**, and **every single one** was
+this. `Version20261124120000` (the Morale / Motivation dials, 16 columns on `game_config`) had
+reached neither `wunderkind` nor `wunderkind_test`. Applying the 16 to the test DB took the run
+straight to 3,403 passing, no code touched. The clue was the count: 3,403 tests against 3,399 the
+day before: **four new tests means new code, and new code on this project usually means new
+columns.**
+
+⚠️ **`schema:update --force` does NOT fully cover this migration.** Fifteen of the columns
+it handles, but `motivation_game_time_penalty_weight_by_role` is `JSON NOT NULL` whose default
+lives only in the migration (the entity has a PHP default, which is this project's convention for
+every one of its ~30 JSON columns — none carries a SQL default). `schema:update` therefore emits
+it with no default and the ALTER fails on an existing row. Run the migration's own DDL instead:
+
+```bash
+# the migration's exact statement, which backfills the existing row
+lando php bin/console dbal:run-sql "ALTER TABLE game_config ADD motivation_game_time_penalty_weight_by_role JSON DEFAULT '{\"star_player\":1,\"important\":1,\"first_team\":1,\"squad_player\":0.5,\"backup\":0,\"prospect\":0}' NOT NULL" --env=test
+# then match the ORM again, which declares no default
+lando php bin/console dbal:run-sql "ALTER TABLE game_config ALTER motivation_game_time_penalty_weight_by_role DROP DEFAULT" --env=test
+```
+
+✅ **Settled by `Version20261124130000`** (2026-11-24), a follow-up migration that does nothing
+but `ALTER ... DROP DEFAULT` on that column. **A follow-up, NOT an edit to
+`Version20261124120000::up()`, and the reason is worth keeping**: by the time the drift was
+noticed, 120000 had already run on `wunderkind`, so it was recorded as executed and an edit to its
+`up()` would never have reached that database — only fresh ones. Editing a migration only fixes
+environments that have not run it yet, which in practice means none of the ones you care about.
+
+**A JSON column added to `game_config` needs this shape**: a SQL default in the ADD so the
+existing row gets a value, and a `DROP DEFAULT` afterwards, because the entity side never declares
+`options: ['default' => …]` for a JSON column.
+
+❗ **Three occurrences now (2026-11-02, 2026-11-20, 2026-11-23) plus this one: assume drift
+BEFORE reading a single assertion.** `schema:update --dump-sql --env=test` is one command and it
+would have turned each of these four debugging sessions into a two-minute fix.
+
 **Syncing the test DB:**
 
 1. `lando php bin/console doctrine:schema:update --dump-sql --env=test` — shows the real diff.
