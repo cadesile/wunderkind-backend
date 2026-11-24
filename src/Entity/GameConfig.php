@@ -3332,4 +3332,142 @@ class GameConfig
 
         return $this;
     }
+
+    // ── Morale / Motivation ───────────────────────────────────────────────
+    //
+    // Engine constants for the client's weekly morale drift and motivation tick. Each
+    // field is served under the identical key by GET /api/game-config; the client falls
+    // back to its own DEFAULT_GAME_CONFIG for anything absent, so these defaults mirror
+    // those and changing nothing here changes nothing in the game.
+
+    /** Morale a player drifts back to each week. Default: 65 */
+    #[ORM\Column(type: 'integer', options: ['default' => 65])]
+    private int $moraleNormalLevel = 65;
+
+    /** Share of the gap to normal a player ABOVE normal loses each week (0–1). Default: 0.15 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.15])]
+    private float $moraleDriftAboveNormalPerWeek = 0.15;
+
+    /** Share of the gap to normal a player BELOW normal recovers each week (0–1). Default: 0.05 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.05])]
+    private float $moraleDriftBelowNormalPerWeek = 0.05;
+
+    /** Share of the gap to a player's personality baseline motivation that closes each week (0–1). Default: 0.12 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.12])]
+    private float $motivationReversionPerWeek = 0.12;
+
+    /** Weekly motivation for a regular starter, scaled down for fewer starts. Default: 1.6 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.6])]
+    private float $motivationGameTimeBonus = 1.6;
+
+    /** Share of the season's matches started that earns the full bonus (0–1). Default: 0.75 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.75])]
+    private float $motivationGameTimeBonusFullShare = 0.75;
+
+    /** How many recent results make up team form. Default: 5 */
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
+    private int $motivationTeamFormMatches = 5;
+
+    /** Weekly motivation for a perfect run of form. Default: 1.5 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.5])]
+    private float $motivationTeamFormMaxBonus = 1.5;
+
+    /** Weekly motivation lost for a run with no points. Default: 1.0 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.0])]
+    private float $motivationTeamFormMaxPenalty = 1.0;
+
+    /** Points share (0–1) where team form is neither a lift nor a drain. Default: 1/3 (a point a game) */
+    #[ORM\Column(type: 'float', options: ['default' => 0.3333])]
+    private float $motivationTeamFormNeutralPpg = 0.3333;
+
+    /** Fit the squad's role expectations into the 11 starts a match offers. Default: true */
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    private bool $motivationShareStartsAcrossSquad = true;
+
+    /**
+     * Share (0–1) of the weekly "short of minutes" motivation drain each squad role takes.
+     * Keys must match the six role slugs exactly.
+     */
+    #[ORM\Column(type: 'json')]
+    private array $motivationGameTimePenaltyWeightByRole = self::DEFAULT_MOTIVATION_GAME_TIME_PENALTY_WEIGHT_BY_ROLE;
+
+    public const DEFAULT_MOTIVATION_GAME_TIME_PENALTY_WEIGHT_BY_ROLE = [
+        'star_player'  => 1.0,
+        'important'    => 1.0,
+        'first_team'   => 1.0,
+        'squad_player' => 0.5,
+        'backup'       => 0.0,
+        'prospect'     => 0.0,
+    ];
+
+    /** Motivation lift when any promise is made to a player, at ambition 1. Default: 30 */
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
+    private int $playerPromiseGrantMotivationMin = 30;
+
+    /** Motivation lift when any promise is made to a player, at ambition 20. Default: 40 */
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
+    private int $playerPromiseGrantMotivationMax = 40;
+
+    /** Motivation lost when a game-time promise is broken. Default: -40 */
+    #[ORM\Column(type: 'integer', options: ['default' => -40])]
+    private int $gametimePromiseBrokenMotivationDelta = -40;
+
+    /** Motivation lost when a contract promise to a player is broken. Default: -40 */
+    #[ORM\Column(type: 'integer', options: ['default' => -40])]
+    private int $playerContractPromiseBrokenMotivationDelta = -40;
+
+    public function getMoraleNormalLevel(): int { return $this->moraleNormalLevel; }
+    public function setMoraleNormalLevel(int $v): static { $this->moraleNormalLevel = max(0, min(100, $v)); return $this; }
+    public function getMoraleDriftAboveNormalPerWeek(): float { return $this->moraleDriftAboveNormalPerWeek; }
+    public function setMoraleDriftAboveNormalPerWeek(float $v): static { $this->moraleDriftAboveNormalPerWeek = max(0.0, min(1.0, $v)); return $this; }
+    public function getMoraleDriftBelowNormalPerWeek(): float { return $this->moraleDriftBelowNormalPerWeek; }
+    public function setMoraleDriftBelowNormalPerWeek(float $v): static { $this->moraleDriftBelowNormalPerWeek = max(0.0, min(1.0, $v)); return $this; }
+    public function getMotivationReversionPerWeek(): float { return $this->motivationReversionPerWeek; }
+    public function setMotivationReversionPerWeek(float $v): static { $this->motivationReversionPerWeek = max(0.0, min(1.0, $v)); return $this; }
+    public function getMotivationGameTimeBonus(): float { return $this->motivationGameTimeBonus; }
+    public function setMotivationGameTimeBonus(float $v): static { $this->motivationGameTimeBonus = max(0.0, min(10.0, $v)); return $this; }
+    public function getMotivationGameTimeBonusFullShare(): float { return $this->motivationGameTimeBonusFullShare; }
+    public function setMotivationGameTimeBonusFullShare(float $v): static { $this->motivationGameTimeBonusFullShare = max(0.01, min(1.0, $v)); return $this; }
+    public function getMotivationTeamFormMatches(): int { return $this->motivationTeamFormMatches; }
+    public function setMotivationTeamFormMatches(int $v): static { $this->motivationTeamFormMatches = max(1, min(20, $v)); return $this; }
+    public function getMotivationTeamFormMaxBonus(): float { return $this->motivationTeamFormMaxBonus; }
+    public function setMotivationTeamFormMaxBonus(float $v): static { $this->motivationTeamFormMaxBonus = max(0.0, min(10.0, $v)); return $this; }
+    public function getMotivationTeamFormMaxPenalty(): float { return $this->motivationTeamFormMaxPenalty; }
+    public function setMotivationTeamFormMaxPenalty(float $v): static { $this->motivationTeamFormMaxPenalty = max(0.0, min(10.0, $v)); return $this; }
+    public function getMotivationTeamFormNeutralPpg(): float { return $this->motivationTeamFormNeutralPpg; }
+    public function setMotivationTeamFormNeutralPpg(float $v): static { $this->motivationTeamFormNeutralPpg = max(0.01, min(0.99, $v)); return $this; }
+    public function isMotivationShareStartsAcrossSquad(): bool { return $this->motivationShareStartsAcrossSquad; }
+    public function setMotivationShareStartsAcrossSquad(bool $v): static { $this->motivationShareStartsAcrossSquad = $v; return $this; }
+
+    /** @return array<string, float> always all six roles, missing ones at their default */
+    public function getMotivationGameTimePenaltyWeightByRole(): array
+    {
+        $out = [];
+        foreach (self::DEFAULT_MOTIVATION_GAME_TIME_PENALTY_WEIGHT_BY_ROLE as $role => $default) {
+            $out[$role] = (float) ($this->motivationGameTimePenaltyWeightByRole[$role] ?? $default);
+        }
+        return $out;
+    }
+
+    /** @param array<string, mixed> $v unknown keys are dropped; each weight is clamped to 0–1 */
+    public function setMotivationGameTimePenaltyWeightByRole(array $v): static
+    {
+        $clean = [];
+        foreach (self::DEFAULT_MOTIVATION_GAME_TIME_PENALTY_WEIGHT_BY_ROLE as $role => $default) {
+            $clean[$role] = isset($v[$role]) && is_numeric($v[$role])
+                ? max(0.0, min(1.0, (float) $v[$role]))
+                : $default;
+        }
+        $this->motivationGameTimePenaltyWeightByRole = $clean;
+        return $this;
+    }
+
+    public function getPlayerPromiseGrantMotivationMin(): int { return $this->playerPromiseGrantMotivationMin; }
+    public function setPlayerPromiseGrantMotivationMin(int $v): static { $this->playerPromiseGrantMotivationMin = max(0, min(100, $v)); return $this; }
+    public function getPlayerPromiseGrantMotivationMax(): int { return $this->playerPromiseGrantMotivationMax; }
+    public function setPlayerPromiseGrantMotivationMax(int $v): static { $this->playerPromiseGrantMotivationMax = max(0, min(100, $v)); return $this; }
+    public function getGametimePromiseBrokenMotivationDelta(): int { return $this->gametimePromiseBrokenMotivationDelta; }
+    public function setGametimePromiseBrokenMotivationDelta(int $v): static { $this->gametimePromiseBrokenMotivationDelta = max(-100, min(0, $v)); return $this; }
+    public function getPlayerContractPromiseBrokenMotivationDelta(): int { return $this->playerContractPromiseBrokenMotivationDelta; }
+    public function setPlayerContractPromiseBrokenMotivationDelta(int $v): static { $this->playerContractPromiseBrokenMotivationDelta = max(-100, min(0, $v)); return $this; }
 }
