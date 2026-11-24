@@ -87,6 +87,29 @@ class SyncServiceGameConfigParityTest extends TestCase
         self::assertStringContainsString('economyConfigPublisher->clientBlock(', $fallback);
     }
 
+    /**
+     * The sync's `debugLoggingEnabled` must go through DebugLoggingResolver, like
+     * GET /api/game-config and GET /api/club/status.
+     *
+     * It used to send the global switch alone. The app applies every sync's block, so each
+     * sync switched a per-account debug panel (and CHECKS with it) back off until the next
+     * signed-in game-config fetch put it back.
+     */
+    public function testTheDebugFlagUsesTheSameRuleAsGameConfig(): void
+    {
+        $source = $this->syncServiceSource();
+        $start  = strpos($source, "'cliqueRelationshipThreshold'");
+        $middle = strpos($source, '] : [', (int) $start);
+
+        $entity = substr($source, (int) $start, (int) $middle - (int) $start);
+
+        self::assertStringContainsString(
+            '=> DebugLoggingResolver::resolve($gameConfig, $user),',
+            $entity,
+        );
+        self::assertStringNotContainsString('$gameConfig->isDebugLoggingEnabled()', $entity);
+    }
+
     // ── The economy block's own two shapes ────────────────────────────────
 
     public function testTheEconomyBlockHasTheSameShapeWithAndWithoutAConfig(): void
