@@ -614,6 +614,24 @@ class DashboardController extends AbstractDashboardController
         $config->setSquadSizeMin((int) $request->request->get('squadSizeMin', 11));
         $config->setSquadSizeMax((int) $request->request->get('squadSizeMax', 25));
 
+        // Morale / Motivation
+        $config->setMoraleNormalLevel((int) $request->request->get('moraleNormalLevel', 65));
+        $config->setMoraleDriftAboveNormalPerWeek((float) $request->request->get('moraleDriftAboveNormalPerWeek', 0.15));
+        $config->setMoraleDriftBelowNormalPerWeek((float) $request->request->get('moraleDriftBelowNormalPerWeek', 0.05));
+        $config->setMotivationReversionPerWeek((float) $request->request->get('motivationReversionPerWeek', 0.12));
+        $config->setMotivationGameTimeBonus((float) $request->request->get('motivationGameTimeBonus', 1.6));
+        $config->setMotivationGameTimeBonusFullShare((float) $request->request->get('motivationGameTimeBonusFullShare', 0.75));
+        $config->setMotivationTeamFormMatches((int) $request->request->get('motivationTeamFormMatches', 5));
+        $config->setMotivationTeamFormMaxBonus((float) $request->request->get('motivationTeamFormMaxBonus', 1.5));
+        $config->setMotivationTeamFormMaxPenalty((float) $request->request->get('motivationTeamFormMaxPenalty', 1.0));
+        $config->setMotivationTeamFormNeutralPpg((float) $request->request->get('motivationTeamFormNeutralPpg', 0.3333));
+        $config->setMotivationShareStartsAcrossSquad((bool) $request->request->get('motivationShareStartsAcrossSquad', false));
+        $config->setMotivationGameTimePenaltyWeightByRole($request->request->all('motivationGameTimePenaltyWeightByRole'));
+        $config->setPlayerPromiseGrantMotivationMin((int) $request->request->get('playerPromiseGrantMotivationMin', 30));
+        $config->setPlayerPromiseGrantMotivationMax((int) $request->request->get('playerPromiseGrantMotivationMax', 40));
+        $config->setGametimePromiseBrokenMotivationDelta((int) $request->request->get('gametimePromiseBrokenMotivationDelta', -40));
+        $config->setPlayerContractPromiseBrokenMotivationDelta((int) $request->request->get('playerContractPromiseBrokenMotivationDelta', -40));
+
         // Squad Roles
         $roleFields = [
             'squadRoleAppearanceExpectations' => 'setSquadRoleAppearanceExpectations',
