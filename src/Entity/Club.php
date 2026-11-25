@@ -87,9 +87,10 @@ class Club
      * response, because the shipped client reads it — removing the field is a later step
      * that needs a coordinated wunderkind-app release. Do not add new readers.
      *
-     * Note `EconomicService::processFinancialYearEnd()` still adds its server-computed
-     * manager dividend here and deliberately does NOT write a UserLedger entry (explicit
-     * product decision), so this column is the only record of that particular payout.
+     * Nothing server-side writes it except the sync. The server-side year-end investor payout
+     * and dividend that used to read and add to it were removed 2026-11-25 (owner ruling: the
+     * device does all financial calculation; only the owner's dividend reaches the server, as
+     * a UserLedger DIVIDEND_DRAW).
      */
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true, 'default' => 0])]
     private int $totalCareerEarnings = 0;
@@ -471,24 +472,7 @@ class Club
         );
     }
 
-    public function calculateAnnualProfit(): int
-    {
-        // Real formula is client-side; server approximates from stored totals.
-        return $this->totalCareerEarnings;
-    }
 
-    /**
-     * True when the span from $fromWeek to $toWeek crosses a 52-week financial-year boundary.
-     *
-     * Clients batch several weeks into a single sync, so they never reliably land on
-     * week % 52 === 0 — the old modulo check would simply never fire. Comparing year
-     * indices also makes a replayed or duplicate sync a no-op; the modulo check paid the
-     * dividend again every time week 52 was re-sent.
-     */
-    public function crossedFinancialYearEnd(int $fromWeek, int $toWeek): bool
-    {
-        return intdiv($toWeek, 52) > intdiv(max(0, $fromWeek), 52);
-    }
 
     public function getCurrentLeague(): ?League { return $this->currentLeague; }
     public function setCurrentLeague(?League $v): static { $this->currentLeague = $v; return $this; }

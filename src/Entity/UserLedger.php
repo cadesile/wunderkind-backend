@@ -8,9 +8,9 @@ use Symfony\Component\Uid\UuidV7;
 
 /**
  * Centralized, user-level financial audit trail — currently just dividend draws the client
- * reports against one of the user's clubs. Historically a club's "manager dividend" (see
- * EconomicService::processFinancialYearEnd()) just folded back into that same club's own
- * totalCareerEarnings; now that a single owner avatar persists across every club a User owns
+ * reports against one of the user's clubs. Historically a club's "manager dividend" just
+ * folded back into that same club's own totalCareerEarnings; now that a single owner avatar
+ * persists across every club a User owns
  * (see "Owner Identity" in CLAUDE.md), this is the one place that centralizes earnings across
  * clubs for that owner.
  *

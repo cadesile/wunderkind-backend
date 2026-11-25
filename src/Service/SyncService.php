@@ -140,10 +140,6 @@ class SyncService
             $syncRecord->getServerTimestamp(),
         );
 
-        // Captured before setLastSyncedWeek() below — the financial-year check needs the
-        // span the client is reporting, not just its end week (syncs batch ~4 weeks).
-        $previousSyncedWeek = $club->getLastSyncedWeek();
-
         // Rollback detection: client sent a week behind the server's last recorded week.
         // Accept the sync but flag it, then purge any superseded future records so
         // the rollback becomes the new canonical timeline for this club.
@@ -251,12 +247,10 @@ class SyncService
         }
 
         // ── Economic lifecycle checks ─────────────────────────────────────────
-        $dividendPaidPence = 0;
-        if ($club->crossedFinancialYearEnd($previousSyncedWeek, $request->weekNumber)) {
-            $yearEndResult     = $this->economicService->processFinancialYearEnd($club);
-            $dividendPaidPence = $yearEndResult['dividendPaidPence'];
-        }
-
+        // No server-side financial year end. Investor payouts and the manager dividend are
+        // computed on the device; the only one that reaches the server is the owner's
+        // dividend, as a `dividend_draw` ledger entry that UserLedgerService turns into a
+        // DIVIDEND_DRAW row (owner ruling 2026-11-25).
         $this->economicService->checkSponsorContracts($club, $club->getReputation());
 
         // ── Player attribute snapshots ────────────────────────────────────────
@@ -491,7 +485,6 @@ class SyncService
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
-            'dividendPaidPence' => $dividendPaidPence,
             'club'              => [
                 'id'                   => (string) $club->getId(),
                 'reputation'           => $club->getReputation(),

@@ -26,11 +26,9 @@ It is **still written on every sync and still emitted** by `GET /api/club/status
 sync response, because the shipped client reads it. Removing the field is a separate,
 later step that needs a coordinated wunderkind-app release. Don't add new readers.
 
-One stream deliberately stays outside the ledger: the server-side manager dividend
-`EconomicService::processFinancialYearEnd()` computes at each financial year end still
-goes only to `totalCareerEarnings` and writes no `UserLedger` row (explicit product
-decision). The ledger therefore reflects client-reported `dividend_draw` entries and
-nothing else.
+The ledger reflects client-reported `dividend_draw` entries and nothing else. The server
+computes no dividend or investor payout of its own: the year-end processing that used to
+(`EconomicService::processFinancialYearEnd()`) was removed 2026-11-25.
 
 ### Expect it to be sparse at first
 

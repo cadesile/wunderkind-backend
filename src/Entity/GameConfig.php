@@ -1655,12 +1655,9 @@ class GameConfig
      * the number of weeks the server divides by is the number of weeks the device actually
      * charges for, and the device's paid season is 46 weeks.
      *
-     * NOT THE SAME AS THE BACKEND'S OWN FINANCIAL YEAR, which is 52 — see
-     * Club::crossedFinancialYearEnd(), which is what triggers
-     * EconomicService::processFinancialYearEnd(). Six weeks of the backend's year are therefore
-     * unpriced by this model. That is a known gap, recorded here rather than papered over,
-     * because the two numbers measure different things and forcing them equal would make one
-     * of them wrong.
+     * The backend has no financial year of its own: the server-side year-end processing that
+     * ran on a 52-week year was removed 2026-11-25, so this is the only season length the
+     * server prices against.
      */
     #[ORM\Column(type: 'smallint', options: ['default' => 46])]
     private int $economyWeeksPerSeason = 46;
