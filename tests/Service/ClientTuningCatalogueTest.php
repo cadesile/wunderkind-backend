@@ -61,4 +61,15 @@ final class ClientTuningCatalogueTest extends TestCase
         $json = json_encode(ClientTuningCatalogue::defaults()['npcStartingBalanceByTier']);
         self::assertStringStartsWith('{"1":', $json);
     }
+
+    public function testInvestorPremiumRangesAreServedAndOrdered(): void
+    {
+        $d = ClientTuningCatalogue::defaults();
+        foreach (['Small', 'Medium', 'Large'] as $size) {
+            self::assertIsFloat($d["investorPremium{$size}Min"]);
+            self::assertLessThanOrEqual($d["investorPremium{$size}Max"], $d["investorPremium{$size}Min"]);
+        }
+        self::assertSame(1.0, $d['investorPremiumSmallMin']);
+        self::assertSame(2.0, $d['investorPremiumLargeMax']);
+    }
 }
