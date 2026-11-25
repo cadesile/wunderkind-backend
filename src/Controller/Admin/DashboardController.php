@@ -595,6 +595,8 @@ class DashboardController extends AbstractDashboardController
         $config->setFreeTransfersPerSeason((int) $request->request->get('freeTransfersPerSeason', 3));
         $config->setPlayerTransferOutOfReachTierGap((int) $request->request->get('playerTransferOutOfReachTierGap', 3));
         $config->setPlayerTransferWagePremiumPerTier((float) $request->request->get('playerTransferWagePremiumPerTier', 1.0));
+        $config->setPlayerContractMaxYears((int) $request->request->get('playerContractMaxYears', 5));
+        $config->setPlayerContractRenewalCooldownWeeks((int) $request->request->get('playerContractRenewalCooldownWeeks', 8));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
