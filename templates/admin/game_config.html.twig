@@ -7,7 +7,7 @@
 
     <div class="bmc-rule"><span class="bmc-rule__title">ENGINE CONSTANTS</span><span class="bmc-rule__line"></span><span class="bmc-rule__meta">synced to every client on the next /api/sync</span></div>
 
-    <form method="post" action="{{ path('admin_game_config_save') }}" data-bmc-form id="game-config-form" style="display:contents">
+    <form method="post" action="{{ path('admin_game_config_save') }}" data-bmc-form data-bmc-track-all id="game-config-form" style="display:contents">
         <input type="hidden" name="_token" value="{{ csrf_token('save_game_config') }}">
         <div style="display:flex;flex-direction:column;gap:12px">
 
