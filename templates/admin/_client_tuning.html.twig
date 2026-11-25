@@ -1,0 +1,34 @@
+{# Engine tuning — the keys declared in App\Service\ClientTuningCatalogue, one card per group.
+   Every input posts as clientTuning[key]; a blank or default value is stored as "use the
+   default", so the row only ever records what an admin changed. #}
+{% set tuning = config.resolvedClientTuning %}
+{% set overrides = config.clientTuning %}
+{% for groupId, groupLabel in tuningGroups %}
+<div class="bmc-card cfg-section" data-domain="club" data-section-id="tuning-{{ groupId }}" data-group="engine-tuning">
+    <div class="bmc-card__head"><i data-lucide="sliders-horizontal"></i><span class="bmc-card__title">{{ groupLabel|upper }}</span></div>
+    <div class="bmc-card__body">
+        <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
+        {% for key, def in tuningKeys|filter(d => d.group == groupId) %}
+            {% set value = tuning[key] %}
+            {% set defaultText = def.type == 'json' ? def.default|json_encode : (def.type == 'bool' ? (def.default ? 'on' : 'off') : def.default) %}
+            {% set help = def.help ~ ' Default: ' ~ defaultText ~ '.' ~ (overrides[key] is defined ? ' (changed)' : '') %}
+            {% if def.type == 'bool' %}
+                <div class="bmc-check" style="margin:6px 0">
+                    <input type="hidden" name="clientTuning[{{ key }}]" value="0">
+                    <input type="checkbox" id="ct-{{ key }}" name="clientTuning[{{ key }}]" value="1" {{ value ? 'checked' : '' }}>
+                    <label for="ct-{{ key }}" title="{{ help }}">{{ def.label }} — <span class="opacity-75">{{ help }}</span></label>
+                </div>
+            {% elseif def.type == 'json' %}
+                <div class="bmc-field-col">
+                    <label for="ct-{{ key }}">{{ def.label }}</label>
+                    <textarea id="ct-{{ key }}" name="clientTuning[{{ key }}]" rows="4" data-kind="text" data-blank="ok">{{ value|json_encode }}</textarea>
+                    <div class="bmc-data">{{ help }}</div>
+                </div>
+            {% else %}
+                <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">{{ def.label }}</span><span class="bmc-setting__help">{{ help }}</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="clientTuning[{{ key }}]" value="{{ value }}" data-saved="{{ value }}" data-kind="{{ def.type == 'int' ? 'int' : 'decimal' }}" inputmode="{{ def.type == 'int' ? 'numeric' : 'decimal' }}" aria-label="{{ def.label|lower }}"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+            {% endif %}
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}

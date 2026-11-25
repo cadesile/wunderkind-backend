@@ -578,6 +578,21 @@ class GameConfig
     #[ORM\Column(type: 'float', options: ['default' => 1.0])]
     private float $playerTransferWagePremiumPerTier = 1.0;
 
+    /**
+     * The longest a player's contract may run, in years. A renewal adds its length onto what is
+     * left, so the app disables any offer that would take the remaining contract past this.
+     * Default: 5
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
+    private int $playerContractMaxYears = 5;
+
+    /**
+     * Weeks after a contract renewal before the same player can be offered another one.
+     * Default: 8
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
+    private int $playerContractRenewalCooldownWeeks = 8;
+
     // ── Guardian Complaints ───────────────────────────────────────────────
 
     /** Player morale boost when manager convinces a guardian. Default: 5 */
@@ -846,6 +861,12 @@ class GameConfig
 
     public function getPlayerTransferWagePremiumPerTier(): float { return $this->playerTransferWagePremiumPerTier; }
     public function setPlayerTransferWagePremiumPerTier(float $v): static { $this->playerTransferWagePremiumPerTier = max(0.0, $v); return $this; }
+
+    public function getPlayerContractMaxYears(): int { return $this->playerContractMaxYears; }
+    public function setPlayerContractMaxYears(int $v): static { $this->playerContractMaxYears = max(1, min(10, $v)); return $this; }
+
+    public function getPlayerContractRenewalCooldownWeeks(): int { return $this->playerContractRenewalCooldownWeeks; }
+    public function setPlayerContractRenewalCooldownWeeks(int $v): static { $this->playerContractRenewalCooldownWeeks = max(0, $v); return $this; }
 
     public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
     public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }
@@ -3637,4 +3658,40 @@ class GameConfig
     public function setManagerMotivationBaseline(int $v): static { $this->managerMotivationBaseline = max(0, min(100, $v)); return $this; }
     public function getManagerMotivationWeeklyDrift(): int { return $this->managerMotivationWeeklyDrift; }
     public function setManagerMotivationWeeklyDrift(int $v): static { $this->managerMotivationWeeklyDrift = max(0, min(20, $v)); return $this; }
+
+    // ── Client engine tuning (2026-11-25) ─────────────────────────────────────────────────
+
+    /**
+     * Admin overrides for the engine tuning keys declared in ClientTuningCatalogue — the
+     * settings the app used to hold only in its own DEFAULT_GAME_CONFIG. Holds only keys an
+     * admin has changed; everything else resolves to the catalogue default (which equals the
+     * app's), so an empty object means "exactly what the app shipped with".
+     *
+     * @var array<string, mixed>
+     */
+    #[ORM\Column(type: 'json', options: ['default' => '{}'])]
+    private array $clientTuning = [];
+
+    /** @return array<string, mixed> stored overrides only */
+    public function getClientTuning(): array { return $this->clientTuning; }
+
+    /** @param array<string, mixed> $v overrides; unknown keys and wrong types are dropped */
+    public function setClientTuning(array $v): static
+    {
+        $clean = [];
+        foreach ($v as $key => $value) {
+            $type = \App\Service\ClientTuningCatalogue::KEYS[$key]['type'] ?? null;
+            if ($type !== null && \App\Service\ClientTuningCatalogue::fits($type, $value)) {
+                $clean[$key] = $value;
+            }
+        }
+        $this->clientTuning = $clean;
+        return $this;
+    }
+
+    /** @return array<string, mixed> every catalogue key, overrides applied — what the API serves */
+    public function getResolvedClientTuning(): array
+    {
+        return \App\Service\ClientTuningCatalogue::resolve($this->clientTuning);
+    }
 }

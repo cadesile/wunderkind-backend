@@ -282,6 +282,8 @@ class DashboardController extends AbstractDashboardController
             'bmcGroup' => 'Config',
             'bmcTitle' => 'Game config',
             'config' => $this->gameConfigRepository->getConfig(),
+            'tuningGroups' => \App\Service\ClientTuningCatalogue::GROUPS,
+            'tuningKeys'   => \App\Service\ClientTuningCatalogue::KEYS,
         ]);
     }
 
@@ -595,6 +597,8 @@ class DashboardController extends AbstractDashboardController
         $config->setFreeTransfersPerSeason((int) $request->request->get('freeTransfersPerSeason', 3));
         $config->setPlayerTransferOutOfReachTierGap((int) $request->request->get('playerTransferOutOfReachTierGap', 3));
         $config->setPlayerTransferWagePremiumPerTier((float) $request->request->get('playerTransferWagePremiumPerTier', 1.0));
+        $config->setPlayerContractMaxYears((int) $request->request->get('playerContractMaxYears', 5));
+        $config->setPlayerContractRenewalCooldownWeeks((int) $request->request->get('playerContractRenewalCooldownWeeks', 8));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
@@ -717,6 +721,33 @@ class DashboardController extends AbstractDashboardController
                 $leagueWinPoints[$tier] = max(0, (int) ($rawLeagueWinPoints[$tier] ?? 0));
             }
             $config->setLeagueWinPoints($leagueWinPoints);
+        }
+
+        // Engine tuning (ClientTuningCatalogue). Only a value that differs from the catalogue
+        // default is stored, so the row keeps recording just what an admin changed. A value
+        // that does not parse leaves that key as it was and is reported, rather than failing
+        // the whole save.
+        $tuningInput = $request->request->all('clientTuning');
+        $tuning      = $config->getClientTuning();
+        $badTuning   = [];
+        foreach (\App\Service\ClientTuningCatalogue::KEYS as $key => $def) {
+            if (!array_key_exists($key, $tuningInput)) {
+                continue;
+            }
+            [$ok, $value] = \App\Service\ClientTuningCatalogue::parse($key, $tuningInput[$key]);
+            if (!$ok) {
+                $badTuning[] = $key;
+                continue;
+            }
+            if ($value == $def['default'] && gettype($value) === gettype($def['default'])) {
+                unset($tuning[$key]);
+            } else {
+                $tuning[$key] = $value;
+            }
+        }
+        $config->setClientTuning($tuning);
+        if ($badTuning !== []) {
+            $this->addFlash('warning', 'Not saved (invalid value): ' . implode(', ', $badTuning));
         }
 
         $this->em->flush();
