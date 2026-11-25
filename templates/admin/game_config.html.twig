@@ -1181,49 +1181,109 @@
                         Ability-based multipliers applied when generating player and staff contract values.
                         Pool players never have a club, so the player's own <strong>current ability</strong> determines the tier.<br>
                         Formula: <code>contractValue = currentAbility × rand(min, max) × playerMultiplier</code><br>
-                        Tiers are evaluated in order; first entry where current ability &lt; Max Ability wins.
-                        Leave Max Ability blank on the last row to catch all higher abilities.
+                        Shown highest first. Order does not matter: rows are sorted by Max Ability when saved,
+                        and a player uses the first row whose Max Ability is above their ability.
+                        Leave Max Ability blank on the top row so it catches every higher ability.
+                        <em>Covers ability</em> and <em>Staff / player</em> update as you type.
                     </p>
 
                     <div class="table-responsive mb-3">
-                        <table class="bmc-minitable">
+                        <table class="bmc-minitable" id="wage-ladder">
                             <thead class="table-light">
                                 <tr>
                                     <th class="small  fw-semibold">Tier</th>
                                     <th class="small  fw-semibold">Max Ability (exclusive)</th>
+                                    <th class="small  fw-semibold">Covers ability</th>
                                     <th class="small  fw-semibold">Player ×</th>
                                     <th class="small  fw-semibold">Staff ×</th>
+                                    <th class="small  fw-semibold">Staff / player</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for i, tier in config.wageMultiplierTiers %}
-                                <tr>
+                                {# Highest first for reading; GameConfig::sortWageMultiplierTiers() restores
+                                   ascending order on save, so the posted order never matters. #}
+                                {% for i, tier in config.wageMultiplierTiers|reverse %}
+                                <tr data-ladder-row>
                                     <td class="small fw-semibold ">Tier {{ i + 1 }}</td>
                                     <td>
                                         <input type="number" name="wageMultiplierTiers[{{ i }}][maxAbility]"
                                                value="{{ tier.maxAbility ?? '' }}"
-                                               min="0" max="100" placeholder="∞ (default)"
-                                               style="width:140px;">
+                                               min="0" max="100" placeholder="∞ (catch-all)"
+                                               data-ladder="max" style="width:140px;">
                                     </td>
+                                    <td class="small" data-ladder="covers"></td>
                                     <td>
                                         <input type="number" name="wageMultiplierTiers[{{ i }}][playerMultiplier]"
                                                value="{{ tier.playerMultiplier }}"
-                                               min="0" step="0.1" style="width:100px;">
+                                               min="0" step="0.1" data-ladder="player" style="width:100px;">
                                     </td>
                                     <td>
                                         <input type="number" name="wageMultiplierTiers[{{ i }}][staffMultiplier]"
                                                value="{{ tier.staffMultiplier }}"
-                                               min="0" step="0.1" style="width:100px;">
+                                               min="0" step="0.1" data-ladder="staff" style="width:100px;">
                                     </td>
+                                    <td class="small" data-ladder="ratio"></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
+                        <div class="small mt-2" id="wage-ladder-note"></div>
+                        <script>
+                        (function () {
+                            var table = document.getElementById('wage-ladder');
+                            var note = document.getElementById('wage-ladder-note');
+                            if (!table) return;
+                            function num(el) { var v = String(el.value).trim(); return v === '' ? null : parseFloat(v); }
+                            function update() {
+                                var rows = Array.prototype.slice.call(table.querySelectorAll('[data-ladder-row]')).map(function (tr) {
+                                    return {
+                                        tr: tr,
+                                        max: num(tr.querySelector('[data-ladder="max"]')),
+                                        player: num(tr.querySelector('[data-ladder="player"]')),
+                                        staff: num(tr.querySelector('[data-ladder="staff"]'))
+                                    };
+                                });
+                                // Same order the server saves in: ascending Max Ability, blank last.
+                                var asc = rows.slice().sort(function (a, b) {
+                                    if (a.max === null && b.max === null) return 0;
+                                    if (a.max === null) return 1;
+                                    if (b.max === null) return -1;
+                                    return a.max - b.max;
+                                });
+                                var lo = 0, dips = 0, prevRatio = null, notes = [];
+                                asc.forEach(function (r, idx) {
+                                    var covers;
+                                    if (r.max === null) {
+                                        covers = lo + '+';
+                                    } else if (r.max <= lo) {
+                                        covers = 'none (overlaps the row below)';
+                                    } else {
+                                        covers = lo + '–' + (r.max - 1) + (idx === asc.length - 1 ? ' and ' + r.max + '+ (top row catches the rest)' : '');
+                                    }
+                                    if (r.max !== null && r.max > lo) lo = r.max;
+                                    r.tr.querySelector('[data-ladder="covers"]').textContent = covers;
+                                    var ratio = r.player > 0 && r.staff !== null ? r.staff / r.player : null;
+                                    var cell = r.tr.querySelector('[data-ladder="ratio"]');
+                                    var dip = ratio !== null && prevRatio !== null && ratio < prevRatio - 1e-9;
+                                    cell.textContent = ratio === null ? '—' : '×' + ratio.toFixed(2) + (dip ? '  ▼ dips' : '');
+                                    cell.style.color = dip ? 'var(--wk-warning, #f2a65a)' : '';
+                                    if (dip) dips++;
+                                    if (ratio !== null) prevRatio = ratio;
+                                });
+                                var top = asc[asc.length - 1];
+                                if (top && top.max !== null) notes.push('Top row has a Max Ability of ' + top.max + '. Leave it blank to make it the catch-all (same pricing, clearer).');
+                                if (dips) notes.push(dips + ' row(s) pay staff a smaller share of the player rate than the row below, so staff earn relatively less as ability rises.');
+                                note.textContent = notes.join(' ');
+                            }
+                            table.addEventListener('input', update);
+                            update();
+                        })();
+                        </script>
                     </div>
 
                     <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
-                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">RAND MIN</span><span class="bmc-setting__help">Lower bound of the random multiplier. Default: 10</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="contractValueRandMin" value="{{ config.contractValueRandMin }}" data-saved="{{ config.contractValueRandMin }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="rand min"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
-                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">RAND MAX</span><span class="bmc-setting__help">Upper bound of the random multiplier. Must be ≥ Rand Min. Default: 40</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="contractValueRandMax" value="{{ config.contractValueRandMax }}" data-saved="{{ config.contractValueRandMax }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="rand max"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">RAND MIN</span><span class="bmc-setting__help">Pence per ability point per week, before the tier's Player ×, so 2000 = £20.00. Legacy wage model only. Code default: 10</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="contractValueRandMin" value="{{ config.contractValueRandMin }}" data-saved="{{ config.contractValueRandMin }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="rand min"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">RAND MAX</span><span class="bmc-setting__help">Pence per ability point per week, upper end of the roll. Must be ≥ Rand Min. Code default: 40</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="contractValueRandMax" value="{{ config.contractValueRandMax }}" data-saved="{{ config.contractValueRandMax }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="rand max"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                     </div>
                 </div>
             </div>
