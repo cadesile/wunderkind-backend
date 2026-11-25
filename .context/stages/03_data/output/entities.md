@@ -165,9 +165,9 @@ migrations are the change log (see `migrations.md`).
   income the club ever had; no longer backs any board or admin panel, superseded
   by `UserLedger` dividend draws. Still written on sync and still emitted by
   `GET /api/club/status`, because the shipped client reads it — removal needs a
-  coordinated wunderkind-app release. `EconomicService::processFinancialYearEnd()`'s
-  server-computed manager dividend still lands here and deliberately writes no
-  ledger row, so this column is its only record), `hallOfFamePoints`, `lastSyncedWeek`,
+  coordinated wunderkind-app release. Nothing server-side reads or adds to it: the
+  server has no year-end processing, investor payout or dividend of its own — the
+  device computes all of those), `hallOfFamePoints`, `lastSyncedWeek`,
   `lastSyncedAt`, `reputationDecayedAt:?datetime` (added by
   `Version20261012215721`) — how far dormancy-based reputation decay has been
   charged; exists purely to make `app:reputation:decay` idempotent and
@@ -1274,11 +1274,9 @@ the knob arrives switched off and is turned on per country by an operator.
   capped below 10000 so the player budget cannot be zero),
   `economyWageCurveExponentBp` (25000 = k 2.5, floored at 1 — a zero exponent
   prices every ability the same), `economyReputationSpreadBp` (0 = flat 1.0).
-- `economyWeeksPerSeason` — **46, which is NOT the backend's own financial
-  year of 52** (`Club::crossedFinancialYearEnd()`). 46 is what the app charges
-  wages for, and the reference-squad calibration is only meaningful against
-  the payer's number. Six weeks of the backend's year are therefore unpriced
-  by this model; recorded, not reconciled.
+- `economyWeeksPerSeason` — **46**, what the app charges wages for; the
+  reference-squad calibration is only meaningful against the payer's number.
+  The backend has no financial year of its own.
 - `inflationRatePerSeasonBp` — **the rate and nothing else.** Never applied to
   a generated row, a stored value, or a world pack (the pack cache is keyed
   `(country, tier)` with no season dimension, so an inflated pack would be

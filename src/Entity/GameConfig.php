@@ -1655,12 +1655,9 @@ class GameConfig
      * the number of weeks the server divides by is the number of weeks the device actually
      * charges for, and the device's paid season is 46 weeks.
      *
-     * NOT THE SAME AS THE BACKEND'S OWN FINANCIAL YEAR, which is 52 — see
-     * Club::crossedFinancialYearEnd(), which is what triggers
-     * EconomicService::processFinancialYearEnd(). Six weeks of the backend's year are therefore
-     * unpriced by this model. That is a known gap, recorded here rather than papered over,
-     * because the two numbers measure different things and forcing them equal would make one
-     * of them wrong.
+     * The backend has no financial year of its own: the server-side year-end processing that
+     * ran on a 52-week year was removed 2026-11-25, so this is the only season length the
+     * server prices against.
      */
     #[ORM\Column(type: 'smallint', options: ['default' => 46])]
     private int $economyWeeksPerSeason = 46;
@@ -3470,4 +3467,174 @@ class GameConfig
     public function setGametimePromiseBrokenMotivationDelta(int $v): static { $this->gametimePromiseBrokenMotivationDelta = max(-100, min(0, $v)); return $this; }
     public function getPlayerContractPromiseBrokenMotivationDelta(): int { return $this->playerContractPromiseBrokenMotivationDelta; }
     public function setPlayerContractPromiseBrokenMotivationDelta(int $v): static { $this->playerContractPromiseBrokenMotivationDelta = max(-100, min(0, $v)); return $this; }
+
+    // ── Morale / Motivation: effects, promises, staff ─────────────────────
+    //
+    // The rest of the client's morale and motivation dials, so every one of them is tunable
+    // from the Morale / Motivation group in Game config. Served under identical keys by
+    // GET /api/game-config; defaults mirror DEFAULT_GAME_CONFIG, so nothing moves until an
+    // admin changes a value.
+
+    /** Morale at or above which development runs at full rate (×1). Default: 60 */
+    #[ORM\Column(type: 'integer', options: ['default' => 60])]
+    private int $moraleDevelopmentThresholdFull = 60;
+
+    /** Morale at or above which the mid multiplier applies. Default: 35 */
+    #[ORM\Column(type: 'integer', options: ['default' => 35])]
+    private int $moraleDevelopmentThresholdMid = 35;
+
+    /** Development multiplier between the mid and full thresholds. Default: 0.6 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.6])]
+    private float $moraleDevelopmentMultiplierMid = 0.6;
+
+    /** Development multiplier below the mid threshold. Default: 0.2 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.2])]
+    private float $moraleDevelopmentMultiplierLow = 0.2;
+
+    /** Motivation at or above which the high multipliers apply. Default: 75 */
+    #[ORM\Column(type: 'integer', options: ['default' => 75])]
+    private int $motivationHighThreshold = 75;
+
+    /** Motivation at or above which the mid multipliers apply. Default: 40 */
+    #[ORM\Column(type: 'integer', options: ['default' => 40])]
+    private int $motivationMidThreshold = 40;
+
+    /** Development multiplier when motivation is high. Default: 1.2 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.2])]
+    private float $motivationHighMultiplier = 1.2;
+
+    /** Development multiplier when motivation is mid. Default: 1.0 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.0])]
+    private float $motivationMidMultiplier = 1.0;
+
+    /** Development multiplier when motivation is below the mid threshold. Default: 0.75 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.75])]
+    private float $motivationLowMultiplier = 0.75;
+
+    /** Match performance multiplier cap for very high motivation. Default: 1.15 */
+    #[ORM\Column(type: 'float', options: ['default' => 1.15])]
+    private float $motivationPerformanceHighMultiplier = 1.15;
+
+    /** Match performance multiplier for low motivation. Default: 0.85 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.85])]
+    private float $motivationPerformanceLowMultiplier = 0.85;
+
+    /** Match performance multiplier for very low motivation. Default: 0.70 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.7])]
+    private float $motivationPerformanceVeryLowMultiplier = 0.7;
+
+    /** Motivation gained when a game-time promise is honoured. Default: 8 */
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
+    private int $gametimePromiseKeptMotivationDelta = 8;
+
+    /** Morale gained when a game-time promise is kept. Default: 10 */
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
+    private int $gametimePromiseKeptMoraleDelta = 10;
+
+    /** Morale change when a game-time promise is broken. Default: -20 */
+    #[ORM\Column(type: 'integer', options: ['default' => -20])]
+    private int $gametimePromiseBrokenMoraleDelta = -20;
+
+    /** Weekly motivation change while a contract role guarantee is in breach, before ambition scaling. Default: -2 */
+    #[ORM\Column(type: 'integer', options: ['default' => -2])]
+    private int $contractBreachMotivationDelta = -2;
+
+    /** Share (0–1) of a disgruntled player's motivation hit that spreads to the rest of their clique. Default: 0.3 */
+    #[ORM\Column(type: 'float', options: ['default' => 0.3])]
+    private float $cliqueMotivationBleedShare = 0.3;
+
+    /** Staff morale gained on a win while morale is in the low band. Default: 10 */
+    #[ORM\Column(type: 'integer', options: ['default' => 10])]
+    private int $staffResultMoraleWinLow = 10;
+
+    /** Staff morale gained on a win while morale is in the mid band. Default: 5 */
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
+    private int $staffResultMoraleWinMid = 5;
+
+    /** Staff morale gained on a win above the mid band. Default: 2 */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $staffResultMoraleWinHigh = 2;
+
+    /** Staff morale gained on a draw while morale is in the low band. Default: 5 */
+    #[ORM\Column(type: 'integer', options: ['default' => 5])]
+    private int $staffResultMoraleDrawLow = 5;
+
+    /** Staff morale gained on a draw while morale is in the mid band. Default: 3 */
+    #[ORM\Column(type: 'integer', options: ['default' => 3])]
+    private int $staffResultMoraleDrawMid = 3;
+
+    /** Staff morale gained on a draw above the mid band. Default: 1 */
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    private int $staffResultMoraleDrawHigh = 1;
+
+    /** Highest morale (inclusive) that counts as the low band. Default: 50 */
+    #[ORM\Column(type: 'integer', options: ['default' => 50])]
+    private int $staffResultMoraleLowBandMax = 50;
+
+    /** Highest morale (inclusive) that counts as the mid band. Default: 80 */
+    #[ORM\Column(type: 'integer', options: ['default' => 80])]
+    private int $staffResultMoraleMidBandMax = 80;
+
+    /** Manager motivation the weekly drift pulls back toward. Default: 60 */
+    #[ORM\Column(type: 'integer', options: ['default' => 60])]
+    private int $managerMotivationBaseline = 60;
+
+    /** Points of manager motivation recovered or shed toward the baseline each week. Default: 2 */
+    #[ORM\Column(type: 'integer', options: ['default' => 2])]
+    private int $managerMotivationWeeklyDrift = 2;
+
+    public function getMoraleDevelopmentThresholdFull(): int { return $this->moraleDevelopmentThresholdFull; }
+    public function setMoraleDevelopmentThresholdFull(int $v): static { $this->moraleDevelopmentThresholdFull = max(0, min(100, $v)); return $this; }
+    public function getMoraleDevelopmentThresholdMid(): int { return $this->moraleDevelopmentThresholdMid; }
+    public function setMoraleDevelopmentThresholdMid(int $v): static { $this->moraleDevelopmentThresholdMid = max(0, min(100, $v)); return $this; }
+    public function getMoraleDevelopmentMultiplierMid(): float { return $this->moraleDevelopmentMultiplierMid; }
+    public function setMoraleDevelopmentMultiplierMid(float $v): static { $this->moraleDevelopmentMultiplierMid = max(0.0, min(2.0, $v)); return $this; }
+    public function getMoraleDevelopmentMultiplierLow(): float { return $this->moraleDevelopmentMultiplierLow; }
+    public function setMoraleDevelopmentMultiplierLow(float $v): static { $this->moraleDevelopmentMultiplierLow = max(0.0, min(2.0, $v)); return $this; }
+    public function getMotivationHighThreshold(): int { return $this->motivationHighThreshold; }
+    public function setMotivationHighThreshold(int $v): static { $this->motivationHighThreshold = max(0, min(100, $v)); return $this; }
+    public function getMotivationMidThreshold(): int { return $this->motivationMidThreshold; }
+    public function setMotivationMidThreshold(int $v): static { $this->motivationMidThreshold = max(0, min(100, $v)); return $this; }
+    public function getMotivationHighMultiplier(): float { return $this->motivationHighMultiplier; }
+    public function setMotivationHighMultiplier(float $v): static { $this->motivationHighMultiplier = max(0.0, min(3.0, $v)); return $this; }
+    public function getMotivationMidMultiplier(): float { return $this->motivationMidMultiplier; }
+    public function setMotivationMidMultiplier(float $v): static { $this->motivationMidMultiplier = max(0.0, min(3.0, $v)); return $this; }
+    public function getMotivationLowMultiplier(): float { return $this->motivationLowMultiplier; }
+    public function setMotivationLowMultiplier(float $v): static { $this->motivationLowMultiplier = max(0.0, min(3.0, $v)); return $this; }
+    public function getMotivationPerformanceHighMultiplier(): float { return $this->motivationPerformanceHighMultiplier; }
+    public function setMotivationPerformanceHighMultiplier(float $v): static { $this->motivationPerformanceHighMultiplier = max(0.0, min(2.0, $v)); return $this; }
+    public function getMotivationPerformanceLowMultiplier(): float { return $this->motivationPerformanceLowMultiplier; }
+    public function setMotivationPerformanceLowMultiplier(float $v): static { $this->motivationPerformanceLowMultiplier = max(0.0, min(2.0, $v)); return $this; }
+    public function getMotivationPerformanceVeryLowMultiplier(): float { return $this->motivationPerformanceVeryLowMultiplier; }
+    public function setMotivationPerformanceVeryLowMultiplier(float $v): static { $this->motivationPerformanceVeryLowMultiplier = max(0.0, min(2.0, $v)); return $this; }
+    public function getGametimePromiseKeptMotivationDelta(): int { return $this->gametimePromiseKeptMotivationDelta; }
+    public function setGametimePromiseKeptMotivationDelta(int $v): static { $this->gametimePromiseKeptMotivationDelta = max(0, min(100, $v)); return $this; }
+    public function getGametimePromiseKeptMoraleDelta(): int { return $this->gametimePromiseKeptMoraleDelta; }
+    public function setGametimePromiseKeptMoraleDelta(int $v): static { $this->gametimePromiseKeptMoraleDelta = max(0, min(100, $v)); return $this; }
+    public function getGametimePromiseBrokenMoraleDelta(): int { return $this->gametimePromiseBrokenMoraleDelta; }
+    public function setGametimePromiseBrokenMoraleDelta(int $v): static { $this->gametimePromiseBrokenMoraleDelta = max(-100, min(0, $v)); return $this; }
+    public function getContractBreachMotivationDelta(): int { return $this->contractBreachMotivationDelta; }
+    public function setContractBreachMotivationDelta(int $v): static { $this->contractBreachMotivationDelta = max(-100, min(0, $v)); return $this; }
+    public function getCliqueMotivationBleedShare(): float { return $this->cliqueMotivationBleedShare; }
+    public function setCliqueMotivationBleedShare(float $v): static { $this->cliqueMotivationBleedShare = max(0.0, min(1.0, $v)); return $this; }
+    public function getStaffResultMoraleWinLow(): int { return $this->staffResultMoraleWinLow; }
+    public function setStaffResultMoraleWinLow(int $v): static { $this->staffResultMoraleWinLow = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleWinMid(): int { return $this->staffResultMoraleWinMid; }
+    public function setStaffResultMoraleWinMid(int $v): static { $this->staffResultMoraleWinMid = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleWinHigh(): int { return $this->staffResultMoraleWinHigh; }
+    public function setStaffResultMoraleWinHigh(int $v): static { $this->staffResultMoraleWinHigh = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleDrawLow(): int { return $this->staffResultMoraleDrawLow; }
+    public function setStaffResultMoraleDrawLow(int $v): static { $this->staffResultMoraleDrawLow = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleDrawMid(): int { return $this->staffResultMoraleDrawMid; }
+    public function setStaffResultMoraleDrawMid(int $v): static { $this->staffResultMoraleDrawMid = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleDrawHigh(): int { return $this->staffResultMoraleDrawHigh; }
+    public function setStaffResultMoraleDrawHigh(int $v): static { $this->staffResultMoraleDrawHigh = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleLowBandMax(): int { return $this->staffResultMoraleLowBandMax; }
+    public function setStaffResultMoraleLowBandMax(int $v): static { $this->staffResultMoraleLowBandMax = max(0, min(100, $v)); return $this; }
+    public function getStaffResultMoraleMidBandMax(): int { return $this->staffResultMoraleMidBandMax; }
+    public function setStaffResultMoraleMidBandMax(int $v): static { $this->staffResultMoraleMidBandMax = max(0, min(100, $v)); return $this; }
+    public function getManagerMotivationBaseline(): int { return $this->managerMotivationBaseline; }
+    public function setManagerMotivationBaseline(int $v): static { $this->managerMotivationBaseline = max(0, min(100, $v)); return $this; }
+    public function getManagerMotivationWeeklyDrift(): int { return $this->managerMotivationWeeklyDrift; }
+    public function setManagerMotivationWeeklyDrift(int $v): static { $this->managerMotivationWeeklyDrift = max(0, min(20, $v)); return $this; }
 }

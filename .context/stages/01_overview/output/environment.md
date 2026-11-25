@@ -399,8 +399,28 @@ environments that have not run it yet, which in practice means none of the ones 
 existing row gets a value, and a `DROP DEFAULT` afterwards, because the entity side never declares
 `options: ['default' => …]` for a JSON column.
 
-❗ **Three occurrences now (2026-11-02, 2026-11-20, 2026-11-23) plus this one: assume drift
-BEFORE reading a single assertion.** `schema:update --dump-sql --env=test` is one command and it
+#### And again on 2026-11-25 — 27 columns, same shape, one day later
+
+`46e17a3f` ("Give morale and motivation their own Game config group") brought
+`Version20261124230000` and **27 more `game_config` columns**; the run reported **192 errors and
+89 failures — the identical pair of numbers as 2026-11-24**, which is worth recognising as a
+fingerprint rather than a coincidence: it is what a `GameConfig` column the test DB lacks always
+costs, because nearly every functional test loads one. Every column had a SQL default and none was
+JSON, so `schema:update --force --env=test` covered all 27 on its own. The test count moving
+3,403 -> 3,514 was the tell again.
+
+⚠️ **A DEAD RUN LEAVES ROWS, AND THEY FAIL A DIFFERENT TEST NEXT TIME.** Four errors survived
+the sync, all in `LeagueSlotsCorrectionTest`, all `club.current_league_id` foreign-key violations:
+the 2026-11-24 run died mid-flight and `LeagueServiceConcludeSeasonIdempotencyTest` never reached
+its tearDown, leaving an `Idem Test Tier 3` league and one club in **ZR** — a code
+`LeagueSlotsCorrectionTest` reserves for its own fixtures, by convention only, and that sibling's
+`unusedCountryCode()` can legitimately pick because it checks only that the code has no league
+*yet*. Fixed where it belongs: that test now clears player `Club` rows in its own country space,
+not just `NpcClub`. **After any aborted run, a later unrelated failure may be its leftovers, not
+your change.**
+
+❗ **Four occurrences now (2026-11-02, 2026-11-20, 2026-11-23) plus 2026-11-24 and 2026-11-25:
+assume drift BEFORE reading a single assertion.** `schema:update --dump-sql --env=test` is one command and it
 would have turned each of these four debugging sessions into a two-minute fix.
 
 **Syncing the test DB:**

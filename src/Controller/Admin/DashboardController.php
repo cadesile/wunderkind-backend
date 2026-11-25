@@ -632,6 +632,35 @@ class DashboardController extends AbstractDashboardController
         $config->setGametimePromiseBrokenMotivationDelta((int) $request->request->get('gametimePromiseBrokenMotivationDelta', -40));
         $config->setPlayerContractPromiseBrokenMotivationDelta((int) $request->request->get('playerContractPromiseBrokenMotivationDelta', -40));
 
+        // Morale / Motivation: effects, promises, staff
+        $config->setMoraleDevelopmentThresholdFull((int) $request->request->get('moraleDevelopmentThresholdFull', 60));
+        $config->setMoraleDevelopmentThresholdMid((int) $request->request->get('moraleDevelopmentThresholdMid', 35));
+        $config->setMoraleDevelopmentMultiplierMid((float) $request->request->get('moraleDevelopmentMultiplierMid', 0.6));
+        $config->setMoraleDevelopmentMultiplierLow((float) $request->request->get('moraleDevelopmentMultiplierLow', 0.2));
+        $config->setMotivationHighThreshold((int) $request->request->get('motivationHighThreshold', 75));
+        $config->setMotivationMidThreshold((int) $request->request->get('motivationMidThreshold', 40));
+        $config->setMotivationHighMultiplier((float) $request->request->get('motivationHighMultiplier', 1.2));
+        $config->setMotivationMidMultiplier((float) $request->request->get('motivationMidMultiplier', 1.0));
+        $config->setMotivationLowMultiplier((float) $request->request->get('motivationLowMultiplier', 0.75));
+        $config->setMotivationPerformanceHighMultiplier((float) $request->request->get('motivationPerformanceHighMultiplier', 1.15));
+        $config->setMotivationPerformanceLowMultiplier((float) $request->request->get('motivationPerformanceLowMultiplier', 0.85));
+        $config->setMotivationPerformanceVeryLowMultiplier((float) $request->request->get('motivationPerformanceVeryLowMultiplier', 0.7));
+        $config->setGametimePromiseKeptMotivationDelta((int) $request->request->get('gametimePromiseKeptMotivationDelta', 8));
+        $config->setGametimePromiseKeptMoraleDelta((int) $request->request->get('gametimePromiseKeptMoraleDelta', 10));
+        $config->setGametimePromiseBrokenMoraleDelta((int) $request->request->get('gametimePromiseBrokenMoraleDelta', -20));
+        $config->setContractBreachMotivationDelta((int) $request->request->get('contractBreachMotivationDelta', -2));
+        $config->setCliqueMotivationBleedShare((float) $request->request->get('cliqueMotivationBleedShare', 0.3));
+        $config->setStaffResultMoraleWinLow((int) $request->request->get('staffResultMoraleWinLow', 10));
+        $config->setStaffResultMoraleWinMid((int) $request->request->get('staffResultMoraleWinMid', 5));
+        $config->setStaffResultMoraleWinHigh((int) $request->request->get('staffResultMoraleWinHigh', 2));
+        $config->setStaffResultMoraleDrawLow((int) $request->request->get('staffResultMoraleDrawLow', 5));
+        $config->setStaffResultMoraleDrawMid((int) $request->request->get('staffResultMoraleDrawMid', 3));
+        $config->setStaffResultMoraleDrawHigh((int) $request->request->get('staffResultMoraleDrawHigh', 1));
+        $config->setStaffResultMoraleLowBandMax((int) $request->request->get('staffResultMoraleLowBandMax', 50));
+        $config->setStaffResultMoraleMidBandMax((int) $request->request->get('staffResultMoraleMidBandMax', 80));
+        $config->setManagerMotivationBaseline((int) $request->request->get('managerMotivationBaseline', 60));
+        $config->setManagerMotivationWeeklyDrift((int) $request->request->get('managerMotivationWeeklyDrift', 2));
+
         // Squad Roles
         $roleFields = [
             'squadRoleAppearanceExpectations' => 'setSquadRoleAppearanceExpectations',
