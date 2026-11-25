@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\Economy;
 
+use App\Entity\Club;
 use App\Entity\League;
 use App\Entity\NpcClub;
 use App\Repository\LeagueRepository;
@@ -192,10 +193,33 @@ class LeagueSlotsCorrectionTest extends KernelTestCase
         }
         $this->em->flush();
 
+        $leagues = [];
         foreach ([self::RESERVED, self::UNRESERVED] as $country) {
             foreach ($this->leagues->findBy(['country' => $country]) as $league) {
-                $this->em->remove($league);
+                $leagues[] = $league;
             }
+        }
+
+        // PLAYER clubs too, not only NpcClub. `club.current_league_id` is a NO ACTION foreign
+        // key, so one real Club pointing at a ZR/ZU league makes the league delete below fail
+        // with a constraint violation and takes all four tests with it.
+        //
+        // That is not hypothetical and it is not this test's own doing: ZR and ZU are only
+        // reserved by convention, and a sibling test that invents a random two-letter code
+        // (LeagueServiceConcludeSeasonIdempotencyTest, which checks only that the code has no
+        // league yet) can legitimately land on one of them. When that run dies before its own
+        // tearDown — as the 2026-11-24 schema-drift run did — its club and league stay behind
+        // and this test inherits them. Clearing its own country space completely is what makes
+        // it immune to that rather than merely unlucky.
+        foreach ($leagues as $league) {
+            foreach ($this->em->getRepository(Club::class)->findBy(['currentLeague' => $league]) as $club) {
+                $this->em->remove($club);
+            }
+        }
+        $this->em->flush();
+
+        foreach ($leagues as $league) {
+            $this->em->remove($league);
         }
         $this->em->flush();
         $this->em->clear();

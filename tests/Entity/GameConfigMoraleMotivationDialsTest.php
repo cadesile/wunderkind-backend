@@ -50,7 +50,13 @@ class GameConfigMoraleMotivationDialsTest extends TestCase
         'managerMotivationWeeklyDrift'           => [2, 0, 20],
     ];
 
-    /** @return iterable<string, array{string, int|float, int|float, int|float}> */
+    // ONE PROVIDER PER ARITY, all three reading DIALS above, because PHPUnit 13 warns when a
+    // data set hands a test method more arguments than it accepts — and three of the four tests
+    // below want only part of a row. A single four-argument provider raised 81 warnings (27
+    // dials x 3 tests) and, worse, the extra arguments were silently dropped, so a signature
+    // that drifted out of step with the provider would never have said so.
+
+    /** Every column of a dial: for the clamp test, which needs all four. @return iterable<string, array{string, int|float, int|float, int|float}> */
     public static function dials(): iterable
     {
         foreach (self::DIALS as $key => [$default, $min, $max]) {
@@ -58,7 +64,23 @@ class GameConfigMoraleMotivationDialsTest extends TestCase
         }
     }
 
-    #[DataProvider('dials')]
+    /** @return iterable<string, array{string, int|float}> */
+    public static function dialDefaults(): iterable
+    {
+        foreach (self::DIALS as $key => [$default]) {
+            yield $key => [$key, $default];
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function dialKeys(): iterable
+    {
+        foreach (array_keys(self::DIALS) as $key) {
+            yield $key => [$key];
+        }
+    }
+
+    #[DataProvider('dialDefaults')]
     public function testDefaultMirrorsTheClient(string $key, int|float $default): void
     {
         self::assertSame($default, (new GameConfig())->{'get' . ucfirst($key)}());
@@ -76,7 +98,7 @@ class GameConfigMoraleMotivationDialsTest extends TestCase
         self::assertSame($default, $c->$set($default)->$get());
     }
 
-    #[DataProvider('dials')]
+    #[DataProvider('dialKeys')]
     public function testTheApiServesItUnderTheClientKey(string $key): void
     {
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Controller/Api/GameConfigController.php');
@@ -86,7 +108,7 @@ class GameConfigMoraleMotivationDialsTest extends TestCase
         );
     }
 
-    #[DataProvider('dials')]
+    #[DataProvider('dialKeys')]
     public function testTheAdminSaveHandlerReadsIt(string $key): void
     {
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Controller/Admin/DashboardController.php');
