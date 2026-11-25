@@ -26,6 +26,7 @@
                 {id: 'facility-config', label: 'Facility Config',    icon: 'building',            subs: 'Income · Construction · Staff Morale'},
                 {id: 'event-config',    label: 'Event Config',       icon: 'zap',                subs: 'Incidents · Sacking · Guardian'},
                 {id: 'club-dev',        label: 'Club Development',   icon: 'sprout',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium · Cooldowns'},
+                {id: 'engine-tuning',   label: 'Engine Tuning',      icon: 'cpu',               subs: tuningGroups|join(' · ')},
             ] %}
             {% set cfgSections = [
                 {id: 'clique',               label: 'Clique System',          group: 'player-dev'},
@@ -71,6 +72,7 @@
                 {id: 'dev-tick',             label: 'Dev Tick Frequency',      group: 'player-dev'},
                 {id: 'cooldowns',            label: 'Feature Cooldowns',       group: 'club-dev'},
             ] %}
+            {% set cfgSections = cfgSections|merge(tuningGroups|map((glabel, gid) => {id: 'tuning-' ~ gid, label: glabel|e, group: 'engine-tuning'})) %}
 
             <div class="d-flex flex-column gap-2" id="cfg-tab-nav">
                 {# Row 1 — parent group buttons #}
@@ -1404,6 +1406,9 @@
                     </p>
                 </div>
             </div>
+
+            {# ── Engine tuning (ClientTuningCatalogue, 2026-11-25) ── #}
+            {% include 'admin/_client_tuning.html.twig' %}
         </div>
     <div class="bmc-savebar" data-bmc-savebar data-idle="Synced to every client on its next /api/sync.">
         <span class="bmc-savebar__dot"></span>

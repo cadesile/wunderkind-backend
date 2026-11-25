@@ -54,6 +54,20 @@ class GameConfigController extends AbstractController
         $map      = $this->translationService->buildLocalizationMap(TranslatableEntityType::FACILITY_TEMPLATE, $language);
 
         $response = $this->json([
+            // Engine tuning the app used to hold only in its own DEFAULT_GAME_CONFIG (2026-11-25).
+            // Every key resolves to the app's own default unless an admin has changed it, so
+            // this is byte-for-byte what the app already ran on. Spread FIRST so no named key
+            // below can be shadowed by it. See App\Service\ClientTuningCatalogue.
+            ...$config->getResolvedClientTuning(),
+
+            // Columns the admin already edits but this endpoint never served (2026-11-25), so
+            // the app ran on its own copies. Sync carries the first two; the match engine reads
+            // the last two server-side.
+            'managerDividendPercent'      => $config->getManagerDividendPercent(),
+            'transferBudgetPercent'       => $config->getTransferBudgetPercent(),
+            'losingTeamCardMultiplierMax' => $config->getLosingTeamCardMultiplierMax(),
+            'losingTeamCardGoalDiffCap'   => $config->getLosingTeamCardGoalDiffCap(),
+
             'cliqueRelationshipThreshold'      => $config->getCliqueRelationshipThreshold(),
             'cliqueSquadCapPercent'             => $config->getCliqueSquadCapPercent(),
             'cliqueMinTenureWeeks'              => $config->getCliqueMinTenureWeeks(),

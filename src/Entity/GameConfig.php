@@ -3658,4 +3658,40 @@ class GameConfig
     public function setManagerMotivationBaseline(int $v): static { $this->managerMotivationBaseline = max(0, min(100, $v)); return $this; }
     public function getManagerMotivationWeeklyDrift(): int { return $this->managerMotivationWeeklyDrift; }
     public function setManagerMotivationWeeklyDrift(int $v): static { $this->managerMotivationWeeklyDrift = max(0, min(20, $v)); return $this; }
+
+    // ── Client engine tuning (2026-11-25) ─────────────────────────────────────────────────
+
+    /**
+     * Admin overrides for the engine tuning keys declared in ClientTuningCatalogue — the
+     * settings the app used to hold only in its own DEFAULT_GAME_CONFIG. Holds only keys an
+     * admin has changed; everything else resolves to the catalogue default (which equals the
+     * app's), so an empty object means "exactly what the app shipped with".
+     *
+     * @var array<string, mixed>
+     */
+    #[ORM\Column(type: 'json', options: ['default' => '{}'])]
+    private array $clientTuning = [];
+
+    /** @return array<string, mixed> stored overrides only */
+    public function getClientTuning(): array { return $this->clientTuning; }
+
+    /** @param array<string, mixed> $v overrides; unknown keys and wrong types are dropped */
+    public function setClientTuning(array $v): static
+    {
+        $clean = [];
+        foreach ($v as $key => $value) {
+            $type = \App\Service\ClientTuningCatalogue::KEYS[$key]['type'] ?? null;
+            if ($type !== null && \App\Service\ClientTuningCatalogue::fits($type, $value)) {
+                $clean[$key] = $value;
+            }
+        }
+        $this->clientTuning = $clean;
+        return $this;
+    }
+
+    /** @return array<string, mixed> every catalogue key, overrides applied — what the API serves */
+    public function getResolvedClientTuning(): array
+    {
+        return \App\Service\ClientTuningCatalogue::resolve($this->clientTuning);
+    }
 }
