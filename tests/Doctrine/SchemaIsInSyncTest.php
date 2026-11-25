@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Doctrine;
 
-use Doctrine\Migrations\DependencyFactory;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
+use App\Tests\Support\TestSchemaDrift;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -59,9 +58,6 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 class SchemaIsInSyncTest extends KernelTestCase
 {
-    /** The Doctrine transport's queue table — see the class docblock on why it is excluded. */
-    private const MESSENGER_TABLE = 'messenger_messages';
-
     public function testOrmMappingMatchesTheMigratedDatabase(): void
     {
         self::bootKernel();
@@ -69,24 +65,9 @@ class SchemaIsInSyncTest extends KernelTestCase
         /** @var EntityManagerInterface $em */
         $em = self::getContainer()->get(EntityManagerInterface::class);
 
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        self::assertNotEmpty($metadata, 'No entity metadata found — the mapping is not loading.');
-
-        $sql = (new SchemaTool($em))->getUpdateSchemaSql($metadata);
-
-        $ignored     = [$this->migrationsTableName(), self::MESSENGER_TABLE];
-        $outstanding = array_values(array_filter(
-            $sql,
-            static function (string $statement) use ($ignored): bool {
-                foreach ($ignored as $table) {
-                    if (str_contains($statement, $table)) {
-                        return false;
-                    }
-                }
-
-                return true;
-            },
-        ));
+        // The comparison itself lives in TestSchemaDrift, because tests/bootstrap.php refuses
+        // to start a run on a drifted database and the two must mean the same thing by it.
+        $outstanding = TestSchemaDrift::outstandingSql($em, self::getContainer());
 
         self::assertSame(
             [],
@@ -94,21 +75,5 @@ class SchemaIsInSyncTest extends KernelTestCase
             "The ORM mapping and the database disagree. Outstanding SQL:\n  "
             . implode("\n  ", $outstanding),
         );
-    }
-
-    /** The migrations bundle's storage table, per configuration — see the class docblock. */
-    private function migrationsTableName(): string
-    {
-        $container = self::getContainer();
-
-        if (!$container->has(DependencyFactory::class)) {
-            return 'doctrine_migration_versions';
-        }
-
-        /** @var DependencyFactory $factory */
-        $factory = $container->get(DependencyFactory::class);
-
-        return $factory->getConfiguration()->getMetadataStorageConfiguration()?->getTableName()
-            ?? 'doctrine_migration_versions';
     }
 }

@@ -419,8 +419,41 @@ its tearDown, leaving an `Idem Test Tier 3` league and one club in **ZR** — a 
 not just `NpcClub`. **After any aborted run, a later unrelated failure may be its leftovers, not
 your change.**
 
-❗ **Four occurrences now (2026-11-02, 2026-11-20, 2026-11-23) plus 2026-11-24 and 2026-11-25:
-assume drift BEFORE reading a single assertion.** `schema:update --dump-sql --env=test` is one command and it
+#### 2026-11-25, second run — three columns, and the JSON caveat no longer applied
+
+The same 192 / 89 pair, this time from `Version20261125100000` and `…` the contract dials:
+`player_contract_max_years`, `player_contract_renewal_cooldown_weeks` and `client_tuning`.
+**`schema:update --force` covered all three, the JSON column included**, because
+`GameConfig::$clientTuning` declares `#[ORM\Column(type: 'json', options: ['default' => '{}'])]`
+— the mapping owns the default, so the dump emits it and nothing is left outstanding afterwards.
+That is the shape to copy; the two-step dance above is only needed for a JSON column whose
+default lives in the migration alone. **Nothing in the suite needed fixing:** 3,513 passing
+straight after the sync.
+
+### ✅ THE RUN NOW CHECKS THIS ITSELF (2026-11-25) — stop reading, it will tell you
+
+Six occurrences (2026-11-02, 11-20, 11-23, 11-24 and twice on 11-25) is a verdict on
+documentation, not on readers: nobody reads a warning they do not yet know they need. So
+`tests/bootstrap.php` now runs `TestSchemaGuard`, which compares the mapping against
+`wunderkind_test` before the first test and, on any difference, prints the outstanding SQL and
+the command that fixes it, then stops the run. About a second, once per suite.
+
+**So you should never meet this section the hard way again.** It stays for the diagnosis and for
+the one case the guard cannot decide for you — a column whose default lives only in a migration,
+where `schema:update --force` aborts on "contains null values" and the migration's own ALTER is
+what you want. The guard says so when it stops you.
+
+It skips itself, with a one-line reason, if the database is unreachable, so a unit-only run on a
+machine with no Postgres still works. `WK_SKIP_SCHEMA_CHECK=1` disables it, and the variable has
+to be set INSIDE the container — `lando php` does not forward the host environment:
+
+```bash
+lando ssh -s appserver -c 'cd /app && WK_SKIP_SCHEMA_CHECK=1 php vendor/bin/phpunit'
+```
+
+`SchemaIsInSyncTest` still asserts the same condition and both read the comparison from one
+place, `TestSchemaDrift`: if the guard were looser than the test, a drifted database would be
+waved through and the suite would fail 200 tests later anyway. `schema:update --dump-sql --env=test` is one command and it
 would have turned each of these four debugging sessions into a two-minute fix.
 
 **Syncing the test DB:**

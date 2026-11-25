@@ -23,3 +23,8 @@ if (method_exists(Dotenv::class, 'bootEnv')) {
 if ($_SERVER['APP_DEBUG']) {
     umask(0000);
 }
+
+// Stop here, with the three lines that fix it, when wunderkind_test is behind the entities —
+// the alternative is ~200 failures that read as a broken change. Skips itself if the database
+// is unreachable; WK_SKIP_SCHEMA_CHECK=1 turns it off. See the class docblock.
+App\Tests\Support\TestSchemaGuard::run();
