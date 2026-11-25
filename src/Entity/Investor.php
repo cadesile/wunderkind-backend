@@ -110,10 +110,6 @@ class Investor
         };
     }
 
-    public function calculateAnnualPayout(int $annualProfit): int
-    {
-        return (int) round($annualProfit * $this->getPercentageOwned() / 100);
-    }
 
     public function getBuybackPrice(): int
     {
