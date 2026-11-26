@@ -63,6 +63,9 @@ way. `creditClubPence` is `0` — nothing happened.
   "investedPence": 0,
   "ceilingPence": 10000000,
   "remainingPence": 10000000,
+  "rescueInvestedPence": 0,
+  "rescueRemainingPence": 10000000,
+  "rescue": false,
   "balancePence": 184000000,
   "countryFactorBp": 10000,
   "tierFactorBp": 10000,
@@ -89,6 +92,25 @@ same natural key `POST /api/club/fund` uses rather than an `Idempotency-Key` hea
 **The replay check runs before the ceiling check**, deliberately: an operator lowering the
 ceiling must not turn a client's harmless retry into a permanent failure for a debit that already
 happened.
+
+## The rescue slot
+
+Added 2026-11-26 (Courtney): when the club is **in debt and at risk of a season-end points
+deduction**, the owner may make **one extra investment** that season, up to the same ceiling.
+
+```json
+{ "amountPence": 2500000, "rescue": true }
+```
+
+- Only a literal JSON `true` opts in; anything else is the regular slot.
+- Its own ledger key, `sourceRef = "{clubId}:{season}:rescue"`, with the same replay and `409`
+  rules as the regular slot. The `409` carries `rescue: true`.
+- Every response reports both slots: `investedPence`/`remainingPence` for the regular one,
+  `rescueInvestedPence`/`rescueRemainingPence` for the rescue one. `rescue` says which slot
+  `invested` and `creditClubPence` refer to (always `false` on a `GET`).
+- **The server does not check the debt.** `club.balance` is device-mirrored and finance is
+  computed on the device, so the device decides eligibility. A client can claim a rescue it does
+  not need; accepted on purpose for now.
 
 ## Error codes
 

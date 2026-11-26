@@ -170,6 +170,79 @@ class SeasonInvestmentControllerTest extends WebTestCase
         self::assertSame(1, $this->ledgerRowCount());
     }
 
+    // ── The rescue slot ───────────────────────────────────────────────────
+
+    public function testARescueInvestmentIsAllowedOnceAfterTheRegularOne(): void
+    {
+        // Courtney, 2026-11-26: a club in debt and facing a points deduction may take ONE extra
+        // investment that season. The device decides eligibility; the server bounds it.
+        $this->setBaseCeiling(10_000_000);
+        $this->accountWithClub(creditPence: 100_000_000);
+
+        $this->authedRequest('POST', self::URI, ['amountPence' => 2_000_000]);
+        self::assertResponseIsSuccessful();
+
+        $this->authedRequest('POST', self::URI, ['amountPence' => 3_000_000, 'rescue' => true]);
+
+        self::assertResponseIsSuccessful();
+        $body = $this->json();
+        self::assertTrue($body['invested']);
+        self::assertTrue($body['rescue']);
+        self::assertSame(3_000_000, $body['creditClubPence']);
+        self::assertSame(2_000_000, $body['investedPence'], 'the regular slot is reported unchanged');
+        self::assertSame(3_000_000, $body['rescueInvestedPence']);
+        self::assertSame(7_000_000, $body['rescueRemainingPence']);
+        self::assertSame(100_000_000 - 5_000_000, $body['balancePence']);
+        self::assertSame(2, $this->ledgerRowCount());
+
+        // A second, different rescue in the same season is a conflict...
+        $this->authedRequest('POST', self::URI, ['amountPence' => 1_000_000, 'rescue' => true]);
+        self::assertResponseStatusCodeSame(409);
+        self::assertTrue($this->json()['rescue']);
+
+        // ...and the same one again is a replay that does not debit.
+        $this->authedRequest('POST', self::URI, ['amountPence' => 3_000_000, 'rescue' => true]);
+        self::assertResponseIsSuccessful();
+        self::assertFalse($this->json()['invested']);
+        self::assertSame(3_000_000, $this->json()['creditClubPence']);
+        self::assertSame(2, $this->ledgerRowCount());
+    }
+
+    public function testARescueIsHeldToTheSameCeiling(): void
+    {
+        $this->setBaseCeiling(1_000_000);
+        $this->accountWithClub(creditPence: 100_000_000);
+
+        $this->authedRequest('POST', self::URI, ['amountPence' => 1_000_001, 'rescue' => true]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(0, $this->ledgerRowCount());
+    }
+
+    public function testOnlyALiteralTrueAsksForTheRescueSlot(): void
+    {
+        $this->setBaseCeiling(10_000_000);
+        $this->accountWithClub(creditPence: 100_000_000);
+
+        $this->authedRequest('POST', self::URI, ['amountPence' => 2_000_000]);
+        self::assertResponseIsSuccessful();
+
+        $this->authedRequest('POST', self::URI, ['amountPence' => 3_000_000, 'rescue' => 'yes']);
+        self::assertResponseStatusCodeSame(409, 'a truthy string must not open the rescue slot');
+    }
+
+    public function testTheReadReportsBothSlots(): void
+    {
+        $this->setBaseCeiling(10_000_000);
+        $this->accountWithClub(creditPence: 100_000_000);
+
+        $this->authedRequest('GET', self::URI);
+        $body = $this->json();
+        self::assertSame(0, $body['rescueInvestedPence']);
+        self::assertSame(10_000_000, $body['rescueRemainingPence']);
+        self::assertFalse($body['rescue']);
+    }
+
     // ── The season authority ──────────────────────────────────────────────
 
     public function testTheSeasonComesFromConcludedRecordsNotFromTheClubColumn(): void

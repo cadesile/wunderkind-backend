@@ -161,16 +161,18 @@ class SetupActionException extends \RuntimeException
      * the backend decides which season it is — from its own SeasonRecord count, not from the
      * device — so the client cannot work it out to explain the refusal.
      */
-    public static function alreadyInvestedThisSeason(int $investedPence, int $season): self
+    public static function alreadyInvestedThisSeason(int $investedPence, int $season, bool $rescue = false): self
     {
         return new self(
             self::ALREADY_INVESTED_THIS_SEASON,
             sprintf(
-                'You have already invested %s in this club for season %d.',
+                $rescue
+                    ? 'You have already made a rescue investment of %s in this club for season %d.'
+                    : 'You have already invested %s in this club for season %d.',
                 number_format($investedPence / 100, 2),
                 $season,
             ),
-            ['investedPence' => $investedPence, 'season' => $season],
+            ['investedPence' => $investedPence, 'season' => $season, 'rescue' => $rescue],
         );
     }
 
