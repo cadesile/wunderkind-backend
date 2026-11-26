@@ -204,6 +204,35 @@ class InitializeController extends AbstractController
     }
 
     /**
+     * GET /api/initialize/land[?country=XX]
+     *
+     * The land under every NPC club in the country (default: the caller's club's), money
+     * included: location and plot ids, plot counts and free plots, the plot's and the town's
+     * catalogue price. UNCACHED, so prices never enter a world pack — see NpcClubLandService.
+     *
+     * No starter precondition: a save built before this endpoint existed backfills from it.
+     */
+    #[Route('/land', name: 'api_initialize_land', methods: ['GET'])]
+    public function land(Request $request, \App\Service\Location\NpcClubLandService $land): JsonResponse
+    {
+        /** @var User $user */
+        $user    = $this->getUser();
+        $country = strtoupper(trim((string) $request->query->get('country', '')));
+
+        if ($country === '') {
+            $club = $this->clubResolver->resolveFromRequest($user);
+
+            if ($club === null) {
+                return $this->json(['error' => 'Club not found; pass ?country=XX.'], Response::HTTP_NOT_FOUND);
+            }
+
+            $country = (string) $club->getCountry();
+        }
+
+        return $this->json(['country' => $country, 'clubs' => $land->forCountry($country)]);
+    }
+
+    /**
      * GET /api/initialize/leagues
      *
      * Step 2: Returns lightweight league metadata for the club's country (no NPC squads).
