@@ -54,6 +54,11 @@ services:
       LOCATION_ENRICHER_PROVIDER: ${LOCATION_ENRICHER_PROVIDER}
       LOCATION_ENRICHER_MODEL: ${LOCATION_ENRICHER_MODEL}
       LOCATION_ENRICHER_API_KEY: ${LOCATION_ENRICHER_API_KEY}
+      # Sentry — listed here for the same reason as the lines above: a value in the server's .env
+      # only reaches the container through this block. See config/packages/sentry.yaml.
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
+      SENTRY_LOG_LEVEL: ${SENTRY_LOG_LEVEL}
     networks:
       - web
       - default
