@@ -80,9 +80,12 @@ class PeriodAwardsBoardService
                 'cadence'     => $archive->getCadence()->value,
                 'cadenceLabel' => $archive->getCadence()->label(),
                 'period'      => $archive->getPeriodKey(),
-                // From the FROZEN instants, never re-derived from the key — the archive
-                // exists so no reader has to parse a period string again.
-                'periodLabel' => $archive->getPeriodStartsAt()->format('F Y'),
+                // Labelled by cadence ("Week 47, 2026" / "November 2026" / "Q4 2026").
+                // This used to be the start instant formatted 'F Y' for every cadence, so
+                // a weekly board read "WEEKLY · November 2026". The key is frozen on the
+                // archive just like the instants, so labelling it is still a read of
+                // closed data, not a re-derivation of the bounds.
+                'periodLabel' => LeaderboardPeriod::label($archive->getPeriodKey()),
                 'periodStart' => $archive->getPeriodStartsAt(),
                 'periodEnd'   => $archive->getPeriodEndsAt(),
                 'closedAt'    => $archive->getClosedAt(),
