@@ -108,7 +108,10 @@ class SeasonInvestmentController extends AbstractController
         }
 
         try {
-            $result = $this->investmentService->invest($user, $club, (int) $amount);
+            // `rescue: true` asks for the once-a-season rescue slot (club in debt and facing a
+            // points deduction). The DEVICE decides eligibility — the server cannot see the
+            // club's money — so only a literal `true` opts in.
+            $result = $this->investmentService->invest($user, $club, (int) $amount, ($body['rescue'] ?? false) === true);
         } catch (SetupActionException $e) {
             return $this->errorResponse($e);
         }
