@@ -32,7 +32,16 @@
                 <div class="journey-text">
                     <div class="journey-chapter pixel">CHAPTER 01 // CREATE</div>
                     <h3 class="journey-headline">NAME YOUR CLUB. PICK YOUR BATTLEGROUND.</h3>
-                    <p>Create your owner, choose your nation and christen your club. The game then builds a world of {{ world.totals.npcClubs|number_format }} rival clubs across {{ world.totals.tierCount }} tiers, all simulated and all waiting to be beaten.</p>
+                    <p>Create your owner, choose your nation, buy a plot of land and christen your club. The game then builds a world of {{ world.totals.npcClubs|number_format }} rival clubs across {{ world.totals.tierCount }} tiers, all simulated and all waiting to be beaten.</p>
+                    <div class="journey-plot" aria-labelledby="plot-title">
+                        <div class="journey-plot-title pixel" id="plot-title">FIRST, BUY YOUR GROUND</div>
+                        <ol class="plot-steps">
+                            <li><span class="plot-step-num pixel">01</span><span><strong>Pick a town.</strong> Big cities hold several clubs, villages only one, and rival clubs already take some places. When a town's plots are gone, it's sold out.</span></li>
+                            <li><span class="plot-step-num pixel">02</span><span><strong>Hold a plot.</strong> The land price and your stadium quote are frozen for 15 minutes while you decide.</span></li>
+                            <li><span class="plot-step-num pixel">03</span><span><strong>Pay from owner credit.</strong> Land is bought with your owner's money, not a club's budget, so what your clubs earn can fund a plot in a bigger city.</span></li>
+                            <li><span class="plot-step-num pixel">04</span><span><strong>Build on it.</strong> Land is revalued over time. Sell up and you're paid its current value plus what your club is worth.</span></li>
+                        </ol>
+                    </div>
                     <ul class="journey-tags">
                         <li>Your owner: name, age, nationality</li>
                         <li>Choose from {{ world.totals.playableCountries }} playable {{ world.totals.playableCountries == 1 ? 'country' : 'countries' }}</li>
