@@ -88,6 +88,22 @@ class PeriodAwardsBoardServiceTest extends KernelTestCase
         self::assertNotContains('2015-M02', $periods, 'a close still in flight is not history yet');
     }
 
+    /**
+     * A weekly board is labelled by its week. It used to be the start instant formatted
+     * 'F Y' for every cadence, so the landing page read "WEEKLY · November 2026".
+     */
+    public function testAWeeklyBoardIsLabelledByItsWeek(): void
+    {
+        $archive = $this->persistArchive('2015-W03', LeaderboardCategory::IRON_MAN);
+        $this->persistEntry($archive, 1, 'Weekly Rovers', 12);
+        $archive->markArchived(5, 1, 0, new \DateTimeImmutable());
+        $this->em->flush();
+
+        $board = $this->boardFor('2015-W03');
+        self::assertNotNull($board);
+        self::assertSame('Week 3, 2015', $board['periodLabel']);
+    }
+
     public function testAnArchivedBoardIsReturnedReadyToRender(): void
     {
         $archive = $this->persistArchive('2015-M03', LeaderboardCategory::IRON_MAN);

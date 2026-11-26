@@ -54,6 +54,17 @@ class LeaderboardAwardDefinition
     #[ORM\Column(name: 'minimum_score', type: 'bigint', options: ['default' => 0])]
     private int $minimumScore = 0;
 
+    /**
+     * The trophy shown for this award in the app's Rankings dashboard, as the 16-bit trophy
+     * sprite's own TrophyConfig ({style, finish, ribbons, ribbonPrimary, ribbonSecondary}).
+     * Same passthrough as CompetitionTemplate::$trophy. Nullable: the summary falls back to
+     * TrophyConfigFactory::defaults(), so an award with none configured still draws a cup.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $trophy = null;
+
     #[ORM\Column(name: 'is_enabled', options: ['default' => false])]
     private bool $isEnabled = false;
 
@@ -109,6 +120,11 @@ class LeaderboardAwardDefinition
 
     public function getMinimumScore(): int { return $this->minimumScore; }
     public function setMinimumScore(int $minimumScore): static { $this->minimumScore = max(0, $minimumScore); $this->touch(); return $this; }
+
+    /** @return array<string, mixed>|null */
+    public function getTrophy(): ?array { return $this->trophy; }
+    /** @param array<string, mixed>|null $trophy */
+    public function setTrophy(?array $trophy): static { $this->trophy = $trophy; $this->touch(); return $this; }
 
     public function isEnabled(): bool { return $this->isEnabled; }
     public function setIsEnabled(bool $isEnabled): static { $this->isEnabled = $isEnabled; $this->touch(); return $this; }
