@@ -1,0 +1,89 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+{#
+  Guarded country delete. Data: CountryDeleteController::confirm() — code, inventory
+  (CountryDeletionService::inventory()). Reached via /admin?routeName=..., and the form posts
+  the same way, per src/Controller/Admin/CLAUDE.md.
+#}
+
+{% block content %}
+<style>
+    .delete-card { max-width: 620px; margin: 2rem auto; }
+    .delete-list { font-size: .85rem; margin: .25rem 0 0; padding-left: 1.1rem; }
+    .delete-list li { padding: .1rem 0; }
+</style>
+
+{% set indexUrl = ea_url().setController('App\\Controller\\Admin\\CountryProfileCrudController').setAction('index') %}
+
+<div class="delete-card">
+    <div class="card border-danger border-opacity-50">
+        <div class="card-header d-flex align-items-center gap-2 py-2 bg-danger bg-opacity-10 border-danger border-opacity-25">
+            <i class="fa fa-trash text-danger"></i>
+            <span class="fw-semibold">Delete country</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex align-items-baseline gap-2 mb-3">
+                <span class="fw-semibold">{{ inventory.name }}</span>
+                <span class="badge bg-secondary fw-normal">{{ code }}</span>
+                <span class="badge bg-light text-dark fw-normal">{{ inventory.status }}</span>
+            </div>
+
+            {% if not inventory.deletable %}
+                <div class="alert alert-warning small mb-3">
+                    <strong>{{ code }} can't be deleted</strong>, because:
+                    <ul class="delete-list">
+                        {% for r in inventory.refusals %}<li>{{ r }}</li>{% endfor %}
+                        {% for b in inventory.blockers %}<li>{{ b.count }} {{ b.label }}</li>{% endfor %}
+                    </ul>
+                    {% if inventory.blockers is not empty %}
+                        <div class="mt-2">This is player data and is never removed here. To withdraw the country, set its status to <strong>Retired</strong> instead.</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <p class="small text-muted mb-1">Deleting removes the country and everything generated for it:</p>
+            {% if inventory.removes is empty %}
+                <p class="small mb-3">Nothing else is linked. Only the country row goes.</p>
+            {% else %}
+                <ul class="delete-list mb-3">
+                    {% for r in inventory.removes %}<li><strong>{{ r.count }}</strong> {{ r.label }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+
+            <p class="small text-muted mb-3">The market pool's players, staff and scouts are shared across countries and are kept. This cannot be undone.</p>
+
+            <form method="POST" action="{{ path('admin', { routeName: 'admin_country_delete' }) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('delete_country_' ~ code) }}">
+                <input type="hidden" name="code" value="{{ code }}">
+
+                {% if inventory.deletable %}
+                    <label for="confirmCode" class="form-label small">Type <strong>{{ code }}</strong> to confirm</label>
+                    <input type="text" class="form-control form-control-sm mb-3" id="confirmCode" name="confirmCode"
+                           autocomplete="off" maxlength="2" style="max-width: 8rem; text-transform: uppercase;">
+                {% endif %}
+
+                <hr class="my-3">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{{ indexUrl }}" class="btn btn-sm btn-secondary">Cancel</a>
+                    {% if inventory.deletable %}
+                        <button type="submit" class="btn btn-sm btn-danger" id="confirmBtn" disabled>
+                            <i class="fa fa-trash fa-xs me-1"></i> Delete {{ code }}
+                        </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if inventory.deletable %}
+<script>
+(function () {
+    var input = document.getElementById('confirmCode');
+    var btn   = document.getElementById('confirmBtn');
+    input.addEventListener('input', function () {
+        btn.disabled = input.value.trim().toUpperCase() !== {{ code|json_encode|raw }};
+    });
+}());
+</script>
+{% endif %}
+{% endblock %}
