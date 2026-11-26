@@ -112,6 +112,76 @@ final class LocationDeletionService
     }
 
     /**
+     * Delete one town from the Locations CRUD, enriched or not, unless a plot there is taken.
+     *
+     * LOOSER THAN deleteUnenrichable() ON PURPOSE (Courtney, 2026-11-26): a town is freely
+     * deletable, whatever its enrichment status, so long as nothing a player owns sits on it.
+     * Blocked by a player's claim (active, or released history, which the ledger still points
+     * at), a user club homed there, or an open hold. NPC clubs seated there are unseated by
+     * the FK's own SET NULL, the same recoverable loss the plot reaper accepts; re-run the
+     * seating backfill to give them a new home.
+     *
+     * @return string|null why it was kept, or null when it was deleted
+     */
+    public function deleteTown(string $id): ?string
+    {
+        return $this->connection->transactional(function (Connection $c) use ($id): ?string {
+            $row = $c->fetchAssociative(
+                'SELECT id, town, country_code FROM location WHERE id = :id FOR UPDATE',
+                ['id' => $id],
+            );
+
+            if ($row === false) {
+                return 'it no longer exists';
+            }
+
+            $reason = $this->takenReason($c, (string) $row['id']);
+
+            if ($reason !== null) {
+                return $reason;
+            }
+
+            $this->deleteRows($c, [(string) $row['id']]);
+            $this->classificationService->reclassifyCountry((string) $row['country_code']);
+
+            return null;
+        });
+    }
+
+    /** Why a player still holds part of this town, or null. */
+    private function takenReason(Connection $c, string $locationId): ?string
+    {
+        $id = ['id' => $locationId];
+
+        $active = (int) $c->fetchOne('SELECT COUNT(*) FROM plot_claim WHERE location_id = :id AND released_at IS NULL', $id);
+        if ($active > 0) {
+            return \sprintf('%d of its plots are taken by a player — retire it instead', $active);
+        }
+
+        $released = (int) $c->fetchOne('SELECT COUNT(*) FROM plot_claim WHERE location_id = :id', $id);
+        if ($released > 0) {
+            return \sprintf('it has %d released plot claim(s) whose money history the ledger still points at — retire it instead', $released);
+        }
+
+        $clubs = (int) $c->fetchOne('SELECT COUNT(*) FROM club WHERE home_location_id = :id', $id);
+        if ($clubs > 0) {
+            return \sprintf('%d player club(s) call it home — retire it instead', $clubs);
+        }
+
+        $openHolds = (int) $c->fetchOne(
+            'SELECT COUNT(*) FROM plot_hold h JOIN land_plot p ON p.id = h.plot_id
+              WHERE p.location_id = :id
+                AND h.released_at IS NULL AND h.consumed_at IS NULL AND h.expires_at > NOW()',
+            $id,
+        );
+        if ($openHolds > 0) {
+            return 'a player is holding a plot there right now — try again once the hold expires';
+        }
+
+        return null;
+    }
+
+    /**
      * Why this town must be kept, or null if nothing real depends on it.
      *
      * @param array<string, mixed> $row
