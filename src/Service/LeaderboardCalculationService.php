@@ -54,6 +54,34 @@ class LeaderboardCalculationService
      */
     public function getLeaderboard(LeaderboardCategory $category, string $period, int $page, int $pageSize): LeaderboardResponseDto
     {
+        $allItems = $this->getRankedItems($category, $period);
+
+        $total       = count($allItems);
+        $offset      = ($page - 1) * $pageSize;
+        $pagedItems  = array_slice($allItems, $offset, $pageSize);
+        $hasNextPage = ($offset + $pageSize) < $total;
+
+        return new LeaderboardResponseDto(
+            category: $category->value,
+            period: $period,
+            entries: $pagedItems,
+            total: $total,
+            page: $page,
+            pageSize: $pageSize,
+            hasNextPage: $hasNextPage,
+        );
+    }
+
+    /**
+     * The whole ranked board for one category+period, from the same cache document the paged
+     * read slices. Exposed so a caller that needs one club's row (the rankings summary's
+     * "you" line) reads the board everyone else sees rather than ranking it a second way.
+     * Same closed-period guard as getLeaderboard(): a closed period comes from its archive.
+     *
+     * @return LeaderboardItemDto[]
+     */
+    public function getRankedItems(LeaderboardCategory $category, string $period): array
+    {
         $key = $this->cacheKey($category, $period);
 
         /** @var LeaderboardItemDto[] $allItems */
@@ -72,20 +100,7 @@ class LeaderboardCalculationService
             return $this->hydrateAll($category, $period);
         });
 
-        $total       = count($allItems);
-        $offset      = ($page - 1) * $pageSize;
-        $pagedItems  = array_slice($allItems, $offset, $pageSize);
-        $hasNextPage = ($offset + $pageSize) < $total;
-
-        return new LeaderboardResponseDto(
-            category: $category->value,
-            period: $period,
-            entries: $pagedItems,
-            total: $total,
-            page: $page,
-            pageSize: $pageSize,
-            hasNextPage: $hasNextPage,
-        );
+        return $allItems;
     }
 
     /**

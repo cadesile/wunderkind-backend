@@ -21,10 +21,12 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\HttpFoundation\Response;
+use App\Form\Type\TrophyConfigType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 
 /**
@@ -69,7 +71,9 @@ class LeaderboardAwardDefinitionCrudController extends AbstractCrudController
             // under Lando and this is how the close job gets exercised by hand. The
             // template overrides one block and calls parent() first, so the detail panel
             // itself is untouched.
-            ->overrideTemplate('crud/detail', 'admin/leaderboard_award_definition_detail.html.twig');
+            ->overrideTemplate('crud/detail', 'admin/leaderboard_award_definition_detail.html.twig')
+            // Custom widget for the compound `trophy` json field, as on CompetitionTemplate.
+            ->addFormTheme('admin/form/trophy_config_theme.html.twig');
     }
 
     public function configureFields(string $pageName): iterable
@@ -99,6 +103,12 @@ class LeaderboardAwardDefinitionCrudController extends AbstractCrudController
             ->setHelp('Do not award a growth below this. 0 would otherwise pay an idle club on a dead chart.');
 
         yield BooleanField::new('isEnabled', 'Enabled')->renderAsSwitch(true);
+
+        yield Field::new('trophy', 'Trophy')
+            ->setFormType(TrophyConfigType::class)
+            ->setRequired(false)
+            ->hideOnIndex()
+            ->setHelp('The trophy the app shows for this award on the Rankings dashboard, drawn by the same sprite as cup trophies. Left empty, the default cup is shown.');
 
         yield IntegerField::new('depth', 'Places')
             ->onlyOnIndex()
