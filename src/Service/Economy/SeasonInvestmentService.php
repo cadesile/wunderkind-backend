@@ -55,11 +55,26 @@ use App\Service\UserLedgerService;
  * original debit; a DIFFERENT amount is refused rather than stacked, because a season is
  * invested in once and the second request is a new gift wearing the first one's key. Exactly
  * ClubFundingService's rule.
+ *
+ * ── THE RESCUE SLOT (Courtney, 2026-11-26) ────────────────────────────────────────────────
+ *
+ * When the club is in debt and at risk of a season-end points deduction, the owner may make ONE
+ * extra investment that season, up to the same ceiling. It is a second, independent slot keyed
+ * `"{clubId}:{season}:rescue"`, with the same idempotency and replay rules as the regular one.
+ *
+ * ⚠️ The server CANNOT verify the debt: `club.balance` is device-mirrored and every financial
+ * calculation lives on the device (owner rule, 2026-11-25). The device decides eligibility and
+ * asks with `rescue: true`; the server only bounds it to one per season at the normal ceiling.
+ * A client can therefore claim a rescue it does not need. Accepted on purpose for now — the
+ * owner called it "cheating the system" and chose to roll with it.
  */
 final class SeasonInvestmentService
 {
     /** Shared by the ledger row's sourceKind and the read that looks it up. */
     public const SOURCE_KIND = 'season_investment';
+
+    /** Suffix on the ledger key for the once-a-season rescue slot. */
+    public const RESCUE_SUFFIX = ':rescue';
 
     public function __construct(
         private readonly UserLedgerRepository   $ledgerRepository,
@@ -75,22 +90,21 @@ final class SeasonInvestmentService
      * so a client can render the screen from either without a second code path.
      *
      * @return array{invested: bool, season: int, investedPence: int, ceilingPence: int,
-     *     remainingPence: int, balancePence: int, countryFactorBp: int, tierFactorBp: int,
+     *     remainingPence: int, rescueInvestedPence: int, rescueRemainingPence: int, rescue: bool,
+     *     balancePence: int, countryFactorBp: int, tierFactorBp: int,
      *     tier: int|null, creditClubPence: int}
      */
     public function state(User $user, Club $club): array
     {
-        $season   = $this->seasonFor($club);
-        $existing = $this->existingFor($club, $season);
-        $invested = $existing !== null ? abs($existing->getAmountPence()) : 0;
+        $season = $this->seasonFor($club);
 
         return $this->result(
             invested: false,
             season: $season,
-            investedPence: $invested,
             club: $club,
             user: $user,
             creditClubPence: 0,
+            rescue: false,
         );
     }
 
@@ -98,12 +112,13 @@ final class SeasonInvestmentService
      * Move `$amountPence` from the owner's account into the club for this season.
      *
      * @return array{invested: bool, season: int, investedPence: int, ceilingPence: int,
-     *     remainingPence: int, balancePence: int, countryFactorBp: int, tierFactorBp: int,
+     *     remainingPence: int, rescueInvestedPence: int, rescueRemainingPence: int, rescue: bool,
+     *     balancePence: int, countryFactorBp: int, tierFactorBp: int,
      *     tier: int|null, creditClubPence: int}
      *
      * @throws SetupActionException
      */
-    public function invest(User $user, Club $club, int $amountPence): array
+    public function invest(User $user, Club $club, int $amountPence, bool $rescue = false): array
     {
         $season = $this->seasonFor($club);
 
@@ -113,24 +128,24 @@ final class SeasonInvestmentService
         // must succeed even if the ceiling has since been lowered, or an operator re-tuning
         // the economy would turn a client's harmless retry into a permanent failure for a
         // debit that already happened.
-        $existing = $this->existingFor($club, $season);
+        $existing = $this->existingFor($club, $season, $rescue);
 
         if ($existing !== null) {
             $already = abs($existing->getAmountPence());
 
             if ($already !== $amountPence) {
-                throw SetupActionException::alreadyInvestedThisSeason($already, $season);
+                throw SetupActionException::alreadyInvestedThisSeason($already, $season, $rescue);
             }
 
             return $this->result(
                 invested: false,
                 season: $season,
-                investedPence: $already,
                 club: $club,
                 user: $user,
                 // The ORIGINAL figure, so a client that lost the first response can still seed
                 // its local balance from the replay.
                 creditClubPence: $already,
+                rescue: $rescue,
             );
         }
 
@@ -163,17 +178,17 @@ final class SeasonInvestmentService
             // NEGATIVE: a debit. append() throws on a positive one.
             -$amountPence,
             self::SOURCE_KIND,
-            $this->sourceRef($club, $season),
-            sprintf('Season %d investment into %s', $season, $club->getName()),
+            $this->sourceRef($club, $season, $rescue),
+            sprintf($rescue ? 'Season %d rescue investment into %s' : 'Season %d investment into %s', $season, $club->getName()),
         );
 
         return $this->result(
             invested: true,
             season: $season,
-            investedPence: $amountPence,
             club: $club,
             user: $user,
             creditClubPence: $amountPence,
+            rescue: $rescue,
         );
     }
 
@@ -189,10 +204,13 @@ final class SeasonInvestmentService
         return $this->seasonRecordRepository->countByClub($club) + 1;
     }
 
-    /** The ledger key. One investment per club per season, so both are in it. */
-    public function sourceRef(Club $club, int $season): string
+    /**
+     * The ledger key. One regular investment per club per season, so both are in it, plus one
+     * rescue investment under its own suffix.
+     */
+    public function sourceRef(Club $club, int $season, bool $rescue = false): string
     {
-        return $club->getId()->toRfc4122() . ':' . $season;
+        return $club->getId()->toRfc4122() . ':' . $season . ($rescue ? self::RESCUE_SUFFIX : '');
     }
 
     /**
@@ -212,28 +230,36 @@ final class SeasonInvestmentService
         return $this->scaleResolver->seasonInvestmentCeilingPence((string) $club->getCountry(), $tier, $season);
     }
 
-    private function existingFor(Club $club, int $season): ?\App\Entity\UserLedger
+    private function existingFor(Club $club, int $season, bool $rescue = false): ?\App\Entity\UserLedger
     {
         return $this->ledgerRepository->findByBackendSource(
             self::SOURCE_KIND,
-            $this->sourceRef($club, $season),
+            $this->sourceRef($club, $season, $rescue),
             UserLedgerEntryType::SEASON_INVESTMENT,
         );
     }
 
     /**
      * @return array{invested: bool, season: int, investedPence: int, ceilingPence: int,
-     *     remainingPence: int, balancePence: int, countryFactorBp: int, tierFactorBp: int,
+     *     remainingPence: int, rescueInvestedPence: int, rescueRemainingPence: int, rescue: bool,
+     *     balancePence: int, countryFactorBp: int, tierFactorBp: int,
      *     tier: int|null, creditClubPence: int}
      */
     private function result(
         bool $invested,
         int $season,
-        int $investedPence,
         Club $club,
         User $user,
         int $creditClubPence,
+        bool $rescue,
     ): array {
+        // Both slots are always reported, whichever one this response is about, so the card can
+        // render the regular and the rescue state from any single response.
+        $regular       = $this->existingFor($club, $season, false);
+        $rescueRow     = $this->existingFor($club, $season, true);
+        $investedPence = $regular !== null ? abs($regular->getAmountPence()) : 0;
+        $rescuePence   = $rescueRow !== null ? abs($rescueRow->getAmountPence()) : 0;
+
         $tier    = $club->getCurrentLeague()?->getTier();
         $ceiling = $this->ceilingFor($club, $season);
         $scale   = $tier !== null
@@ -248,6 +274,11 @@ final class SeasonInvestmentService
             // Never negative, even if an operator lowered the ceiling after a debit — the money
             // is already gone and "you owe 40,000" is not a thing this screen can mean.
             'remainingPence' => max(0, $ceiling - $investedPence),
+            // The rescue slot: same ceiling, its own allowance. See the class docblock.
+            'rescueInvestedPence'  => $rescuePence,
+            'rescueRemainingPence' => max(0, $ceiling - $rescuePence),
+            // Which slot `invested` and `creditClubPence` refer to. False on a read.
+            'rescue'               => $rescue,
             'balancePence'   => $this->ledgerRepository->getCurrentBalance($user),
             // The breakdown, so an owner can see WHY their ceiling is what it is rather than
             // being handed an unexplained number. Factors, not money — the resolved ceiling
