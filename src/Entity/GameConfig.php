@@ -2941,9 +2941,64 @@ class GameConfig
     private int $contractValueRandMax = 40;
 
     /** @return array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}> */
-    public function getWageMultiplierTiers(): array { return $this->wageMultiplierTiers; }
+    public function getWageMultiplierTiers(): array { return self::sortWageMultiplierTiers($this->wageMultiplierTiers); }
     /** @param array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}> $v */
-    public function setWageMultiplierTiers(array $v): static { $this->wageMultiplierTiers = $v; return $this; }
+    public function setWageMultiplierTiers(array $v): static { $this->wageMultiplierTiers = self::sortWageMultiplierTiers($v); return $this; }
+
+    /**
+     * @param array<array{fromAbility: int|string, playerMultiplier: float|string, staffMultiplier: float|string}> $rows
+     * @return array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}>
+     */
+    public static function wageTiersFromMinimums(array $rows): array
+    {
+        // The admin form edits FROM ability (a floor, owner's ask 2026-11-26); storage, the API
+        // and both engines keep the exclusive `maxAbility` ceiling. Each row's ceiling is the
+        // next higher row's floor, and the highest floor becomes the `null` catch-all, so the
+        // top row can no longer be left bounded. The lowest row also covers every ability below
+        // its floor, exactly as the lowest ceiling row always has.
+        $rows = array_values($rows);
+        usort($rows, static fn (array $a, array $b): int => ((int) $a['fromAbility']) <=> ((int) $b['fromAbility']));
+
+        $tiers = [];
+        $n = count($rows);
+        for ($i = 0; $i < $n; $i++) {
+            $tiers[] = [
+                'maxAbility'       => $i + 1 < $n ? (int) $rows[$i + 1]['fromAbility'] : null,
+                'playerMultiplier' => (float) $rows[$i]['playerMultiplier'],
+                'staffMultiplier'  => (float) $rows[$i]['staffMultiplier'],
+            ];
+        }
+
+        return $tiers;
+    }
+
+    /**
+     * ORDER-PROOF: every reader walks the table first-match on `ability < maxAbility`
+     * (WageModelResolver::multipliersFor(), the app's resolveWageTier()), so a table saved
+     * highest-first would price everyone below the top bound at the TOP multiplier. The admin
+     * form shows the ladder highest-first (owner's ask, 2026-11-25), so the order is fixed
+     * here rather than trusted: ascending by maxAbility, the `null` catch-all last. Applied on
+     * write and on read, so the API, the resolver and the form all see the same order.
+     *
+     * @param array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}> $tiers
+     * @return array<array{maxAbility: int|null, playerMultiplier: float, staffMultiplier: float}>
+     */
+    public static function sortWageMultiplierTiers(array $tiers): array
+    {
+        $tiers = array_values($tiers);
+        $keyed = [];
+        foreach ($tiers as $i => $t) { $keyed[] = [$t, $i]; }
+        usort($keyed, static function (array $a, array $b): int {
+            $ma = $a[0]['maxAbility'] ?? null;
+            $mb = $b[0]['maxAbility'] ?? null;
+            if ($ma === null && $mb === null) { return $a[1] <=> $b[1]; }
+            if ($ma === null) { return 1; }
+            if ($mb === null) { return -1; }
+            return [$ma, $a[1]] <=> [$mb, $b[1]];
+        });
+
+        return array_map(static fn (array $p): array => $p[0], $keyed);
+    }
 
     public function getContractValueRandMin(): int { return $this->contractValueRandMin; }
     public function setContractValueRandMin(int $v): static { $this->contractValueRandMin = max(1, $v); return $this; }
