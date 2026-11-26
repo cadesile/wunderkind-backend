@@ -284,7 +284,35 @@ class DashboardController extends AbstractDashboardController
             'config' => $this->gameConfigRepository->getConfig(),
             'tuningGroups' => \App\Service\ClientTuningCatalogue::GROUPS,
             'tuningKeys'   => \App\Service\ClientTuningCatalogue::KEYS,
+            // Calibration workspace: the code default of every field, keyed by the form's input
+            // name, so the page can show "Code default" and a changed-from-default filter. Read
+            // from a fresh entity rather than restated, so it can never drift from the code.
+            'gcDefaults'   => $this->gameConfigCodeDefaults(),
+            // One Staff pool dial edited here too (scout judgement vs tier), saved back to PoolConfig.
+            'poolConfig'   => $this->poolConfigRepository->getConfig(),
         ]);
+    }
+
+    /** @return array<string, mixed> input name => code default */
+    private function gameConfigCodeDefaults(): array
+    {
+        $fresh = new \App\Entity\GameConfig();
+        $defaults = [];
+        foreach ((new \ReflectionClass($fresh))->getProperties() as $prop) {
+            if ($prop->isStatic() || !$prop->isInitialized($fresh)) {
+                continue;
+            }
+            $value = $prop->getValue($fresh);
+            if ($value === null || is_scalar($value) || is_array($value)) {
+                $defaults[$prop->getName()] = $value;
+            }
+        }
+        foreach (\App\Service\ClientTuningCatalogue::KEYS as $key => $def) {
+            $defaults['clientTuning[' . $key . ']'] = $def['default'];
+        }
+        $defaults['poolConfig[scoutJudgementBandBp]'] = (new \App\Entity\PoolConfig())->getScoutJudgementBandBp();
+
+        return $defaults;
     }
 
     #[Route('/admin/game-config/save', name: 'admin_game_config_save', methods: ['POST'])]
@@ -760,6 +788,12 @@ class DashboardController extends AbstractDashboardController
             }
         }
         $config->setClientTuning($tuning);
+
+        // Linked Staff pool dial (shown in Staff & scouts). Blank leaves it alone.
+        $poolInput = $request->request->all('poolConfig');
+        if (($poolInput['scoutJudgementBandBp'] ?? '') !== '') {
+            $this->poolConfigRepository->getConfig()->setScoutJudgementBandBp((int) $poolInput['scoutJudgementBandBp']);
+        }
         if ($badTuning !== []) {
             $this->addFlash('warning', 'Not saved (invalid value): ' . implode(', ', $badTuning));
         }

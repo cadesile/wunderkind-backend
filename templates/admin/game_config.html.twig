@@ -11,109 +11,83 @@
         <input type="hidden" name="_token" value="{{ csrf_token('save_game_config') }}">
         <div style="display:flex;flex-direction:column;gap:12px">
 
-            {# ── Section navigation ───────────────────────────────────────── #}
-            {#
-                cfgGroups  — parent fieldsets; each group button shows all child sections at once.
-                cfgSections — individual tabs; sections with a 'group' key belong to a parent fieldset.
-                Ungrouped sections (group: null) are standalone — clicked individually.
-            #}
-            {% set cfgGroups = [
-                {id: 'player-dev',      label: 'Player Development', icon: 'chart-column',           subs: 'Clique · Bonds · Development · Coach · Physical · Retirement · Dev Tick'},
-                {id: 'morale-motivation', label: 'Morale / Motivation', icon: 'heart-pulse',     subs: 'Player Motivation · Effects on XP & Matches · Promises · Squad Role Morale · Starting Morale · Cliques & Bonds · Staff & Manager'},
-                {id: 'transfer',        label: 'Transfers',          icon: 'arrow-left-right', subs: 'Transfer Market · Wages · Scouting'},
-                {id: 'match-settings',  label: 'Match Settings',     icon: 'circle-dot',              subs: 'Injury · Playing Style · Cards'},
-                {id: 'league-config',   label: 'League Config',      icon: 'trophy',              subs: 'Finances · NPC · Squad · Penalties · Trophy Points · Pyramid News'},
-                {id: 'facility-config', label: 'Facility Config',    icon: 'building',            subs: 'Income · Construction · Staff Morale'},
-                {id: 'event-config',    label: 'Event Config',       icon: 'zap',                subs: 'Incidents · Sacking · Guardian'},
-                {id: 'club-dev',        label: 'Club Development',   icon: 'sprout',            subs: 'Reputation · Inbox · XP · Staff · Sponsors · Investors · Stadium · Cooldowns'},
-                {id: 'engine-tuning',   label: 'Engine Tuning',      icon: 'cpu',               subs: tuningGroups|join(' · ')},
+            {# ── Calibration workspace (2026-11-26) ──────────────────────────────
+               Sections stay where they are in this file; public/bmc-game-config.js moves each
+               .cfg-section into its group below by data-section-id, so regrouping is this list
+               only. A section missing from it lands in "Other" rather than disappearing. #}
+            {% set gcGroups = [
+                {id: 'wages',      kind: 'Calibrate', label: 'Wages & contracts',      icon: 'banknote',        sections: ['wages', 'transfer', 'staff-limits', 'youth-academy', 'tuning-transfers-contracts']},
+                {id: 'staff',      kind: 'Calibrate', label: 'Staff & scouts',         icon: 'binoculars',      sections: ['linked-staff-pool', 'scouting', 'tuning-scouting-dof']},
+                {id: 'income',     kind: 'Calibrate', label: 'Club income & prizes',   icon: 'coins',           sections: ['linked-economy', 'league-finances', 'stadium', 'attendance', 'facility-income', 'tuning-economy']},
+                {id: 'sponsors',   kind: 'Calibrate', label: 'Sponsors & investors',   icon: 'handshake',       sections: ['sponsor-probs', 'investor-probs', 'sponsor-investor-limits']},
+                {id: 'npc',        kind: 'Calibrate', label: 'NPC club finances',      icon: 'building-2',      sections: ['npc-finances', 'tuning-npc-clubs']},
+                {id: 'penalties',  kind: 'Calibrate', label: 'Penalties & insolvency', icon: 'gavel',           sections: ['financial-penalties']},
+                {id: 'player-dev', kind: 'Gameplay',  label: 'Player development',     icon: 'chart-column',    sections: ['development', 'coach', 'xp', 'physical-degradation', 'retirement', 'dev-tick', 'reputation', 'tuning-youth-development', 'tuning-player-reputation']},
+                {id: 'morale',     kind: 'Gameplay',  label: 'Morale & relationships', icon: 'heart-pulse',     sections: ['morale-motivation', 'morale-effects', 'morale-promises', 'squad-role-morale', 'morale', 'morale-social', 'staff-morale', 'clique', 'bonds', 'tuning-relationships']},
+                {id: 'match',      kind: 'Gameplay',  label: 'Match & squad',          icon: 'circle-dot',      sections: ['injury', 'cards', 'playing-style', 'squad', 'squad-roles', 'tuning-injuries-cards']},
+                {id: 'club-life',  kind: 'Gameplay',  label: 'Events & club life',     icon: 'zap',             sections: ['incidents', 'sacking', 'guardian', 'inbox', 'cooldowns', 'competition-history', 'pyramid-news', 'facility-build', 'facility-morale', 'tuning-manager-mandate']},
+                {id: 'system',     kind: 'System',    label: 'System',                 icon: 'cpu',             sections: ['debug']},
+                {id: 'other',      kind: 'System',    label: 'Other',                  icon: 'ellipsis',        sections: []},
             ] %}
-            {% set cfgSections = [
-                {id: 'clique',               label: 'Clique System',          group: 'player-dev'},
-                {id: 'bonds',                label: 'Bond System',            group: 'player-dev'},
-                {id: 'morale-motivation',    label: 'Player Motivation &amp; Drift', group: 'morale-motivation'},
-                {id: 'morale-effects',       label: 'Effects on XP &amp; Matches', group: 'morale-motivation'},
-                {id: 'morale-promises',      label: 'Promises &amp; Contracts', group: 'morale-motivation'},
-                {id: 'squad-role-morale',    label: 'Squad Role Morale',       group: 'morale-motivation'},
-                {id: 'morale',               label: 'Starting Morale',         group: 'morale-motivation'},
-                {id: 'morale-social',        label: 'Cliques &amp; Bonds Morale', group: 'morale-motivation'},
-                {id: 'staff-morale',         label: 'Staff &amp; Manager Morale', group: 'morale-motivation'},
-                {id: 'development',          label: 'Development / Potential', group: 'player-dev'},
-                {id: 'coach',                label: 'Coach Influence',         group: 'player-dev'},
-                {id: 'transfer',             label: 'Transfer Market',         group: 'transfer'},
-                {id: 'injury',               label: 'Injury',                  group: 'match-settings'},
-                {id: 'playing-style',        label: 'Playing Style',           group: 'match-settings'},
-                {id: 'cards',                label: 'Cards &amp; Discipline',  group: 'match-settings'},
-                {id: 'league-finances',      label: 'League Finances',         group: 'league-config'},
-                {id: 'npc-finances',         label: 'NPC Club Finances',       group: 'league-config'},
-                {id: 'squad-roles',          label: 'Squad Roles',             group: 'league-config'},
-                {id: 'squad',                label: 'Squad',                   group: 'league-config'},
-                {id: 'facility-income',      label: 'Facility Income',         group: 'facility-config'},
-                {id: 'facility-build',       label: 'Facility Construction',   group: 'facility-config'},
-                {id: 'facility-morale',      label: 'Facility Staff Morale',   group: 'facility-config'},
-                {id: 'incidents',            label: 'Incidents',               group: 'event-config'},
-                {id: 'sacking',              label: 'Manager Sacking',         group: 'event-config'},
-                {id: 'guardian',             label: 'Guardian Complaints',     group: 'event-config'},
-                {id: 'xp',                   label: 'XP &amp; Progression',   group: 'club-dev'},
-                {id: 'physical-degradation', label: 'Physical Degradation',   group: 'player-dev'},
-                {id: 'reputation',           label: 'Reputation',              group: 'club-dev'},
-                {id: 'scouting',             label: 'Scouting',                group: 'transfer'},
-                {id: 'financial-penalties',  label: 'Financial Penalties',     group: 'league-config'},
-                {id: 'staff-limits',         label: 'Staff Limits',            group: 'club-dev'},
-                {id: 'sponsor-probs',        label: 'Sponsor Offers',          group: 'club-dev'},
-                {id: 'investor-probs',       label: 'Investor Offers',         group: 'club-dev'},
-                {id: 'stadium',              label: 'Stadium',                 group: 'club-dev'},
-                {id: 'attendance',           label: 'Attendance',              group: 'league-config'},
-                {id: 'retirement',           label: 'Retirement',              group: 'player-dev'},
-                {id: 'inbox',                label: 'Inbox',                   group: 'club-dev'},
-                {id: 'wages',                label: 'Wages',                   group: 'transfer'},
-                {id: 'competition-history',  label: 'Competition History',     group: 'league-config'},
-                {id: 'pyramid-news',         label: 'Pyramid News',            group: 'league-config'},
-                {id: 'dev-tick',             label: 'Dev Tick Frequency',      group: 'player-dev'},
-                {id: 'cooldowns',            label: 'Feature Cooldowns',       group: 'club-dev'},
-            ] %}
-            {% set cfgSections = cfgSections|merge(tuningGroups|map((glabel, gid) => {id: 'tuning-' ~ gid, label: glabel|e, group: 'engine-tuning'})) %}
-
-            <div class="d-flex flex-column gap-2" id="cfg-tab-nav">
-                {# Row 1 — parent group buttons #}
-                <div class="d-flex flex-wrap gap-1 align-items-center">
-                    <span class=" fw-semibold me-1" style="font-size:.68rem;white-space:nowrap">GROUPS:</span>
-                    {% for g in cfgGroups %}
-                    <button type="button"
-                            class="cfg-group-btn bmc-quick-btn"
-                            data-group="{{ g.id }}"
-                            title="{{ g.subs }}"
-                            style="font-size:.72rem;padding:.2rem .55rem;">
-                        <i data-lucide="{{ g.icon }}" width="14" height="14"></i>{{ g.label }}
-                    </button>
-                    {% endfor %}
-                </div>
-                {# Row 2 — individual section tabs (collapsible) #}
-                <details id="cfg-sections-drawer" style="border:1px solid var(--wk-stroke);border-radius:.375rem;padding:.25rem .5rem;">
-                    <summary style="font-size:.68rem;font-weight:600;color:var(--wk-text-dim);cursor:pointer;list-style:none;display:flex;align-items:center;gap:.4rem;">
-                        <i data-lucide="chevron-right" id="cfg-sections-chevron" width="14" height="14" style="transition:transform .2s"></i>
-                        SECTIONS
-                        <span id="cfg-sections-summary-hint" class="opacity-50 fw-normal ms-1"></span>
-                    </summary>
-                    <div class="d-flex flex-wrap gap-1 align-items-center pt-2">
-                        {% for s in cfgSections %}
-                        <button type="button"
-                                class="cfg-tab bmc-quick-btn"
-                                data-tab="{{ s.id }}"
-                                {% if s.group %}data-group-member="{{ s.group }}"{% endif %}
-                                style="font-size:.72rem;padding:.2rem .55rem;">
-                            {{ s.label|raw }}
-                        </button>
-                        {% endfor %}
+            <div id="gc-workspace" class="gc" data-groups="{{ gcGroups|json_encode|e('html_attr') }}">
+                <script type="application/json" id="gc-defaults">{{ gcDefaults|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP'))|raw }}</script>
+                <div class="gc-toolbar">
+                    <label class="gc-search">
+                        <i data-lucide="search" width="16" height="16" aria-hidden="true"></i>
+                        <input type="search" id="gc-q" placeholder="Search settings, e.g. wage, sponsor, scout" aria-label="Search settings" autocomplete="off">
+                    </label>
+                    <div class="gc-chips" role="group" aria-label="Show">
+                        <button type="button" class="gc-chip is-on" data-gc-mode="all" aria-pressed="true">All <span data-gc-count="all"></span></button>
+                        <button type="button" class="gc-chip" data-gc-mode="changed" aria-pressed="false">Changed from default <span data-gc-count="changed"></span></button>
+                        <button type="button" class="gc-chip gc-chip--warn" data-gc-mode="warn" aria-pressed="false">Warnings <span data-gc-count="warn"></span></button>
+                        <button type="button" class="gc-chip" data-gc-mode="unsaved" aria-pressed="false">Unsaved <span data-gc-count="unsaved"></span></button>
                     </div>
-                </details>
+                    <div class="gc-tools">
+                        <button type="button" class="gc-link" data-gc-expand>Expand all</button>
+                        <button type="button" class="gc-link" data-gc-collapse>Collapse all</button>
+                    </div>
+                </div>
+                <div class="gc-body">
+                    <nav class="gc-nav" id="gc-nav" aria-label="Config sections"></nav>
+                    <div class="gc-main">
+                        <section class="gc-checks" id="gc-checks" aria-labelledby="gc-checks-h">
+                            <h2 id="gc-checks-h" class="gc-checks__title">CHECKS</h2>
+                            <div id="gc-checks-live"></div>
+                            <details class="gc-checks__device">
+                                <summary>Warnings that need game data (app Debug → CHECKS)</summary>
+                                <ul>
+                                    <li><strong>NPC staff / scouts paid above their anchored rate:</strong> no field. Renewals close half the gap each time, so re-check after a season rollover.</li>
+                                    <li><strong>Player wages below band:</strong> no field. Wages are written at world build; re-check on a fresh world.</li>
+                                    <li><strong>Scout judgement vs tier:</strong> <a href="#" data-gc-goto="poolConfig[scoutJudgementBandBp]">Scout judgement vs tier</a>, in Staff &amp; scouts. Lands on newly generated scouts only.</li>
+                                </ul>
+                            </details>
+                        </section>
+                        {% for g in gcGroups %}
+                        <section class="gc-group" data-gc-group="{{ g.id }}" aria-label="{{ g.label }}">
+                            <h2 class="gc-group__title"><i data-lucide="{{ g.icon }}" width="16" height="16" aria-hidden="true"></i><span>{{ g.label|upper }}</span><span class="gc-group__kind">{{ g.kind }}</span></h2>
+                            <div class="gc-group__body"></div>
+                        </section>
+                        {% endfor %}
+                        <p class="gc-empty" id="gc-empty" hidden>No settings match. Clear the search or pick All.</p>
+                    </div>
+                </div>
             </div>
 
-            {# Active group context banner — populated and shown by JS when a group button is active #}
-            <div id="cfg-group-banner" class="d-none small py-2 px-3"
-                 style="border-left:3px solid var(--wk-accent);background:var(--wk-panel);color:var(--wk-text)">
-                <strong id="cfg-group-banner-title"></strong>
-                <span class="ms-2 opacity-75" id="cfg-group-banner-subs"></span>
+            {# ── Linked: Staff pool rules ─────────────────────────────────── #}
+            <div class="bmc-card cfg-section" data-domain="club" data-section-id="linked-staff-pool">
+                <div class="bmc-card__head"><i data-lucide="link"></i><span class="bmc-card__title">FROM STAFF POOL RULES</span></div>
+                <div class="bmc-card__body">
+                    <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SCOUT JUDGEMENT vs TIER</span><span class="bmc-setting__help">How well a club scout judges, against the staff ability band of its own tier. 10000 = exactly that band; lower makes lower-tier scouts worse. 12500 holds England tier 1 at today's judgement mean of 52.5. Lands on newly generated scouts only (a fresh world pack). Saved to Staff pool rules.</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="poolConfig[scoutJudgementBandBp]" value="{{ poolConfig.scoutJudgementBandBp }}" data-saved="{{ poolConfig.scoutJudgementBandBp }}" data-kind="int" data-min="1" data-max="100000" inputmode="numeric" aria-label="scout judgement versus tier, basis points"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                    <p class="bmc-data mb-0 mt-2">Scout wages and the rest of the staff pool live on <a href="{{ path('admin', {routeName: 'admin_staff_pool_config'}) }}">Staff pool rules</a>.</p>
+                </div>
+            </div>
+
+            {# ── Linked: World › Economy ──────────────────────────────────── #}
+            <div class="bmc-card cfg-section" data-domain="club" data-section-id="linked-economy">
+                <div class="bmc-card__head"><i data-lucide="link"></i><span class="bmc-card__title">PER-COUNTRY ECONOMY</span></div>
+                <div class="bmc-card__body">
+                    <p class="bmc-bodytext mb-0">Turnover, wage scale and prize money per country and tier are set on <a href="{{ path('admin', {routeName: 'admin_economy'}) }}">World › Economy</a>. The fields below are the global dials applied on top.</p>
+                </div>
             </div>
 
             {# ── Clique System ──────────────────────────────────────────── #}
@@ -585,32 +559,32 @@
 
                         <div class="bmc-field-col">
                             <label for="smallSponsorMin">Small Sponsor Min</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="smallSponsorMin" value="{{ config.smallSponsorMin / 100 }}" data-saved="{{ config.smallSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="smallSponsorMin" data-gc-scale="100" value="{{ config.smallSponsorMin / 100 }}" data-saved="{{ config.smallSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Minimum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="smallSponsorMax">Small Sponsor Max</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="smallSponsorMax" value="{{ config.smallSponsorMax / 100 }}" data-saved="{{ config.smallSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="smallSponsorMax" data-gc-scale="100" value="{{ config.smallSponsorMax / 100 }}" data-saved="{{ config.smallSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Maximum per-season income for SMALL sponsors.</div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="mediumSponsorMin">Medium Sponsor Min</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="mediumSponsorMin" value="{{ config.mediumSponsorMin / 100 }}" data-saved="{{ config.mediumSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="mediumSponsorMin" data-gc-scale="100" value="{{ config.mediumSponsorMin / 100 }}" data-saved="{{ config.mediumSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Minimum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="mediumSponsorMax">Medium Sponsor Max</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="mediumSponsorMax" value="{{ config.mediumSponsorMax / 100 }}" data-saved="{{ config.mediumSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="mediumSponsorMax" data-gc-scale="100" value="{{ config.mediumSponsorMax / 100 }}" data-saved="{{ config.mediumSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Maximum per-season income for MEDIUM sponsors.</div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="largeSponsorMin">Large Sponsor Min</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="largeSponsorMin" value="{{ config.largeSponsorMin / 100 }}" data-saved="{{ config.largeSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="largeSponsorMin" data-gc-scale="100" value="{{ config.largeSponsorMin / 100 }}" data-saved="{{ config.largeSponsorMin / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Minimum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="bmc-field-col">
                             <label for="largeSponsorMax">Large Sponsor Max</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="largeSponsorMax" value="{{ config.largeSponsorMax / 100 }}" data-saved="{{ config.largeSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="largeSponsorMax" data-gc-scale="100" value="{{ config.largeSponsorMax / 100 }}" data-saved="{{ config.largeSponsorMax / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Maximum per-season income for LARGE sponsors.</div>
                         </div>
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">POSITION PRIZE DECREASE %</span><span class="bmc-setting__help">% reduction per finishing position for leaguePositionPot distribution. Default: 5</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="leaguePositionDecreasePercent" value="{{ config.leaguePositionDecreasePercent }}" data-saved="{{ config.leaguePositionDecreasePercent }}" data-kind="int" data-min="1" data-max="99" inputmode="numeric" aria-label="position prize decrease %"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
@@ -630,7 +604,7 @@
                     <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
                         <div class="bmc-field-col">
                             <label for="youthScholarshipWagePence">Scholarship Wage</label>
-                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="youthScholarshipWagePence" value="{{ config.youthScholarshipWagePence / 100 }}" data-saved="{{ config.youthScholarshipWagePence / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
+                            <label class="bmc-num bmc-num--104"><span class="bmc-num__unit">£</span><input name="youthScholarshipWagePence" data-gc-scale="100" value="{{ config.youthScholarshipWagePence / 100 }}" data-saved="{{ config.youthScholarshipWagePence / 100 }}" data-kind="int" data-min="0" inputmode="numeric"></label>
                             <div class="bmc-data">Flat weekly wage for every signed scholar, in pounds. Default: 250</div>
                         </div>
                     </div>
@@ -942,7 +916,7 @@
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">CAPACITY CALCULATION</span><span class="bmc-setting__help">Multiplier used to calculate stadium capacity from fan base. Default: 100</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="capacityCalculation" value="{{ config.capacityCalculation }}" data-saved="{{ config.capacityCalculation }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="capacity calculation"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SEASON TICKET HOLDERS %</span><span class="bmc-setting__help">Percentage of matchday attendance made up of season-ticket holders (0–100). Default: 60</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="seasonTicketHolderPercent" value="{{ config.seasonTicketHolderPercent }}" data-saved="{{ config.seasonTicketHolderPercent }}" data-kind="int" data-min="0" data-max="100" inputmode="numeric" aria-label="season ticket holders %"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">MATCHDAY FOOD UPTAKE %</span><span class="bmc-setting__help">Share of a matchday crowd that buys food (0–100). Read by the app; the server has no matchday. Default: 35</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="matchdayFoodUptakePercent" value="{{ config.matchdayFoodUptakePercent }}" data-saved="{{ config.matchdayFoodUptakePercent }}" data-kind="int" data-min="0" data-max="100" inputmode="numeric" aria-label="matchday food uptake %"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
-                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SPONSOR WEEKLY (£)</span><span class="bmc-setting__help">A sponsor’s WEEKLY payment. The six sponsor bands below are PER SEASON — different deals, not convertible by dividing. 0 = no weekly sponsor income. Default: 0</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="sponsorWeeklyPence" value="{{ (config.sponsorWeeklyPence / 100)|round }}" data-saved="{{ (config.sponsorWeeklyPence / 100)|round }}" data-kind="int" data-min="0" inputmode="numeric" aria-label="sponsor weekly pounds"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">SPONSOR WEEKLY (£)</span><span class="bmc-setting__help">A sponsor’s WEEKLY payment. The six sponsor bands below are PER SEASON — different deals, not convertible by dividing. 0 = no weekly sponsor income. Default: 0</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="sponsorWeeklyPence" data-gc-scale="100" value="{{ (config.sponsorWeeklyPence / 100)|round }}" data-saved="{{ (config.sponsorWeeklyPence / 100)|round }}" data-kind="int" data-min="0" inputmode="numeric" aria-label="sponsor weekly pounds"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                     </div>
                 </div>
             </div>
@@ -1438,7 +1412,7 @@
 
         {# ── Developer / Debug — footer ──────────────────────────────── #}
         <div class="mt-4 pt-4" style="border-top:3px solid var(--wk-stroke)">
-            <div class="bmc-inset">
+            <div class="bmc-inset cfg-section" data-section-id="debug">
                 <div class="bmc-card__head"><i data-lucide="triangle-alert" class="ink-danger"></i><span class="bmc-card__title">DEVELOPER / DEBUG</span></div>
                 <div class="bmc-card__body">
                     <p class="bmc-bodytext">
@@ -1477,138 +1451,6 @@
     </form>
 
 
-<script>
-(function () {
-    var STORAGE_KEY = 'gc_active_tab';
-    var tabs    = Array.from(document.querySelectorAll('.cfg-tab'));
-    var grpBtns = Array.from(document.querySelectorAll('.cfg-group-btn'));
-    var panels  = Array.from(document.querySelectorAll('.cfg-section'));
-    var banner  = document.getElementById('cfg-group-banner');
-    var bannerTitle = document.getElementById('cfg-group-banner-title');
-    var bannerSubs  = document.getElementById('cfg-group-banner-subs');
-
-    if (!panels.length) return;
-
-    // Build section-id → group-id map from data-group attributes on each panel
-    var groupMap = {};
-    panels.forEach(function (p) {
-        if (p.dataset.group) groupMap[p.dataset.sectionId] = p.dataset.group;
-    });
-
-    // Build group-id → { label, subs } metadata from group button attributes
-    var groupMeta = {};
-    grpBtns.forEach(function (g) {
-        groupMeta[g.dataset.group] = { label: g.textContent.trim(), subs: g.title || '' };
-    });
-
-    function setNavState(activeSectionId, activeGroupId) {
-        tabs.forEach(function (t) {
-            var on = t.dataset.tab === activeSectionId;
-            t.classList.toggle('btn-primary',           on);
-            t.classList.toggle('btn-outline-secondary', !on);
-        });
-        grpBtns.forEach(function (g) {
-            var on = g.dataset.group === activeGroupId;
-            g.classList.toggle('btn-primary',        on);
-            g.classList.toggle('btn-outline-primary', !on);
-        });
-    }
-
-    function showBanner(groupId) {
-        if (!banner) return;
-        var meta = groupMeta[groupId];
-        if (meta) {
-            bannerTitle.textContent = meta.label;
-            bannerSubs.textContent  = meta.subs ? '— ' + meta.subs : '';
-        }
-        banner.classList.remove('d-none');
-    }
-
-    function hideBanner() {
-        if (banner) banner.classList.add('d-none');
-    }
-
-    // Show a single section
-    function activate(id) {
-        var parentGroup = groupMap[id] || null;
-        panels.forEach(function (p) {
-            p.style.display = p.dataset.sectionId === id ? '' : 'none';
-        });
-        setNavState(id, parentGroup);
-        if (parentGroup) { showBanner(parentGroup); } else { hideBanner(); }
-        try { localStorage.setItem(STORAGE_KEY, 'section:' + id); } catch (e) {}
-    }
-
-    // Show all sections belonging to a group
-    function activateGroup(groupId) {
-        panels.forEach(function (p) {
-            p.style.display = groupMap[p.dataset.sectionId] === groupId ? '' : 'none';
-        });
-        setNavState(null, groupId);
-        showBanner(groupId);
-        try { localStorage.setItem(STORAGE_KEY, 'group:' + groupId); } catch (e) {}
-    }
-
-    tabs.forEach(function (t) {
-        t.addEventListener('click', function () { activate(t.dataset.tab); });
-    });
-    grpBtns.forEach(function (g) {
-        g.addEventListener('click', function () { activateGroup(g.dataset.group); });
-    });
-
-    // Restore saved state (supports legacy bare ids, 'section:id', 'group:id')
-    var saved = null;
-    try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-
-    if (saved) {
-        if (saved.indexOf('group:') === 0) {
-            var gId = saved.slice(6);
-            if (grpBtns.some(function (g) { return g.dataset.group === gId; })) {
-                activateGroup(gId);
-                return;
-            }
-        } else {
-            var sId = saved.indexOf('section:') === 0 ? saved.slice(8) : saved;
-            if (panels.some(function (p) { return p.dataset.sectionId === sId; })) {
-                activate(sId);
-                return;
-            }
-        }
-    }
-
-    // Default: open first group
-    if (grpBtns.length) {
-        activateGroup(grpBtns[0].dataset.group);
-    } else if (tabs.length) {
-        activate(tabs[0].dataset.tab);
-    }
-})();
-
-// ── Sections drawer chevron + hint ───────────────────────────────────
-(function () {
-    var drawer   = document.getElementById('cfg-sections-drawer');
-    var chevron  = document.getElementById('cfg-sections-chevron');
-    var hint     = document.getElementById('cfg-sections-summary-hint');
-    if (!drawer) return;
-
-    function updateChevron() {
-        chevron.style.transform = drawer.open ? 'rotate(90deg)' : 'rotate(0deg)';
-    }
-    drawer.addEventListener('toggle', updateChevron);
-    updateChevron();
-
-    // Show the active tab label in the summary when collapsed
-    function updateHint() {
-        if (drawer.open) { hint.textContent = ''; return; }
-        var active = document.querySelector('.cfg-tab.active, .cfg-tab.btn-secondary');
-        hint.textContent = active ? '— ' + active.textContent.trim() : '';
-    }
-    drawer.addEventListener('toggle', updateHint);
-    document.addEventListener('click', function (e) {
-        if (e.target.classList.contains('cfg-tab') || e.target.classList.contains('cfg-group-btn')) {
-            setTimeout(updateHint, 50);
-        }
-    });
-})();
-</script>
+<link rel="stylesheet" href="{{ asset('bmc-game-config.css') }}?v=20261126b">
+<script src="{{ asset('bmc-game-config.js') }}?v=20261126b" defer></script>
 {% endblock %}
