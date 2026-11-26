@@ -9,10 +9,13 @@
 # sale credits first and then PERMANENTLY deletes the club, so this runs only on wk_golive
 # and only after a typed confirmation. Spoof clubs are never sold.
 #
-# The note is shown to players beside the credit in their account history.
+# Without GOLIVE_SALE_NOTE each credit reads "Club sale — <club name>" in the player's account
+# history, which is what the app's one-off "we bought your club" notice shows. Set it only to
+# override that text for every sale.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-NOTE="${GOLIVE_SALE_NOTE:-Thanks for playing the beta. We bought your club so you can start the new game ahead.}"
+NOTE_ARGS=()
+[[ -n "${GOLIVE_SALE_NOTE:-}" ]] && NOTE_ARGS=(--note "$GOLIVE_SALE_NOTE")
 BATCH="${GOLIVE_SALE_BATCH:-25}"
 
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -27,7 +30,7 @@ while :; do
     remaining="$(dev_psql "$GOLIVE_DB" -At -c "SELECT count(*) FROM club c WHERE NOT coalesce(c.is_spoof,false) AND NOT EXISTS (SELECT 1 FROM club_sale s WHERE s.club_id = c.id::text AND s.status <> 'failed')")"
     [[ "$remaining" == "0" ]] && break
     say "$remaining clubs left to queue; queuing $BATCH"
-    console_on "$GOLIVE_DB" app:clubs:sell-batch --all --limit "$BATCH" --note "$NOTE"
+    console_on "$GOLIVE_DB" app:clubs:sell-batch --all --limit "$BATCH" "${NOTE_ARGS[@]}"
     say "Draining the clubsale queue"
     console_on "$GOLIVE_DB" messenger:consume clubsale --limit "$BATCH" --time-limit 600 --no-interaction -vv
     # A sale whose handler threw stays PENDING and its message moves to the failed transport,
