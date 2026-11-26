@@ -1,85 +1,94 @@
 {#
-   The League System (#leagues). The tier-payment table and the pyramid both
-   come from the League table rather than from copy — this section once claimed a
-   flat "22 clubs" for all eight tiers, which is why neither number is written
-   down here.
+   The League System (#leagues). Every figure comes from WorldOverviewService
+   rather than from copy — this section once claimed a flat "22 clubs" for all
+   eight tiers, which is why no number is written down here.
 
-   Changed in the redesign:
-     - the matchday GIF (images/match-ticker.gif) is gone. It is a capture of the
-       app, which the design rules out alongside the screenshots, and it was the
-       page's single largest asset. Its copy point — live 1x/2x/4x matchday
-       ticker — now sits in the prose, where it costs nothing to load.
-     - a decorative kits-and-players scene takes its place.
+   ONE LADDER, NOT A TABLE PLUS A PYRAMID. The section used to show the payment
+   table and, under it, a list of tier bars that got NARROWER towards the bottom:
+   an upside-down pyramid that repeated the tier column of the table above it.
+   Each row now carries both: a bar that widens from the elite tier down to the
+   player's starting tier (a real pyramid silhouette when the rows stack), then
+   that tier's club count and payouts. Below 640px each row folds into the bar
+   over a labelled figure strip, so the money never needs a horizontal scroll.
 
-   The pyramid list is NOT in the design, which shows the payment table and one
-   scene. It is kept because it is live League data and the only place the page
-   shows the shape of the ladder; it sits beside the table in the same column
-   block so the designed two-column split still reads as drawn.
+   Club counts: the deepest tier holds one fewer NPC club than the tier above
+   because that place is reserved for the player's own club, which is added on
+   the device (see LeagueSizeResolver / app:economy:wage-table check 9). It is
+   shown as "N + you" so the count reads as a full division, not a missing club.
 
-   Tiers with no prize/TV value configured are omitted from the table rather
-   than rendered as £0, which would read as a deliberate figure.
+   The pyramid is the primary country's (world.tiers); the headline total and the
+   footer cover every live country, so the footer says which pyramid is drawn.
+
+   Tiers with no value configured print a dash rather than £0, which would read
+   as a deliberate figure.
 #}
 {% set country_names = world.countries|map(c => c.name) %}
-{% set funded = world.tiers|filter(t => t.prizeMoney is not null or t.tvDeal is not null) %}
+{% set tiers = world.tiers %}
+{% set tier_total = tiers|length %}
 
 <section class="leagues-section" id="leagues" aria-labelledby="lg-title">
     <div class="wrap">
-        <div class="section-label">The League System</div>
-        <h2 class="section-title" id="lg-title">{{ world.totals.tierCount }} TIERS. {{ world.totals.npcClubs|number_format }} CLUBS. ONE ASCENT.</h2>
-        <p class="section-sub">Start in non-league obscurity at the bottom of the pyramid, playing everyone home and away. Rival clubs have fully simulated squads, staff, finances and tactics, so beating them means building something real. Track live match updates on the 2D matchday pitch at 1x, 2x or 4x speed, or skip straight to the result.</p>
-
-        <div class="leagues-split">
-            <div class="leagues-data">
-                {% if funded is not empty %}
-                    <div class="prize-table-wrap dash-scroll">
-                        <table class="prize-table">
-                            <caption class="pixel">WHAT EACH TIER PAYS</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Tier</th>
-                                    <th scope="col">Division</th>
-                                    <th scope="col" class="num">Prize money</th>
-                                    <th scope="col" class="num">TV deal</th>
-                                    <th scope="col" class="num">Position pot</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for tier in funded %}
-                                    <tr>
-                                        <td class="is-cyan">T{{ tier.tier }}</td>
-                                        <td>{{ tier.name }}</td>
-                                        <td class="num">{{ tier.prizeMoney is null ? '—' : '£' ~ tier.prizeMoney|number_format }}</td>
-                                        <td class="num">{{ tier.tvDeal is null ? '—' : '£' ~ tier.tvDeal|number_format }}</td>
-                                        <td class="num">{{ tier.leaguePositionPot is null ? '—' : '£' ~ tier.leaguePositionPot|number_format }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        <p class="prize-note">Season-end payouts. Climb a tier and the money changes shape entirely.</p>
-                    </div>
-                {% endif %}
-
-                <div class="pyramid-wrap" role="list" aria-label="League pyramid tiers">
-                    {% for tier in world.tiers %}
-                        <div class="pyramid-tier t{{ tier.tier }}" role="listitem">
-                            <span class="pyramid-tier-name">
-                                TIER {{ tier.tier }}{% if loop.first %} — ELITE{% elseif loop.last %} — YOUR START{% endif %}
-                            </span>
-                            <span class="pyramid-tier-clubs">{{ tier.clubs }} clubs</span>
-                        </div>
-                    {% endfor %}
-                </div>
-                <p class="pyramid-label">
-                    {{ world.totals.npcClubs|number_format }} NPC clubs ·
-                    {{ country_names|join(', ') }}{% if world.totals.playableCountries == 1 %} only{% endif %} · more countries coming
-                </p>
+        <div class="leagues-head">
+            <div class="leagues-intro">
+                <div class="section-label">The League System</div>
+                <h2 class="section-title" id="lg-title">{{ world.totals.tierCount }} TIERS. {{ world.totals.npcClubs|number_format }} CLUBS. ONE ASCENT.</h2>
+                <p class="section-sub">Start in non-league obscurity at the bottom of the pyramid, playing everyone home and away. Rival clubs have fully simulated squads, staff, finances and tactics, so beating them means building something real. Track live match updates on the 2D matchday pitch at 1x, 2x or 4x speed, or skip straight to the result.</p>
             </div>
-
             <div class="leagues-scene">
                 <div class="scene" data-scene="match">
                     <img alt="Home and away kits above three pixel players" width="520" height="400" decoding="async">
                 </div>
             </div>
         </div>
+
+        {% if tiers is not empty %}
+            <div class="ladder">
+                <table class="ladder-table">
+                    <caption class="pixel">THE PYRAMID &amp; WHAT EACH TIER PAYS</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ladder-th-tier">Division</th>
+                            <th scope="col" class="num">Clubs</th>
+                            <th scope="col" class="num">Prize money</th>
+                            <th scope="col" class="num">TV deal</th>
+                            <th scope="col" class="num">Position pot</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tier in tiers %}
+                            {# 0 at the top tier, 1 at the bottom: drives width and colour. #}
+                            {% set depth = tier_total > 1 ? (loop.index0 / (tier_total - 1)) : 1 %}
+                            <tr class="ladder-row{% if loop.first %} is-top{% endif %}{% if loop.last %} is-start{% endif %}"
+                                style="--depth: {{ depth|round(3) }}">
+                                <th scope="row" class="ladder-tier">
+                                    <span class="ladder-bar{% if depth < 0.6 %} is-bright{% endif %}">
+                                        <span class="ladder-num">T{{ tier.tier }}</span>
+                                        <span class="ladder-name">{{ tier.name }}</span>
+                                        {% if loop.last and tier_total > 1 %}<span class="ladder-start">&lt; Your start</span>{% endif %}
+                                    </span>
+                                    {% if loop.first and tier_total > 1 %}<span class="ladder-tag">Elite &gt;</span>{% endif %}
+                                </th>
+                                <td class="num ladder-clubs" data-label="Clubs">
+                                    {%- if loop.last and tier_total > 1 -%}
+                                        <span>{{ tier.clubs }} <span class="ladder-you">+ you</span></span>
+                                    {%- else -%}
+                                        {{ tier.clubs }}
+                                    {%- endif -%}
+                                </td>
+                                <td class="num" data-label="Prize">{{ tier.prizeMoney is null ? '—' : '£' ~ tier.prizeMoney|number_format }}</td>
+                                <td class="num" data-label="TV deal">{{ tier.tvDeal is null ? '—' : '£' ~ tier.tvDeal|number_format }}</td>
+                                <td class="num" data-label="Pos. pot">{{ tier.leaguePositionPot is null ? '—' : '£' ~ tier.leaguePositionPot|number_format }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <p class="ladder-note">
+                    Season-end payouts{% if country_names is not empty %} in the {{ country_names|first }} pyramid{% endif %}. Climb a tier and the money changes shape entirely.
+                </p>
+                <p class="ladder-foot">
+                    {{ world.totals.npcClubs|number_format }} NPC clubs across {{ country_names|join(', ') }}{% if world.totals.playableCountries == 1 %} only{% endif %} · more countries coming
+                </p>
+            </div>
+        {% endif %}
     </div>
 </section>
