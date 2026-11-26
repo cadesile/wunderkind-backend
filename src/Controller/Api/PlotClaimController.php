@@ -47,7 +47,7 @@ class PlotClaimController extends AbstractController
         $claims = $this->claimRepository->findActiveForUser($this->currentUser());
 
         $response = new JsonResponse([
-            'claims' => array_map(fn (PlotClaim $c): array => $this->serialise($c), $claims),
+            'claims' => array_map(fn (PlotClaim $c): array => self::present($c), $claims),
         ]);
         $response->setPrivate();
         $response->setMaxAge(0);
@@ -89,7 +89,7 @@ class PlotClaimController extends AbstractController
             );
         }
 
-        return $this->json(['claim' => $this->serialise($claim)], Response::HTTP_CREATED);
+        return $this->json(['claim' => self::present($claim)], Response::HTTP_CREATED);
     }
 
     /** Build the ground on a plot already owned. */
@@ -116,7 +116,7 @@ class PlotClaimController extends AbstractController
             return $this->errorResponse($e);
         }
 
-        return $this->json(['claim' => $this->serialise($claim)]);
+        return $this->json(['claim' => self::present($claim)]);
     }
 
     /**
@@ -144,7 +144,7 @@ class PlotClaimController extends AbstractController
         }
 
         return $this->json([
-            'claim' => $this->serialise($claim),
+            'claim' => self::present($claim),
             'quote' => $sellBack->quote($claim),
         ])->setPrivate()->setMaxAge(0);
     }
@@ -189,8 +189,17 @@ class PlotClaimController extends AbstractController
         ]);
     }
 
-    /** @return array<string, mixed> */
-    private function serialise(PlotClaim $claim): array
+    /**
+     * One claim as the API shows it. Public static so ClubLiquidationController answers with the
+     * same shape.
+     *
+     * `restartable`: no club stands on the plot (its club was liquidated, or none was ever
+     * founded), so the owner may found a new one here. A plot with a live club can only be sold
+     * back (Courtney, 2026-11-26).
+     *
+     * @return array<string, mixed>
+     */
+    public static function present(PlotClaim $claim): array
     {
         $location = $claim->getLocation();
 
@@ -210,6 +219,7 @@ class PlotClaimController extends AbstractController
             'stadiumPencePaid' => $claim->getStadiumPencePaid(),
             'totalPaidPence'   => $claim->getTotalPaidPence(),
             'hasStadium'       => $claim->hasStadium(),
+            'restartable'      => $claim->getClub() === null,
         ];
     }
 

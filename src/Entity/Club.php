@@ -311,6 +311,20 @@ class Club
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $isSpoof = false;
 
+    /**
+     * When the club was liquidated at game over (the owner could not save it). Null = trading.
+     *
+     * A liquidated club no longer stands on its plot: ClubLiquidationService detaches the claim,
+     * so the plot stays with the OWNER and a new club can be founded on it. The row itself is
+     * kept until `deleteAfter`, then app:clubs:purge-liquidated scrubs it.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $liquidatedAt = null;
+
+    /** When app:clubs:purge-liquidated may delete this club. Set with `liquidatedAt`. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $deleteAfter = null;
+
     public function __construct(string $name, User $user)
     {
         $this->id                 = new UuidV7();
@@ -442,6 +456,20 @@ class Club
 
     public function isSpoof(): bool { return $this->isSpoof; }
     public function setSpoof(bool $isSpoof): void { $this->isSpoof = $isSpoof; }
+
+    public function getLiquidatedAt(): ?\DateTimeImmutable { return $this->liquidatedAt; }
+    public function getDeleteAfter(): ?\DateTimeImmutable { return $this->deleteAfter; }
+    public function isLiquidated(): bool { return $this->liquidatedAt !== null; }
+
+    /** Mark the club liquidated. Idempotent: a second call keeps the first dates. */
+    public function markLiquidated(\DateTimeImmutable $at, \DateTimeImmutable $deleteAfter): void
+    {
+        if ($this->liquidatedAt !== null) {
+            return;
+        }
+        $this->liquidatedAt = $at;
+        $this->deleteAfter  = $deleteAfter;
+    }
 
     public function getTransfers(): Collection { return $this->transfers; }
     public function getSyncRecords(): Collection { return $this->syncRecords; }

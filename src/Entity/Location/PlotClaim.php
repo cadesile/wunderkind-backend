@@ -166,6 +166,20 @@ class PlotClaim
         $this->updatedAt       = new \DateTimeImmutable();
     }
 
+    /**
+     * Take the club off the plot while the OWNER keeps it — the game-over liquidation path.
+     *
+     * The claim stays active (released_at NULL) and still belongs to `user`, so the plot is not
+     * ownerless: it is an empty plot the owner can found a new club on or sell back. The frozen
+     * name is cleared so rival lists stop showing a club that no longer trades there.
+     */
+    public function detachClub(): void
+    {
+        $this->club            = null;
+        $this->clubNameAtClaim = null;
+        $this->updatedAt       = new \DateTimeImmutable();
+    }
+
     public function getClubNameAtClaim(): ?string { return $this->clubNameAtClaim; }
 
     /**

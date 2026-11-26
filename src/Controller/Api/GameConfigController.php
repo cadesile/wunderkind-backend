@@ -304,6 +304,10 @@ class GameConfigController extends AbstractController
             'bankruptcyDeductionTiers'    => $config->getBankruptcyDeductionTiers(),
             'bankruptcyDeductionsEnabled' => $config->isBankruptcyDeductionsEnabled(),
 
+            // Game over / liquidation
+            'gameOverFanMoraleThreshold'    => $config->getGameOverFanMoraleThreshold(),
+            'liquidatedClubDeleteAfterDays' => $config->getLiquidatedClubDeleteAfterDays(),
+
             // Competition history — points per league-win by tier
             'leagueWinPoints' => $config->getLeagueWinPoints(),
 
