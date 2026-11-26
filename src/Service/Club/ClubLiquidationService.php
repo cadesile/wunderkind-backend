@@ -15,9 +15,10 @@ use Psr\Log\LoggerInterface;
 /**
  * Game over: the club is liquidated, the OWNER KEEPS THE PLOT (Courtney, 2026-11-26).
  *
- * THE DEVICE DECIDES. Game over is "balance below zero, the owner cannot invest, fan morale
- * below `gameOverFanMoraleThreshold`", and every one of those is device-owned state (finance
- * rule: all financial calculation happens on the device). The server only records the outcome.
+ * THE DEVICE DECIDES. With the balance below zero and fan morale below
+ * `gameOverFanMoraleThreshold`, the app warns on Advance that the club will be liquidated; the
+ * player confirms (or invests first). Both are device-owned state (finance rule: all financial
+ * calculation happens on the device), so the server only records the outcome.
  *
  * WHAT LIQUIDATION DOES
  *   - stamps `club.liquidated_at` and `club.delete_after` (now + `liquidatedClubDeleteAfterDays`);

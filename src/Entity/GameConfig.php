@@ -1031,8 +1031,8 @@ class GameConfig
     private bool $bankruptcyDeductionsEnabled = true;
 
     /**
-     * Game over: fan morale (0-100) below which a club in debt, whose owner can no longer invest,
-     * is liquidated. All three must hold in the same week; the app decides. Default: 30
+     * Game over: with the club balance below zero and fan morale (0-100) below this, the app warns
+     * on Advance that the club will be liquidated; confirming ends the save. Default: 30
      */
     #[ORM\Column(type: 'integer', options: ['default' => 30])]
     private int $gameOverFanMoraleThreshold = 30;

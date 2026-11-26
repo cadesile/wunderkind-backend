@@ -4,13 +4,7 @@ Courtney, 2026-11-26. Plots belong to the account (`plot_claim.user`), not the c
 
 ## Game over (decided on the device)
 
-The app ends a save when, in the same week:
-
-1. the club balance is below zero,
-2. the owner can no longer invest (this season's regular and rescue season investments are used up, or the owner's account credit is zero), and
-3. fan morale is below `gameOverFanMoraleThreshold` (game config, default 30).
-
-All three are device state, so the server does not re-check them (all financial calculation happens on the device).
+Courtney, 2026-11-27: whether to invest is the player's choice. When the club balance is below zero and fan morale is below `gameOverFanMoraleThreshold` (game config, default 30), pressing Advance warns "if you advance, your club will be liquidated". Confirming ends the save and the app calls the endpoint below. The player can cancel and invest first. The server does not re-check (all financial calculation happens on the device).
 
 ## `POST /api/club/liquidate`
 
