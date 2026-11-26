@@ -13,6 +13,8 @@ use App\Service\Location\CountryReadinessService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
@@ -66,6 +68,26 @@ class CountryProfileCrudController extends AbstractCrudController
                 'The bounding box and land-value band are used to validate AI-supplied data. '
                 . 'Leaving them blank means weaker checks, not none.',
             );
+    }
+
+    /**
+     * EasyAdmin's stock delete is replaced by the guarded one (CountryDeleteController). The
+     * stock one ran straight into location's ON DELETE RESTRICT with a 500, and would have
+     * orphaned every table that keys on the code as a bare string if it had not.
+     */
+    public function configureActions(Actions $actions): Actions
+    {
+        $delete = Action::new('deleteCountry', 'Delete', 'fa fa-trash')
+            ->linkToUrl(fn (CountryProfile $profile) => $this->generateUrl('admin', [
+                'routeName'   => 'admin_country_delete_confirm',
+                'routeParams' => ['code' => $profile->getCode()],
+            ]))
+            ->addCssClass('text-danger');
+
+        return $actions
+            ->disable(Action::DELETE, Action::BATCH_DELETE)
+            ->add(Crud::PAGE_INDEX, $delete)
+            ->add(Crud::PAGE_EDIT, $delete);
     }
 
     public function configureFilters(Filters $filters): Filters

@@ -11,6 +11,7 @@ use App\Enum\Location\LocationStatus;
 use App\Service\ClubNameNormalizer;
 use App\Service\Location\Enrichment\LocationEnrichmentOrchestrator;
 use App\Service\Location\LocationClassificationService;
+use App\Service\Location\LocationDeletionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -54,6 +55,7 @@ class LocationCrudController extends AbstractCrudController
     public function __construct(
         private readonly LocationClassificationService  $classificationService,
         private readonly LocationEnrichmentOrchestrator $orchestrator,
+        private readonly LocationDeletionService        $deletionService,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -246,30 +248,22 @@ class LocationCrudController extends AbstractCrudController
             return;
         }
 
-        $countryCode = $entityInstance->getCountryCode();
+        // Plots alone no longer block (Courtney, 2026-11-26): a town is deletable, enriched or
+        // not, unless one of its plots is taken by a player. LocationDeletionService::deleteTown()
+        // holds the rule and removes the town's free plots, holds, estimates and rivals in FK
+        // order — a plain remove hit land_plot's ON DELETE RESTRICT as a 500.
+        $town   = $entityInstance->getTown();
+        $reason = $this->deletionService->deleteTown((string) $entityInstance->getId());
 
-        // A location with plots cannot be deleted at all — the FK is ON DELETE RESTRICT because
-        // a plot may carry a claim and real money. Say so plainly instead of surfacing a
-        // ForeignKeyConstraintViolationException as a 500.
-        $plots = (int) $entityManager->getConnection()->fetchOne(
-            'SELECT COUNT(*) FROM land_plot WHERE location_id = :id',
-            ['id' => (string) $entityInstance->getId()],
-        );
-
-        if ($plots > 0) {
-            $this->addFlash('danger', sprintf(
-                '%s still has %d plot(s) and cannot be deleted — a plot may carry a claim. '
-                . 'Set its status to Retired instead, which hides it from players without breaking existing clubs.',
-                $entityInstance->getTown(),
-                $plots,
-            ));
+        if ($reason !== null) {
+            $this->addFlash('danger', sprintf('%s was not deleted: %s.', $town, $reason));
 
             return;
         }
 
-        parent::deleteEntity($entityManager, $entityInstance);
-
-        $this->classificationService->reclassifyCountry($countryCode);
+        // Deleted underneath the ORM; detach so nothing later tries to flush the stale row.
+        $entityManager->detach($entityInstance);
+        $this->addFlash('success', sprintf('%s deleted, with its free plots.', $town));
     }
 
     /** Keep the normalised name in step with the town, since club-name checks compare on it. */
