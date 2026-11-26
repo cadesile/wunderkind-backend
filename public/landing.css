@@ -2988,6 +2988,27 @@ button:focus-visible,
 .journey-tags { list-style: none; margin: 0; padding: 0; color: var(--text-muted); }
 .journey-tags li { padding: 6px 0; font-size: 13px; }
 
+/* Chapter 01's plot purchase: four numbered steps in a deed-like panel. */
+.journey-plot {
+    margin: 4px 0 18px;
+    padding: 16px 18px;
+    background: var(--dark);
+    border: 3px solid var(--border);
+    border-left: 6px solid var(--gold);
+    box-shadow: 4px 4px 0 var(--border);
+}
+.journey-plot-title { font-size: 9px; line-height: 1.6; color: var(--gold); margin-bottom: 12px; }
+.plot-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.plot-steps li { display: flex; gap: 12px; align-items: baseline; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+.plot-steps strong { color: var(--text); font-weight: 700; }
+.plot-step-num {
+    flex: 0 0 auto;
+    font-size: 8px;
+    color: var(--dark);
+    background: var(--mint);
+    padding: 4px 5px 3px;
+}
+
 /* ── Facilities (#facilities) ────────────────────────────────────────────── */
 
 .facilities-section {
