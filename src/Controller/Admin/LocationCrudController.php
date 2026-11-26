@@ -122,7 +122,11 @@ class LocationCrudController extends AbstractCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        yield AssociationField::new('country')->setRequired(true);
+        // Plain text on the list and detail page, not EasyAdmin's association link. The link opened the
+        // country's own page, whose Delete deletes the whole country: that is how a town
+        // delete on NL ended up as POST /admin/country-profile/NL/delete (2026-11-26).
+        yield TextField::new('countryCode', 'Country')->hideOnForm()->setSortable(false);
+        yield AssociationField::new('country')->setRequired(true)->onlyOnForms();
         yield TextField::new('town');
         yield TextField::new('region');
 
