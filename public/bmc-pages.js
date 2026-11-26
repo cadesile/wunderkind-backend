@@ -30,6 +30,11 @@
  *   [data-bmc-setting]              a row: owns its fields, one .bmc-revert and one [data-bmc-hint]
  *   [data-bmc-hint][data-default]   the row's idle hint; replaced by the error / "Saved: …" text
  *   [data-bmc-savebar]              .bmc-savebar__title / __sub, [data-bmc-save], [data-bmc-discard]
+ *   form[data-bmc-track-all]        also track every named field WITHOUT data-saved (tables,
+ *                                   JSON textareas, checkboxes): its load-time value becomes its
+ *                                   saved value, as kind "text" with blank allowed, so editing
+ *                                   only one of those still enables Save. Checkboxes compare
+ *                                   checked state ("1" / "").
  */
 (function () {
     'use strict';
@@ -127,7 +132,9 @@
     };
 
     // ── form state ──────────────────────────────────────────────────────
-    function norm(el) { return el.getAttribute('data-kind') === 'money' ? BMC.digits(el.value) : String(el.value).trim(); }
+    function isTick(el) { return el.type === 'checkbox' || el.type === 'radio'; }
+    function norm(el) { if (isTick(el)) return el.checked ? '1' : ''; return el.getAttribute('data-kind') === 'money' ? BMC.digits(el.value) : String(el.value).trim(); }
+    function restore(el) { var s = el.getAttribute('data-saved'); if (isTick(el)) el.checked = s === '1'; else el.value = s; if (el.getAttribute('data-kind') === 'money') BMC.money(el); }
     function savedOf(el) { var s = el.getAttribute('data-saved'); return el.getAttribute('data-kind') === 'money' ? BMC.digits(s) : String(s == null ? '' : s).trim(); }
     function intOf(el) { var v = norm(el); return /^-?\d+$/.test(v) ? parseInt(v, 10) : null; }
 
@@ -167,7 +174,22 @@
     // four selects and two JSON editors, so it would have been unusable.
     var FIELD_SEL = 'input[data-saved], select[data-saved], textarea[data-saved]';
 
+    // UNTRACKED FIELDS COULD NOT BE SAVED ON THEIR OWN. Game config's tables (wage multiplier
+    // tiers, league win points, attendance, NPC balances), JSON textareas and checkboxes carried
+    // no data-saved, so check() never counted them: clearing the top wage tier's Max Ability left
+    // the bar on ALL SAVED with [data-bmc-save] disabled, and the edit could never be posted.
+    function adoptUntracked(form) {
+        $$('input[name], select[name], textarea[name]', form).forEach(function (el) {
+            if (el.hasAttribute('data-saved')) return;
+            if (/^(hidden|submit|button|reset|file)$/.test(el.type)) return;
+            if (!el.hasAttribute('data-kind')) el.setAttribute('data-kind', 'text');
+            if (!el.hasAttribute('data-blank')) el.setAttribute('data-blank', 'ok');
+            el.setAttribute('data-saved', isTick(el) ? (el.checked ? '1' : '') : el.value);
+        });
+    }
+
     function bindForm(form) {
+        if (form.hasAttribute('data-bmc-track-all')) adoptUntracked(form);
         var fields = $$(FIELD_SEL, form);
         var bar = $('[data-bmc-savebar]', form) || $('[data-bmc-savebar][data-form="' + form.id + '"]');
         var byName = {}; fields.forEach(function (f) { byName[f.name] = f; });
@@ -238,14 +260,14 @@
         $$('[data-bmc-setting]', form).forEach(function (row) {
             var rv = $('.bmc-revert', row);
             if (rv) rv.addEventListener('click', function () {
-                $$(FIELD_SEL, row).forEach(function (f) { f.value = f.getAttribute('data-saved'); if (f.getAttribute('data-kind') === 'money') BMC.money(f); });
+                $$(FIELD_SEL, row).forEach(restore);
                 check();
             });
         });
         if (bar) {
             var discard = $('[data-bmc-discard]', bar);
             if (discard) discard.addEventListener('click', function () {
-                fields.forEach(function (f) { f.value = f.getAttribute('data-saved'); if (f.getAttribute('data-kind') === 'money') BMC.money(f); });
+                fields.forEach(restore);
                 check(); form.dispatchEvent(new CustomEvent('bmc:discard'));
             });
         }
