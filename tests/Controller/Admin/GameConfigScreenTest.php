@@ -136,14 +136,57 @@ class GameConfigScreenTest extends WebTestCase
         }
     }
 
-    /** The section tabs are what make 32 sections usable; losing them hides most of the page. */
-    public function testTheSectionNavigationSurvives(): void
+    /**
+     * The side nav is BUILT IN THE BROWSER, so what has to survive here is what it is built from.
+     *
+     * public/bmc-game-config.js reads the group list off #gc-workspace[data-groups], then moves
+     * each .cfg-section into [data-gc-group="<id>"] .gc-group__body by its data-section-id. Lose
+     * any one of those three and the script has nothing to move: the 47 sections stay in the page
+     * but no nav reaches them, which is the same silent shape the rest of this class guards —
+     * the page still renders and still saves, it just hides most of itself.
+     *
+     * Replaces an assertion on #cfg-tab-nav / .cfg-tab / .cfg-group-btn, the top tab strip this
+     * nav took over from in the 2026-11-26 calibration-workspace rebuild.
+     */
+    public function testTheSectionNavigationHasWhatTheBrowserBuildsItFrom(): void
     {
         $this->body();
+        $crawler = $this->client->getCrawler();
 
-        self::assertSelectorExists('#cfg-tab-nav');
-        self::assertSelectorExists('.cfg-group-btn');
-        self::assertSelectorExists('.cfg-tab');
-        self::assertSelectorExists('.cfg-section');
+        self::assertSelectorExists('#gc-nav', 'the nav mounts into #gc-nav; nothing to mount into');
+        self::assertSelectorExists('#gc-workspace[data-groups]');
+        self::assertSelectorExists('.cfg-section', 'no sections to move into the groups');
+
+        $groups = json_decode($crawler->filter('#gc-workspace')->attr('data-groups') ?? '', true);
+        self::assertIsArray($groups);
+        self::assertNotEmpty($groups, 'an empty group list builds an empty nav');
+
+        $ids = array_column($groups, 'id');
+        self::assertContains('other', $ids, 'the catch-all is what stops an unlisted section vanishing');
+
+        foreach ($groups as $group) {
+            self::assertSelectorExists(
+                \sprintf('[data-gc-group="%s"] .gc-group__body', $group['id']),
+                \sprintf('group "%s" is in the nav list but has no body to move sections into', $group['id']),
+            );
+        }
+
+        // A listed id with no section behind it is a nav entry that leads nowhere. The reverse is
+        // deliberately not asserted: an unlisted section lands in "Other" by design.
+        $rendered = $crawler->filter('.cfg-section')->each(
+            static fn ($node): string => (string) $node->attr('data-section-id'),
+        );
+
+        $dead = [];
+
+        foreach ($groups as $group) {
+            foreach ($group['sections'] as $sectionId) {
+                if (!\in_array($sectionId, $rendered, true)) {
+                    $dead[] = \sprintf('%s (in %s)', $sectionId, $group['id']);
+                }
+            }
+        }
+
+        self::assertSame([], $dead, 'nav entries with no section behind them: ' . implode(', ', $dead));
     }
 }
