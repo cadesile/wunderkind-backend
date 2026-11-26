@@ -455,6 +455,20 @@ class DashboardController extends AbstractDashboardController
         // Wage multiplier tiers
         $rawTiers = $request->request->all('wageMultiplierTiers') ?: [];
         $tiers = [];
+        // The form posts FROM ability (a floor). A blank floor counts as 0, the bottom row.
+        $first = reset($rawTiers);
+        if (is_array($first) && array_key_exists('fromAbility', $first)) {
+            $rows = [];
+            foreach ($rawTiers as $tier) {
+                $rows[] = [
+                    'fromAbility'      => ($tier['fromAbility'] ?? '') === '' ? 0 : max(0, (int) $tier['fromAbility']),
+                    'playerMultiplier' => (float) ($tier['playerMultiplier'] ?? 1.0),
+                    'staffMultiplier'  => (float) ($tier['staffMultiplier'] ?? 1.0),
+                ];
+            }
+            $rawTiers = [];
+            $tiers = \App\Entity\GameConfig::wageTiersFromMinimums($rows);
+        }
         foreach ($rawTiers as $tier) {
             $maxAbility = isset($tier['maxAbility']) && $tier['maxAbility'] !== '' ? (int) $tier['maxAbility'] : null;
             $tiers[] = [

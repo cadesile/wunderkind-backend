@@ -27,6 +27,19 @@ final class WageMultiplierTiersOrderTest extends TestCase
         self::assertSame([5.0, 7.0, 14.0, 28.0], array_column($config->getWageMultiplierTiers(), 'playerMultiplier'));
     }
 
+    public function testFromAbilityRowsBecomeCeilingsWithTopCatchAll(): void
+    {
+        $tiers = GameConfig::wageTiersFromMinimums([
+            ['fromAbility' => 60, 'playerMultiplier' => 28, 'staffMultiplier' => 12],
+            ['fromAbility' => 40, 'playerMultiplier' => 14, 'staffMultiplier' => 8],
+            ['fromAbility' => 20, 'playerMultiplier' => 7,  'staffMultiplier' => 4],
+            ['fromAbility' => 0,  'playerMultiplier' => 5,  'staffMultiplier' => 2],
+        ]);
+
+        self::assertSame([20, 40, 60, null], array_column($tiers, 'maxAbility'));
+        self::assertSame([5.0, 7.0, 14.0, 28.0], array_column($tiers, 'playerMultiplier'));
+    }
+
     public function testAlreadyAscendingTableIsUnchanged(): void
     {
         $tiers = (new GameConfig())->getWageMultiplierTiers();

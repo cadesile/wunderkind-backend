@@ -1181,9 +1181,10 @@
                         Ability-based multipliers applied when generating player and staff contract values.
                         Pool players never have a club, so the player's own <strong>current ability</strong> determines the tier.<br>
                         Formula: <code>contractValue = currentAbility × rand(min, max) × playerMultiplier</code><br>
-                        Shown highest first. Order does not matter: rows are sorted by Max Ability when saved,
-                        and a player uses the first row whose Max Ability is above their ability.
-                        Leave Max Ability blank on the top row so it catches every higher ability.
+                        Highest tier first. <strong>From ability</strong> is where each tier starts: a player uses the
+                        tier with the highest From ability at or below their ability. The top tier covers everything
+                        above it, and the bottom tier also covers anything below its From ability.
+                        Row order does not matter; tiers are sorted when saved.
                         <em>Covers ability</em> and <em>Staff / player</em> update as you type.
                     </p>
 
@@ -1192,7 +1193,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th class="small  fw-semibold">Tier</th>
-                                    <th class="small  fw-semibold">Max Ability (exclusive)</th>
+                                    <th class="small  fw-semibold">From ability</th>
                                     <th class="small  fw-semibold">Covers ability</th>
                                     <th class="small  fw-semibold">Player ×</th>
                                     <th class="small  fw-semibold">Staff ×</th>
@@ -1200,16 +1201,20 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {# Highest first for reading; GameConfig::sortWageMultiplierTiers() restores
-                                   ascending order on save, so the posted order never matters. #}
-                                {% for i, tier in config.wageMultiplierTiers|reverse %}
+                                {# Stored as exclusive maxAbility ceilings (ascending, null last). Each tier's
+                                   floor is the ceiling of the tier below it; the bottom tier's floor is 0.
+                                   GameConfig::wageTiersFromMinimums() converts back on save. #}
+                                {% set asc = config.wageMultiplierTiers %}
+                                {% for i, tier in asc|reverse %}
+                                {% set a = asc|length - 1 - i %}
+                                {% set fromAb = a > 0 ? (asc[a - 1].maxAbility ?? 0) : 0 %}
                                 <tr data-ladder-row>
                                     <td class="small fw-semibold ">Tier {{ i + 1 }}</td>
                                     <td>
-                                        <input type="number" name="wageMultiplierTiers[{{ i }}][maxAbility]"
-                                               value="{{ tier.maxAbility ?? '' }}"
-                                               min="0" max="100" placeholder="∞ (catch-all)"
-                                               data-ladder="max" style="width:140px;">
+                                        <input type="number" name="wageMultiplierTiers[{{ i }}][fromAbility]"
+                                               value="{{ fromAb }}"
+                                               min="0" max="100" step="1"
+                                               data-ladder="from" style="width:140px;">
                                     </td>
                                     <td class="small" data-ladder="covers"></td>
                                     <td>
@@ -1233,36 +1238,28 @@
                             var table = document.getElementById('wage-ladder');
                             var note = document.getElementById('wage-ladder-note');
                             if (!table) return;
-                            function num(el) { var v = String(el.value).trim(); return v === '' ? null : parseFloat(v); }
+                            function num(el) { var v = String(el.value).trim(); return v === '' ? 0 : parseFloat(v); }
                             function update() {
                                 var rows = Array.prototype.slice.call(table.querySelectorAll('[data-ladder-row]')).map(function (tr) {
                                     return {
                                         tr: tr,
-                                        max: num(tr.querySelector('[data-ladder="max"]')),
+                                        from: num(tr.querySelector('[data-ladder="from"]')),
                                         player: num(tr.querySelector('[data-ladder="player"]')),
                                         staff: num(tr.querySelector('[data-ladder="staff"]'))
                                     };
                                 });
-                                // Same order the server saves in: ascending Max Ability, blank last.
-                                var asc = rows.slice().sort(function (a, b) {
-                                    if (a.max === null && b.max === null) return 0;
-                                    if (a.max === null) return 1;
-                                    if (b.max === null) return -1;
-                                    return a.max - b.max;
-                                });
-                                var lo = 0, dips = 0, prevRatio = null, notes = [];
+                                // Same order the server saves in: ascending From ability.
+                                var asc = rows.slice().sort(function (a, b) { return a.from - b.from; });
+                                var prevRatio = null, dips = 0, dupes = 0;
                                 asc.forEach(function (r, idx) {
+                                    var next = asc[idx + 1];
+                                    var lo = idx === 0 ? 0 : r.from;
                                     var covers;
-                                    if (r.max === null) {
-                                        covers = lo + '+';
-                                    } else if (r.max <= lo) {
-                                        covers = 'none (overlaps the row below)';
-                                    } else {
-                                        covers = lo + '–' + (r.max - 1) + (idx === asc.length - 1 ? ' and ' + r.max + '+ (top row catches the rest)' : '');
-                                    }
-                                    if (r.max !== null && r.max > lo) lo = r.max;
+                                    if (next && next.from === r.from) { covers = 'none (same From as another tier)'; dupes++; }
+                                    else if (!next) covers = lo + '+';
+                                    else covers = lo + '–' + (next.from - 1);
                                     r.tr.querySelector('[data-ladder="covers"]').textContent = covers;
-                                    var ratio = r.player > 0 && r.staff !== null ? r.staff / r.player : null;
+                                    var ratio = r.player > 0 ? r.staff / r.player : null;
                                     var cell = r.tr.querySelector('[data-ladder="ratio"]');
                                     var dip = ratio !== null && prevRatio !== null && ratio < prevRatio - 1e-9;
                                     cell.textContent = ratio === null ? '—' : '×' + ratio.toFixed(2) + (dip ? '  ▼ dips' : '');
@@ -1270,9 +1267,9 @@
                                     if (dip) dips++;
                                     if (ratio !== null) prevRatio = ratio;
                                 });
-                                var top = asc[asc.length - 1];
-                                if (top && top.max !== null) notes.push('Top row has a Max Ability of ' + top.max + '. Leave it blank to make it the catch-all (same pricing, clearer).');
-                                if (dips) notes.push(dips + ' row(s) pay staff a smaller share of the player rate than the row below, so staff earn relatively less as ability rises.');
+                                var notes = [];
+                                if (dupes) notes.push('Two tiers share a From ability; one of them will never be used.');
+                                if (dips) notes.push(dips + ' tier(s) pay staff a smaller share of the player rate than the tier below, so staff earn relatively less as ability rises.');
                                 note.textContent = notes.join(' ');
                             }
                             table.addEventListener('input', update);
