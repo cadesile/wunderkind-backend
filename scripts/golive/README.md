@@ -24,7 +24,7 @@ refuse any other, except `promote.sh`, which is the cutover.
 | 2 | `make-golive.sh` | `wk_golive` | backs up dev, restores the backup as `wk_golive` |
 | 3 | `import.sh` | `wk_golive` | `sql/purge-dev-users.sql`, `sql/export-accounts.sql`, `sql/import-accounts.sql`, `sql/verify-import.sql` |
 | 4 | `sell.sh --dry-run`, then `sell.sh` | `wk_golive` | the buyout in batches of 25 (`app:clubs:sell-batch`), drains `clubsale`, then `sql/verify-sale.sql` |
-| 5 | `promote.sh` | **production** | backs up prod, replaces it with `wk_golive` (refuses while the prod app is running) |
+| 5 | `promote.sh` | **production** | sets the client version gate to 2, backs up prod, replaces it with `wk_golive` (refuses while the prod app is running) |
 
 `sell.sh` and `promote.sh` ask for a typed word (`SELL`, `PROMOTE`) before they act.
 
@@ -46,6 +46,13 @@ buying a plot.
 6. Smoke test prod, then publish the app (OTA + store builds).
 
 Merge only after step 4: the deploy runs migrations against whatever database prod has.
+
+## Client version gate
+
+`game_config.min_client_api_version` (admin: Game config, "Minimum client API version").
+App builds send `X-Client-Api-Version`; builds from before the header count as 1. Below the
+minimum, every `/api/` call answers 426 `update_required`. `promote.sh` sets it to 2, so
+master-era builds stop instead of syncing deleted clubs, and pick up the OTA.
 
 ## Rollback
 

@@ -25,6 +25,13 @@ fi
 say "Checking wk_golive passed its buyout checks"
 dev_psql "$GOLIVE_DB" < "$SCRIPT_DIR/sql/verify-sale.sql"
 
+# Master-era builds send no X-Client-Api-Version and count as 1; their clubs are gone. From
+# the moment prod answers on the new database they get 426 update_required instead of
+# syncing into nothing. New builds send 2. See ClientVersionGateSubscriber.
+GOLIVE_MIN_CLIENT_API_VERSION="${GOLIVE_MIN_CLIENT_API_VERSION:-2}"
+say "Setting the client version gate to $GOLIVE_MIN_CLIENT_API_VERSION in $GOLIVE_DB"
+dev_psql "$GOLIVE_DB" -c "UPDATE game_config SET min_client_api_version = $GOLIVE_MIN_CLIENT_API_VERSION"
+
 mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
 PROD_BACKUP="$BACKUP_DIR/prod-before-promote-$(stamp).dump"
 GOLIVE_DUMP="$BACKUP_DIR/golive-$(stamp).dump"
