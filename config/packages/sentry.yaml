@@ -1,0 +1,50 @@
+# Sentry error reporting (project build-my-club/wunderkind-backend).
+#
+# Both deployed stacks run APP_ENV=prod (see docker-compose.dev.yml), so the Symfony env cannot tell
+# dev.buildmyclub.co.uk from production. Two variables written by the deploy workflows do that instead:
+#
+#   SENTRY_ENVIRONMENT  dev | production   — the environment tag events carry in Sentry
+#   SENTRY_LOG_LEVEL    warning | error    — the lowest Monolog level that becomes a Sentry event
+#
+# Same rule as the app: dev sends warnings and errors, production sends errors only.
+# SENTRY_DSN is one key shared by both stacks (GitHub secret SENTRY_DSN). Left empty — the default in
+# .env, so local and CI never report — the SDK is a no-op.
+when@prod:
+    sentry:
+        dsn: '%env(SENTRY_DSN)%'
+        # Exceptions reach Sentry through the Monolog handler below (Symfony's ErrorListener logs every
+        # uncaught one at ERROR/CRITICAL). Leaving the bundle's own listener on as well would send each
+        # crash twice.
+        register_error_listener: false
+        register_error_handler: false
+        options:
+            environment: '%env(SENTRY_ENVIRONMENT)%'
+            send_default_pii: false
+            # Errors only — no performance tracing, which would spend the event quota on every request.
+            traces_sample_rate: 0.0
+            before_send: 'App\Monitoring\SentryBeforeSend'
+
+    monolog:
+        handlers:
+            sentry:
+                type: service
+                id: Sentry\Monolog\Handler
+            # INFO and above are kept in memory as breadcrumbs and attached to the next event sent, so
+            # an error arrives with the log lines that led up to it. Nothing is sent on its own.
+            sentry_breadcrumbs:
+                type: service
+                id: Sentry\Monolog\BreadcrumbHandler
+
+    services:
+        Sentry\Monolog\Handler:
+            arguments:
+                $hub: '@Sentry\State\HubInterface'
+                $level: '%env(SENTRY_LOG_LEVEL)%'
+                $fillExtraContext: true
+
+        Sentry\Monolog\BreadcrumbHandler:
+            arguments:
+                $hub: '@Sentry\State\HubInterface'
+                $level: info
+
+        App\Monitoring\SentryBeforeSend: ~

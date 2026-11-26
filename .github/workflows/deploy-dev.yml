@@ -95,6 +95,9 @@ jobs:
             LOCATION_ENRICHER_PROVIDER="${{ secrets.DEV_LOCATION_ENRICHER_PROVIDER }}"
             LOCATION_ENRICHER_MODEL="${{ secrets.DEV_LOCATION_ENRICHER_MODEL }}"
             LOCATION_ENRICHER_API_KEY="${{ secrets.DEV_LOCATION_ENRICHER_API_KEY }}"
+            SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
+            SENTRY_ENVIRONMENT=dev
+            SENTRY_LOG_LEVEL=warning
             EOF
             sed -i 's/^[[:space:]]*//' .env
 
