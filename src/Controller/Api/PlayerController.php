@@ -83,15 +83,15 @@ class PlayerController extends AbstractController
      * there — an empty shelf, not an error.
      */
     /**
-     * GET /api/players/free-agents?country=<code>[&count=<n>]
+     * GET /api/players/free-agents?country=<code>[&count=<n>|&extra=<n>]
      *
      * A fresh batch of unattached players for the season transition's free transfer top-up
      * (Courtney, 2026-11-27). Generated on the spot and never stored: every player is the
      * given country's nationality, weighted toward the bottom half of its pyramid (see
      * FreeAgentGenerationService). No money in the payload; the device prices them.
      *
-     * `count` defaults to StarterConfig::$freeAgentSeasonTopUpCount and is clamped to
-     * 1-200. The client treats any failure as "no top-up this season", so this endpoint has
+     * `count` defaults to StarterConfig::$freeAgentSeasonTopUpCount plus `extra` (the device's
+     * NPC roster shortfall), and is clamped to 1-200. The client treats any failure as "no top-up this season", so this endpoint has
      * no partial or degraded mode to reason about.
      */
     #[Route('/free-agents', name: 'api_players_free_agents', methods: ['GET'])]
@@ -114,8 +114,14 @@ class PlayerController extends AbstractController
             );
         }
 
+        // `extra` is added to the configured default rather than replacing it, so the device
+        // can ask for its NPC clubs' roster shortfall on top without knowing the default.
+        // An explicit `count` wins over both.
         $default = $starterConfigRepository->getConfig()->getFreeAgentSeasonTopUpCount();
-        $count   = (int) $request->query->get('count', (string) $default);
+        $extra   = max(0, (int) $request->query->get('extra', '0'));
+        $count   = $request->query->has('count')
+            ? (int) $request->query->get('count')
+            : $default + $extra;
         $count   = max(1, min($count, self::MAX_AMOUNT));
 
         $players = $generator->generate($country->value, $count);
