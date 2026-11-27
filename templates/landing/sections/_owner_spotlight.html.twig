@@ -124,6 +124,8 @@
                         </div>
                         {{ ui.clubList(leader.clubs, landing_v) }}
                     {% endif %}
+
+                    {{ ui.plotList(leader, landing_v) }}
                 </div>
             </li>
         </ol>
@@ -166,6 +168,8 @@
                         {% if owner.clubs is not empty %}
                             {{ ui.clubList(owner.clubs, landing_v) }}
                         {% endif %}
+
+                        {{ ui.plotList(owner, landing_v) }}
                     </li>
                 {% endfor %}
             </ol>
@@ -173,7 +177,10 @@
 
         <p class="ospot-note">
             Dividends drawn across every club an owner holds, as reported by the app and
-            refreshed every few minutes. Owners appear by display name only.
+            refreshed every few minutes. Only owners who currently run a club are listed.
+            Plot values are today's land price; sell-back is what the owner would be paid
+            for the plot and its club, and the timer is how long until the plot is bought
+            back if the club does not sync. Owners appear by display name only.
             <a href="#privacy">How we handle your data</a>.
         </p>
     </div>
@@ -213,4 +220,70 @@
             </li>
         {% endfor %}
     </ul>
+{% endmacro %}
+
+{#
+   An owner's live plots (Courtney, 2026-11-27): town + flag, region, then three figures —
+   land value today, the sell-back payout, and time left before the inactivity rule takes
+   the plot. "SYNC IN" for a plot with a club; "BUILD IN" for an empty one, whose deadline
+   is to found a new club on it. The label turns red in the last three days.
+
+   Nothing renders for an owner with no plots (a club founded before plots existed).
+#}
+{% macro plotList(owner, landing_v) %}
+    {% import _self as ui %}
+    {% if owner.plots is defined and owner.plots is not empty %}
+        <div class="ospot-clubs-head vt">
+            <span>{{ owner.plotCount == 1 ? 'PLOT' : 'PLOTS' }}</span>
+            {% if owner.plotCount > owner.plots|length %}
+                <span>+{{ owner.plotCount - owner.plots|length }} more</span>
+            {% endif %}
+        </div>
+        <ul class="ospot-plots">
+            {% for plot in owner.plots %}
+                <li class="ospot-plot">
+                    <span class="ospot-plot-town">
+                        {{ plot.town }}
+                        {% set plotCountry = plot.countryLabel ?? plot.countryCode %}
+                        <img class="ospot-flag"
+                             src="{{ asset('assets/flags/' ~ plot.countryCode|lower ~ '.svg') }}?v={{ landing_v }}"
+                             width="18" height="13" loading="lazy" decoding="async"
+                             alt="{{ plotCountry }}" title="{{ plotCountry }}">
+                    </span>
+                    <span class="ospot-plot-region">
+                        {{ plot.region }}{% if plot.clubName is null %} · empty plot{% endif %}
+                    </span>
+                    <dl class="ospot-plot-stats">
+                        <div>
+                            <dt class="vt">VALUE</dt>
+                            <dd class="pixel" title="£{{ (plot.landValuePence / 100)|round(0, 'floor')|number_format }}">{{ ui.compactMoney(plot.landValuePence) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="vt">SELL-BACK</dt>
+                            <dd class="pixel" title="£{{ (plot.sellBackPence / 100)|round(0, 'floor')|number_format }}">{{ ui.compactMoney(plot.sellBackPence) }}</dd>
+                        </div>
+                        <div{% if plot.timeLeftUrgent %} class="is-urgent"{% endif %}>
+                            <dt class="vt">{{ plot.clubName is null ? 'BUILD IN' : 'SYNC IN' }}</dt>
+                            <dd class="pixel">{{ plot.timeLeftLabel }}</dd>
+                        </div>
+                    </dl>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+
+{#
+   £2.5m / £850k / £900 for the plot figures: three full £ figures cannot share a row at
+   grid-card or phone width without wrapping mid-number. The exact figure is in the title.
+#}
+{% macro compactMoney(pence) %}
+    {%- set pounds = pence / 100 -%}
+    {%- if pounds >= 1000000 -%}
+        £{{ (pounds / 1000000)|number_format(pounds >= 100000000 ? 0 : 1)|replace({'.0': ''}) }}m
+    {%- elseif pounds >= 1000 -%}
+        £{{ (pounds / 1000)|round(0, 'floor')|number_format }}k
+    {%- else -%}
+        £{{ pounds|round(0, 'floor')|number_format }}
+    {%- endif -%}
 {% endmacro %}
