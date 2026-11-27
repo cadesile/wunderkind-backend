@@ -1787,49 +1787,13 @@ class DashboardController extends AbstractDashboardController
 
     // ── Developer Tools ───────────────────────────────────────────────────
 
-    #[Route('/admin/developer-tools/trigger-age21', name: 'admin_trigger_age21', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function triggerAge21Deletion(Request $request): Response
-    {
-        if (!$this->isCsrfTokenValid('trigger_age21', $request->request->get('_csrf_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirectToRoute('admin_settings');
-        }
-
-        $this->addFlash('info', 'Age-21 deletion is now handled automatically during sync. Pool players are not club-owned and are deleted on consumption.');
-        return $this->redirectToRoute('admin_settings');
-    }
-
-    #[Route('/admin/developer-tools/cleanup-entities', name: 'admin_cleanup_entities', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function cleanupEntities(Request $request, KernelInterface $kernel): Response
-    {
-        if (!$this->isCsrfTokenValid('cleanup_entities', $request->request->get('_csrf_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirectToRoute('admin_settings');
-        }
-
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
-
-        $input  = new ArrayInput(['command' => 'app:cleanup:assigned-entities']);
-        $output = new BufferedOutput();
-        $application->run($input, $output);
-
-        $this->addFlash('success', 'Cleanup command executed.');
-        $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
-
-        return $this->redirectToRoute('admin_settings');
-    }
-
     /**
      * Deletes every spoof club and its throwaway owning account (app:clubs:purge-spoof).
      *
-     * Unlike its neighbours here, this one posts to and redirects through EasyAdmin's entry
+     * This one posts to and redirects through EasyAdmin's entry
      * point (/admin?routeName=...). settings.html.twig extends @EasyAdmin/layout.html.twig,
      * and the `ea` Twig context is only populated for routes EasyAdmin itself created — see
-     * src/Controller/Admin/CLAUDE.md. The older buttons on this screen still use the plain
-     * route; they are not changed here, but new ones should not copy that.
+     * src/Controller/Admin/CLAUDE.md. New buttons here should do the same.
      */
     #[Route('/admin/developer-tools/purge-spoof-clubs', name: 'admin_purge_spoof_clubs', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
@@ -1854,37 +1818,6 @@ class DashboardController extends AbstractDashboardController
         $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
 
         return $this->redirect($settingsUrl);
-    }
-
-    #[Route('/admin/developer-tools/generate-leaderboards', name: 'admin_generate_leaderboards', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function generateLeaderboards(Request $request, KernelInterface $kernel): Response
-    {
-        if (!$this->isCsrfTokenValid('generate_leaderboards', $request->request->get('_csrf_token'))) {
-            $this->addFlash('danger', 'Invalid CSRF token.');
-            return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
-        }
-
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
-
-        $input  = new ArrayInput(['command' => 'app:leaderboards:generate']);
-        $output = new BufferedOutput();
-        $application->run($input, $output);
-
-        $this->addFlash('success', 'Leaderboard generation executed.');
-        $this->addFlash('info', nl2br(htmlspecialchars(trim($output->fetch()))));
-
-        return $this->redirect($this->generateUrl('admin', ['routeName' => 'admin_settings']));
-    }
-
-    #[Route('/admin/developer-tools/reset-database', name: 'admin_reset_database', methods: ['GET'])]
-    #[IsGranted('ROLE_ADMIN')]
-    public function resetDatabase(): Response
-    {
-        $this->addFlash('warning', 'Database reset must be run from the CLI:');
-        $this->addFlash('info', 'bash scripts/reset_and_seed.sh');
-        return $this->redirectToRoute('admin_settings');
     }
 
     #[Route('/admin/developer-tools/nuclear-reset', name: 'admin_nuclear_reset', methods: ['POST'])]
