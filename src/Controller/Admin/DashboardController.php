@@ -878,6 +878,9 @@ class DashboardController extends AbstractDashboardController
             max(1, (int) $request->request->get('worldPackClaimedRetentionDays', 7)),
         );
         $config->setStarterPlayerCount((int) $request->request->get('starterPlayerCount', 5));
+        $config->setFreeAgentPackCount((int) $request->request->get('freeAgentPackCount', $config->getFreeAgentPackCount()));
+        $config->setFreeAgentSeasonTopUpCount((int) $request->request->get('freeAgentSeasonTopUpCount', $config->getFreeAgentSeasonTopUpCount()));
+        $config->setFreeAgentUpperTierPercent((int) $request->request->get('freeAgentUpperTierPercent', $config->getFreeAgentUpperTierPercent()));
         $config->setStarterCoachCount((int) $request->request->get('starterCoachCount', 1));
         $config->setStarterScoutCount((int) $request->request->get('starterScoutCount', 1));
         $config->setStarterManagerCount((int) $request->request->get('starterManagerCount', 1));

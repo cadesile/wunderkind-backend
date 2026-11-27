@@ -163,6 +163,24 @@ class StarterConfig
     #[ORM\Column(type: 'integer', options: ['default' => 7])]
     private int $worldPackClaimedRetentionDays = 7;
 
+    /**
+     * Free agents generated with every world pack set and loaded into the save's free transfer
+     * list at new game (Courtney, 2026-11-27). See FreeAgentGenerationService.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 200])]
+    private int $freeAgentPackCount = 200;
+
+    /** Default size of the season-transition top-up from GET /api/players/free-agents. */
+    #[ORM\Column(type: 'integer', options: ['default' => 80])]
+    private int $freeAgentSeasonTopUpCount = 80;
+
+    /**
+     * Percent of every free agent batch drawn from the TOP half of the pyramid; the rest
+     * comes from the bottom half. Default 20.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
+    private int $freeAgentUpperTierPercent = 20;
+
     /** Number of coaches assigned to a starter club. Default: 1 */
     #[ORM\Column(type: 'integer')]
     private int $starterCoachCount = 1;
@@ -709,6 +727,15 @@ class StarterConfig
     public function setWorldPackSetTarget(int $v): static { $this->worldPackSetTarget = $v; return $this; }
 
     public function getWorldPackClaimedRetentionDays(): int { return $this->worldPackClaimedRetentionDays; }
+
+    public function getFreeAgentPackCount(): int { return $this->freeAgentPackCount; }
+    public function setFreeAgentPackCount(int $v): static { $this->freeAgentPackCount = max(0, min($v, 300)); return $this; }
+
+    public function getFreeAgentSeasonTopUpCount(): int { return $this->freeAgentSeasonTopUpCount; }
+    public function setFreeAgentSeasonTopUpCount(int $v): static { $this->freeAgentSeasonTopUpCount = max(0, min($v, 300)); return $this; }
+
+    public function getFreeAgentUpperTierPercent(): int { return $this->freeAgentUpperTierPercent; }
+    public function setFreeAgentUpperTierPercent(int $v): static { $this->freeAgentUpperTierPercent = max(0, min($v, 100)); return $this; }
     public function setWorldPackClaimedRetentionDays(int $v): static { $this->worldPackClaimedRetentionDays = $v; return $this; }
     public function setStarterPlayerCount(int $v): static { $this->starterPlayerCount = $v; return $this; }
 

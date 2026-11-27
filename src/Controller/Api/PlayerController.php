@@ -82,6 +82,51 @@ class PlayerController extends AbstractController
      * the supply, so an under-seeded pool returns fewer than `limit` with the gap visible
      * there — an empty shelf, not an error.
      */
+    /**
+     * GET /api/players/free-agents?country=<code>[&count=<n>]
+     *
+     * A fresh batch of unattached players for the season transition's free transfer top-up
+     * (Courtney, 2026-11-27). Generated on the spot and never stored: every player is the
+     * given country's nationality, weighted toward the bottom half of its pyramid (see
+     * FreeAgentGenerationService). No money in the payload; the device prices them.
+     *
+     * `count` defaults to StarterConfig::$freeAgentSeasonTopUpCount and is clamped to
+     * 1-200. The client treats any failure as "no top-up this season", so this endpoint has
+     * no partial or degraded mode to reason about.
+     */
+    #[Route('/free-agents', name: 'api_players_free_agents', methods: ['GET'])]
+    #[IsGranted('ROLE_CLUB')]
+    public function freeAgents(
+        Request $request,
+        \App\Service\FreeAgentGenerationService $generator,
+        \App\Repository\StarterConfigRepository $starterConfigRepository,
+    ): JsonResponse {
+        $countryParam = $request->query->get('country');
+        if ($countryParam === null || trim($countryParam) === '') {
+            return $this->json(['error' => 'country is required.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $country = Country::tryFrom(strtoupper(trim($countryParam)));
+        if ($country === null) {
+            return $this->json(
+                ['error' => "Unknown country code '{$countryParam}'."],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        $default = $starterConfigRepository->getConfig()->getFreeAgentSeasonTopUpCount();
+        $count   = (int) $request->query->get('count', (string) $default);
+        $count   = max(1, min($count, self::MAX_AMOUNT));
+
+        $players = $generator->generate($country->value, $count);
+
+        return $this->json([
+            'country' => $country->value,
+            'amount'  => count($players),
+            'players' => $players,
+        ]);
+    }
+
     #[Route('/youth', name: 'api_players_youth', methods: ['GET'])]
     #[IsGranted('ROLE_CLUB')]
     public function youth(
