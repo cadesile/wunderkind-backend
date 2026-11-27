@@ -336,6 +336,11 @@ class CompetitionResultsService
                 );
             }
         } else {
+            // Every winner of an earlier round earns half of the next round's prize (the
+            // final pays the full victorPrize). Delivered as inbox offers like the final's.
+            foreach ($winners as $winner) {
+                $this->rewardApplierService->applyRoundPrize($winner, $activeCompetition, $round->getRoundIndex(), $round->getLabel());
+            }
             $this->scheduleNextRoundDraw($round, $now);
         }
 
