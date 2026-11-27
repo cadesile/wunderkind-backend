@@ -196,6 +196,11 @@
         </div>
     </div>
 
+    {# ── Notify: email + device message + push (UserNotifyController) ───── #}
+    {% if notify is defined %}
+        {{ include('admin/_user_notify_form.html.twig') }}
+    {% endif %}
+
 </div>
 
 {% endblock %}

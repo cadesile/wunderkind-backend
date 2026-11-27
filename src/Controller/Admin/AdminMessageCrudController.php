@@ -81,7 +81,7 @@ class AdminMessageCrudController extends AbstractCrudController
         yield ChoiceField::new('targetType', 'Target')
             ->setFormType(EnumType::class)
             ->setFormTypeOptions(['class' => MessageTargetType::class])
-            ->setHelp('Broadcast ignores the fields below. Group segmented uses Audience Groups; Direct club uses Target Club.');
+            ->setHelp('Broadcast ignores the fields below. Group segmented uses Audience Groups; Direct club uses Target Club. Direct user uses Target User (normally sent from a user\'s page with Notify).');
 
         yield AssociationField::new('audienceGroups', 'Audience Groups')
             ->setFormTypeOption('by_reference', false)
@@ -91,6 +91,13 @@ class AdminMessageCrudController extends AbstractCrudController
         yield AssociationField::new('targetClub', 'Target Club')
             ->hideOnIndex()
             ->setHelp('Used only when Target is "direct club".');
+
+        yield AssociationField::new('targetUser', 'Target User')
+            ->hideOnIndex()
+            ->autocomplete()
+            ->setFormTypeOption('choice_label', 'email')
+            ->formatValue(static fn ($v, AdminMessage $m): ?string => $m->getTargetUser()?->getEmail())
+            ->setHelp('Used only when Target is "direct user": shows on whichever club this account plays next, so it still arrives after their clubs are sold.');
 
         yield BooleanField::new('isActive', 'Active')
             ->setHelp('Inactive messages are never delivered, regardless of the validity window.');
