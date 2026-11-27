@@ -39,8 +39,28 @@
                             <li><span class="plot-step-num pixel">01</span><span><strong>Pick a town.</strong> Big cities hold several clubs, villages only one, and rival clubs already take some places. When a town's plots are gone, it's sold out.</span></li>
                             <li><span class="plot-step-num pixel">02</span><span><strong>Hold a plot.</strong> The land price and your stadium quote are frozen for 15 minutes while you decide.</span></li>
                             <li><span class="plot-step-num pixel">03</span><span><strong>Pay from owner credit.</strong> Land is bought with your owner's money, not a club's budget, so what your clubs earn can fund a plot in a bigger city.</span></li>
-                            <li><span class="plot-step-num pixel">04</span><span><strong>Build on it.</strong> Land is revalued over time. Sell up and you're paid its current value plus what your club is worth.</span></li>
+                            <li><span class="plot-step-num pixel">04</span><span><strong>Build on it.</strong> The plot belongs to your account, not to one save. You can own up to two, one per save slot, and land is revalued over time.</span></li>
                         </ol>
+                        {# Ownership rules: DormancyWarningStage (30-day window, warnings at 7 days and 1 day),
+                           ClaimReleaseReason (sold back / dormancy both pay out), PlotSellBackService
+                           (land at current value + club value). Keep this copy in step with them. #}
+                        <div class="plot-rules">
+                            <div class="plot-rule plot-rule--keep">
+                                <div class="plot-rule-head pixel">HOW YOU KEEP IT</div>
+                                <ul>
+                                    <li><strong>Keep playing.</strong> Sync the club on your plot at least once every 30 days. You're warned a week before and again the day before.</li>
+                                    <li><strong>Survive a collapse.</strong> If your balance goes negative and the fans turn on you, the club is liquidated but the land stays yours. Start a new club on it.</li>
+                                </ul>
+                            </div>
+                            <div class="plot-rule plot-rule--lose">
+                                <div class="plot-rule-head pixel">HOW YOU LOSE IT</div>
+                                <ul>
+                                    <li><strong>Go quiet.</strong> No sync for 30 days, or a plot left empty for 30 days after a liquidation, and it's sold back automatically.</li>
+                                    <li><strong>Sell up.</strong> Sell it back whenever you like.</li>
+                                </ul>
+                                <p class="plot-rule-note">Either way you're paid the sell-back price: the land at today's value plus what your club is worth.</p>
+                            </div>
+                        </div>
                     </div>
                     <ul class="journey-tags">
                         <li>Your owner: name, age, nationality</li>
