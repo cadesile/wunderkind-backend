@@ -102,7 +102,6 @@ class NotificationLogCrudController extends AbstractCrudController
         $responseParameters->set('bmcDomain', 'match');
         $responseParameters->set('bmcTotal', $this->em->getRepository(NotificationLog::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Summary or error text');
-        $responseParameters->set('bmcFacetColumns', ['status' => 2]);
         $responseParameters->set('bmcWidths', ['status' => 112, 'messageType' => 200, 'createdAt' => 180]);
 
         $responseParameters->set('bmcFacets', $this->facets->count(

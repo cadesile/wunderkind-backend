@@ -150,7 +150,6 @@ class PlayerCrudController extends AbstractCrudController
         $responseParameters->set('bmcTotal', $this->em->getRepository(Player::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Player name');
         // One column: "Goalkeeper" plus its count does not fit a 136px half-rail.
-        $responseParameters->set('bmcFacetColumns', []);
         $responseParameters->set('bmcUnits', ['contractValue' => '£']);
         $responseParameters->set('bmcWidths', [
             'position' => 80, 'currentAbility' => 210, 'status' => 132, 'contractValue' => 96,

@@ -130,9 +130,11 @@
                 {% elseif choices is not null %}
                     {% set chosen = applied['value']|default([]) %}
                     {% set chosen = chosen is iterable ? chosen : [chosen] %}
-                    {% set cols   = bmcFacetColumns[prop]|default(1) %}
+                    {# One option per row on every page (Courtney, 2026-11-27): the 2- and
+                       3-column grids cut labels off ("Nc 432" for "None"), so
+                       bmcFacetColumns is no longer read. #}
                     <input type="hidden" name="filters[{{ param }}][comparison]" value="=">
-                    <div class="bmc-checks{{ cols > 1 ? ' bmc-checks--' ~ cols }}">
+                    <div class="bmc-checks">
                         {% for label, value in choices %}
                             {# A choice value can be a string, a bool, or a
                                backed enum case — controllers pass enum cases

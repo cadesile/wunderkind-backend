@@ -43,7 +43,7 @@
                         data-action-name="{{ batchAction.name }}"
                         data-action-url="{{ batchAction.linkUrl }}"
                         data-action-csrf-token="{{ batchAction.htmlAttributes['data-action-csrf-token']|default('') }}"
-                        {% if 'delete' in batchAction.name|lower %}data-bmc-confirm="This cannot be undone."{% endif %}>
+                        {% if 'delete' in batchAction.name|lower and batchAction.htmlAttributes['data-bmc-preview'] is not defined %}data-bmc-confirm="This cannot be undone."{% endif %}>
                     <span>{{ batchAction.label|trans|upper }}</span>
                 </button>
             {% endfor %}
