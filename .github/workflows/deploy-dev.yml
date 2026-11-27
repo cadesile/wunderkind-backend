@@ -133,12 +133,12 @@ jobs:
               docker compose -f docker-compose.dev.yml pull
             fi
             docker compose -f docker-compose.dev.yml up -d
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console doctrine:migrations:migrate --no-interaction
             # One-time bootstrap only — acts solely when the language table is empty, so it
             # never overwrites an admin's later choice of default language. Permanently a
             # no-op after the first successful run.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-default-language
             # Unlike app:backfill-appearances below, this is a single set-based SQL
             # INSERT...SELECT executed entirely in Postgres — no findBy()/entity
@@ -146,17 +146,17 @@ jobs:
             # table size. Idempotent (NOT EXISTS guard on sync_record_id): safe to run
             # on every deploy, and after the first run only backfills syncs received
             # since the last deploy, since live syncs already write their own snapshot.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:backfill-player-career-stat-snapshots
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-player-events
             # Rebuilds the curated 20-archetype catalogue. This TRUNCATES first, so
             # admin edits to archetypes do not survive a deploy — the catalogue is
             # code-owned. Without this the table is empty and /api/archetypes
             # silently serves [], which is why scout reports showed null archetypes.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-archetypes
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-social-post-templates
             # NOTE: app:seed-excursions is deliberately NOT run here. It upserts the
             # excursion catalogue by slug from a hardcoded PHP array, which overwrites
@@ -165,18 +165,18 @@ jobs:
             # by hand only when bootstrapping a fresh database.
             # Idempotent — skips existing slugs, so re-running only inserts new
             # templates (e.g. the dressing-room cohesion events).
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-game-events
             # Seeds the MATCH_NARRATIVE chain-graph content (ported from
             # wunderkind-app's narrativeContent.json) that MatchNarrativeGeneratorService
             # walks to build a Competition result's narrativePayload. Same idempotent
             # skip-existing-slug behavior as app:seed-game-events above.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:seed-match-narrative
             # Find-or-creates a TranslationKey for every translatable field of every
             # existing event/facility/excursion row. Cheap (narrative row counts are tiny)
             # and idempotent — safe to re-run every deploy.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:backfill-narrative-translations
             # Prices scouts that have none. `scout.weekly_salary` arrived DEFAULT 0 in
             # Version20261105120000, and that 0 is an "unpriced" sentinel rather than a real
@@ -188,7 +188,7 @@ jobs:
             # at 0, re-running is a no-op, and the wage is derived from stored experience so the
             # figure is reproducible. It does hydrate the matching rows, but the scout table is
             # thousands of rows rather than the tens of thousands that broke appearances.
-            docker compose -f docker-compose.dev.yml exec -T app \
+            docker compose -f docker-compose.dev.yml exec -T -u www-data app \
               php bin/console app:backfill-scout-wages
             # NOTE: app:backfill-appearances is deliberately NOT run here. It
             # hydrates every matching row in one findBy(), which exhausted the
@@ -212,4 +212,13 @@ jobs:
             # the host OOM killer on 2026-08-15. Nothing above invalidates the
             # compiled container: migrations change schema, seeds change data,
             # assets:install writes symlinks under public/.
+            # Self-heal var/ ownership. The console steps above run as www-data (`exec`
+            # otherwise runs as ROOT), because a root-run command that parses DQL creates
+            # new hashed dirs under var/cache/prod/pools/system owned by root, and
+            # php-fpm + the workers (www-data) then can't write the Doctrine query cache
+            # into them (Sentry WUNDERKIND-BACKEND-1/-3/-5/-6/-7: "Failed to save key …
+            # rename(): No such file or directory"). This chown also repairs any
+            # root-owned dirs left by earlier deploys or a hand-run root command.
+            docker compose -f docker-compose.dev.yml exec -T app \
+              chown -R www-data:www-data var/
             docker image prune -a -f --filter "until=24h"
