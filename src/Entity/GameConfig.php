@@ -2941,6 +2941,21 @@ class GameConfig
     public function getSystemNotificationFrequencyWeeks(): int { return $this->systemNotificationFrequencyWeeks; }
     public function setSystemNotificationFrequencyWeeks(int $v): static { $this->systemNotificationFrequencyWeeks = max(1, min(52, $v)); return $this; }
 
+    // ── Client version gate ───────────────────────────────────────────────
+
+    /**
+     * The oldest client API version the server still talks to. Every app build sends its
+     * version in the `X-Client-Api-Version` header; a build too old to send one counts as 1.
+     * A request from an older build gets 426 `update_required` and touches nothing (see
+     * ClientVersionGateSubscriber). 0 turns the gate off. Raised to 2 at go-live, so that
+     * master-era builds stop syncing clubs the go-live buyout has deleted.
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    private int $minClientApiVersion = 0;
+
+    public function getMinClientApiVersion(): int { return $this->minClientApiVersion; }
+    public function setMinClientApiVersion(int $v): static { $this->minClientApiVersion = max(0, min(1000, $v)); return $this; }
+
     // ── Developer / Debug ─────────────────────────────────────────────────
 
     /** When true, the in-app debug log panel is visible to users. Default: false */
