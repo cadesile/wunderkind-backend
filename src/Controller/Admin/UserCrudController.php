@@ -58,6 +58,7 @@ class UserCrudController extends AbstractCrudController
         private readonly BatchSelection $batchSelection,
         private readonly CsvExporter $csvExporter,
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
+        private readonly \App\Service\Notification\OwnerNoticeService $ownerNotices,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -470,6 +471,13 @@ class UserCrudController extends AbstractCrudController
             'sales'          => $this->saleRepository->findLiveForClubs(
                 array_map(static fn (Club $c): string => (string) $c->getId(), $clubs),
             ),
+            // The Notify form (UserNotifyController): go-live template prefilled from this
+            // account, how many devices a push would reach, and notices already sent.
+            'notify'         => [
+                'defaults'    => $this->ownerNotices->defaultsFor($user, $clubs),
+                'pushDevices' => $this->ownerNotices->countPushDevices($user),
+                'previous'    => $this->ownerNotices->previousNotices($user),
+            ],
         ]);
     }
 }

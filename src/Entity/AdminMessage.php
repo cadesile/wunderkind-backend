@@ -95,6 +95,11 @@ class AdminMessage
     #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
     private ?Club $targetClub = null;
 
+    /** Targeting for MessageTargetType::DIRECT_USER. */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?User $targetUser = null;
+
     public function __construct()
     {
         $this->id             = new UuidV7();
@@ -275,6 +280,18 @@ class AdminMessage
     public function setTargetClub(?Club $targetClub): self
     {
         $this->targetClub = $targetClub;
+
+        return $this;
+    }
+
+    public function getTargetUser(): ?User
+    {
+        return $this->targetUser;
+    }
+
+    public function setTargetUser(?User $targetUser): self
+    {
+        $this->targetUser = $targetUser;
 
         return $this;
     }

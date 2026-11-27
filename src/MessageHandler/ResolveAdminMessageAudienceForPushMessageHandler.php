@@ -70,6 +70,12 @@ class ResolveAdminMessageAudienceForPushMessageHandler
             return $targetClub === null ? [] : [(string) $targetClub->getUser()->getId()];
         }
 
+        if ($adminMessage->getTargetType() === MessageTargetType::DIRECT_USER) {
+            $targetUser = $adminMessage->getTargetUser();
+
+            return $targetUser === null ? [] : [(string) $targetUser->getId()];
+        }
+
         $userIds = [];
 
         // Only clubs with at least one registered device can ever receive a push — bounds the
