@@ -113,7 +113,10 @@ class ClubInitializationService
 
         $config  = $this->starterConfigRepository->getConfig();
         $club = new Club($clubName, $user);
-        $club->setBalance($config->getStartingBalance());
+        // £0: the club's opening money is what the owner funds it with at the FUND step (the
+        // Starter config "Club starting balance" was removed 2026-11-27), and the device's first
+        // sync owns the balance from then on anyway.
+        $club->setBalance(0);
         $club->setAbbreviation(self::generateAbbreviation($clubName));
         $club->setPaName($this->generatePaName());
         $club->setManagerTemperament(rand(40, 60));
@@ -192,7 +195,8 @@ class ClubInitializationService
         $config = $this->starterConfigRepository->getConfig();
 
         return [
-            'startingBalance' => $config->getStartingBalance(),
+            // Removed setting; still sent as 0 because older clients read the key by name.
+            'startingBalance' => 0,
             'players'         => $config->getStarterPlayerCount(),
             'coaches'         => $config->getStarterCoachCount(),
             'scouts'          => $config->getStarterScoutCount(),

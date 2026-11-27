@@ -184,7 +184,6 @@ class StarterConfigFanBaseShareTest extends WebTestCase
 
         $client->request('POST', '/admin/starter-config/save', [
             '_token'                       => $token,
-            'startingBalance'              => $config->getStartingBalancePounds(),
             'userStartingBalanceMinPounds' => (int) round($config->getUserStartingBalanceMinPence() / 100),
             'userStartingBalanceMaxPounds' => (int) round($config->getUserStartingBalanceMaxPence() / 100),
             'starterPlayerCount'           => $config->getStarterPlayerCount(),

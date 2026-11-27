@@ -29,7 +29,6 @@ class StarterConfigScreenTest extends WebTestCase
 
     /** Every scalar field name saveStarterConfig() reads. */
     private const SCALAR_FIELDS = [
-        'startingBalance',
         'userStartingBalanceMinPounds',
         'userStartingBalanceMaxPounds',
         'maxEnrichmentRequestsPerUser',
