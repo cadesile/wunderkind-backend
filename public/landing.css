@@ -3565,6 +3565,34 @@ button:focus-visible,
     color: var(--text-muted);
 }
 
+/*
+   Plot rows (Courtney, 2026-11-27): town + flag, region, then a three-up row of
+   VALUE / SELL-BACK / SYNC IN. Same panel as a club row so the two lists read as
+   one card. Long £ figures wrap inside their column rather than widening it.
+*/
+.ospot-plots { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ospot-plot {
+    display: grid;
+    gap: 4px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+.ospot-plot-town { display: flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: break-word; }
+.ospot-plot-region { color: var(--text-muted); font-size: 12px; }
+.ospot-plot-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 4px 0 0;
+}
+.ospot-plot-stats div { min-width: 0; }
+.ospot-plot-stats dt { color: var(--text-muted); font-size: 14px; line-height: 1.1; }
+.ospot-plot-stats dd { margin: 2px 0 0; font-size: 9px; line-height: 1.6; color: var(--mint); overflow-wrap: anywhere; }
+.ospot-plot-stats .is-urgent dd { color: var(--red); }
+
 .ospot-note { margin-top: 28px; font-size: 13px; line-height: 1.6; color: var(--text-muted); max-width: 760px; }
 
 /* ── Period Awards (#period-awards) ──────────────────────────────────────────

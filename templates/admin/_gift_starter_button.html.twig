@@ -1,0 +1,24 @@
+{#
+   "Gift starter balance": tops the account's starting grant up to the configured maximum
+   (UserStarterGiftController). Shows what it would pay; once the grant is at the max it turns
+   into a plain badge, so it cannot be pressed twice. POST + CSRF + confirm, like Kill Session.
+#}
+{% if starterGift is defined and starterGift.maxPence > 0 %}
+    {% if starterGift.giftPence > 0 %}
+        <form method="post"
+              action="{{ path('admin_user_gift_starter_balance', {id: user.id}) }}"
+              class="d-inline"
+              onsubmit="return confirm('Gift £{{ (starterGift.giftPence / 100)|number_format(2) }} starter balance to {{ user.email|e('js') }}?\n\nCredits their owner ledger so their starting grant reaches the £{{ (starterGift.maxPence / 100)|number_format(0) }} maximum. It can only be given once.');">
+            <input type="hidden" name="_token" value="{{ csrf_token('gift_starter_' ~ user.id) }}">
+            <button type="submit" class="btn btn-sm btn-outline-success"
+                    title="Starting grant so far: £{{ (starterGift.grantedPence / 100)|number_format(2) }}">
+                <i class="fa fa-gift me-1" aria-hidden="true"></i> Gift starter balance (£{{ (starterGift.giftPence / 100)|number_format(0) }})
+            </button>
+        </form>
+    {% else %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2"
+              title="Starting grant £{{ (starterGift.grantedPence / 100)|number_format(2) }}, at or above the £{{ (starterGift.maxPence / 100)|number_format(0) }} maximum">
+            <i class="fa fa-gift me-1" aria-hidden="true"></i> Starter balance at max
+        </span>
+    {% endif %}
+{% endif %}

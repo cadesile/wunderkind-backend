@@ -11,7 +11,9 @@ use App\Repository\ClubFacilityRepository;
 use App\Repository\ClubRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\Facility\FacilityConfigBuilder;
+use App\Service\Location\RichListPlotService;
 use App\Service\OwnerSpotlightService;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Psr16Cache;
@@ -34,7 +36,7 @@ class OwnerSpotlightPayloadTest extends TestCase
      *
      * @return array<int, array<string, mixed>>
      */
-    private function board(array $owners, array $clubsByOwner = [], array $facilityLevels = []): array
+    private function board(array $owners, array $clubsByOwner = [], array $facilityLevels = [], array $plotsByOwner = [], ?int $now = null): array
     {
         $ledger = $this->createStub(UserLedgerRepository::class);
         $ledger->method('findTopOwnersByBalance')->willReturn(array_map(
@@ -70,14 +72,18 @@ class OwnerSpotlightPayloadTest extends TestCase
             },
         );
 
+        $plots = $this->createStub(RichListPlotService::class);
+        $plots->method('forUsers')->willReturn($plotsByOwner);
+
         $service = new OwnerSpotlightService(
             $clubRepo,
             $ledger,
             new FacilityConfigBuilder($facilityRepo),
             $this->cache(),
+            $plots,
         );
 
-        return $service->getTopOwners();
+        return $service->getTopOwners($now);
     }
 
     private function cache(): CacheInterface
@@ -173,5 +179,73 @@ class OwnerSpotlightPayloadTest extends TestCase
         $board = $this->board([['userId' => $a, 'balancePence' => 10_00]]);
 
         $this->assertNull($board[0]['stadiumConfig']);
+    }
+    public function testOwnersCarryTheirPlotsWithATimeLeftWorkedOutPerRequest(): void
+    {
+        $a   = '0193f2c6-0000-7000-8000-0000000000e1';
+        $now = 1_800_000_000;
+
+        $board = $this->board(
+            [['userId' => $a, 'balancePence' => 1_000_00]],
+            plotsByOwner: [$a => [[
+                'town' => 'Leeds', 'region' => 'West Yorkshire', 'countryCode' => 'EN',
+                'countryLabel' => 'England', 'clubName' => 'Leeds Rovers',
+                'landValuePence' => 2_500_000_00, 'sellBackPence' => 3_000_000_00,
+                'reclaimAtTs' => $now + 12 * 86400 + 600,
+            ]]],
+            now: $now,
+        );
+
+        $this->assertSame(1, $board[0]['plotCount']);
+        $this->assertSame('Leeds', $board[0]['plots'][0]['town']);
+        $this->assertSame('12d', $board[0]['plots'][0]['timeLeftLabel']);
+        $this->assertFalse($board[0]['plots'][0]['timeLeftUrgent']);
+    }
+
+    public function testAnOwnerWithNoPlotsHasAnEmptyList(): void
+    {
+        $board = $this->board([['userId' => '0193f2c6-0000-7000-8000-0000000000e2', 'balancePence' => 1]]);
+
+        $this->assertSame(0, $board[0]['plotCount']);
+        $this->assertSame([], $board[0]['plots']);
+    }
+
+    public function testPlotsAreTruncatedForDisplayButCountedInFull(): void
+    {
+        $a    = '0193f2c6-0000-7000-8000-0000000000e3';
+        $plot = [
+            'town' => 'X', 'region' => 'Y', 'countryCode' => 'EN', 'countryLabel' => null,
+            'clubName' => null, 'landValuePence' => 1, 'sellBackPence' => 1, 'reclaimAtTs' => 0,
+        ];
+
+        $board = $this->board(
+            [['userId' => $a, 'balancePence' => 1]],
+            plotsByOwner: [$a => array_fill(0, OwnerSpotlightService::PLOTS_PER_OWNER + 2, $plot)],
+            now: 10,
+        );
+
+        $this->assertSame(OwnerSpotlightService::PLOTS_PER_OWNER + 2, $board[0]['plotCount']);
+        $this->assertCount(OwnerSpotlightService::PLOTS_PER_OWNER, $board[0]['plots']);
+    }
+
+    #[DataProvider('timeLeftCases')]
+    public function testTimeLeftLabel(int $seconds, string $label, bool $urgent): void
+    {
+        $this->assertSame(
+            ['timeLeftLabel' => $label, 'timeLeftUrgent' => $urgent],
+            OwnerSpotlightService::timeLeft($seconds),
+        );
+    }
+
+    /** @return iterable<string, array{int, string, bool}> */
+    public static function timeLeftCases(): iterable
+    {
+        yield 'past the deadline'      => [-5, 'Due', true];
+        yield 'exactly at it'          => [0, 'Due', true];
+        yield 'minutes left'           => [600, '1h', true];
+        yield 'hours left'             => [5 * 3600 + 59, '5h', true];
+        yield 'days round down'        => [2 * 86400 + 86399, '2d', true];
+        yield 'three days is not urgent' => [3 * 86400, '3d', false];
+        yield 'a month'                => [30 * 86400, '30d', false];
     }
 }

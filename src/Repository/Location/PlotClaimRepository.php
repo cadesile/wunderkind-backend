@@ -157,6 +157,33 @@ class PlotClaimRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Every live claim held by any of these users, oldest first, with plot, town and club
+     * fetched in the same query. Backs the Rich List's plot rows, which list a handful of
+     * owners at once.
+     *
+     * @param  string[] $userIds
+     * @return list<PlotClaim>
+     */
+    public function findActiveForUserIds(array $userIds): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('c')
+            ->addSelect('p', 'l', 'club')
+            ->join('c.plot', 'p')
+            ->join('c.location', 'l')
+            ->leftJoin('c.club', 'club')
+            ->where('c.user IN (:userIds)')
+            ->andWhere('c.releasedAt IS NULL')
+            ->setParameter('userIds', $userIds)
+            ->orderBy('c.claimedAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return list<PlotClaim> */
     public function findActiveForClub(Club $club): array
     {
