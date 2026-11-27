@@ -17,6 +17,7 @@ use Doctrine\Migrations\AbstractMigration;
  *   game_config.liquidated_club_delete_after_days (default 30).
  * - game_config.plot_dormancy_reclaim_days (default 30): the inactivity sell-back window, which
  *   was the DormancyWarningStage::RECLAIM_AFTER_DAYS constant.
+ * - plot_claim.vacated_at: when the plot last became empty; starts an empty plot's sell-back clock.
  */
 final class Version20261127000000 extends AbstractMigration
 {
@@ -32,6 +33,7 @@ final class Version20261127000000 extends AbstractMigration
         $this->addSql('ALTER TABLE game_config ADD game_over_fan_morale_threshold INT DEFAULT 30 NOT NULL');
         $this->addSql('ALTER TABLE game_config ADD liquidated_club_delete_after_days INT DEFAULT 30 NOT NULL');
         $this->addSql('ALTER TABLE game_config ADD plot_dormancy_reclaim_days INT DEFAULT 30 NOT NULL');
+        $this->addSql('ALTER TABLE plot_claim ADD vacated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL');
     }
 
     public function down(Schema $schema): void
@@ -41,5 +43,6 @@ final class Version20261127000000 extends AbstractMigration
         $this->addSql('ALTER TABLE game_config DROP game_over_fan_morale_threshold');
         $this->addSql('ALTER TABLE game_config DROP liquidated_club_delete_after_days');
         $this->addSql('ALTER TABLE game_config DROP plot_dormancy_reclaim_days');
+        $this->addSql('ALTER TABLE plot_claim DROP vacated_at');
     }
 }

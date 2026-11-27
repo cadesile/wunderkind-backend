@@ -37,10 +37,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * insert sends. A crash between the send and the stamp risks one duplicate warning on the next
  * pass, which is much better than the reverse order's risk of a silent permanent skip.
  *
- * CLAIMS WITH NO CLUB ARE NEVER WARNED OR RECLAIMED, because they have no activity clock —
- * findDormantClaims() joins club. Land bought and never built on is therefore held
- * indefinitely. That is a deliberate consequence of letting land be bought before a club
- * exists, not an oversight, but it is a product question worth revisiting.
+ * CLAIMS WITH NO CLUB ARE NOT WARNED HERE — there is no club inbox. They are still reclaimed
+ * (Courtney, 2026-11-27): DormancyReclaimCommand sells an empty plot back once the window
+ * passes from the day it went empty, and the app shows that date instead of a warning.
  */
 #[AsCommand(
     name: 'app:plots:dormancy-warn',

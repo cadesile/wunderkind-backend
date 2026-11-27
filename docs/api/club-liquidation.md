@@ -39,6 +39,13 @@ Selling back an empty plot pays land (90% of current value) + stadium (50% of wh
 
 `app:clubs:purge-liquidated` (daily 04:20 UTC, `docker/clubs-purge-liquidated.sh`, `--dry-run`, `--limit`) deletes clubs past `delete_after` through `ClubScrubService`. It detaches any claim first, so the owner's plot is never released by a purge.
 
-Dormancy reclaim only reads claims with a club, so an empty owned plot is never reclaimed for inactivity.
+## Inactivity sell-back (Courtney, 2026-11-27)
+
+Every owned plot is sold back automatically (`app:plots:dormancy-reclaim`, sell-back price) once `plotDormancyReclaimDays` (game config, default 30, was a fixed 30) pass without a sync. The clock follows each plot's own club, so a player keeps at most as many plots alive as they have save slots (2).
+
+- Plot with a club: the club's last sync. Inbox warnings 7 days and 1 day before, and the reclaim refuses an unwarned plot, as before.
+- Empty plot (club liquidated, or bought and never used): `plot_claim.vacated_at`, else `claimed_at`. No club inbox exists, so no warning row is needed; the app shows the date instead. Founding a new club on it stops the clock.
+
+`GET /api/plots/claims/mine` and the liquidation answer carry `reclaimAt` (the deadline) and `emptySince` on each claim.
 
 `GET /api/clubs/all` adds `liquidatedAt` and `deleteAfter` to each club.

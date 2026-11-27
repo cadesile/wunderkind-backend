@@ -8,6 +8,7 @@ use App\Entity\Location\PlotClaim;
 use App\Entity\User;
 use App\Service\Club\ClubLiquidationService;
 use App\Service\ClubResolver;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +30,7 @@ class ClubLiquidationController extends AbstractController
         private readonly ClubResolver           $clubResolver,
         private readonly ClubLiquidationService $liquidation,
         private readonly PlotClaimRepository    $claimRepository,
+        private readonly GameConfigRepository   $configRepository,
     ) {}
 
     #[Route('/liquidate', name: 'api_club_liquidate', methods: ['POST'])]
@@ -41,6 +43,7 @@ class ClubLiquidationController extends AbstractController
 
         $club     = $this->clubResolver->resolveRequiredFromRequest($user);
         $detached = $this->liquidation->liquidate($club);
+        $window   = $this->configRepository->getConfig()->getPlotDormancyReclaimDays();
 
         return $this->json([
             'liquidated'      => true,
@@ -49,7 +52,7 @@ class ClubLiquidationController extends AbstractController
             'deleteAfter'     => $club->getDeleteAfter()?->format(\DateTimeInterface::ATOM),
             'detachedClaimIds' => array_map(static fn (PlotClaim $c): string => (string) $c->getId(), $detached),
             'claims'          => array_map(
-                static fn (PlotClaim $c): array => PlotClaimController::present($c),
+                static fn (PlotClaim $c): array => PlotClaimController::present($c, $window),
                 $this->claimRepository->findActiveForUser($user),
             ),
         ]);

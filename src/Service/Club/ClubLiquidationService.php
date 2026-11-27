@@ -59,7 +59,7 @@ final class ClubLiquidationService
 
         $claims = $this->claimRepository->findActiveForClub($club);
         foreach ($claims as $claim) {
-            $claim->detachClub();
+            $claim->detachClub($now);
         }
         $club->setHomeLocation(null);
 
