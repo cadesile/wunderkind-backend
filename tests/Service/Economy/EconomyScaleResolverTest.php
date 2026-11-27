@@ -280,6 +280,78 @@ class EconomyScaleResolverTest extends TestCase
         self::assertSame($right->wageScaleMicroPence, $swapped->wageScaleMicroPence);
     }
 
+    // ── Owner season investment ceiling (owner ruling 2026-11-27) ─────────
+
+    private const TURNOVER_POUNDS = [331_000_000, 114_000_000, 34_600_000, 20_700_000, 7_320_000, 2_690_000, 686_000, 215_000];
+
+    private function investmentConfig(int $basePounds, bool $turnover = true): GameConfig
+    {
+        $config = (new GameConfig())->setEconomySeasonInvestmentBasePence($basePounds * 100);
+
+        if ($turnover) {
+            $config->setEconomyBaselineTurnoverPence(array_map(fn (int $p) => $p * 100, self::TURNOVER_POUNDS));
+        }
+
+        return $config;
+    }
+
+    public function testTheBaseIsTheTierOneCeiling(): void
+    {
+        $resolver = $this->resolver($this->investmentConfig(10_000_000), $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+        ]);
+
+        self::assertSame(10000, $resolver->seasonInvestmentTierShareBp('EN', 1));
+        self::assertSame(1_000_000_000, $resolver->seasonInvestmentCeilingPence('EN', 1, 1));
+    }
+
+    public function testLowerTiersScaleByTurnoverShareOfTierOne(): void
+    {
+        $resolver = $this->resolver($this->investmentConfig(10_000_000), $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+        ]);
+
+        // 114m / 331m of £10m = £3,444,100 at ppm precision, not the coarser bp share.
+        self::assertSame(3444, $resolver->seasonInvestmentTierShareBp('EN', 2));
+        self::assertSame(344_410_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
+        // 215k / 331m of £10m = £6,490 at ppm precision (6.5 bp; rounding to 6 bp would have cost 8%).
+        self::assertSame(6, $resolver->seasonInvestmentTierShareBp('EN', 8));
+        self::assertSame(649_000, $resolver->seasonInvestmentCeilingPence('EN', 8, 1));
+    }
+
+    public function testTheCountryFactorStillAppliesOnTop(): void
+    {
+        $resolver = $this->resolver($this->investmentConfig(10_000_000), $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+            'SC' => $this->profile('SC', factorBp: 1000, tierCount: 4),
+        ]);
+
+        // Scotland tier 1 = 10% of England tier 1; tier 4 reads row 4, not row 8.
+        self::assertSame(100_000_000, $resolver->seasonInvestmentCeilingPence('SC', 1, 1));
+        self::assertSame(6_253_700, $resolver->seasonInvestmentCeilingPence('SC', 4, 1));
+    }
+
+    public function testAnUnauthoredTurnoverTableFallsBackToTheTierFactor(): void
+    {
+        $config = $this->investmentConfig(10_000_000, turnover: false)
+            ->setEconomyTierFactorsBp([10000, 5000, 10000, 10000, 10000, 10000, 10000, 10000]);
+        $resolver = $this->resolver($config, $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+        ]);
+
+        self::assertSame(5000, $resolver->seasonInvestmentTierShareBp('EN', 2));
+        self::assertSame(500_000_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
+    }
+
+    public function testAZeroBaseKeepsTheFeatureOff(): void
+    {
+        $resolver = $this->resolver($this->investmentConfig(0), $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+        ]);
+
+        self::assertSame(0, $resolver->seasonInvestmentCeilingPence('EN', 1, 5));
+    }
+
     // ── Inflation ─────────────────────────────────────────────────────────
 
     public function testSeasonOneIsAlwaysTheBaseYear(): void
