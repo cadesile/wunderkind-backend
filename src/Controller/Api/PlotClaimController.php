@@ -215,6 +215,10 @@ class PlotClaimController extends AbstractController
             'town'             => $location->getTown(),
             'region'           => $location->getRegion(),
             'countryCode'      => $location->getCountryCode(),
+            // Where the town is, for the in-app plot map. Null only for a town nobody has
+            // valued yet, which cannot hold a claim, so in practice always set.
+            'lat'              => $location->getLat(),
+            'lng'              => $location->getLng(),
             'claimedBy'        => $claim->getClaimedByName(),
             'clubId'           => $claim->getClub() === null ? null : (string) $claim->getClub()->getId(),
             'claimedAt'        => $claim->getClaimedAt()->format(\DateTimeInterface::ATOM),

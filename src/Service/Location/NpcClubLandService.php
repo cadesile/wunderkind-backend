@@ -32,7 +32,7 @@ class NpcClubLandService
     ) {}
 
     /**
-     * @return list<array{clubId: string, locationId: string, town: string, region: string,
+     * @return list<array{clubId: string, locationId: string, town: string, region: string, lat: ?float, lng: ?float,
      *     plotId: ?string, plotNumber: ?int, plotLandPence: ?int, townLandPence: ?int,
      *     population: ?int, capital: bool, citySize: string, enrichmentStatus: string,
      *     plots: int, npcClubs: int, npcOccupied: int, claimed: int, available: int}>
@@ -66,6 +66,9 @@ class NpcClubLandService
             'locationId'       => (string) $location->getId(),
             'town'             => $location->getTown(),
             'region'           => $location->getRegion(),
+            // The town's position, for the in-app plot map. Null until the town is valued.
+            'lat'              => $location->getLat(),
+            'lng'              => $location->getLng(),
             'plotId'           => $plot !== null ? (string) $plot->getId() : null,
             'plotNumber'       => $plot?->getPlotNumber(),
             // The plot's own figure, else the town's — what a buyer would be charged for it.
