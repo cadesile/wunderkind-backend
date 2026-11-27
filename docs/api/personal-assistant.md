@@ -83,11 +83,26 @@ Sign-in is required (`IS_AUTHENTICATED_FULLY`). The request is owner-scoped, so 
 template advice and adds its out-of-office strip. `retryAfterSeconds` is sent only with `rate_limited`, and only
 when the daily cap was actually reached.
 
+## Reply cache (added 2026-11-27)
+
+The endpoint is a paid proxy to the AI, so the server caches each `ok` reply (`PaAdviceCache`, in `cache.app`,
+kept 30 days). An identical request from **any** owner gets the stored reply without a provider call.
+
+- **The key** is a SHA-256 of the model (`PA_ADVICE_MODEL`), the full system prompt as built for the PA (so an admin
+  edit to its personality prompt, or a rule change in code, starts fresh), and the sanitised request: slug, topic,
+  locale, context and findings, with object keys sorted. `context.gameDate` is left out, so the same figures a week
+  later reuse the reply. The app keeps its own on-device cache with the same rule.
+- **Cache hits are free.** They're served before the daily cap is checked, so they never count toward
+  `paAdviceDailyCallLimit`, and an owner who has hit the cap still gets cached replies. `0` still turns AI wording
+  off entirely, cached replies included.
+- Only `ok` replies are cached. Failures (`timeout`, `provider_error`, empty or overlong replies) are retried on the
+  next request.
+
 ## Limits (admin › Game config › Events & club life › Personal Assistant advice)
 
 - **`paAdviceDailyCallLimit`** (default 20): paid AI calls one owner may make per day, in a fixed one-day window.
   The value is read on every request, so an admin change applies at once. `0` turns AI wording off. A call only
-  counts when it reaches the provider; a 4xx, an unknown PA, an unsupported locale or `not_configured` cost
+  counts when it reaches the provider (a cache hit never does); a 4xx, an unknown PA, an unsupported locale or `not_configured` cost
   nothing. The app never receives this value.
 - **`paAdviceTimeoutSeconds`** (default 8, range 1 to 30): how long the server waits for the provider before
   answering `timeout`.
