@@ -3,7 +3,7 @@
   System → Settings & tools, on bmc_page + bmc-pages.css/js.
   Data: none — every card is a POST to a named route.
 
-  SIX DESTRUCTIVE BUTTONS AND NOTHING ELSE. There is no form state here, so no data-bmc-form
+  TWO DESTRUCTIVE BUTTONS AND NOTHING ELSE (clear spoof clubs, nuclear reset). There is no form state here, so no data-bmc-form
   and no save bar: each card is one action and one confirm.
 
   EVERY CONFIRM IS THE PIXELDIALOG NOW. They were window.confirm through a shared
@@ -17,32 +17,11 @@
 
 {% set tools = [
     {
-        title: 'AGE-21 DELETION', icon: 'user-round-x', variant: 'orange',
-        route: 'admin_trigger_age21', token: 'trigger_age21', via_admin: false,
-        button: 'RUN AGE-21 CHECK',
-        body: 'Runs the age-out check across every club. Players who have turned 21 are permanently deleted, with the Guardian and Transfer cascade.',
-        confirm: {title: 'DELETE EVERY PLAYER AGED 21+?', message: 'Runs across every club. Guardians and transfers cascade. This cannot be undone.', ok: 'RUN IT', variant: 'yellow'},
-    },
-    {
-        title: 'CLEANUP OLD ASSIGNED ENTITIES', icon: 'brush-cleaning', variant: '',
-        route: 'admin_cleanup_entities', token: 'cleanup_entities', via_admin: false,
-        button: 'RUN CLEANUP',
-        body: 'Permanently deletes players, staff, sponsors and investors that were assigned to clubs more than 52 weeks ago.',
-        confirm: {title: 'DELETE ASSIGNED ENTITIES OLDER THAN 52 WEEKS?', message: 'Players, staff, sponsors and investors assigned before that cut-off are removed permanently.', ok: 'RUN IT', variant: 'yellow'},
-    },
-    {
         title: 'CLEAR SPOOF CLUBS', icon: 'ghost', variant: 'danger-outline',
         route: 'admin_purge_spoof_clubs', token: 'purge_spoof_clubs', via_admin: true,
         button: 'CLEAR SPOOF CLUBS',
         body: 'Permanently deletes every spoof club generated for testing, along with the throwaway account that owns it and everything hanging off it — competition entries and their snapshots, leaderboard rows, season records and match results. Real clubs are untouched: an account is only removed when every club it owns is a spoof.',
         confirm: {title: 'DELETE ALL SPOOF CLUBS AND THEIR ACCOUNTS?', message: 'An account goes only when every club it owns is a spoof. This cannot be undone.', ok: 'DELETE', variant: 'red'},
-    },
-    {
-        title: 'GENERATE LEADERBOARDS', icon: 'trophy', variant: '',
-        route: 'admin_generate_leaderboards', token: 'generate_leaderboards', via_admin: false,
-        button: 'RUN GENERATE',
-        body: 'Recalculates every leaderboard score and rank — empire index, golden boot, playmaker and the rest — and invalidates the leaderboard cache. The same process the cron job runs every five minutes.',
-        confirm: {title: 'RECALCULATE EVERY LEADERBOARD?', message: 'Scores, ranks and the cache. Safe to run at any time — the cron does the same thing.', ok: 'RUN IT', variant: 'yellow'},
     },
     {
         title: 'NUCLEAR RESET', icon: 'skull', variant: 'danger-outline', nuclear: true,
@@ -64,7 +43,7 @@
     <i data-lucide="triangle-alert"></i>
     <div class="bmc-danger__text">
         <span class="bmc-lbl bmc-lbl--ink">THESE OPERATIONS AFFECT LIVE DATA</span>
-        <span class="bmc-data">Every button on this page writes, and most of them delete. None of it can be undone.</span>
+        <span class="bmc-data">Both buttons delete permanently. Neither can be undone.</span>
     </div>
 </div>
 
@@ -92,21 +71,6 @@
         </section>
     {% endfor %}
 
-    {# Not a button — the one tool that genuinely cannot run from a browser. #}
-    <section class="bmc-card" data-domain="club" style="opacity:.7">
-        <div class="bmc-card__head">
-            <i data-lucide="terminal"></i>
-            <span class="bmc-card__title">RESET &amp; SEED DATABASE</span>
-            <span class="bmc-card__meta">CLI only</span>
-        </div>
-        <div class="bmc-card__body" style="display:flex;flex-direction:column;gap:12px">
-            <p class="bmc-bodytext">
-                Wipes all club and game data, preserves admin users, and re-seeds the market pool. There is no
-                browser path to this on purpose.
-            </p>
-            <code class="bmc-code bmc-breakall" style="padding:8px 10px;border:2px solid var(--wk-stroke);background:var(--wk-panel)">bash scripts/reset_and_seed.sh</code>
-        </div>
-    </section>
 </div>
 {% endblock %}
 
