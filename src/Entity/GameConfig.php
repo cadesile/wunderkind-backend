@@ -593,6 +593,22 @@ class GameConfig
     #[ORM\Column(type: 'integer', options: ['default' => 8])]
     private int $playerContractRenewalCooldownWeeks = 8;
 
+    // ── Personal Assistant advice ─────────────────────────────────────────
+
+    /**
+     * Paid AI wording calls one owner may make per day for Personal Assistant advice
+     * (Courtney, 2026-11-27: a backend-configured value). Read on every request, so a change here
+     * applies to the next call. 0 turns AI wording off: every call answers `rate_limited` and
+     * the app shows its own template advice. Never sent to the app — only the server enforces it.
+     * Default: 20
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 20])]
+    private int $paAdviceDailyCallLimit = 20;
+
+    /** Seconds the server waits for the AI provider before answering `timeout`. Default: 8 */
+    #[ORM\Column(type: 'integer', options: ['default' => 8])]
+    private int $paAdviceTimeoutSeconds = 8;
+
     // ── Guardian Complaints ───────────────────────────────────────────────
 
     /** Player morale boost when manager convinces a guardian. Default: 5 */
@@ -867,6 +883,11 @@ class GameConfig
 
     public function getPlayerContractRenewalCooldownWeeks(): int { return $this->playerContractRenewalCooldownWeeks; }
     public function setPlayerContractRenewalCooldownWeeks(int $v): static { $this->playerContractRenewalCooldownWeeks = max(0, $v); return $this; }
+
+    public function getPaAdviceDailyCallLimit(): int { return $this->paAdviceDailyCallLimit; }
+    public function setPaAdviceDailyCallLimit(int $v): void { $this->paAdviceDailyCallLimit = max(0, $v); }
+    public function getPaAdviceTimeoutSeconds(): int { return $this->paAdviceTimeoutSeconds; }
+    public function setPaAdviceTimeoutSeconds(int $v): void { $this->paAdviceTimeoutSeconds = max(1, min(30, $v)); }
 
     public function getDefaultMoraleMin(): int { return $this->defaultMoraleMin; }
     public function setDefaultMoraleMin(int $v): static { $this->defaultMoraleMin = $v; return $this; }

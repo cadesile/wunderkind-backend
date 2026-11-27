@@ -644,6 +644,8 @@ class DashboardController extends AbstractDashboardController
         $config->setPlayerTransferWagePremiumPerTier((float) $request->request->get('playerTransferWagePremiumPerTier', 1.0));
         $config->setPlayerContractMaxYears((int) $request->request->get('playerContractMaxYears', 5));
         $config->setPlayerContractRenewalCooldownWeeks((int) $request->request->get('playerContractRenewalCooldownWeeks', 8));
+        $config->setPaAdviceDailyCallLimit((int) $request->request->get('paAdviceDailyCallLimit', 20));
+        $config->setPaAdviceTimeoutSeconds((int) $request->request->get('paAdviceTimeoutSeconds', 8));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
 
@@ -2218,6 +2220,7 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(AgentCrudController::class, 'Agents'),
             MenuItem::linkTo(GuardianCrudController::class, 'Guardians'),
             MenuItem::linkTo(InvestorCrudController::class, 'Investors'),
+            MenuItem::linkTo(PersonalAssistantCrudController::class, 'Personal assistants'),
             MenuItem::linkTo(SponsorCrudController::class, 'Sponsors'),
         ]);
         yield MenuItem::subMenu('Templates', 'scroll')->setSubItems([
