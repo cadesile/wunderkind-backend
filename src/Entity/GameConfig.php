@@ -1031,6 +1031,27 @@ class GameConfig
     private bool $bankruptcyDeductionsEnabled = true;
 
     /**
+     * Game over: with the club balance below zero and fan morale (0-100) below this, the app warns
+     * on Advance that the club will be liquidated; confirming ends the save. Default: 30
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
+    private int $gameOverFanMoraleThreshold = 30;
+
+    /**
+     * Days a liquidated club is kept before app:clubs:purge-liquidated deletes it. Default: 30
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
+    private int $liquidatedClubDeleteAfterDays = 30;
+
+    /**
+     * Days without a sync after which an owned plot is sold back to the game automatically
+     * (app:plots:dormancy-reclaim), paying what a sell-back pays. Warnings go out 7 days and 1
+     * day before. Default: 30
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 30])]
+    private int $plotDormancyReclaimDays = 30;
+
+    /**
      * The deficit ladder expressed in WEEKS OF THE CLUB'S OWN WAGE BILL. Null = app default.
      *
      * ── WHY A SECOND LADDER RATHER THAN FIXING THE FIRST ──────────────────────────────────
@@ -1195,6 +1216,16 @@ class GameConfig
 
     public function isBankruptcyDeductionsEnabled(): bool { return $this->bankruptcyDeductionsEnabled; }
     public function setBankruptcyDeductionsEnabled(bool $v): static { $this->bankruptcyDeductionsEnabled = $v; return $this; }
+
+    public function getGameOverFanMoraleThreshold(): int { return $this->gameOverFanMoraleThreshold; }
+    public function setGameOverFanMoraleThreshold(int $v): static { $this->gameOverFanMoraleThreshold = max(0, min(100, $v)); return $this; }
+
+    public function getLiquidatedClubDeleteAfterDays(): int { return $this->liquidatedClubDeleteAfterDays; }
+    public function setLiquidatedClubDeleteAfterDays(int $v): static { $this->liquidatedClubDeleteAfterDays = max(0, $v); return $this; }
+
+    public function getPlotDormancyReclaimDays(): int { return $this->plotDormancyReclaimDays; }
+    /** At least 2 days, so the one-day warning always lands before the reclaim. */
+    public function setPlotDormancyReclaimDays(int $v): static { $this->plotDormancyReclaimDays = max(2, $v); return $this; }
 
     // ── Sponsor & Investor Offer Probabilities ────────────────────────────
 

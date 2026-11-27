@@ -24,6 +24,7 @@ enum DormancyWarningStage: string
      * below rather than written out, so moving the deadline cannot leave a warning firing after
      * the reclaim it was supposed to precede.
      */
+    /** The DEFAULT window. The live one is game_config.plot_dormancy_reclaim_days. */
     public const RECLAIM_AFTER_DAYS = 30;
 
     /** How many days of grace remain when this stage fires. */
@@ -36,9 +37,10 @@ enum DormancyWarningStage: string
     }
 
     /** Days of inactivity at which this stage fires — 23 and 29 against a 30-day deadline. */
-    public function triggersAfterDays(): int
+    public function triggersAfterDays(int $reclaimAfterDays = self::RECLAIM_AFTER_DAYS): int
     {
-        return self::RECLAIM_AFTER_DAYS - $this->daysRemaining();
+        // A window shorter than the stage's lead time fires the stage straight away.
+        return max(0, $reclaimAfterDays - $this->daysRemaining());
     }
 
     /**
@@ -48,10 +50,10 @@ enum DormancyWarningStage: string
      * at 29 days, it gets the one-day warning rather than a stale seven-day one — the player
      * needs the truth, not the warning they should have had a week ago.
      */
-    public static function forDaysInactive(int $daysInactive): ?self
+    public static function forDaysInactive(int $daysInactive, int $reclaimAfterDays = self::RECLAIM_AFTER_DAYS): ?self
     {
         foreach ([self::N_MINUS_1, self::N_MINUS_7] as $stage) {
-            if ($daysInactive >= $stage->triggersAfterDays()) {
+            if ($daysInactive >= $stage->triggersAfterDays($reclaimAfterDays)) {
                 return $stage;
             }
         }

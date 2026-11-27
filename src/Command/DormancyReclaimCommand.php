@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Enum\Location\ClaimReleaseReason;
 use App\Enum\Location\DormancyWarningStage;
 use App\Repository\Location\ClubDormancyWarningRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Service\Location\PlotSellBackService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -35,6 +36,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * credit lands on the ACCOUNT, so a player who comes back after a break finds the money rather
  * than the plot.
  *
+ * EMPTY PLOTS (no club) are reclaimed too, on the clock from the day they went empty, and
+ * without a warning row — there is no club inbox to send one to. See the loop below.
+ *
  * SAFE TO RE-RUN. The release is a conditional UPDATE and the credit is idempotent on the claim
  * id, so a second pass over the same claim pays nothing further.
  */
@@ -46,6 +50,7 @@ class DormancyReclaimCommand extends Command
 {
     public function __construct(
         private readonly PlotClaimRepository           $claimRepository,
+        private readonly GameConfigRepository          $configRepository,
         private readonly ClubDormancyWarningRepository $warningRepository,
         private readonly PlotSellBackService           $sellBack,
     ) {
@@ -73,11 +78,12 @@ class DormancyReclaimCommand extends Command
         $limit         = max(1, (int) $input->getOption('limit'));
 
         $now    = new \DateTimeImmutable();
-        $cutoff = $now->modify(sprintf('-%d days', DormancyWarningStage::RECLAIM_AFTER_DAYS));
+        $cutoff = $now->modify(sprintf('-%d days', $this->configRepository->getConfig()->getPlotDormancyReclaimDays()));
 
-        $rows = $this->claimRepository->findDormantClaims($cutoff, $limit);
+        $rows      = $this->claimRepository->findDormantClaims($cutoff, $limit);
+        $emptyRows = $this->claimRepository->findDormantEmptyClaims($cutoff, $limit);
 
-        if ($rows === []) {
+        if ($rows === [] && $emptyRows === []) {
             $io->success('No plots are due for reclaim.');
 
             return Command::SUCCESS;
@@ -128,12 +134,52 @@ class DormancyReclaimCommand extends Command
             $table[] = [$row['town'], $claim->getClub()->getName(), $this->pounds($entry->getAmountPence()), 'reclaimed'];
         }
 
+        // EMPTY PLOTS (Courtney, 2026-11-27): the clock follows each plot's own club, so a plot
+        // with no club gets no syncs and is sold back once the window passes from the day it went
+        // empty, unless a new club is founded on it. There is no club inbox to warn, so these do
+        // not wait for a warning row: the app shows the date on the game-over screen and in the
+        // owned-plots list (GET /api/plots/claims/mine `reclaimAt`).
+        foreach ($emptyRows as $row) {
+            $claim = $this->claimRepository->find((string) $row['claim_id']);
+
+            if ($claim === null || !$claim->isActive() || $claim->getClub() !== null) {
+                $skipped++;
+                continue;
+            }
+
+            $quote = $this->sellBack->quote($claim);
+
+            if ($dryRun) {
+                $table[] = [$row['town'], '(empty plot)', $this->pounds($quote['payoutPence']), 'would reclaim'];
+                $reclaimed++;
+                $paidTotal += $quote['payoutPence'];
+                continue;
+            }
+
+            $entry = $this->sellBack->execute($claim, ClaimReleaseReason::DORMANCY);
+
+            if ($entry === null) {
+                if ($claim->getReleasedAt() === null) {
+                    $skipped++;
+                    continue;
+                }
+                // Released with nothing to pay (an unvalued town bought for nothing).
+                $reclaimed++;
+                $table[] = [$row['town'], '(empty plot)', $this->pounds(0), 'reclaimed'];
+                continue;
+            }
+
+            $reclaimed++;
+            $paidTotal += $entry->getAmountPence();
+            $table[] = [$row['town'], '(empty plot)', $this->pounds($entry->getAmountPence()), 'reclaimed'];
+        }
+
         if ($table !== []) {
             $io->table(['Town', 'Club', 'Paid', 'Outcome'], $table);
         }
 
         $io->definitionList(
-            ['Considered' => count($rows)],
+            ['Considered' => count($rows) + count($emptyRows)],
             [$dryRun ? 'Would reclaim' : 'Reclaimed' => $reclaimed],
             [$dryRun ? 'Would credit' : 'Credited' => $this->pounds($paidTotal)],
             ['Skipped: never warned' => $unwarned],

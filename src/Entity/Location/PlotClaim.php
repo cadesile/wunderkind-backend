@@ -93,6 +93,17 @@ class PlotClaim
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $releasedAt = null;
 
+    /**
+     * When the plot last became EMPTY (its club was liquidated). Null while a club stands on it,
+     * and on a plot bought and never built on, whose clock is `claimedAt`.
+     *
+     * The inactivity sell-back follows each plot's own club's syncs (Courtney, 2026-11-27), so an
+     * empty plot gets none: it is sold back once `plot_dormancy_reclaim_days` pass from here
+     * unless a new club is founded on it. That makes the window the grace period to restart.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $vacatedAt = null;
+
     #[ORM\Column(length: 24, nullable: true, enumType: ClaimReleaseReason::class)]
     private ?ClaimReleaseReason $releaseReason = null;
 
@@ -163,8 +174,29 @@ class PlotClaim
     {
         $this->club            = $club;
         $this->clubNameAtClaim = $club->getName();
+        $this->vacatedAt       = null;
         $this->updatedAt       = new \DateTimeImmutable();
     }
+
+    /**
+     * Take the club off the plot while the OWNER keeps it — the game-over liquidation path.
+     *
+     * The claim stays active (released_at NULL) and still belongs to `user`, so the plot is not
+     * ownerless: it is an empty plot the owner can found a new club on or sell back. The frozen
+     * name is cleared so rival lists stop showing a club that no longer trades there.
+     */
+    public function detachClub(?\DateTimeImmutable $at = null): void
+    {
+        $this->club            = null;
+        $this->clubNameAtClaim = null;
+        $this->vacatedAt       = $at ?? new \DateTimeImmutable();
+        $this->updatedAt       = $this->vacatedAt;
+    }
+
+    public function getVacatedAt(): ?\DateTimeImmutable { return $this->vacatedAt; }
+
+    /** Where an EMPTY plot's inactivity clock starts. Meaningless while a club stands on it. */
+    public function getEmptySince(): \DateTimeImmutable { return $this->vacatedAt ?? $this->claimedAt; }
 
     public function getClubNameAtClaim(): ?string { return $this->clubNameAtClaim; }
 

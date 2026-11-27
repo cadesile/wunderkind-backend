@@ -269,4 +269,29 @@ class PlotClaimRepository extends ServiceEntityRepository
             ['cutoff' => 'datetime_immutable'],
         );
     }
+
+    /**
+     * Active claims with NO club whose empty-plot clock (vacated_at, else claimed_at) is before
+     * the cutoff. These have no club to sync, so the window is the grace period to restart.
+     *
+     * @return list<array{claim_id: string, user_id: string, town: string, empty_since: string}>
+     */
+    public function findDormantEmptyClaims(\DateTimeImmutable $emptySince, int $limit): array
+    {
+        return $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT pc.id AS claim_id,
+                    pc.user_id,
+                    l.town,
+                    COALESCE(pc.vacated_at, pc.claimed_at) AS empty_since
+               FROM plot_claim pc
+               JOIN location l ON l.id = pc.location_id
+              WHERE pc.released_at IS NULL
+                AND pc.club_id IS NULL
+                AND COALESCE(pc.vacated_at, pc.claimed_at) <= :cutoff
+              ORDER BY COALESCE(pc.vacated_at, pc.claimed_at) ASC
+              LIMIT " . max(1, $limit),
+            ['cutoff' => $emptySince],
+            ['cutoff' => 'datetime_immutable'],
+        );
+    }
 }

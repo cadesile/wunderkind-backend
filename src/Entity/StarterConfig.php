@@ -411,6 +411,16 @@ class StarterConfig
                 'dismissible' => true,
             ],
             [
+                // Plot ownership: how you own a plot, keep it (sync within the window) and lose it.
+                'id' => 'note-location',
+                'kind' => 'note',
+                'anchor' => [
+                    'on' => 'location',
+                ],
+                'bodyKey' => 'ngs.tut.note.location',
+                'dismissible' => true,
+            ],
+            [
                 'id' => 'note-club',
                 'kind' => 'note',
                 'anchor' => [
