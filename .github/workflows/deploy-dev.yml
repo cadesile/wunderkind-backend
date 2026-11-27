@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - dev
+  # Manual re-deploy, e.g. after changing the DEV_DB_NAME repository variable.
+  workflow_dispatch:
 
 # Both stacks live on the same Hetzner box and share one Docker daemon, so the
 # `docker system prune` each deploy runs can delete layer blobs the *other* one is
@@ -71,6 +73,11 @@ jobs:
 
             cat > .env <<EOF
             DB_PASSWORD=${{ secrets.DEV_DB_PASSWORD }}
+            # Which database in postgres-dev the dev app uses. Repository variable
+            # DEV_DB_NAME (Settings > Secrets and variables > Actions > Variables);
+            # unset = wunderkind. Set to wk_golive to run dev on the go-live rehearsal
+            # copy (scripts/golive/README.md). Every deploy migrates and seeds this DB.
+            DB_NAME=${{ vars.DEV_DB_NAME || 'wunderkind' }}
             APP_SECRET=${{ secrets.DEV_APP_SECRET }}
             APP_URL=https://dev.buildmyclub.co.uk
             DEFAULT_URI=https://dev.buildmyclub.co.uk

@@ -70,3 +70,17 @@ unchanged, dev's claimed world pack set removed and its unclaimed buffer kept, p
 freed, sponsors unassigned, the refresh-token sequence moved on. The buyout itself
 (`sell.sh`) needs the app image and was not run here; `verify-sale.sql` was checked against
 a simulated buyout.
+
+## Running dev on wk_golive
+
+The dev app's database name comes from the `DEV_DB_NAME` repository variable
+(GitHub > Settings > Secrets and variables > Actions > Variables). Unset means
+`wunderkind`.
+
+- Switch to the rehearsal copy: set `DEV_DB_NAME=wk_golive`, then run the
+  "Deploy Development" workflow (Actions > Run workflow on `dev`).
+- Switch back: delete the variable (or set it to `wunderkind`) and run the
+  workflow again. The `wunderkind` database is never touched by the switch.
+- While dev points at wk_golive, every dev deploy migrates and seeds wk_golive,
+  and its workers write to it. Do not re-run `make-golive.sh` (it drops and
+  recreates wk_golive) until dev has been switched back.
