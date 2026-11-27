@@ -53,8 +53,16 @@ services:
         arguments:
             $mailerFrom: '%env(MAILER_FROM)%'
             $mailerFromName: '%env(MAILER_FROM_NAME)%'
-            $appUrl: '%env(APP_URL)%'
             $betaInviteMailerFrom: '%env(BETA_INVITE_MAILER_FROM)%'
+
+    App\Service\Notification\OwnerNoticeService:
+        arguments:
+            $mailerFrom: '%env(MAILER_FROM)%'
+            $mailerFromName: '%env(MAILER_FROM_NAME)%'
+
+    App\Service\Mail\BrandedEmailLayout:
+        arguments:
+            $appUrl: '%env(APP_URL)%'
 
     App\Service\TokenEncryptionService:
         arguments:
