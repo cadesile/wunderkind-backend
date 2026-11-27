@@ -547,6 +547,9 @@ class DashboardController extends AbstractDashboardController
         $config->setFacilityMaintenanceFrequencyWeeks((int) $request->request->get('facilityMaintenanceFrequencyWeeks', 4));
         $config->setSystemNotificationFrequencyWeeks((int) $request->request->get('systemNotificationFrequencyWeeks', 8));
 
+        // Client version gate: kept as it is when the field is not on the submitted form.
+        $config->setMinClientApiVersion((int) $request->request->get('minClientApiVersion', $config->getMinClientApiVersion()));
+
         // Financial Penalties
         $config->setBankruptcyDeductionsEnabled((bool) $request->request->get('bankruptcyDeductionsEnabled', false));
         $config->setGameOverFanMoraleThreshold((int) $request->request->get('gameOverFanMoraleThreshold', 30));

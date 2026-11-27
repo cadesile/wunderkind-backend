@@ -22,7 +22,7 @@ services:
       APP_URL: ${APP_URL}
       DEFAULT_URI: ${DEFAULT_URI}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES}
-      DATABASE_URL: postgresql://wunderkind:${DB_PASSWORD}@postgres-dev:5432/wunderkind?serverVersion=16&charset=utf8
+      DATABASE_URL: postgresql://wunderkind:${DB_PASSWORD}@postgres-dev:5432/${DB_NAME:-wunderkind}?serverVersion=16&charset=utf8
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
