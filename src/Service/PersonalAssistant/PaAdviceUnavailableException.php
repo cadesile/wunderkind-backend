@@ -12,6 +12,8 @@ final class PaAdviceUnavailableException extends \RuntimeException
 {
     public const PROVIDER_ERROR = 'provider_error';
     public const TIMEOUT        = 'timeout';
+    /** The request needs a switch that is off (the `sponsor_pitch` topic while `paCheatsEnabled` is false). */
+    public const DISABLED       = 'disabled';
 
     public function __construct(public readonly string $reason, string $message, ?\Throwable $previous = null)
     {

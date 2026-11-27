@@ -1411,6 +1411,13 @@
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">AI CALLS PER OWNER PER DAY</span><span class="bmc-setting__help">Paid AI wording calls one owner may make per day. Read on every request. 0 turns AI wording off (the app keeps its templates). Default 20.</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="paAdviceDailyCallLimit" value="{{ config.paAdviceDailyCallLimit }}" data-saved="{{ config.paAdviceDailyCallLimit }}" data-kind="int" data-min="0" inputmode="numeric" aria-label="pa advice daily call limit"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">AI TIMEOUT (SECONDS)</span><span class="bmc-setting__help">How long the server waits for the AI provider before giving up. 1 to 30. Default 8.</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="paAdviceTimeoutSeconds" value="{{ config.paAdviceTimeoutSeconds }}" data-saved="{{ config.paAdviceTimeoutSeconds }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="pa advice timeout seconds"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                     </div>
+                    <span class="bmc-lbl bmc-lbl--ink" style="margin-top:10px">PA CHEATS</span>
+                    <div class="bmc-check" style="margin:6px 0 4px">
+                        <input type="hidden" name="paCheatsEnabled" value="0">
+                        <input type="checkbox" id="paCheatsEnabled" name="paCheatsEnabled" value="1" {{ config.paCheatsEnabled ? 'checked' : '' }}>
+                        <label for="paCheatsEnabled">Let the Personal Assistant pitch sham sponsorship deals</label>
+                    </div>
+                    <p class="bmc-bodytext">Off stops new pitches; deals already signed keep paying until they end. Accepted deals are recorded under Clubs &rsaquo; Illicit activity. Default off.</p>
                 </div>
             </div>
 

@@ -39,6 +39,20 @@ final class PaAdviceRequestParserTest extends TestCase
         self::assertSame([['code' => 'FINANCE_SUMMARY', 'severity' => 'low', 'facts' => ['weeklyNet' => -42000]]], $r->findings);
     }
 
+    public function testTheInvestAndSponsorPitchTopicsAndTheirCodesParse(): void
+    {
+        $r = $this->parser->parse(self::body(['topic' => 'invest', 'findings' => [['code' => 'INVEST_SUMMARY', 'severity' => 'low', 'facts' => ['facilitiesBudget' => 500000, 'lowestFacility' => 'training_ground', 'ownerInvestedThisSeason' => true]]]]));
+        self::assertSame('invest', $r->topic);
+        self::assertSame('INVEST_SUMMARY', $r->findings[0]['code']);
+        self::assertSame(['facilitiesBudget' => 500000, 'lowestFacility' => 'training_ground', 'ownerInvestedThisSeason' => true], $r->findings[0]['facts']);
+
+        foreach (['SPONSOR_PITCH_BLEED', 'SPONSOR_PITCH_TABLE', 'SPONSOR_PITCH_ACCEPTED', 'SPONSOR_PITCH_DECLINED'] as $code) {
+            $r = $this->parser->parse(self::body(['topic' => 'sponsor_pitch', 'findings' => [['code' => $code, 'severity' => 'high', 'facts' => ['weeklyPayment' => 1250000, 'suspicion' => 64]]]]));
+            self::assertSame('sponsor_pitch', $r->topic);
+            self::assertSame($code, $r->findings[0]['code']);
+        }
+    }
+
     public function testAnUnknownTopicIsRefused(): void
     {
         $this->expectException(PaAdviceValidationException::class);

@@ -654,6 +654,7 @@ class DashboardController extends AbstractDashboardController
         $config->setPlayerContractMaxYears((int) $request->request->get('playerContractMaxYears', 5));
         $config->setPlayerContractRenewalCooldownWeeks((int) $request->request->get('playerContractRenewalCooldownWeeks', 8));
         $config->setPaAdviceDailyCallLimit((int) $request->request->get('paAdviceDailyCallLimit', 20));
+        $config->setPaCheatsEnabled((bool) $request->request->get('paCheatsEnabled', false));
         $config->setPaAdviceTimeoutSeconds((int) $request->request->get('paAdviceTimeoutSeconds', 8));
 
         $config->setCapacityCalculation((int) $request->request->get('capacityCalculation', 100));
@@ -2179,6 +2180,7 @@ class DashboardController extends AbstractDashboardController
             MenuItem::linkTo(ClubCrudController::class, 'Clubs'),
             MenuItem::linkTo(UserLedgerCrudController::class, 'User ledger'),
             MenuItem::linkTo(SyncRecordCrudController::class, 'Sync records'),
+            MenuItem::linkTo(IllicitActivityCrudController::class, 'Illicit activity'),
             self::queue(MenuItem::linkTo(BetaRequestCrudController::class, 'Beta requests'), $queues['beta']),
             self::queue(MenuItem::linkTo(DeletionRequestCrudController::class, 'Deletion requests'), $queues['deletion']),
         ]);

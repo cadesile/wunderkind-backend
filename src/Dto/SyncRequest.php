@@ -315,6 +315,16 @@ class SyncRequest
     public array $excursions = [];
 
     /**
+     * Every cheat the save has done (2026-11-27), active and ended: the FULL list on every sync,
+     * not windowed by week. Null means the client didn't send the field ("no change"); [] means
+     * none. Validated record by record by IllicitActivityValidator, so a bad record is dropped
+     * without failing the sync. Stored in club_illicit_activity and archived on the SyncRecord.
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
+    public ?array $illicitActivity = null;
+
+    /**
      * Optional debug diagnostics — only present when gameConfig.debugLoggingEnabled === true on the client.
      * Stored verbatim on SyncRecord; never fails validation if absent.
      * A value of -1 on any numeric field means the scan failed — treat as unavailable, not zero.

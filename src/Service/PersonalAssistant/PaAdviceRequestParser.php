@@ -28,7 +28,15 @@ final class PaAdviceRequestParser
     public const MAX_FACTS         = 10;
     public const SUPPORTED_LOCALES = ['en'];
 
-    public const TOPICS = ['finances', 'squad', 'transfers', 'general'];
+    /**
+     * `invest` is the fifth ADVICE chip (2026-11-27). `sponsor_pitch` is HIDDEN: no chip shows it;
+     * only the app's sham-sponsor pitch dialog sends it, and PaAdviceService refuses it while
+     * `GameConfig::paCheatsEnabled` is off.
+     */
+    public const TOPICS = ['finances', 'squad', 'transfers', 'general', 'invest', 'sponsor_pitch'];
+
+    /** Topics that only exist while the PA cheat switch is on. */
+    public const CHEAT_TOPICS = ['sponsor_pitch'];
 
     public const SEVERITIES = ['low', 'medium', 'high'];
 
@@ -48,6 +56,12 @@ final class PaAdviceRequestParser
         'SQUAD_SUMMARY',
         'TRANSFER_SUMMARY',
         'GENERAL_SUMMARY',
+        'INVEST_SUMMARY',
+        // The sham-sponsor pitch dialog (topic sponsor_pitch)
+        'SPONSOR_PITCH_BLEED',
+        'SPONSOR_PITCH_TABLE',
+        'SPONSOR_PITCH_ACCEPTED',
+        'SPONSOR_PITCH_DECLINED',
     ];
 
     private const SEVERITY_RANK = ['high' => 0, 'medium' => 1, 'low' => 2];

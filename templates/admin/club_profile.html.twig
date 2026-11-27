@@ -1136,6 +1136,26 @@
     {% endif %}
 
     {# ══════════════════════════════════════════════════════════════════ #}
+    {# ILLICIT ACTIVITY (PA cheats, 2026-11-27)                           #}
+    {# ══════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 mt-1">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2"
+            style="letter-spacing:.08em;font-size:.75rem;border-left:3px solid var(--bs-border-color);padding-left:.5rem;">
+            Illicit activity
+            <span class="text-muted fw-normal ms-1" style="font-size:.75rem;">({{ illicitActivityCount }})</span>
+        </h6>
+        <p class="small mb-3">
+            {% if illicitActivityCount > 0 %}
+                <a href="{{ ea_url().setController('App\\Controller\\Admin\\IllicitActivityCrudController').setAction('index').set('filters', {club: {comparison: '=', value: club.id ~ ''}}) }}">
+                    View {{ illicitActivityCount }} reported cheat{{ illicitActivityCount == 1 ? '' : 's' }}
+                </a>
+            {% else %}
+                None reported.
+            {% endif %}
+        </p>
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════ #}
     {# SYNC LOG                                                           #}
     {# ══════════════════════════════════════════════════════════════════ #}
     <div class="col-12 mt-1">

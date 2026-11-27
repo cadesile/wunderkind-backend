@@ -399,6 +399,9 @@ class GameConfigController extends AbstractController
                 $this->facilityTemplateRepository->getActiveTemplates()
             ),
 
+            // PA cheats switch (2026-11-27): the app pitches sham sponsor deals only while true.
+            'paCheatsEnabled' => $config->isPaCheatsEnabled(),
+
             // Personal Assistant roster the owner chooses from (2026-11-27). Active only, in
             // picker order. toConfigArray() is an allowlist: the admin-only personality prompt
             // that is sent to the AI never appears here.
