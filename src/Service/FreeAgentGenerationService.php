@@ -27,7 +27,8 @@ use Psr\Log\LoggerInterface;
  *    `StarterPackService::resolveAbilityRange()` the starter squad and NPC clubs use, so the
  *    pool scales by country with everything else.
  *  - **No money.** Snapshots go through `WorldPackSnapshotBuilder::buildPlayerSnapshot()`,
- *    which strips `contractValue`; the device prices free agents like any pack player.
+ *    which strips `contractValue`; the device prices free agents like any pack player, at the
+ *    tier named by each snapshot's `packTier`.
  *
  * Nothing is persisted and nothing is consumed, so a call cannot fail on supply.
  */
@@ -98,7 +99,10 @@ class FreeAgentGenerationService
 
             foreach ($players as $player) {
                 /** @var Player $player */
-                $snapshots[] = $this->snapshotBuilder->buildPlayerSnapshot($player);
+                // `packTier`: the tier band the player was generated in. The device prices an
+                // unpriced pack player against a tier's wage scale; a free agent has no club, so
+                // this is the tier it is pitched at.
+                $snapshots[] = $this->snapshotBuilder->buildPlayerSnapshot($player) + ['packTier' => (int) $tier];
             }
         }
 
