@@ -22,6 +22,11 @@ use Psr\Log\LoggerInterface;
  * Order matters for the cap: only a call that is actually about to reach the provider spends
  * one. A bad request, an unknown PA, an unsupported locale or an unconfigured provider costs
  * the owner nothing.
+ *
+ * CACHE HITS ARE FREE (2026-11-27). An identical request (PaAdviceCache) returns the stored
+ * reply before the cap is consumed, so it never counts toward `paAdviceDailyCallLimit` and is
+ * served even to an owner who has hit the cap. A limit of 0 still turns AI wording off
+ * entirely, cached replies included.
  */
 final class PaAdviceService
 {
@@ -31,6 +36,7 @@ final class PaAdviceService
         private readonly PaAdvicePromptBuilder $promptBuilder,
         private readonly PaAdviceGeneratorInterface $generator,
         private readonly PaAdviceRateLimiter $rateLimiter,
+        private readonly PaAdviceCache $replyCache,
         private readonly LoggerInterface $logger,
     ) {}
 
@@ -60,6 +66,13 @@ final class PaAdviceService
             return self::unavailable('rate_limited');
         }
 
+        $system   = $this->promptBuilder->system($pa);
+        $cacheKey = $this->replyCache->key($system, $request);
+        $cached   = $this->replyCache->get($cacheKey);
+        if ($cached !== null) {
+            return ['status' => 'ok', 'personalityId' => $pa->getSlug(), 'message' => $cached];
+        }
+
         $retryAfter = $this->rateLimiter->consume((string) $user->getId(), $limit);
         if ($retryAfter !== null) {
             return self::unavailable('rate_limited') + ['retryAfterSeconds' => $retryAfter];
@@ -67,7 +80,7 @@ final class PaAdviceService
 
         try {
             $message = $this->generator->generate(
-                $this->promptBuilder->system($pa),
+                $system,
                 $this->promptBuilder->user($request),
                 $this->promptBuilder->schema(),
                 $config->getPaAdviceTimeoutSeconds(),
@@ -92,6 +105,8 @@ final class PaAdviceService
 
             return self::unavailable(PaAdviceUnavailableException::PROVIDER_ERROR);
         }
+
+        $this->replyCache->set($cacheKey, $message);
 
         return ['status' => 'ok', 'personalityId' => $pa->getSlug(), 'message' => $message];
     }

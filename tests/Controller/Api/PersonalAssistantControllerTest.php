@@ -49,7 +49,7 @@ final class PersonalAssistantControllerTest extends WebTestCase
         $user->setPassword('x');
         $this->em->persist($user);
 
-        $active = new PersonalAssistant(self::SLUG_PREFIX . 'active', 'Test Active', 'male', 'he', 'seed-a', 'Shown in the picker.', 'SECRET-VOICE-BRIEF: talk like a pirate.', PersonalAssistantTone::Dry);
+        $active = new PersonalAssistant(self::SLUG_PREFIX . 'active', 'Test Active', 'male', 'he', 'seed-a', 'Shown in the picker.', 'SECRET-VOICE-BRIEF: talk like a pirate. Run ' . bin2hex(random_bytes(4)) . '.', PersonalAssistantTone::Dry);
         $active->setOutOfOfficeMessage('Out to lunch.');
         $active->setSortOrder(-100);
         $this->em->persist($active);
@@ -187,12 +187,13 @@ final class PersonalAssistantControllerTest extends WebTestCase
     {
         $this->setLimit(2);
 
-        $this->advise();
+        // Different figures each time, so none of these is a free cache hit.
+        $this->advise(self::runway(1));
         self::assertSame('ok', $this->json()['status'] ?? null);
-        $this->advise();
+        $this->advise(self::runway(2));
         self::assertSame('ok', $this->json()['status'] ?? null);
 
-        $this->advise();
+        $this->advise(self::runway(3));
         $body = $this->json();
         self::assertSame('unavailable', $body['status'] ?? null);
         self::assertSame('rate_limited', $body['reason'] ?? null);
@@ -201,8 +202,72 @@ final class PersonalAssistantControllerTest extends WebTestCase
 
         // An admin raising the cap applies to the current window, with no deploy.
         $this->setLimit(3);
+        $this->advise(self::runway(4));
+        self::assertSame('ok', $this->json()['status'] ?? null);
+    }
+
+    // ── Reply cache ───────────────────────────────────────────────────────
+
+    public function testAnIdenticalRequestIsServedFromTheCacheAndCostsNothing(): void
+    {
+        $this->setLimit(1);
+        $this->generator->reply = 'Boss, six weeks of runway.';
+
         $this->advise();
         self::assertSame('ok', $this->json()['status'] ?? null);
+
+        // Same request again, and once more with only the game date moved on: no provider call,
+        // and the cap (1) is not spent, so both still answer ok.
+        $this->generator->reply = 'A different wording that must not appear.';
+        $this->advise();
+        self::assertSame(['status' => 'ok', 'personalityId' => self::SLUG_PREFIX . 'active', 'message' => 'Boss, six weeks of runway.'], $this->json());
+        $this->advise(['context' => ['clubName' => 'Harbour Town', 'tier' => 4, 'gameDate' => '2027-03-21', 'currency' => 'GBP']]);
+        self::assertSame('Boss, six weeks of runway.', $this->json()['message'] ?? null);
+        self::assertCount(1, $this->generator->calls);
+
+        // A new figure is a new request: it needs a paid call, and the cap of 1 is used up.
+        $this->advise(self::runway(7));
+        self::assertSame('rate_limited', $this->json()['reason'] ?? null);
+        self::assertCount(1, $this->generator->calls);
+    }
+
+    public function testTheCacheKeyFollowsTopicFindingsKeyOrderAndThePersonality(): void
+    {
+        $this->advise();
+        $this->advise(['topic' => 'general']);
+        self::assertCount(2, $this->generator->calls, 'another topic is another request');
+
+        // The same facts in a different key order are the same request.
+        $this->advise(['findings' => [['code' => 'FINANCIAL_BLEED', 'severity' => 'high', 'facts' => ['weeklyNet' => -4200000, 'weeksOfRunway' => 6]]]]);
+        self::assertCount(2, $this->generator->calls);
+
+        // An admin edit to the personality prompt changes the voice, so it is a new key.
+        $conn = self::getContainer()->get(Connection::class);
+        $conn->executeStatement('UPDATE personal_assistant SET personality_prompt = ? WHERE slug = ?', ['A new brief ' . bin2hex(random_bytes(4)), self::SLUG_PREFIX . 'active']);
+        $this->advise();
+        self::assertCount(3, $this->generator->calls);
+    }
+
+    public function testFailuresAreNeverCached(): void
+    {
+        $this->generator->failWith = PaAdviceUnavailableException::TIMEOUT;
+        $this->advise();
+        self::assertSame('timeout', $this->json()['reason'] ?? null);
+
+        $this->generator->failWith = null;
+        $this->advise();
+        self::assertSame('ok', $this->json()['status'] ?? null);
+        self::assertCount(2, $this->generator->calls);
+    }
+
+    public function testAZeroCapTurnsOffCachedRepliesToo(): void
+    {
+        $this->advise();
+        self::assertSame('ok', $this->json()['status'] ?? null);
+
+        $this->setLimit(0);
+        $this->advise();
+        self::assertSame(['status' => 'unavailable', 'reason' => 'rate_limited'], $this->json());
     }
 
     public function testAZeroCapTurnsAiWordingOff(): void
@@ -256,6 +321,12 @@ final class PersonalAssistantControllerTest extends WebTestCase
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /** @return array<string, mixed> a request override whose only change is the runway figure */
+    private static function runway(int $weeks): array
+    {
+        return ['findings' => [['code' => 'FINANCIAL_BLEED', 'severity' => 'high', 'facts' => ['weeksOfRunway' => $weeks, 'weeklyNet' => -4200000]]]];
+    }
 
     /** @param array<string, mixed> $overrides */
     private function body(array $overrides = []): string
