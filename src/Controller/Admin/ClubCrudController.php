@@ -416,7 +416,6 @@ class ClubCrudController extends AbstractCrudController
         // already on the paginator, so it costs nothing extra.
         $responseParameters->set('bmcTotal', $this->em->getRepository(Club::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Club, abbreviation, owner');
-        $responseParameters->set('bmcFacetColumns', ['currentLeague.tier' => 2]);
         $responseParameters->set('bmcFlagFacets', ['country']);
         $responseParameters->set('bmcSegmentLabels', ['isSpoof' => ['0' => 'REAL', '1' => 'SPOOF']]);
         $responseParameters->set('bmcUnits', ['balance' => '£']);

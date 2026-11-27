@@ -21,6 +21,8 @@ use App\Repository\SyncRecordRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\Club\ClubSaleValuationService;
 use App\Service\SessionRevocationService;
+use App\Service\AccountDeletionService;
+use App\Service\Account\AccountDeletionGuard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -60,6 +62,9 @@ class UserCrudController extends AbstractCrudController
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
         private readonly \App\Service\Notification\OwnerNoticeService $ownerNotices,
         private readonly \App\Service\StartingGrantService $startingGrant,
+        private readonly AccountDeletionService $accountDeletion,
+        private readonly AccountDeletionGuard $deletionGuard,
+        private readonly \Psr\Log\LoggerInterface $logger,
     ) {}
 
     public static function getEntityFqcn(): string
@@ -108,6 +113,12 @@ class UserCrudController extends AbstractCrudController
                 ->createAsBatchAction())
             ->addBatchAction(Action::new('debugPanelOn', 'Debug panel on')
                 ->linkToCrudAction('debugPanelOn')
+                ->createAsBatchAction())
+            // Goes to a preview page with a typed confirmation, not a window.confirm():
+            // data-bmc-preview tells the selection bar to skip its own prompt.
+            ->addBatchAction(Action::new('deleteUsers', 'Delete users + clubs')
+                ->linkToCrudAction('deleteUsers')
+                ->setHtmlAttributes(['data-bmc-preview' => '1'])
                 ->createAsBatchAction());
     }
 
@@ -325,6 +336,136 @@ class UserCrudController extends AbstractCrudController
         ));
     }
 
+    /**
+     * Batch "Delete users + clubs" (Courtney, 2026-11-27, go-live cleanup).
+     *
+     * Two POSTs to the same action. The first, from the selection bar, renders a preview:
+     * how many users and clubs will go, and which selected accounts are PROTECTED and kept
+     * (AccountDeletionGuard: owner ledger history, plots, admin role, test accounts). The
+     * preview's form posts the same batch fields back with a typed phrase ("DELETE 37") and
+     * the count the operator saw; only then is anything deleted, and only if the server
+     * still finds exactly that many deletable accounts, so a selection that shifted between
+     * preview and confirm (a "select all matching" re-runs the filter) is shown again
+     * instead of being acted on.
+     *
+     * Deletion goes through AccountDeletionService::deleteAccountsBulk(), the same set-based
+     * path the spoof purge uses.
+     */
+    #[AdminRoute(path: '/batch/delete-users', name: 'batch_delete_users', options: ['methods' => ['POST']])]
+    public function deleteUsers(BatchActionDto $batch, AdminContext $context): Response
+    {
+        $this->assertBatchToken($batch);
+        $request = $context->getRequest();
+
+        $selected = [];
+        foreach ($this->batchSelection->chunks($batch, $request, $this->matchingQuery($context)) as $chunk) {
+            foreach ($chunk as $user) {
+                $selected[] = $user;
+            }
+        }
+
+        ['deletable' => $deletable, 'protected' => $protected] = $this->deletionGuard->partition($selected);
+        $phrase = self::deletePhrase(\count($deletable));
+
+        $typed    = $request->request->get('confirmPhrase');
+        $expected = $request->request->get('expectedCount');
+        $stale    = null;
+        $wrong    = false;
+
+        if (null !== $typed) {
+            if ((int) $expected !== \count($deletable)) {
+                $stale = (int) $expected;
+            } elseif (trim((string) $typed) !== $phrase) {
+                $wrong = true;
+            } elseif ([] !== $deletable) {
+                $result = $this->accountDeletion->deleteAccountsBulk($deletable);
+
+                $this->logger->notice('Admin batch user delete', [
+                    'admin'     => $this->getUser()?->getUserIdentifier(),
+                    'users'     => $result['users'],
+                    'clubs'     => $result['clubs'],
+                    'protected' => \count($protected),
+                ]);
+
+                return $this->backToReferrer($context, 'success', \sprintf(
+                    'Deleted %d %s and %d %s. %d protected %s kept.',
+                    $result['users'], 1 === $result['users'] ? 'user' : 'users',
+                    $result['clubs'], 1 === $result['clubs'] ? 'club' : 'clubs',
+                    \count($protected), 1 === \count($protected) ? 'account' : 'accounts',
+                ));
+            }
+        }
+
+        $byType = ['real' => 0, 'guest' => 0, 'spoof' => 0];
+        foreach ($deletable as $user) {
+            $email = $user->getEmail();
+            ++$byType[User::isSpoofEmail($email) ? 'spoof' : (User::isGuestEmail($email) ? 'guest' : 'real')];
+        }
+
+        $reasonCounts = [];
+        foreach ($protected as $row) {
+            foreach ($row['reasons'] as $reason) {
+                $reasonCounts[$reason] = ($reasonCounts[$reason] ?? 0) + 1;
+            }
+        }
+
+        $clubsByUser = [];
+        foreach (array_chunk($deletable, 1000) as $chunk) {
+            $rows = $this->em->createQuery(
+                'SELECT IDENTITY(c.user) AS uid, COUNT(c.id) AS n FROM App\Entity\Club c WHERE c.user IN (:users) GROUP BY c.user'
+            )->setParameter('users', $chunk)->getArrayResult();
+            foreach ($rows as $row) {
+                $clubsByUser[(string) $row['uid']] = (int) $row['n'];
+            }
+        }
+
+        $referrer = (string) $request->request->get('referrer', '');
+
+        return $this->render('admin/user_batch_delete.html.twig', [
+            'bmcGroup'     => 'Accounts',
+            'bmcDomain'    => 'people',
+            'selected'     => \count($selected),
+            'deletable'    => $deletable,
+            'protected'    => $protected,
+            'byType'       => $byType,
+            'clubCount'    => array_sum($clubsByUser),
+            'clubsByUser'  => $clubsByUser,
+            'reasonCounts' => $reasonCounts,
+            'reasonLabels' => AccountDeletionGuard::LABELS,
+            'reasonShort'  => [
+                AccountDeletionGuard::LEDGER => 'Owner ledger',
+                AccountDeletionGuard::PLOT   => 'Plot',
+                AccountDeletionGuard::ADMIN  => 'Admin',
+                AccountDeletionGuard::TEST   => 'Test account',
+            ],
+            'phrase'       => $phrase,
+            'stale'        => $stale,
+            'wrongPhrase'  => $wrong,
+            'listLimit'    => 100,
+            'actionUrl'    => $request->getRequestUri(),
+            'backUrl'      => '' !== $referrer ? $referrer : $this->container
+                ->get(\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGeneratorInterface::class)
+                ->setAction(Action::INDEX)->generateUrl(),
+            // Re-posted verbatim so the confirm step resolves the same selection the same
+            // way (ids, or allMatching + referrer re-running the filter server-side).
+            'batchFields'  => [
+                'batchActionName'      => $batch->getName(),
+                'entityFqcn'           => $batch->getEntityFqcn(),
+                'batchActionCsrfToken' => $batch->getCsrfToken(),
+                'batchActionUrl'       => (string) $request->request->get('batchActionUrl', ''),
+                'allMatching'          => $this->batchSelection->isAllMatching($request) ? '1' : '0',
+                'referrer'             => $referrer,
+            ],
+            'entityIds'    => $batch->getEntityIds(),
+        ]);
+    }
+
+    /** What the operator types to confirm, e.g. "DELETE 37". */
+    public static function deletePhrase(int $count): string
+    {
+        return 'DELETE ' . $count;
+    }
+
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
@@ -353,7 +494,6 @@ class UserCrudController extends AbstractCrudController
         $responseParameters->set('bmcTotal', $this->em->getRepository(User::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Email, owner, club');
         $responseParameters->set('bmcSegmentLabels', ['isVerified' => ['0' => 'NO', '1' => 'YES']]);
-        $responseParameters->set('bmcFacetColumns', ['id' => 3]);
         $responseParameters->set('bmcHints', [
             'lastLoginAt' => [ActivityFilter::ACTIVE => '≤ 7d', ActivityFilter::DORMANT => '> 7d'],
             'email'       => [AccountTypeFilter::GUEST => 'device-bound', AccountTypeFilter::SPOOF => 'admin-made'],

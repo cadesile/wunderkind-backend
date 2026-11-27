@@ -1,0 +1,145 @@
+{% extends 'admin/bmc_page.html.twig' %}
+{#
+  Preview + typed confirmation for the Users list's "Delete users + clubs" batch action.
+
+  Rendered by UserCrudController::deleteUsers() on the first POST from the selection bar.
+  The form below posts the SAME batch fields back to the same action (ids, or
+  allMatching + referrer, which the server turns back into the filtered query), plus the
+  typed phrase and the count the operator saw. Nothing is deleted unless the phrase matches
+  and the server still finds exactly that many deletable accounts.
+#}
+
+{% block bmc_title %}DELETE USERS{% endblock %}
+
+{% block bmc_body %}
+<div class="bmc-grid">
+    <section class="bmc-card" data-domain="people">
+        <header class="bmc-card__head">
+            <i data-lucide="user-x"></i>
+            <span class="bmc-card__title">What will be deleted</span>
+            <span class="bmc-card__meta">{{ selected|number_format }} selected</span>
+        </header>
+        <div class="bmc-card__body">
+            {% if stale %}
+                <div class="bmc-danger">
+                    <i data-lucide="triangle-alert"></i>
+                    <div class="bmc-danger__text">
+                        <span class="bmc-lbl bmc-lbl--ink">The selection changed</span>
+                        <span class="bmc-note">You confirmed {{ stale|number_format }}, but {{ deletable|length|number_format }} can be deleted now. Nothing was deleted. Check the figures and confirm again.</span>
+                    </div>
+                </div>
+            {% endif %}
+            {% if wrongPhrase %}
+                <div class="bmc-danger">
+                    <i data-lucide="triangle-alert"></i>
+                    <div class="bmc-danger__text">
+                        <span class="bmc-lbl bmc-lbl--ink">Confirmation did not match</span>
+                        <span class="bmc-note">Nothing was deleted. Type the phrase exactly as shown.</span>
+                    </div>
+                </div>
+            {% endif %}
+
+            <table class="bmc-minitable">
+                <tbody>
+                    <tr><td>Users to delete</td><td class="is-right"><strong>{{ deletable|length|number_format }}</strong></td></tr>
+                    <tr><td>&nbsp;&nbsp;Real</td><td class="is-right">{{ byType.real|number_format }}</td></tr>
+                    <tr><td>&nbsp;&nbsp;Guest</td><td class="is-right">{{ byType.guest|number_format }}</td></tr>
+                    <tr><td>&nbsp;&nbsp;Spoof</td><td class="is-right">{{ byType.spoof|number_format }}</td></tr>
+                    <tr><td>Clubs deleted with them</td><td class="is-right"><strong>{{ clubCount|number_format }}</strong></td></tr>
+                    <tr><td>Protected, will be kept</td><td class="is-right"><strong>{{ protected|length|number_format }}</strong></td></tr>
+                    {% for key, label in reasonLabels %}
+                        {% if reasonCounts[key]|default(0) > 0 %}
+                            <tr><td>&nbsp;&nbsp;{{ label }}</td><td class="is-right">{{ reasonCounts[key]|number_format }}</td></tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <p class="bmc-note">Each deleted account loses its clubs, sync history, refresh tokens and leaderboard entries. Archived leaderboard rows are kept without the name. This cannot be undone.</p>
+
+            {% if deletable|length > 0 %}
+                <form method="post" action="{{ actionUrl }}" class="bmc-card__body" style="padding:0">
+                    {% for name, value in batchFields %}
+                        <input type="hidden" name="{{ name }}" value="{{ value }}">
+                    {% endfor %}
+                    {% for id in entityIds %}
+                        <input type="hidden" name="batchActionEntityIds[]" value="{{ id }}">
+                    {% endfor %}
+                    <input type="hidden" name="expectedCount" value="{{ deletable|length }}">
+
+                    <label class="bmc-lbl" for="bmc-delete-phrase">Type <strong class="bmc-lbl--ink">{{ phrase }}</strong> to confirm</label>
+                    <span class="bmc-search">
+                        <input class="bmc-input" id="bmc-delete-phrase" name="confirmPhrase" type="text"
+                               autocomplete="off" spellcheck="false" data-phrase="{{ phrase }}" autofocus>
+                    </span>
+                    <div style="display:flex;gap:8px;justify-content:flex-end">
+                        <a class="bmc-btn" href="{{ backUrl }}"><span>CANCEL</span></a>
+                        <button type="submit" class="bmc-btn bmc-btn--red" id="bmc-delete-go" disabled>
+                            <span>DELETE {{ deletable|length|number_format }} {{ deletable|length == 1 ? 'USER' : 'USERS' }}</span>
+                        </button>
+                    </div>
+                </form>
+                <script>
+                (function () {
+                    var input = document.getElementById('bmc-delete-phrase'), go = document.getElementById('bmc-delete-go');
+                    if (!input || !go) return;
+                    input.addEventListener('input', function () { go.disabled = input.value.trim() !== input.getAttribute('data-phrase'); });
+                    go.closest('form').addEventListener('submit', function () { go.disabled = true; go.querySelector('span').textContent = 'DELETING…'; });
+                }());
+                </script>
+            {% else %}
+                <p class="bmc-note">Every selected account is protected, so there is nothing to delete.</p>
+                <div><a class="bmc-btn" href="{{ backUrl }}"><span>BACK TO USERS</span></a></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        {% if protected|length > 0 %}
+            <section class="bmc-card" data-domain="people">
+                <header class="bmc-card__head">
+                    <i data-lucide="shield"></i>
+                    <span class="bmc-card__title">Protected, will be kept</span>
+                    <span class="bmc-card__meta">{{ protected|length > listLimit ? 'first ' ~ listLimit ~ ' of ' }}{{ protected|length|number_format }}</span>
+                </header>
+                <div style="overflow-x:auto">
+                    <table class="bmc-minitable">
+                        <thead><tr><th>Owner</th><th>Why</th></tr></thead>
+                        <tbody>
+                            {% for row in protected|slice(0, listLimit) %}
+                                <tr>
+                                    <td>{{ row.user.name|default('—') }}<br><span class="bmc-note">{{ row.user.email }}</span></td>
+                                    <td>{{ row.reasons|map(r => reasonShort[r]|default(r))|join(', ') }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        {% endif %}
+
+        {% if deletable|length > 0 %}
+            <section class="bmc-card" data-domain="people">
+                <header class="bmc-card__head">
+                    <i data-lucide="trash-2"></i>
+                    <span class="bmc-card__title">To be deleted</span>
+                    <span class="bmc-card__meta">{{ deletable|length > listLimit ? 'first ' ~ listLimit ~ ' of ' }}{{ deletable|length|number_format }}</span>
+                </header>
+                <div style="overflow-x:auto">
+                    <table class="bmc-minitable">
+                        <thead><tr><th>Owner</th><th class="is-right">Clubs</th></tr></thead>
+                        <tbody>
+                            {% for user in deletable|slice(0, listLimit) %}
+                                <tr>
+                                    <td>{{ user.name|default('—') }}<br><span class="bmc-note">{{ user.email }}</span></td>
+                                    <td class="is-right">{{ clubsByUser[user.id.toRfc4122]|default(0) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

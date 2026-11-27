@@ -103,7 +103,6 @@ class NpcClubCrudController extends AbstractCrudController
         $responseParameters->set('bmcTotal', $this->em->getRepository(NpcClub::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Club, abbreviation, stadium');
         $responseParameters->set('bmcFlagFacets', ['country']);
-        $responseParameters->set('bmcFacetColumns', ['tier' => 2, 'citySize' => 3]);
         $responseParameters->set('bmcUnits', ['balance' => '£']);
         $responseParameters->set('bmcWidths', [
             'country' => 92, 'tier' => 64, 'reputation' => 160, 'citySize' => 100, 'balance' => 100,

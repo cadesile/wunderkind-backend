@@ -238,12 +238,15 @@ input:focus-visible + .bmc-tile { outline: 2px solid var(--wk-accent); outline-o
    enough to re-apply by hand when the handoff stylesheet is updated.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── three-column facets ───────────────────────────────────────────────────
-   prototype/admin-config.js asks for cols: 3 on the short-label facets (city
-   size, clubs owned, company size) but the handoff stylesheet only ships
-   .bmc-checks--2, so every one of them was quietly rendering as a single
-   column. Same shape as the --2 rule. */
-.bmc-checks--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* ── filter rail readability (Courtney, 2026-11-27) ──────────────────────────
+   Every facet option gets its own row (the rail template no longer emits
+   .bmc-checks--2/--3, whose columns cut labels off), and the dim hint and
+   count text is lifted: textDim on the rail's navy read as grey on grey.
+   A zero-match option keeps a quieter label so it still reads as empty. */
+.bmc-checks--2, .bmc-checks--3 { grid-template-columns: 1fr; }
+.bmc-check__hint, .bmc-check__n { color: #c9d6e3; }
+.bmc-check.is-empty .bmc-check__label { color: #b4c3d3; }
+.bmc-check__text { white-space: normal; flex-wrap: wrap; row-gap: 0; }
 
 /* ── toast stack ───────────────────────────────────────────────────────────
    .bmc-toast is position:fixed at a single bottom:24px, so two flash messages
