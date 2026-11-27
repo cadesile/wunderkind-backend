@@ -121,6 +121,11 @@ services:
         arguments:
             $cache: '@cache.app'
 
+    App\Service\PersonalAssistant\PaAdviceCache:
+        arguments:
+            $cache: '@cache.app'
+            $model: '%env(string:PA_ADVICE_MODEL)%'
+
     App\Service\Location\Suggestion\TownSuggesterInterface:
         factory: ['@App\Service\Location\Suggestion\TownSuggesterFactory', 'create']
 
