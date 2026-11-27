@@ -51,9 +51,11 @@ class StarterConfigController extends AbstractController
         }
 
         return $this->json([
-            'startingBalance'    => $config->getStartingBalance(),
+            // The club kitty setting was removed (2026-11-27): a club opens with what its owner
+            // funds at the FUND step. Still sent, as 0, because older builds read it by name.
+            'startingBalance'    => 0,
             // The ACCOUNT's opening credit range, in pence — what land and stadiums are charged
-            // against, as opposed to `startingBalance` above, which is the club's own kitty.
+            // against, and what the owner funds a new club from.
             // The range is served (not the resolved figure) because this endpoint is PUBLIC and
             // unauthenticated: there is no account to resolve for. The actual grant arrives on
             // the ledger when the owner avatar is created; read it from GET /api/account/ledger.

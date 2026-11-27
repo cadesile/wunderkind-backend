@@ -65,23 +65,6 @@
 
         <div class="bmc-setting" data-bmc-setting>
             <div class="bmc-setting__text">
-                <span class="bmc-setting__label">CLUB STARTING BALANCE</span>
-                <span class="bmc-setting__help">The new club's own transfer kitty. Device-owned — every sync reassigns it, so land is <strong>not</strong> charged against this.</span>
-                <span class="bmc-setting__hint" data-bmc-hint data-default="Default £50,000"></span>
-            </div>
-            <div class="bmc-setting__ctl">
-                <label class="bmc-num bmc-num--fill" style="max-width:160px">
-                    <span class="bmc-num__unit">£</span>
-                    <input name="startingBalance" inputmode="numeric" data-kind="money"
-                           value="{{ config.startingBalancePounds }}" data-saved="{{ config.startingBalancePounds }}"
-                           data-min="0" data-max="100000000" aria-label="Club starting balance, pounds">
-                </label>
-                <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
-            </div>
-        </div>
-
-        <div class="bmc-setting" data-bmc-setting>
-            <div class="bmc-setting__text">
                 <span class="bmc-setting__label">ACCOUNT STARTING GRANT</span>
                 <span class="bmc-setting__help">
                     The <strong>account's</strong> opening credit, granted once when the player creates their

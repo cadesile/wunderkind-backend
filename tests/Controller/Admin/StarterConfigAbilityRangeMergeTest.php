@@ -156,7 +156,6 @@ class StarterConfigAbilityRangeMergeTest extends WebTestCase
 
         $client->request('POST', '/admin/starter-config/save', [
             '_token'                       => $this->seedValidCsrfToken($client, 'save_starter_config'),
-            'startingBalance'              => $config->getStartingBalancePounds(),
             'userStartingBalanceMinPounds' => (int) round($config->getUserStartingBalanceMinPence() / 100),
             'userStartingBalanceMaxPounds' => (int) round($config->getUserStartingBalanceMaxPence() / 100),
             'starterPlayerCount'           => $config->getStarterPlayerCount(),

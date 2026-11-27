@@ -856,7 +856,6 @@ class DashboardController extends AbstractDashboardController
 
         $config = $this->starterConfigRepository->getConfig();
         // Form submits pounds; multiply by 100 to store pence
-        $config->setStartingBalance((int) $request->request->get('startingBalance', 50_000) * 100);
 
         // The ACCOUNT's opening credit range — distinct from the club kitty above. Set as a
         // pair, because the setter normalises a transposed min/max rather than refusing the
