@@ -66,6 +66,9 @@ final class LocationEnrichmentService
         private readonly LocationClassificationService       $classificationService,
         private readonly NpcClubLocationLinker               $npcLinker,
         private readonly LandPlotProvisioner                 $plotProvisioner,
+        // Nullable only so the existing unit-test constructor keeps working; the container
+        // always injects it.
+        private readonly ?\App\Service\Location\NpcClubPlotSeatingService $plotSeating = null,
     ) {}
 
     /**
@@ -402,6 +405,20 @@ final class LocationEnrichmentService
                     'location' => (string) $location->getId(),
                     'plots'    => $plots,
                 ]);
+
+                // SEAT THE TOWN'S NPC CLUBS NOW. Before this, a club generated while its town was
+                // unpriced stayed unseated for ever: generation seats only on plots that exist,
+                // and nothing ran app:npc-clubs:seat-plots afterwards. Seen 2026-11-27 on dev:
+                // all 143 US NPC clubs unseated, so no NPC club had a plot price for the device
+                // to value (GET /api/initialize/land). The seat is idempotent per country.
+                $seated = $this->plotSeating?->seatCountry($location->getCountryCode());
+
+                if (($seated['seated'] ?? 0) > 0) {
+                    $this->logger->info('NPC clubs seated on a newly priced town', [
+                        'location' => (string) $location->getId(),
+                        'seated'   => $seated['seated'],
+                    ]);
+                }
             }
         } catch (\Throwable $e) {
             $this->logger->error('Could not provision plots after enrichment', [
