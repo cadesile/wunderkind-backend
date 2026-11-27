@@ -87,12 +87,14 @@ final class AnthropicJsonClient
      * @param array<string, mixed> $schema
      * @param ?string              $effort one of the EFFORT_* constants; null sends nothing and
      *                                     takes the API's own default of high
+     * @param ?string              $system top-level system prompt; null sends none (every caller
+     *                                     before the Personal Assistant put everything in $prompt)
      *
      * @throws AiUnavailableException
      */
-    public function sendJson(string $prompt, array $schema, int $maxTokens, string $context, ?int $timeoutSeconds = null, ?string $effort = null): AnthropicJsonResponse
+    public function sendJson(string $prompt, array $schema, int $maxTokens, string $context, ?int $timeoutSeconds = null, ?string $effort = null, ?string $system = null): AnthropicJsonResponse
     {
-        $payload = $this->send($prompt, $maxTokens, $schema, $timeoutSeconds, $effort);
+        $payload = $this->send($prompt, $maxTokens, $schema, $timeoutSeconds, $effort, $system);
 
         $stopReason = (string) ($payload['stop_reason'] ?? 'unknown');
         $text       = self::firstTextBlock($payload);
@@ -161,18 +163,25 @@ final class AnthropicJsonClient
      *
      * @param array<string, mixed>|null $schema null sends no format block
      * @param ?string                   $effort one of the EFFORT_* constants; null sends nothing
+     * @param ?string                   $system top-level system prompt; null sends none
      *
      * @return array<string, mixed>
      *
      * @throws AiUnavailableException on any transport, auth, rate-limit or server error
      */
-    public function send(string $prompt, int $maxTokens, ?array $schema = null, ?int $timeoutSeconds = null, ?string $effort = null): array
+    public function send(string $prompt, int $maxTokens, ?array $schema = null, ?int $timeoutSeconds = null, ?string $effort = null, ?string $system = null): array
     {
         $body = [
             'model'      => $this->model,
             'max_tokens' => $maxTokens,
             'messages'   => [['role' => 'user', 'content' => $prompt]],
         ];
+
+        // Instructions the caller must keep separate from data it was handed (the Personal
+        // Assistant's rules vs the device's findings) go in `system`, never in the user turn.
+        if ($system !== null && $system !== '') {
+            $body['system'] = $system;
+        }
 
         // BOTH LIVE UNDER output_config, which is why this is assembled rather than assigned.
         // `format` used to be set directly and effort has to join it in the same object — two

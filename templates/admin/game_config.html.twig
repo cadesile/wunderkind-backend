@@ -25,7 +25,7 @@
                 {id: 'player-dev', kind: 'Gameplay',  label: 'Player development',     icon: 'chart-column',    sections: ['development', 'coach', 'xp', 'physical-degradation', 'retirement', 'dev-tick', 'reputation', 'tuning-youth-development', 'tuning-player-reputation']},
                 {id: 'morale',     kind: 'Gameplay',  label: 'Morale & relationships', icon: 'heart-pulse',     sections: ['morale-motivation', 'morale-effects', 'morale-promises', 'squad-role-morale', 'morale', 'morale-social', 'staff-morale', 'clique', 'bonds', 'tuning-relationships']},
                 {id: 'match',      kind: 'Gameplay',  label: 'Match & squad',          icon: 'circle-dot',      sections: ['injury', 'cards', 'playing-style', 'squad', 'squad-roles', 'tuning-injuries-cards']},
-                {id: 'club-life',  kind: 'Gameplay',  label: 'Events & club life',     icon: 'zap',             sections: ['incidents', 'sacking', 'guardian', 'inbox', 'cooldowns', 'competition-history', 'pyramid-news', 'facility-build', 'facility-morale', 'tuning-manager-mandate']},
+                {id: 'club-life',  kind: 'Gameplay',  label: 'Events & club life',     icon: 'zap',             sections: ['incidents', 'sacking', 'guardian', 'inbox', 'cooldowns', 'competition-history', 'pyramid-news', 'facility-build', 'facility-morale', 'tuning-manager-mandate', 'personal-assistant']},
                 {id: 'system',     kind: 'System',    label: 'System',                 icon: 'cpu',             sections: ['debug']},
                 {id: 'other',      kind: 'System',    label: 'Other',                  icon: 'ellipsis',        sections: []},
             ] %}
@@ -1385,6 +1385,22 @@
                     </p>
                     <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
                         <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">DEVELOPMENT TICK FREQUENCY (WEEKS)</span><span class="bmc-setting__help">How many in-game weeks between each development pass. Default: 1</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="developmentTickFrequencyWeeks" value="{{ config.developmentTickFrequencyWeeks }}" data-saved="{{ config.developmentTickFrequencyWeeks }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="development tick frequency (weeks)"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Personal Assistant advice (2026-11-27) ─────────────────── #}
+            <div class="bmc-card cfg-section" data-domain="club" data-section-id="personal-assistant" data-group="club-dev">
+                <div class="bmc-card__head"><i data-lucide="sliders-horizontal"></i><span class="bmc-card__title">PERSONAL ASSISTANT ADVICE</span></div>
+                <div class="bmc-card__body">
+                    <p class="bmc-bodytext">
+                        Limits on the paid AI wording behind Personal Assistant advice. The app always shows its own
+                        template advice first; these only control the AI rewording on top. Personalities are edited under
+                        World &rsaquo; Personal assistants.
+                    </p>
+                    <div class="bmc-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">AI CALLS PER OWNER PER DAY</span><span class="bmc-setting__help">Paid AI wording calls one owner may make per day. Read on every request. 0 turns AI wording off (the app keeps its templates). Default 20.</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="paAdviceDailyCallLimit" value="{{ config.paAdviceDailyCallLimit }}" data-saved="{{ config.paAdviceDailyCallLimit }}" data-kind="int" data-min="0" inputmode="numeric" aria-label="pa advice daily call limit"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
+                        <div class="bmc-setting" data-bmc-setting><div class="bmc-setting__text"><span class="bmc-setting__label">AI TIMEOUT (SECONDS)</span><span class="bmc-setting__help">How long the server waits for the AI provider before giving up. 1 to 30. Default 8.</span><span class="bmc-setting__hint" data-bmc-hint data-default=""></span></div><div class="bmc-setting__ctl"><label class="bmc-num bmc-num--104"><input name="paAdviceTimeoutSeconds" value="{{ config.paAdviceTimeoutSeconds }}" data-saved="{{ config.paAdviceTimeoutSeconds }}" data-kind="int" data-min="1" inputmode="numeric" aria-label="pa advice timeout seconds"></label><button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button></div></div>
                     </div>
                 </div>
             </div>
