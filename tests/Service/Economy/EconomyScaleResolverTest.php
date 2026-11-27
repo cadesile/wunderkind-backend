@@ -311,12 +311,12 @@ class EconomyScaleResolverTest extends TestCase
             'EN' => $this->profile('EN', isBaseline: true),
         ]);
 
-        // 114m / 331m = 0.3444 -> 3444 bp -> £3,444,000.
+        // 114m / 331m of £10m = £3,444,100 at ppm precision, not the coarser bp share.
         self::assertSame(3444, $resolver->seasonInvestmentTierShareBp('EN', 2));
-        self::assertSame(344_400_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
-        // 215k / 331m = 0.00065 -> 6 bp -> £6,000.
+        self::assertSame(344_410_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
+        // 215k / 331m of £10m = £6,490 at ppm precision (6.5 bp; rounding to 6 bp would have cost 8%).
         self::assertSame(6, $resolver->seasonInvestmentTierShareBp('EN', 8));
-        self::assertSame(600_000, $resolver->seasonInvestmentCeilingPence('EN', 8, 1));
+        self::assertSame(649_000, $resolver->seasonInvestmentCeilingPence('EN', 8, 1));
     }
 
     public function testTheCountryFactorStillAppliesOnTop(): void
@@ -328,7 +328,7 @@ class EconomyScaleResolverTest extends TestCase
 
         // Scotland tier 1 = 10% of England tier 1; tier 4 reads row 4, not row 8.
         self::assertSame(100_000_000, $resolver->seasonInvestmentCeilingPence('SC', 1, 1));
-        self::assertSame(6_250_000, $resolver->seasonInvestmentCeilingPence('SC', 4, 1));
+        self::assertSame(6_253_700, $resolver->seasonInvestmentCeilingPence('SC', 4, 1));
     }
 
     public function testAnUnauthoredTurnoverTableFallsBackToTheTierFactor(): void

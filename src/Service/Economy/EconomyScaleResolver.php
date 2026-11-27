@@ -227,7 +227,15 @@ final class EconomyScaleResolver
         }
 
         $countryScaled = intdiv($base * $this->countryFactorBp($country), self::BP);
-        $tierScaled    = intdiv($countryScaled * $this->seasonInvestmentTierShareBp($country, $tier), self::BP);
+        [$own, $top]   = $this->seasonInvestmentTurnoverPair($country, $tier);
+
+        // Parts per million, not basis points: tier 8 is 6.5 bp of tier 1, and rounding that to
+        // 6 bp would cut its ceiling by 8%. Not the raw ratio either: base pence x turnover pence
+        // overflows a 64-bit int (£10m x £331m is 3.3e19). ppm keeps both under it for any base
+        // below about £9bn.
+        $tierScaled = $top > 0
+            ? intdiv($countryScaled * intdiv($own * 1_000_000, $top), 1_000_000)
+            : intdiv($countryScaled * $this->seasonInvestmentTierShareBp($country, $tier), self::BP);
 
         return intdiv($tierScaled * $this->inflationIndexBp($season), self::BP);
     }
@@ -247,18 +255,34 @@ final class EconomyScaleResolver
      */
     public function seasonInvestmentTierShareBp(string $country, int $tier): int
     {
-        $scale     = $this->resolve($country, $tier);
-        $turnovers = $this->gameConfigRepository->getConfig()->getEconomyBaselineTurnoverPence();
-        $top       = (int) ($turnovers[0] ?? 0);
-        $own       = $scale->baselineTurnoverPence;
+        [$own, $top] = $this->seasonInvestmentTurnoverPair($country, $tier);
 
-        if ($top <= 0 || $own <= 0) {
-            return $scale->tierFactorBp;
+        if ($top <= 0) {
+            return $this->resolve($country, $tier)->tierFactorBp;
         }
 
-        // A lower tier should never out-earn tier 1, but a typo could make it do so; the base
-        // is the MAXIMUM by ruling, so the share is capped at parity rather than trusted.
-        return min(self::BP, intdiv($own * self::BP, $top));
+        return intdiv($own * self::BP, $top);
+    }
+
+    /**
+     * [this tier's baseline turnover, tier 1's], or [0, 0] when either is unauthored.
+     *
+     * A lower tier should never out-earn tier 1, but a typo could make it do so; the base is the
+     * MAXIMUM by ruling, so this tier's figure is capped at tier 1's rather than trusted.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function seasonInvestmentTurnoverPair(string $country, int $tier): array
+    {
+        $turnovers = $this->gameConfigRepository->getConfig()->getEconomyBaselineTurnoverPence();
+        $top       = (int) ($turnovers[0] ?? 0);
+        $own       = $this->resolve($country, $tier)->baselineTurnoverPence;
+
+        if ($top <= 0 || $own <= 0) {
+            return [0, 0];
+        }
+
+        return [min($own, $top), $top];
     }
 
     /**
