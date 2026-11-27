@@ -19,24 +19,20 @@ class StarterConfig
     #[ORM\Column(type: 'integer')]
     private int $id = 1;
 
-    /** Starting balance in pence. Default: £50,000 = 5,000,000p */
-    #[ORM\Column(type: 'integer')]
-    private int $startingBalance = 5_000_000;
 
     /**
      * Range the ACCOUNT's opening credit is drawn from, in pence. Default £5,000,000-£6,000,000.
      *
-     * A DIFFERENT THING FROM $startingBalance ABOVE, and conflating the two is the mistake this
-     * comment exists to prevent. $startingBalance is the CLUB's transfer kitty — device-owned,
-     * reassigned absolutely by every sync, and spent on players. This pair is the ACCOUNT's
-     * UserLedger credit: backend-owned, durable, and what land and stadiums are actually
-     * charged against. One player has many clubs and exactly one account balance.
+     * This is the ACCOUNT's UserLedger credit: backend-owned, durable, and what land, stadiums
+     * and the FUND step's club funding are charged against. One player has many clubs and
+     * exactly one account balance. (A separate club "starting balance" kitty used to sit here;
+     * it was removed 2026-11-27, since a club now opens with what its owner funds it with.)
      *
      * A RANGE RATHER THAN A VALUE because every account getting the identical opening figure
      * makes the first decision — which town can I afford — the same for everybody. The default
      * span matches what the prototype's land step was built against.
      *
-     * BIGINT, not integer like $startingBalance. £6,000,000 is 600,000,000 pence, which fits a
+     * BIGINT, not integer. £6,000,000 is 600,000,000 pence, which fits a
      * 4-byte int, but the ceiling is admin-editable and 4 bytes cap at £21,474,836 — the same
      * trap that made Version20261103230000 necessary for user_ledger. Not worth re-learning.
      */
@@ -580,12 +576,8 @@ class StarterConfig
 
     public function getId(): int { return $this->id; }
 
-    public function getStartingBalance(): int { return $this->startingBalance; }
-    public function setStartingBalance(int $v): static { $this->startingBalance = $v; return $this; }
 
     /** Virtual property for the admin form — accepts/returns pounds; storage remains pence. */
-    public function getStartingBalancePounds(): int { return (int) round($this->startingBalance / 100); }
-    public function setStartingBalancePounds(int $pounds): static { $this->startingBalance = $pounds * 100; return $this; }
 
     public function getMaxEnrichmentRequestsPerUser(): int { return $this->maxEnrichmentRequestsPerUser; }
 

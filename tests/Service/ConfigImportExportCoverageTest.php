@@ -171,13 +171,13 @@ class ConfigImportExportCoverageTest extends TestCase
 
         $errors = ConfigImportExportService::applyEntity($starter, [
             'starterReputationTier' => 'nonsense',
-            'startingBalance'       => 12_345,
+            'starterPlayerCount'    => 23,
         ]);
 
         self::assertCount(1, $errors);
         self::assertStringContainsString('starterReputationTier', $errors[0]);
         self::assertStringContainsString('nonsense', $errors[0]);
-        self::assertSame(12_345, $starter->getStartingBalance());
+        self::assertSame(23, $starter->getStarterPlayerCount());
     }
 
     /**

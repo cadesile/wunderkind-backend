@@ -82,7 +82,7 @@ class ClubFoundingOnPlotTest extends KernelTestCase
         // every client that does not know about locationId keeps functioning.
         $this->assertNull($club->getHomeLocation());
         $this->assertSame('Groundless FC', $club->getName());
-        $this->assertGreaterThan(0, $club->getBalance(), 'the starter balance is still granted');
+        $this->assertSame(0, $club->getBalance(), 'a club opens at £0: its money comes from the owner at the FUND step');
     }
 
     public function testNameNormalisedIsMaintainedByTheEntity(): void
