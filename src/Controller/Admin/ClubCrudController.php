@@ -10,6 +10,7 @@ use App\Entity\SeasonRatingsSnapshot;
 use App\Entity\SeasonRecord;
 use App\Entity\SeasonSnapshot;
 use App\Entity\Sponsor;
+use App\Entity\IllicitActivity;
 use App\Entity\SyncRecord;
 use App\Entity\Transfer;
 use App\Admin\BatchSelection;
@@ -162,6 +163,8 @@ class ClubCrudController extends AbstractCrudController
             // longer backs any board (see its own deprecation note); it is kept on the page
             // alongside, labelled legacy, so an admin can still compare the two.
             'dividendsPence'     => $this->userLedgerRepository->getTotalDividendsByClub($club),
+            // Cheats the device reported (PA fake sponsors, 2026-11-27): a count + link only.
+            'illicitActivityCount' => $this->em->getRepository(IllicitActivity::class)->count(['club' => $club]),
         ]);
     }
 

@@ -60,9 +60,9 @@ Sign-in is required (`IS_AUTHENTICATED_FULLY`). The request is owner-scoped, so 
 
 | Field | Rule |
 |---|---|
-| `topic` | `finances`, `squad`, `transfers` or `general`. Any other value returns 422. |
+| `topic` | `finances`, `squad`, `transfers`, `general` or `invest` (the ADVICE chips), or the hidden `sponsor_pitch` (only the app's sham-sponsor pitch dialog sends it; it answers `unavailable` / `disabled` while Game Config `paCheatsEnabled` is off, before the cap is touched). Any other value returns 422. |
 | `locale` | Only `en` is supported. Any other language code returns `unavailable` / `unsupported_locale`. |
-| `findings[].code` | `SUPPORTER_CRISIS`, `FINANCIAL_BLEED`, `5_STAR_UNDERPERFORMANCE`, `DRESSING_ROOM_SCHISM`, `STAFF_MORALE_SLUMP`, `PHYSICAL_BURNOUT`, `ACADEMY_OVER_SATURATION`, `GAFFER_IDEOLOGY_DEADLOCK`, `SCOUTING_PRIMER`, `FINANCE_SUMMARY`, `SQUAD_SUMMARY`, `TRANSFER_SUMMARY`, `GENERAL_SUMMARY`. Unknown codes are dropped. |
+| `findings[].code` | `SUPPORTER_CRISIS`, `FINANCIAL_BLEED`, `5_STAR_UNDERPERFORMANCE`, `DRESSING_ROOM_SCHISM`, `STAFF_MORALE_SLUMP`, `PHYSICAL_BURNOUT`, `ACADEMY_OVER_SATURATION`, `GAFFER_IDEOLOGY_DEADLOCK`, `SCOUTING_PRIMER`, `FINANCE_SUMMARY`, `SQUAD_SUMMARY`, `TRANSFER_SUMMARY`, `GENERAL_SUMMARY`, `INVEST_SUMMARY`, and for `sponsor_pitch` `SPONSOR_PITCH_BLEED`, `SPONSOR_PITCH_TABLE`, `SPONSOR_PITCH_ACCEPTED`, `SPONSOR_PITCH_DECLINED`. Unknown codes are dropped. |
 | `findings[].severity` | `low`, `medium` or `high`. Anything else becomes `medium`. The list is sorted highest severity first and capped at 6. |
 | `findings[].facts` | Keys are camelCase identifiers, up to 40 characters. Values are numbers, booleans, ISO dates, or lowercase tokens `[a-z0-9_-]{1,24}`. Anything else is dropped, and each finding keeps at most 10 facts. **Money is in minor units** of `context.currency`. |
 | `context` | `clubName` (control characters and brackets are stripped, then it's cut to 60 characters), `tier` (1 to 20), `gameDate` (ISO date), `currency` (ISO 4217). |
@@ -73,7 +73,7 @@ Sign-in is required (`IS_AUTHENTICATED_FULLY`). The request is owner-scoped, so 
 ```json
 200 { "status": "ok", "personalityId": "pa-marcus", "message": "Boss, six weeks of runway. …" }
 200 { "status": "unavailable", "reason": "rate_limited", "retryAfterSeconds": 3600 }
-200 { "status": "unavailable", "reason": "provider_error | timeout | not_configured | unsupported_locale" }
+200 { "status": "unavailable", "reason": "provider_error | timeout | not_configured | unsupported_locale | disabled" }
 404 { "error": "unknown_personality" }
 413 { "error": "payload_too_large" }
 422 { "error": "invalid_topic | invalid_personality | invalid_locale | invalid_json" }
@@ -126,3 +126,8 @@ The prompt is built in three layers:
 
 The findings go in the user turn inside `<club_data>`, which is marked as data. The output is held to a
 `{ "message": string }` schema. An empty reply, or one over 500 characters, counts as `provider_error`.
+
+For `sponsor_pitch` only, a fourth paragraph sits before the restated rules: the PA is pitching a sham
+sponsorship deal, a cheat inside the game, so it must talk only in game terms, never name the company, and never
+describe real-world fraud, laundering or ways to avoid regulators. Every other topic's system prompt is unchanged,
+so existing cached replies stay valid.

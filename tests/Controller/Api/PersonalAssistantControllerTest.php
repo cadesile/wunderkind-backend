@@ -35,6 +35,7 @@ final class PersonalAssistantControllerTest extends WebTestCase
     private FakePaAdviceGenerator $generator;
     private string $userId = '';
     private int $savedLimit = 20;
+    private bool $savedCheats = false;
 
     protected function setUp(): void
     {
@@ -44,6 +45,7 @@ final class PersonalAssistantControllerTest extends WebTestCase
 
         $this->purge();
         $this->savedLimit = $this->config()->getPaAdviceDailyCallLimit();
+        $this->savedCheats = $this->config()->isPaCheatsEnabled();
 
         $user = new User(self::EMAIL_PREFIX . bin2hex(random_bytes(5)) . '@test.local');
         $user->setPassword('x');
@@ -66,6 +68,7 @@ final class PersonalAssistantControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->setLimit($this->savedLimit);
+        $this->setCheats($this->savedCheats);
         $this->purge();
         parent::tearDown();
     }
@@ -88,6 +91,70 @@ final class PersonalAssistantControllerTest extends WebTestCase
         self::assertSame(['id', 'slug', 'name', 'gender', 'pronoun', 'appearanceSeed', 'appearanceOverrides', 'description', 'tone', 'outOfOfficeMessage', 'sortOrder'], array_keys($mine));
         self::assertSame('dry', $mine['tone']);
         self::assertStringNotContainsString('SECRET-VOICE-BRIEF', (string) $this->client->getResponse()->getContent());
+    }
+
+    public function testGameConfigServesTheCheatSwitch(): void
+    {
+        $this->setCheats(false);
+        $this->client->request('GET', '/api/game-config');
+        self::assertFalse(json_decode((string) $this->client->getResponse()->getContent(), true)['paCheatsEnabled'] ?? null);
+
+        $this->setCheats(true);
+        self::ensureKernelShutdown();
+        $this->client = static::createClient();
+        $this->client->request('GET', '/api/game-config');
+        self::assertTrue(json_decode((string) $this->client->getResponse()->getContent(), true)['paCheatsEnabled'] ?? null);
+    }
+
+    public function testAFreshGameConfigHasCheatsOff(): void
+    {
+        self::assertFalse((new GameConfig())->isPaCheatsEnabled());
+    }
+
+    // ── PA cheats: the hidden sponsor_pitch topic (2026-11-27) ────────────
+
+    public function testTheSponsorPitchIsDisabledWhileTheSwitchIsOffAndCostsNothing(): void
+    {
+        $this->setCheats(false);
+        $this->setLimit(1);
+        $this->advise(self::pitch());
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(['status' => 'unavailable', 'reason' => 'disabled'], $this->json());
+        self::assertSame([], $this->generator->calls);
+
+        // The refused pitch spent nothing: the one allowed call is still there.
+        $this->advise();
+        self::assertSame('ok', $this->json()['status'] ?? null);
+    }
+
+    public function testTheSponsorPitchIsWordedInGameTermsWhileTheSwitchIsOn(): void
+    {
+        $this->setCheats(true);
+        $this->advise(self::pitch());
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('ok', $this->json()['status'] ?? null);
+        self::assertCount(1, $this->generator->calls);
+        $call = $this->generator->calls[0];
+        self::assertStringContainsString('sham sponsorship deal', $call['system']);
+        self::assertStringContainsString('Never describe real-world ways to commit fraud', $call['system']);
+        self::assertStringContainsString('You are raising a quiet sponsorship arrangement', $call['user']);
+        self::assertStringContainsString('SPONSOR_PITCH_BLEED', $call['user']);
+    }
+
+    public function testThePitchFramingNeverReachesOtherTopics(): void
+    {
+        $this->setCheats(true);
+        $this->advise();
+        $this->advise(['topic' => 'invest', 'findings' => [['code' => 'INVEST_SUMMARY', 'severity' => 'low', 'facts' => ['currentBalance' => 120000000, 'lowestFacility' => 'training_ground', 'ownerInvestedThisSeason' => false]]]]);
+
+        self::assertCount(2, $this->generator->calls);
+        foreach ($this->generator->calls as $call) {
+            self::assertStringNotContainsString('sham', $call['system']);
+        }
+        self::assertStringContainsString('where to invest in the club', $this->generator->calls[1]['user']);
+        self::assertStringContainsString('INVEST_SUMMARY', $this->generator->calls[1]['user']);
     }
 
     // ── Advice ────────────────────────────────────────────────────────────
@@ -322,6 +389,15 @@ final class PersonalAssistantControllerTest extends WebTestCase
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    /** @return array<string, mixed> a sham-sponsor pitch request */
+    private static function pitch(): array
+    {
+        return [
+            'topic'    => 'sponsor_pitch',
+            'findings' => [['code' => 'SPONSOR_PITCH_BLEED', 'severity' => 'high', 'facts' => ['weeklyPayment' => 1250000, 'contractWeeks' => 38, 'suspicion' => 64, 'projectedBalanceInFourWeeks' => -9000000]]],
+        ];
+    }
+
     /** @return array<string, mixed> a request override whose only change is the runway figure */
     private static function runway(int $weeks): array
     {
@@ -373,6 +449,13 @@ final class PersonalAssistantControllerTest extends WebTestCase
         $conn = self::getContainer()->get(Connection::class);
         $this->config();
         $conn->executeStatement('UPDATE game_config SET pa_advice_daily_call_limit = ?', [$limit]);
+    }
+
+    private function setCheats(bool $on): void
+    {
+        $conn = self::getContainer()->get(Connection::class);
+        $this->config();
+        $conn->executeStatement('UPDATE game_config SET pa_cheats_enabled = ?', [$on ? 'true' : 'false']);
     }
 
     private function purge(): void

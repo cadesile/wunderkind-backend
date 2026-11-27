@@ -61,6 +61,7 @@ class SyncService
         private readonly \App\Service\Economy\EconomyConfigPublisher $economyConfigPublisher,
         private readonly \App\Service\Economy\LeagueSizeResolver      $leagueSizeResolver,
         private readonly \App\Service\Economy\LeaguePayoutResolver    $leaguePayoutResolver,
+        private readonly \App\Service\IllicitActivity\IllicitActivitySyncProcessor $illicitActivityProcessor,
     ) {}
 
     /**
@@ -122,6 +123,7 @@ class SyncService
                 'relationships'       => $request->relationships,
                 'promises'            => $request->promises,
                 'excursions'          => $request->excursions,
+                'illicitActivity'     => $request->illicitActivity,
             ],
         );
         if ($request->log !== null) {
@@ -129,6 +131,9 @@ class SyncService
             $this->checkDebugLogThresholds($request->log);
         }
         $this->em->persist($syncRecord);
+
+        // Cheats the device reports (2026-11-27). Record only: no balance, ledger or owner change.
+        $this->illicitActivityProcessor->process($club, $request->illicitActivity, $syncRecord, $syncRecord->getServerTimestamp());
 
         // Centralize dividend draws reported in this payload's ledger onto the owning User —
         // see UserLedgerService. Not skipped on rollback: same precedent as Transfer/

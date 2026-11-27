@@ -605,6 +605,15 @@ class GameConfig
     #[ORM\Column(type: 'integer', options: ['default' => 20])]
     private int $paAdviceDailyCallLimit = 20;
 
+    /**
+     * PA cheats (Courtney, 2026-11-27): lets the Personal Assistant pitch sham sponsorship deals,
+     * and lets the hidden `sponsor_pitch` advice topic reach the AI. Sent to the app. Off stops
+     * new pitches; deals already signed keep paying on the device until they end.
+     * Default: false
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $paCheatsEnabled = false;
+
     /** Seconds the server waits for the AI provider before answering `timeout`. Default: 8 */
     #[ORM\Column(type: 'integer', options: ['default' => 8])]
     private int $paAdviceTimeoutSeconds = 8;
@@ -884,6 +893,8 @@ class GameConfig
     public function getPlayerContractRenewalCooldownWeeks(): int { return $this->playerContractRenewalCooldownWeeks; }
     public function setPlayerContractRenewalCooldownWeeks(int $v): static { $this->playerContractRenewalCooldownWeeks = max(0, $v); return $this; }
 
+    public function isPaCheatsEnabled(): bool { return $this->paCheatsEnabled; }
+    public function setPaCheatsEnabled(bool $v): void { $this->paCheatsEnabled = $v; }
     public function getPaAdviceDailyCallLimit(): int { return $this->paAdviceDailyCallLimit; }
     public function setPaAdviceDailyCallLimit(int $v): void { $this->paAdviceDailyCallLimit = max(0, $v); }
     public function getPaAdviceTimeoutSeconds(): int { return $this->paAdviceTimeoutSeconds; }
