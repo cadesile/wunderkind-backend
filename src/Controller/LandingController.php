@@ -12,6 +12,7 @@ use App\Service\Competition\CupResultsBoardService;
 use App\Service\Competition\CupTelemetryService;
 use App\Service\Leaderboard\PeriodAwardsBoardService;
 use App\Service\LiveTelemetryService;
+use App\Service\Location\OwnedPlotsMapService;
 use App\Service\OwnerSpotlightService;
 use App\Service\WorldOverviewService;
 use App\Service\YouTubeFeedService;
@@ -46,6 +47,7 @@ class LandingController extends AbstractController
         private readonly PeriodAwardsBoardService $periodAwardsBoardService,
         private readonly CupResultsBoardService $cupResultsBoardService,
         private readonly CupTelemetryService $cupTelemetryService,
+        private readonly OwnedPlotsMapService $ownedPlotsMapService,
     ) {}
 
     #[Route('/', name: 'landing_home', methods: ['GET'])]
@@ -87,6 +89,9 @@ class LandingController extends AbstractController
             // reads — see CupTelemetryService for the limits and for why a short cache
             // would still be safe if traffic ever warrants one.
             'cups' => $this->cupTelemetryService->getBand(),
+            // Towns with an owned plot, their owners and clubs, for the #plot-map world map.
+            // Live query behind a 10-minute cache, the ownerSpotlight pattern.
+            'plotMap' => $this->ownedPlotsMapService->getMap(),
         ]);
     }
 

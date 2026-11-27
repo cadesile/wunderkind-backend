@@ -2203,3 +2203,45 @@ var Scenes = (function () {
     tick();
     setInterval(tick, 1000);
 }());
+
+/* Plot map (#plot-map): tap a marker to open its owners popover, tap it again or
+   anywhere else to close. Hover and keyboard focus are handled in CSS; this exists
+   because iOS Safari never focuses a button on tap. One popover open at a time. */
+(function () {
+    var map = document.querySelector('.pmap-map');
+    if (!map) return;
+
+    // On a phone the map is wider than its frame and scrolls; start it on Europe, where
+    // most plots are, rather than on the Pacific.
+    var frame = map.parentElement;
+    if (frame && frame.scrollWidth > frame.clientWidth) {
+        frame.scrollLeft = Math.max(0, map.offsetWidth * 0.5 - frame.clientWidth / 2);
+    }
+
+    function closeAll(except) {
+        map.querySelectorAll('.pmap-dot.is-open').forEach(function (d) {
+            if (d !== except) {
+                d.classList.remove('is-open');
+                d.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    map.addEventListener('click', function (e) {
+        var dot = e.target.closest('.pmap-dot');
+        if (!dot) { closeAll(null); return; }
+        // A tap inside the open popover (to read or scroll it) must not close it.
+        if (e.target.closest('.pmap-pop') && dot.classList.contains('is-open')) return;
+        closeAll(dot);
+        var open = dot.classList.toggle('is-open');
+        dot.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!map.contains(e.target)) closeAll(null);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+}());
