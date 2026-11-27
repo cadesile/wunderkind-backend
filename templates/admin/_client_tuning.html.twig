@@ -15,7 +15,7 @@
             {% if def.type == 'bool' %}
                 <div class="bmc-check" style="margin:6px 0">
                     <input type="hidden" name="clientTuning[{{ key }}]" value="0">
-                    <input type="checkbox" id="ct-{{ key }}" name="clientTuning[{{ key }}]" value="1" {{ value ? 'checked' : '' }}>
+                    <input type="checkbox" id="ct-{{ key }}" name="clientTuning[{{ key }}]" value="1" {{ value ? 'checked' : '' }}><span class="bmc-tile" aria-hidden="true"></span>
                     <label for="ct-{{ key }}" title="{{ help }}">{{ def.label }} — <span class="opacity-75">{{ help }}</span></label>
                 </div>
             {% elseif def.type == 'json' %}
