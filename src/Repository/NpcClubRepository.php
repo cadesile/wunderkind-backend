@@ -121,6 +121,25 @@ class NpcClubRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Every NPC club in a country with its town and plot fetched in the same query, for
+     * `GET /api/initialize/land`. LEFT joins for the same reason as findByLeagueWithLand():
+     * both relations are legitimately null.
+     *
+     * @return list<NpcClub>
+     */
+    public function findByCountryWithLand(string $country): array
+    {
+        return $this->createQueryBuilder('c')
+            ->addSelect('loc', 'plot')
+            ->leftJoin('c.location', 'loc')
+            ->leftJoin('c.landPlot', 'plot')
+            ->where('c.country = :country')
+            ->setParameter('country', $country)
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return string[] every NPC club name in the given country, across all tiers */
     public function findNamesByCountry(string $country): array
     {
