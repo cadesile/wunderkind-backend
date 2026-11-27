@@ -172,6 +172,8 @@ Content-Type: application/json
     "town": "Salford",
     "region": "Greater Manchester",
     "countryCode": "EN",
+    "lat": 53.4875,
+    "lng": -2.2901,
     "claimedBy": null,
     "clubId": null,
     "claimedAt": "2026-11-03T14:20:03+00:00",

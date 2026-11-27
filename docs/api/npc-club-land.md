@@ -19,6 +19,8 @@ has no club).
       "locationId": "01a1…",
       "town": "Brindisi",
       "region": "Apulia",
+      "lat": 40.6327,
+      "lng": 17.9418,
       "plotId": "01a1…",
       "plotNumber": 1,
       "plotLandPence": 350000000,
