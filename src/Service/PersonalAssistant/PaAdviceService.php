@@ -56,17 +56,23 @@ final class PaAdviceService
             return self::unavailable('unsupported_locale');
         }
 
+        $config = $this->gameConfigRepository->getConfig();
+        // The sham-sponsor pitch dialog only exists while the PA cheat switch is on. Checked
+        // before the provider and the cap, so a refused pitch costs the owner nothing.
+        if (\in_array($request->topic, PaAdviceRequestParser::CHEAT_TOPICS, true) && !$config->isPaCheatsEnabled()) {
+            return self::unavailable(PaAdviceUnavailableException::DISABLED);
+        }
+
         if (!$this->generator->isConfigured()) {
             return self::unavailable('not_configured');
         }
 
-        $config = $this->gameConfigRepository->getConfig();
         $limit  = $config->getPaAdviceDailyCallLimit();
         if ($limit <= 0) {
             return self::unavailable('rate_limited');
         }
 
-        $system   = $this->promptBuilder->system($pa);
+        $system   = $this->promptBuilder->system($pa, $request->topic);
         $cacheKey = $this->replyCache->key($system, $request);
         $cached   = $this->replyCache->get($cacheKey);
         if ($cached !== null) {
