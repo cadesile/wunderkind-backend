@@ -200,7 +200,7 @@ class LegacyNewGameFlowTest extends WebTestCase
 
         self::assertNotNull($club);
         self::assertNull($club->getHomeLocation(), 'a club founded the old way has no plot');
-        self::assertGreaterThan(0, $club->getBalance(), 'the starter balance is still granted');
+        self::assertSame(0, $club->getBalance(), 'a club opens at £0: its money comes from the owner at the FUND step');
     }
 
     public function testTheNewClubIsNotChargedForLand(): void

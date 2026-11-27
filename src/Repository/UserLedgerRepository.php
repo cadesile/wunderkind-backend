@@ -120,7 +120,8 @@ class UserLedgerRepository extends ServiceEntityRepository
      * SyncRecordRepository::findTopAttendanceSince().
      *
      * Only owners who actually hold ledger entries are returned — an owner with no
-     * recorded dividend draw is absent, not listed at zero. The ledger holds
+     * recorded dividend draw is absent, not listed at zero. Owners with no club are
+     * absent too, however rich (see the SQL comment). The ledger holds
      * client-reported draws only, so this is deliberately NOT the same population as
      * "every user who owns a club".
      *
@@ -148,6 +149,16 @@ class UserLedgerRepository extends ServiceEntityRepository
                      SELECT 1 FROM user_ledger d
                       WHERE d.user_id = l.user_id
                         AND d.type = :dividendDraw
+                 )
+                 -- And to owners who hold a club RIGHT NOW (Courtney, 2026-11-27). The go-live
+                 -- buyout deletes every club and credits its owner, so without this the board
+                 -- would fill with rich owners showing 0 clubs until they buy a plot and
+                 -- found a new one. Spoof clubs (competition fillers) do not count, the same
+                 -- rule ClubRepository::findByUserIds() applies to the clubs listed.
+                 AND EXISTS (
+                     SELECT 1 FROM club c
+                      WHERE c.user_id = l.user_id
+                        AND c.is_spoof = false
                  )
                  ORDER BY l.user_id, l.recorded_at DESC, l.id DESC
              ) AS latest

@@ -61,6 +61,7 @@ class UserCrudController extends AbstractCrudController
         private readonly CsvExporter $csvExporter,
         private readonly \Doctrine\ORM\EntityManagerInterface $em,
         private readonly \App\Service\Notification\OwnerNoticeService $ownerNotices,
+        private readonly \App\Service\StartingGrantService $startingGrant,
         private readonly AccountDeletionService $accountDeletion,
         private readonly AccountDeletionGuard $deletionGuard,
         private readonly \Psr\Log\LoggerInterface $logger,
@@ -611,6 +612,8 @@ class UserCrudController extends AbstractCrudController
             'sales'          => $this->saleRepository->findLiveForClubs(
                 array_map(static fn (Club $c): string => (string) $c->getId(), $clubs),
             ),
+            // "Gift starter balance" (UserStarterGiftController): what a gift would pay now.
+            'starterGift'    => $this->startingGrant->giftPreview($user),
             // The Notify form (UserNotifyController): go-live template prefilled from this
             // account, how many devices a push would reach, and notices already sent.
             'notify'         => [

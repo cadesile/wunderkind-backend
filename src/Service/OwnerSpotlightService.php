@@ -9,6 +9,7 @@ use App\Enum\Country;
 use App\Repository\ClubRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\Facility\FacilityConfigBuilder;
+use App\Service\Location\RichListPlotService;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -34,6 +35,14 @@ use Symfony\Contracts\Cache\ItemInterface;
  * deliberately not a ledger entry (explicit product decision), so this board
  * reflects draws the client has actually reported and nothing else — it stays
  * sparse until clients emit them at volume.
+ *
+ * ONLY OWNERS WHO HOLD A CLUB are listed (Courtney, 2026-11-27): the go-live buyout leaves
+ * many rich owners with no club until they buy a plot, and a board of "0 clubs" cards reads
+ * as broken. The filter is in UserLedgerRepository::findTopOwnersByBalance(), so the board
+ * still fills to OWNER_LIMIT from the owners who qualify.
+ *
+ * Each owner also carries their live plots (RichListPlotService): town, land value,
+ * sell-back figure and time left before the inactivity rule takes the plot.
  */
 class OwnerSpotlightService
 {
@@ -63,11 +72,18 @@ class OwnerSpotlightService
      */
     public const CLUBS_PER_OWNER = 5;
 
+    /**
+     * How many plots are listed per owner. The game expects two at most (one per save slot),
+     * so this only bites on an account an admin has given more.
+     */
+    public const PLOTS_PER_OWNER = 3;
+
     public function __construct(
         private readonly ClubRepository $clubRepository,
         private readonly UserLedgerRepository $userLedgerRepository,
         private readonly FacilityConfigBuilder $facilityConfigBuilder,
         private readonly CacheInterface $cache,
+        private readonly RichListPlotService $plotService,
     ) {}
 
     /**
@@ -76,16 +92,52 @@ class OwnerSpotlightService
      *     ownerAppearance: ?array, drawnPence: int, sharePct: float, clubCount: int,
      *     stadiumConfig: ?array,
      *     clubs: array<array{name: string, division: string, tier: ?int, countryCode: ?string,
-     *         countryLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>
+     *         countryLabel: ?string, homeKitConfig: ?array, awayKitConfig: ?array, badgeConfig: ?array}>,
+     *     plotCount: int,
+     *     plots: array<array{town: string, region: string, countryCode: string, countryLabel: ?string,
+     *         clubName: ?string, landValuePence: int, sellBackPence: int, reclaimAtTs: int,
+     *         timeLeftLabel: string, timeLeftUrgent: bool}>
      * }>
      */
-    public function getTopOwners(): array
+    public function getTopOwners(?int $now = null): array
     {
-        return $this->cache->get(self::CACHE_KEY, function (ItemInterface $item): array {
+        $owners = $this->cache->get(self::CACHE_KEY, function (ItemInterface $item): array {
             $item->expiresAfter(self::TTL);
 
             return $this->build();
         });
+
+        // The countdown is worked out per request, AFTER the cache: the board is cached for
+        // ten minutes, and a cached "1d left" would otherwise outlive the deadline it names.
+        $now ??= time();
+        foreach ($owners as &$owner) {
+            foreach ($owner['plots'] ?? [] as $i => $plot) {
+                $owner['plots'][$i] += self::timeLeft($plot['reclaimAtTs'] - $now);
+            }
+        }
+        unset($owner);
+
+        return $owners;
+    }
+
+    /**
+     * "23d" / "5h" / "Due", plus an urgent flag for the last three days so the row can warn.
+     *
+     * Whole days are rounded DOWN, so the label never promises more time than is left.
+     *
+     * @return array{timeLeftLabel: string, timeLeftUrgent: bool}
+     */
+    public static function timeLeft(int $seconds): array
+    {
+        if ($seconds <= 0) {
+            return ['timeLeftLabel' => 'Due', 'timeLeftUrgent' => true];
+        }
+
+        $label = $seconds >= 86400
+            ? intdiv($seconds, 86400) . 'd'
+            : max(1, intdiv($seconds, 3600)) . 'h';
+
+        return ['timeLeftLabel' => $label, 'timeLeftUrgent' => $seconds < 3 * 86400];
     }
 
     public function clear(): void
@@ -109,6 +161,9 @@ class OwnerSpotlightService
         foreach ($this->clubRepository->findByUserIds(array_column($owners, 'userId')) as $club) {
             $clubsByOwner[(string) $club->getUser()->getId()][] = $club;
         }
+
+        // Same shape: one query for every listed owner's live plots.
+        $plotsByOwner = $this->plotService->forUsers(array_column($owners, 'userId'));
 
         // Share is of the LEADER's total, not of the board's sum: the design shows each
         // owner against the richest, so rank 1 is always 100% and the rest read as "how
@@ -148,6 +203,9 @@ class OwnerSpotlightService
                     ? $this->facilityConfigBuilder->buildStadium($allClubs[0], [])
                     : null,
                 'clubs'            => array_map(self::serializeClub(...), array_slice($allClubs, 0, self::CLUBS_PER_OWNER)),
+                // Truncated for display like clubs; plotCount is the real total.
+                'plotCount'        => count($plotsByOwner[$owner['userId']] ?? []),
+                'plots'            => array_slice($plotsByOwner[$owner['userId']] ?? [], 0, self::PLOTS_PER_OWNER),
             ];
         }
 

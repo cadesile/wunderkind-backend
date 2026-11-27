@@ -198,13 +198,21 @@ final class EconomyScaleResolver
     /**
      * What the owner may put into a club this season, in pence. 0 means the feature is off.
      *
-     * `base x countryFactor x tierFactor x inflationIndex(season)`, and this is **the only
+     * `base x countryFactor x tierShare x inflationIndex(season)`, and this is **the only
      * server-side consumer of the inflation index**. Everything else the backend publishes is
      * base-year and the app compounds it — but a ceiling has to be checked against the season
      * being claimed for, or a save twenty seasons in would be held to year-one money.
      *
-     * Uses `combinedFactorBp`, which is country x tier already composed, so the scaling chain
-     * is the same one that prices a wage. One intdiv per factor, no floats.
+     * ── THE BASE IS THE TIER 1 MAXIMUM (owner ruling, 2026-11-27) ───────────────────────────
+     *
+     * The configured base is what an owner may put into a TIER 1 club of the baseline country.
+     * Every lower tier gets the same share of it as its baseline turnover is of tier 1's:
+     * `base x turnover[tier] / turnover[1]` — see seasonInvestmentTierShareBp(). So with
+     * England at £331m / £114m / ... / £215k, a £10m base gives tier 2 about £3.4m and tier 8
+     * about £6.5k. The country factor then applies on top, as it does to every money figure,
+     * because "everything economic scales by country".
+     *
+     * One intdiv per factor, no floats.
      *
      * ZERO IS THE SHIPPED ANSWER, because `economySeasonInvestmentBasePence` ships at 0. Every
      * investment is then above the ceiling and the endpoint refuses — which is how the feature
@@ -218,9 +226,63 @@ final class EconomyScaleResolver
             return 0;
         }
 
-        $scaled = intdiv($base * $this->resolve($country, $tier)->combinedFactorBp, self::BP);
+        $countryScaled = intdiv($base * $this->countryFactorBp($country), self::BP);
+        [$own, $top]   = $this->seasonInvestmentTurnoverPair($country, $tier);
 
-        return intdiv($scaled * $this->inflationIndexBp($season), self::BP);
+        // Parts per million, not basis points: tier 8 is 6.5 bp of tier 1, and rounding that to
+        // 6 bp would cut its ceiling by 8%. Not the raw ratio either: base pence x turnover pence
+        // overflows a 64-bit int (£10m x £331m is 3.3e19). ppm keeps both under it for any base
+        // below about £9bn.
+        $tierScaled = $top > 0
+            ? intdiv($countryScaled * intdiv($own * 1_000_000, $top), 1_000_000)
+            : intdiv($countryScaled * $this->seasonInvestmentTierShareBp($country, $tier), self::BP);
+
+        return intdiv($tierScaled * $this->inflationIndexBp($season), self::BP);
+    }
+
+    /**
+     * The tier half of the season-investment ceiling, in basis points. 10000 = the full base.
+     *
+     * `turnover[tier] x 10000 / turnover[1]`, read from the BASELINE turnover table, so it is a
+     * pure tier ratio — the country half is applied separately by the caller. Tier 1 is always
+     * exactly 10000. The tier is clamped to the country's own depth first, the same way
+     * resolve() clamps it, so a 4-tier country's bottom division reads row 4.
+     *
+     * FALLS BACK TO THE TIER FACTOR when the turnover table is unauthored (tier 1 or this tier
+     * at 0). Zero turnover would otherwise make every lower tier's ceiling zero and switch the
+     * feature off by accident; the tier-factor column was the ceiling's tier scale before this
+     * ruling, so falling back to it is the "no change" direction.
+     */
+    public function seasonInvestmentTierShareBp(string $country, int $tier): int
+    {
+        [$own, $top] = $this->seasonInvestmentTurnoverPair($country, $tier);
+
+        if ($top <= 0) {
+            return $this->resolve($country, $tier)->tierFactorBp;
+        }
+
+        return intdiv($own * self::BP, $top);
+    }
+
+    /**
+     * [this tier's baseline turnover, tier 1's], or [0, 0] when either is unauthored.
+     *
+     * A lower tier should never out-earn tier 1, but a typo could make it do so; the base is the
+     * MAXIMUM by ruling, so this tier's figure is capped at tier 1's rather than trusted.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function seasonInvestmentTurnoverPair(string $country, int $tier): array
+    {
+        $turnovers = $this->gameConfigRepository->getConfig()->getEconomyBaselineTurnoverPence();
+        $top       = (int) ($turnovers[0] ?? 0);
+        $own       = $this->resolve($country, $tier)->baselineTurnoverPence;
+
+        if ($top <= 0 || $own <= 0) {
+            return [0, 0];
+        }
+
+        return [min($own, $top), $top];
     }
 
     /**

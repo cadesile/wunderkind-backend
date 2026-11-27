@@ -262,9 +262,7 @@ final class SeasonInvestmentService
 
         $tier    = $club->getCurrentLeague()?->getTier();
         $ceiling = $this->ceilingFor($club, $season);
-        $scale   = $tier !== null
-            ? $this->scaleResolver->resolve((string) $club->getCountry(), $tier)
-            : null;
+        $country = (string) $club->getCountry();
 
         return [
             'invested'       => $invested,
@@ -283,8 +281,11 @@ final class SeasonInvestmentService
             // The breakdown, so an owner can see WHY their ceiling is what it is rather than
             // being handed an unexplained number. Factors, not money — the resolved ceiling
             // above is the money.
-            'countryFactorBp' => $scale?->countryFactorBp ?? 10000,
-            'tierFactorBp'    => $scale?->tierFactorBp ?? 10000,
+            'countryFactorBp' => $tier !== null ? $this->scaleResolver->countryFactorBp($country) : 10000,
+            // The tier's share of the tier 1 maximum: turnover[tier] / turnover[1] in basis
+            // points (EconomyScaleResolver::seasonInvestmentTierShareBp). Kept under its old
+            // key so an installed app reads it unchanged.
+            'tierFactorBp'    => $tier !== null ? $this->scaleResolver->seasonInvestmentTierShareBp($country, $tier) : 10000,
             'tier'            => $tier,
             // WHAT THE DEVICE MUST ADD TO `club.balance`. The server does not and cannot do it
             // — see the class docblock. 0 on a read, and 0 on a refusal.

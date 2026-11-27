@@ -137,12 +137,9 @@ class StadiumEstimateServiceTest extends KernelTestCase
      */
     public function testTheLargestGroundIsAMultiClubAmbition(): void
     {
-        $startingBalance = self::getContainer()
-            ->get(\App\Repository\StarterConfigRepository::class)
-            ->getConfig()
-            ->getStartingBalance();
-
-        self::assertGreaterThan(0, $startingBalance);
+        // The old club starting balance (£50,000) as a fixed yardstick: the Starter config
+        // setting it used to be read from was removed on 2026-11-27.
+        $startingBalance = 5_000_000;
 
         $london = $this->service->price($this->town('london', 8_982_000, 0));
 
