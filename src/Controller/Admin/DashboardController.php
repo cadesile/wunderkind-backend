@@ -555,6 +555,12 @@ class DashboardController extends AbstractDashboardController
         $config->setGameOverFanMoraleThreshold((int) $request->request->get('gameOverFanMoraleThreshold', 30));
         $config->setLiquidatedClubDeleteAfterDays((int) $request->request->get('liquidatedClubDeleteAfterDays', 30));
         $config->setPlotDormancyReclaimDays((int) $request->request->get('plotDormancyReclaimDays', 30));
+        // Inactive account cleanup: each kept as it is when the field is not on the submitted form.
+        $config->setInactiveAccountPruneMode((string) $request->request->get('inactiveAccountPruneMode', $config->getInactiveAccountPruneMode()));
+        $config->setInactiveAccountPruneDays((int) $request->request->get('inactiveAccountPruneDays', $config->getInactiveAccountPruneDays()));
+        $config->setInactiveAccountPruneWarningDays((int) $request->request->get('inactiveAccountPruneWarningDays', $config->getInactiveAccountPruneWarningDays()));
+        $config->setInactiveAccountPruneMaxPerRun((int) $request->request->get('inactiveAccountPruneMaxPerRun', $config->getInactiveAccountPruneMaxPerRun()));
+        $config->setInactiveAccountPruneProtectedEmails((string) $request->request->get('inactiveAccountPruneProtectedEmails', $config->getInactiveAccountPruneProtectedEmails()));
         $tiersJson = $request->request->get('bankruptcyDeductionTiers', '[]');
         $tiers = json_decode($tiersJson, true);
         if (is_array($tiers)) {
