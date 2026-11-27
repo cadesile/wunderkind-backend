@@ -25,6 +25,9 @@ enum DeletionRequestStatus: string
     /** Credentials were valid but the deletion itself threw. Needs manual follow-up. */
     case FAILED = 'failed';
 
+    /** Never-played account deleted by app:users:prune-inactive after its warning period. */
+    case PRUNED_INACTIVE = 'pruned_inactive';
+
     public function label(): string
     {
         return match ($this) {
@@ -32,6 +35,7 @@ enum DeletionRequestStatus: string
             self::REJECTED_INVALID_CREDENTIALS => 'Rejected — invalid credentials',
             self::REJECTED_GUEST               => 'Rejected — guest account',
             self::FAILED                       => 'Failed — needs follow-up',
+            self::PRUNED_INACTIVE              => 'Deleted — never played, inactive',
         };
     }
 

@@ -71,6 +71,7 @@ class AdminMessageRepository extends ServiceEntityRepository
                 $qb->expr()->orX(
                     'm.targetType = :broadcast',
                     $qb->expr()->andX('m.targetType = :direct', 'm.targetClub = :club'),
+                    $qb->expr()->andX('m.targetType = :directUser', 'm.targetUser = :user'),
                     $qb->expr()->andX('m.targetType = :segmented', $qb->expr()->exists($targetedByGroup)),
                 ),
             )
@@ -84,6 +85,7 @@ class AdminMessageRepository extends ServiceEntityRepository
             ->setParameter('dynamic', AudienceCriteriaType::DYNAMIC->value)
             ->setParameter('broadcast', MessageTargetType::BROADCAST->value)
             ->setParameter('direct', MessageTargetType::DIRECT_CLUB->value)
+            ->setParameter('directUser', MessageTargetType::DIRECT_USER->value)
             ->setParameter('segmented', MessageTargetType::GROUP_SEGMENTED->value)
             ->orderBy('m.priority', 'DESC')
             ->addOrderBy('m.createdAt', 'ASC')

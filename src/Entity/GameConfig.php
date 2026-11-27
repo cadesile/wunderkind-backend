@@ -1073,6 +1073,31 @@ class GameConfig
     private int $plotDormancyReclaimDays = 30;
 
     /**
+     * Inactive account cleanup (app:users:prune-inactive): 'off', 'dry_run' or 'live'.
+     * Deletes ONLY in 'live' AND when the command is given --live; the nightly cron passes
+     * --live, so this switch is the per-environment control (dev and prod have separate DBs).
+     * Default: off
+     */
+    #[ORM\Column(length: 10, options: ['default' => 'off'])]
+    private string $inactiveAccountPruneMode = 'off';
+
+    /** Days an account must be both old and unseen before it is warned. Minimum 30. Default: 90 */
+    #[ORM\Column(type: 'integer', options: ['default' => 90])]
+    private int $inactiveAccountPruneDays = 90;
+
+    /** Days between the warning email and deletion. Minimum 1. Default: 14 */
+    #[ORM\Column(type: 'integer', options: ['default' => 14])]
+    private int $inactiveAccountPruneWarningDays = 14;
+
+    /** Most warnings sent, and most accounts deleted, in one run. Default: 50 */
+    #[ORM\Column(type: 'integer', options: ['default' => 50])]
+    private int $inactiveAccountPruneMaxPerRun = 50;
+
+    /** Emails (one per line or comma separated) that are never warned or deleted. */
+    #[ORM\Column(type: 'text', options: ['default' => ''])]
+    private string $inactiveAccountPruneProtectedEmails = '';
+
+    /**
      * The deficit ladder expressed in WEEKS OF THE CLUB'S OWN WAGE BILL. Null = app default.
      *
      * ── WHY A SECOND LADDER RATHER THAN FIXING THE FIRST ──────────────────────────────────
@@ -1243,6 +1268,32 @@ class GameConfig
 
     public function getLiquidatedClubDeleteAfterDays(): int { return $this->liquidatedClubDeleteAfterDays; }
     public function setLiquidatedClubDeleteAfterDays(int $v): static { $this->liquidatedClubDeleteAfterDays = max(0, $v); return $this; }
+
+    public const INACTIVE_PRUNE_MODES = ['off', 'dry_run', 'live'];
+
+    public function getInactiveAccountPruneMode(): string { return $this->inactiveAccountPruneMode; }
+    public function setInactiveAccountPruneMode(string $v): static
+    {
+        // Anything unrecognised falls back to off: a typo must never switch deletion on.
+        $this->inactiveAccountPruneMode = in_array($v, self::INACTIVE_PRUNE_MODES, true) ? $v : 'off';
+        return $this;
+    }
+    public function getInactiveAccountPruneDays(): int { return $this->inactiveAccountPruneDays; }
+    public function setInactiveAccountPruneDays(int $v): static { $this->inactiveAccountPruneDays = max(30, $v); return $this; }
+    public function getInactiveAccountPruneWarningDays(): int { return $this->inactiveAccountPruneWarningDays; }
+    public function setInactiveAccountPruneWarningDays(int $v): static { $this->inactiveAccountPruneWarningDays = max(1, $v); return $this; }
+    public function getInactiveAccountPruneMaxPerRun(): int { return $this->inactiveAccountPruneMaxPerRun; }
+    public function setInactiveAccountPruneMaxPerRun(int $v): static { $this->inactiveAccountPruneMaxPerRun = max(0, $v); return $this; }
+    public function getInactiveAccountPruneProtectedEmails(): string { return $this->inactiveAccountPruneProtectedEmails; }
+    public function setInactiveAccountPruneProtectedEmails(string $v): static { $this->inactiveAccountPruneProtectedEmails = trim($v); return $this; }
+
+    /** @return list<string> lower-cased */
+    public function getInactiveAccountPruneProtectedEmailList(): array
+    {
+        $parts = preg_split('/[\s,;]+/', strtolower($this->inactiveAccountPruneProtectedEmails)) ?: [];
+
+        return array_values(array_filter($parts, static fn (string $e): bool => $e !== ''));
+    }
 
     public function getPlotDormancyReclaimDays(): int { return $this->plotDormancyReclaimDays; }
     /** At least 2 days, so the one-day warning always lands before the reclaim. */

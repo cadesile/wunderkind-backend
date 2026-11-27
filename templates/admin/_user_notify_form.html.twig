@@ -1,0 +1,128 @@
+{#
+   Notify: email the owner and/or message their device (with optional push).
+   Posted to UserNotifyController. "Send test to me" mails only the signed-in admin and
+   touches no device, so a notice can be proofed against the dev database's real accounts.
+   Buttons use .bmc-btn because .bmc-shell resets plain <button> styling (see bmc-admin.css).
+#}
+{% set d = notify.defaults %}
+<div class="col-12" id="notify">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-2 px-4">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa fa-paper-plane text-muted" aria-hidden="true"></i>
+                <span class="fw-semibold">Notify</span>
+            </div>
+            <span class="text-muted small">
+                <i class="fa fa-mobile-screen me-1" aria-hidden="true"></i>
+                {{ notify.pushDevices }} push device{{ notify.pushDevices != 1 ? 's' : '' }} registered
+            </span>
+        </div>
+        <div class="card-body px-4 py-3">
+            {# Where each template value came from, so a guessed value is obvious. #}
+            <div class="d-flex flex-wrap gap-2 mb-3 small">
+                {% for key, v in d.values %}
+                    <span class="badge {{ v.value is null ? 'bg-warning-subtle text-warning border border-warning-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle' }}"
+                          title="{{ v.source }}">
+                        [{{ key }}] {{ v.value ?? 'not filled' }}
+                        <span class="opacity-75">· {{ v.source }}</span>
+                    </span>
+                {% endfor %}
+            </div>
+
+            <form method="post" action="{{ path('admin_user_notify', {id: user.id}) }}"
+                  data-notify-form
+                  data-user-email="{{ user.email }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('notify_user_' ~ user.id) }}">
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" for="notify-subject">Subject (also the device message title)</label>
+                    <input type="text" class="form-control" id="notify-subject" name="subject" maxlength="150" required value="{{ d.subject }}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" for="notify-body">Message</label>
+                    <textarea class="form-control font-monospace" id="notify-body" name="body" rows="16" required>{{ d.body }}</textarea>
+                    <div class="form-text">Plain text. A blank line starts a new paragraph; lines starting <code>* </code> become bullets, and a bullet's leading "Label:" is shown bold. Any <code>[PLACEHOLDER]</code> left in blocks a real send.</div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="notify-email" name="send_email" value="1" checked>
+                            <label class="form-check-label" for="notify-email">Email <span class="text-muted small">{{ user.email }}</span></label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="notify-device" name="send_device" value="1" checked>
+                            <label class="form-check-label" for="notify-device">Device message</label>
+                        </div>
+                        <div class="form-check ms-3">
+                            <input class="form-check-input" type="checkbox" id="notify-push" name="send_push" value="1" {{ notify.pushDevices > 0 ? 'checked' }}>
+                            <label class="form-check-label" for="notify-push">Also push</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold" for="notify-display">Device message shows as</label>
+                        <select class="form-select form-select-sm" id="notify-display" name="display_type">
+                            <option value="modal_blocking" selected>Pop-up</option>
+                            <option value="inbox_item">Inbox item</option>
+                            <option value="bottom_sheet">Bottom sheet</option>
+                        </select>
+                        <div class="form-text">Waits for the owner's next club if they have none yet.</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold" for="notify-push-body">Push text</label>
+                        <textarea class="form-control form-control-sm" id="notify-push-body" name="push_body" rows="3" maxlength="240">{{ d.pushBody }}</textarea>
+                        <div class="form-text">Short OS notification; tapping it opens the device message.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="submit" name="mode" value="test" class="bmc-btn" formnovalidate>
+                        <span><i class="fa fa-flask me-2" aria-hidden="true"></i>Send test to me</span>
+                    </button>
+                    <button type="submit" name="mode" value="send" class="bmc-btn bmc-btn--yellow" data-notify-send>
+                        <span><i class="fa fa-paper-plane me-2" aria-hidden="true"></i>Send to player</span>
+                    </button>
+                    <span class="text-muted small">The test only emails your own admin address and sends nothing to the device.</span>
+                </div>
+            </form>
+
+            {% if notify.previous is not empty %}
+                <hr class="my-3">
+                <div class="small fw-semibold mb-2">Device messages already sent to this account</div>
+                <ul class="list-unstyled small mb-0">
+                    {% for m in notify.previous %}
+                        <li class="mb-1">
+                            {{ m.createdAt|date('d M Y, H:i') }} · {{ m.title }}
+                            {% if m.pushSentAt %}<span class="badge bg-info-subtle text-info border border-info-subtle ms-1">push</span>{% endif %}
+                            {% if m.createdBy %}<span class="text-muted">· {{ m.createdBy.email }}</span>{% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var form = document.querySelector('[data-notify-form]');
+        if (!form) return;
+        var device = form.querySelector('#notify-device');
+        var push = form.querySelector('#notify-push');
+        function sync() { push.disabled = !device.checked; if (!device.checked) push.checked = false; }
+        device.addEventListener('change', sync);
+        sync();
+        form.addEventListener('submit', function (e) {
+            var btn = e.submitter;
+            if (!btn || !btn.hasAttribute('data-notify-send')) return;
+            var channels = [];
+            if (form.querySelector('#notify-email').checked) channels.push('email');
+            if (device.checked) channels.push('device message');
+            if (push.checked) channels.push('push');
+            if (!window.confirm('Send this notice to ' + form.dataset.userEmail + ' by ' + (channels.join(', ') || 'nothing') + '?\n\nThis reaches the real player and cannot be undone.')) {
+                e.preventDefault();
+            }
+        });
+    })();
+</script>

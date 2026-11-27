@@ -68,7 +68,7 @@ class DeletionRequest
         $this->ipAddress   = $ipAddress;
         $this->requestedAt = new \DateTimeImmutable();
 
-        if ($status === DeletionRequestStatus::COMPLETED) {
+        if ($status === DeletionRequestStatus::COMPLETED || $status === DeletionRequestStatus::PRUNED_INACTIVE) {
             $this->completedAt = $this->requestedAt;
         }
     }
