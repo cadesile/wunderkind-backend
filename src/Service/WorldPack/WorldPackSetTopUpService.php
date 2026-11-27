@@ -54,6 +54,7 @@ class WorldPackSetTopUpService
     public function __construct(
         private readonly WorldPackSetService        $setService,
         private readonly StarterPackService         $starterPackService,
+        private readonly \App\Service\FreeAgentGenerationService $freeAgentGenerator,
         private readonly StarterConfigRepository    $starterConfigRepository,
         private readonly LeagueRepository           $leagueRepository,
         private readonly WorldInitializationService $worldInitializationService,
@@ -239,6 +240,7 @@ class WorldPackSetTopUpService
             $pack,
             count($tiers),
         );
+        $set->setFreeAgentsJson($this->freeAgentGenerator->generateForPack($country));
         $this->em->persist($set);
         $this->em->flush();
 

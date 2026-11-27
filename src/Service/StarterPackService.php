@@ -113,7 +113,7 @@ class StarterPackService
      * kept because it is logged with the rest of the generation inputs, and because the caller
      * already has it.
      *
-     * @return array{players: array, staff: array, scouts: array}
+     * @return array{players: array, staff: array, scouts: array, squads: array, staffOptions: array}
      */
     public function generatePack(string $country, int $tier, int $clubReputation = 0): array
     {
@@ -140,37 +140,66 @@ class StarterPackService
         // players can surface at most that handful, so there is nothing here for it to bound.
         $agents = $this->agentRepository->findAll();
 
-        $players = $this->clubGenerator->generatePlayers(
-            $squadConf,
-            $abilityRange,
-            $nationality,
-            $poolConfig,
-            $agents,
-        );
+        // ── Three squads (pack v16, Courtney 2026-11-27) ──────────────────────────────────
+        // Low = lower half of the bottom-tier band, Mid = the full band (today's squad),
+        // High = the band of the tier above. The device prices each and the player buys one
+        // in setup; `players` stays the Mid squad so older builds keep working.
+        $bands  = $this->squadBands($country, $tier);
+        $squads = [];
+        foreach ($bands as $key => $band) {
+            $squadPlayers = $this->clubGenerator->generatePlayers(
+                $squadConf,
+                $band,
+                $nationality,
+                $poolConfig,
+                $agents,
+            );
+            $squads[$key] = [
+                'band'    => $band,
+                'players' => array_map(fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p), $squadPlayers),
+            ];
+        }
 
-        // ⚠️ **$abilityRange IS THE PLAYER BAND AND NO LONGER REACHES STAFF (A25, 2026-11-20,
-        // owner ruling).** These two lines read
-        //
-        //     // Same $abilityRange as the squad above — a founder's staff are at the
-        //     // founder's level.
-        //
-        // and that is what replaced it: a founder's staff ARE still at the founder's level,
-        // but off the authored per-country/per-tier STAFF table resolved inside
-        // StaffGenerationService from $country and $tier, not off the squad's band.
-        //
-        // Lending the player band was a workaround for there being no staff table at all, and
-        // it was wrong in a way that could not be tuned out: the band is applied to POTENTIAL
-        // (PlayerGenerationService's parameter is $potentialRange), so a founder's squad lands
-        // BELOW it while a coach handed the same band is at that figure from day one. The two
-        // sides of every staff-vs-player comparison were therefore different quantities. See
-        // StaffAbilityRangeService for the table, the measured seed and the scale ruling.
-        $staff  = $this->clubGenerator->generateStaff($squadConf, $nationality, $country, $tier);
+        // ── Three hire candidates per setup role, all of the pack nationality ────────────
+        $optionEntities = $this->clubGenerator->generateStaffOptions($nationality, $country, $tier, self::STAFF_OPTIONS_PER_ROLE);
+        $staffOptions   = [];
+        foreach ($optionEntities as $role => $list) {
+            $staffOptions[$role] = array_map(fn(Staff $st) => $this->snapshotBuilder->buildStaffSnapshot($st), $list);
+        }
+
+        // `staff` (what older builds assign directly): the first candidate of each role the
+        // Starter config asks for, plus coaches. Coaches are generated here, nationality-matched.
+        $staffSnapshots = [];
+        $roleCounts = [
+            'manager'              => (int) $squadConf['managerCount'],
+            'chairman'             => (int) $squadConf['chairmanCount'],
+            'director_of_football' => (int) $squadConf['directorOfFootballCount'],
+            'facility_manager'     => (int) $squadConf['facilityManagerCount'],
+        ];
+        foreach ($roleCounts as $role => $n) {
+            for ($i = 0; $i < min($n, count($staffOptions[$role] ?? [])); $i++) {
+                $staffSnapshots[] = $staffOptions[$role][$i];
+            }
+        }
+        $coaches = $this->clubGenerator->generateStaff(
+            ['managerCount' => 0, 'coachCount' => (int) $squadConf['coachCount'], 'chairmanCount' => 0],
+            $nationality,
+            $country,
+            $tier,
+            matchNationality: true,
+        );
+        foreach ($coaches as $coach) {
+            $staffSnapshots[] = $this->snapshotBuilder->buildStaffSnapshot($coach);
+        }
+
         $scouts = $this->clubGenerator->generateScouts($squadConf, $nationality, $country, $tier);
 
         $pack = [
-            'players' => array_map(fn(Player $p) => $this->snapshotBuilder->buildPlayerSnapshot($p), $players),
-            'staff'   => array_map(fn(Staff $s) => $this->snapshotBuilder->buildStaffSnapshot($s), $staff),
-            'scouts'  => array_map(fn(Scout $sc) => $this->snapshotBuilder->buildScoutSnapshot($sc), $scouts),
+            'players'      => $squads['mid']['players'],
+            'staff'        => $staffSnapshots,
+            'scouts'       => array_map(fn(Scout $sc) => $this->snapshotBuilder->buildScoutSnapshot($sc), $scouts),
+            'squads'       => $squads,
+            'staffOptions' => $staffOptions,
         ];
 
         $this->logger->info('starter_pack.generate.done', [
@@ -178,9 +207,40 @@ class StarterPackService
             'playerCount' => count($pack['players']),
             'staffCount'  => count($pack['staff']),
             'scoutCount'  => count($pack['scouts']),
+            'squadBands'  => array_map(static fn(array $sq) => $sq['band'], $squads),
         ]);
 
         return $pack;
+    }
+
+    /** Hire candidates per setup role in a starter pack (Courtney, 2026-11-27). */
+    public const STAFF_OPTIONS_PER_ROLE = 3;
+
+    /**
+     * The three starter squads' ability bands for ($country, $tier).
+     *
+     * Low = lower half of the tier's band, Mid = the band, High = the band of the tier above.
+     * In a one-tier country there is no tier above, so High is the upper half of the band.
+     * Every band comes from resolveAbilityRange(), so it scales by country like the rest.
+     *
+     * @return array{low: array{min:int,max:int}, mid: array{min:int,max:int}, high: array{min:int,max:int}}
+     */
+    public function squadBands(string $country, int $tier): array
+    {
+        $mid    = $this->resolveAbilityRange($country, $tier);
+        $mid    = ['min' => $mid['min'], 'max' => $mid['max']];
+        $middle = (int) round(($mid['min'] + $mid['max']) / 2);
+        $low    = ['min' => $mid['min'], 'max' => max($mid['min'], $middle)];
+
+        $above = $tier > 1 ? $this->leagueRepository->findByCountryAndTier($country, $tier - 1) : null;
+        if ($above !== null) {
+            $high = $this->resolveAbilityRange($country, $tier - 1);
+            $high = ['min' => $high['min'], 'max' => $high['max']];
+        } else {
+            $high = ['min' => min($mid['max'], $middle), 'max' => $mid['max']];
+        }
+
+        return ['low' => $low, 'mid' => $mid, 'high' => $high];
     }
 
     /**

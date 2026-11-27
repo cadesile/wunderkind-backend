@@ -47,6 +47,7 @@ class WorldPackGenerationOrchestrator
         private readonly WorldPackGenerationRunRepository $runRepository,
         private readonly WorldPackSetService              $setService,
         private readonly StarterPackService               $starterPackService,
+        private readonly \App\Service\FreeAgentGenerationService $freeAgentGenerator,
         private readonly StarterConfigRepository          $starterConfigRepository,
         private readonly LeagueRepository                 $leagueRepository,
         private readonly MessageBusInterface              $messageBus,
@@ -177,6 +178,7 @@ class WorldPackGenerationOrchestrator
             $pack,
             $tierCount,
         );
+        $set->setFreeAgentsJson($this->freeAgentGenerator->generateForPack($country));
 
         $this->em->persist($set);
         $this->em->flush();

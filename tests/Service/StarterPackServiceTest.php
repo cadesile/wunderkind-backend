@@ -282,4 +282,58 @@ class StarterPackServiceTest extends KernelTestCase
             );
         }
     }
+
+    /** Pack v16: three squads banded low / mid / high, with `players` still the Mid squad. */
+    public function testThreeSquadsAreBandedLowMidHigh(): void
+    {
+        $league7 = new League(self::COUNTRY, 7, 'StarterPackServiceTest League 7');
+        $league8 = new League(self::COUNTRY, 8, 'StarterPackServiceTest League 8');
+        $this->em->persist($league7);
+        $this->em->persist($league8);
+        $this->em->flush();
+        $this->cleanup[] = $league7;
+        $this->cleanup[] = $league8;
+
+        $pack  = $this->service->generatePack(self::COUNTRY, 8);
+        $mid   = $this->service->resolveAbilityRange(self::COUNTRY, 8);
+        $above = $this->service->resolveAbilityRange(self::COUNTRY, 7);
+
+        $this->assertSame(['low', 'mid', 'high'], array_keys($pack['squads']));
+        $this->assertSame(['min' => $mid['min'], 'max' => $mid['max']], $pack['squads']['mid']['band']);
+        $this->assertSame(['min' => $above['min'], 'max' => $above['max']], $pack['squads']['high']['band']);
+        $this->assertSame($mid['min'], $pack['squads']['low']['band']['min']);
+        $this->assertLessThan($mid['max'], $pack['squads']['low']['band']['max']);
+        $this->assertSame($pack['squads']['mid']['players'], $pack['players']);
+
+        foreach ($pack['squads'] as $key => $squad) {
+            $this->assertNotEmpty($squad['players'], $key);
+            foreach ($squad['players'] as $p) {
+                $this->assertGreaterThanOrEqual($squad['band']['min'], $p['potential'], $key);
+                $this->assertLessThanOrEqual($squad['band']['max'], $p['potential'], $key);
+            }
+        }
+    }
+
+    /** Pack v16: three candidates per setup role, and every staff member is the pack nationality. */
+    public function testStaffOptionsAndEveryStaffMemberMatchThePackNationality(): void
+    {
+        $pack = $this->service->generatePack('EN', 8);
+        $nat  = \App\Service\ClubInitializationService::countryToNationality('EN');
+
+        foreach (['manager', 'director_of_football', 'chairman', 'facility_manager'] as $role) {
+            $this->assertCount(StarterPackService::STAFF_OPTIONS_PER_ROLE, $pack['staffOptions'][$role], $role);
+            foreach ($pack['staffOptions'][$role] as $s) {
+                $this->assertSame($role, $s['role']);
+                $this->assertSame($nat, $s['nationality'], $role);
+            }
+        }
+        foreach ($pack['staff'] as $s) {
+            $this->assertSame($nat, $s['nationality'], 'auto-assigned ' . $s['role']);
+        }
+        foreach ($pack['squads'] as $squad) {
+            foreach ($squad['players'] as $p) {
+                $this->assertSame($nat, $p['nationality']);
+            }
+        }
+    }
 }
