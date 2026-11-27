@@ -124,4 +124,48 @@ class RewardApplierServiceTest extends KernelTestCase
         $this->assertCount(2, $messages[0]->getOfferData()['effects']);
         $this->assertCount(2, $this->em->getRepository(EntrantRewardClaim::class)->findBy(['entrant' => $entrant]));
     }
+
+    public function testRoundPrizeHalvesBackFromTheFinal(): void
+    {
+        // £2m victor prize in an 8-club cup: QF £500k, SF £1m, final £2m.
+        $this->assertSame(50_000_000, RewardApplierService::roundPrizePence(200_000_000, 1, 3));
+        $this->assertSame(100_000_000, RewardApplierService::roundPrizePence(200_000_000, 2, 3));
+        $this->assertSame(200_000_000, RewardApplierService::roundPrizePence(200_000_000, 3, 3));
+        // Floored to whole pounds: £5,000 over 6 rounds -> round 1 pays £156, not £156.25.
+        $this->assertSame(15_600, RewardApplierService::roundPrizePence(500_000, 1, 6));
+        $this->assertSame(0, RewardApplierService::roundPrizePence(0, 1, 3));
+    }
+
+    public function testSemiFinalWinnerGetsHalfThePrizeAsAnInboxOfferOnce(): void
+    {
+        [$entrant, $instance, $club] = $this->buildWinner(victorPrize: 200_000_000);
+
+        $this->applier->applyRoundPrize($entrant, $instance, 1, 'SF');
+        $this->em->flush();
+        // A round-processor retry must not pay twice.
+        $this->applier->applyRoundPrize($entrant, $instance, 1, 'SF');
+        $this->em->flush();
+
+        $messages = $this->em->getRepository(InboxMessage::class)->findBy(['club' => $club]);
+        $this->assertCount(1, $messages);
+        $offer = $messages[0]->getOfferData();
+        $this->assertSame('COMPETITION_ROUND_WON', $offer['type']);
+        $this->assertSame(100_000_000, $offer['effects'][0]['amountPence']);
+        $this->assertSame(0, $club->getBalance(), 'Club balance must be untouched until the message is accepted.');
+
+        // The final still pays the full prize, as a separate claim.
+        $this->applier->applyVictorPrize($entrant, $instance);
+        $this->em->flush();
+        $this->assertCount(2, $this->em->getRepository(EntrantRewardClaim::class)->findBy(['entrant' => $entrant]));
+    }
+
+    public function testRoundPrizeIsNotPaidForTheFinalRound(): void
+    {
+        [$entrant, $instance, $club] = $this->buildWinner(victorPrize: 200_000_000);
+
+        $this->applier->applyRoundPrize($entrant, $instance, 2, 'FINAL');
+        $this->em->flush();
+
+        $this->assertCount(0, $this->em->getRepository(InboxMessage::class)->findBy(['club' => $club]));
+    }
 }

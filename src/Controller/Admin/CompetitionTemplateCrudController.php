@@ -74,7 +74,13 @@ class CompetitionTemplateCrudController extends AbstractCrudController
         yield IntegerField::new('minClubReputation')->setHelp('0-100.');
         yield IntegerField::new('minClubAgeSeasons')->setHelp('Minimum successfully concluded seasons. "Future/advanced" gate — leave at 0 to not enforce.');
         yield IntegerField::new('entryFeePerRound')->setHelp('Pence, e.g. 500 = £5.00. Defined for the schema — not charged in Phase 1.');
-        yield IntegerField::new('victorPrize')->setHelp('Pence, e.g. 500000 = £5,000. Synthesized into a reward delivered to the winner — no separate Reward Template needed for this.');
+        yield IntegerField::new('victorPrize', 'Victor Prize (final winner, paid every round)')->setHelp(
+            'Pence, e.g. 500000 = £5,000. This is what the FINAL winner gets. Every round pays its winners, '
+            . 'each earlier round paying half the round after it: with 200000000 (£2m) the final winner gets £2m, '
+            . 'each semi-final winner £1m, each quarter-final winner £500k, and so on back to round 1. '
+            . 'So a champion collects every round on the way (£3.5m in an 8-club cup with £2m). '
+            . 'Each payment is an inbox reward the player accepts; no Reward Template needed.'
+        );
 
         yield Field::new('trophy', 'Trophy')
             ->setFormType(TrophyConfigType::class)
