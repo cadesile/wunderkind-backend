@@ -101,7 +101,6 @@ class SponsorCrudController extends AbstractCrudController
         $responseParameters->set('bmcTotal', $this->em->getRepository(Sponsor::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Company, nationality, club');
         $responseParameters->set('bmcSegmentLabels', ['isActive' => ['0' => 'NO', '1' => 'YES']]);
-        $responseParameters->set('bmcFacetColumns', ['size' => 3]);
         $responseParameters->set('bmcUnits', ['monthlyPayment' => '£']);
         $responseParameters->set('bmcWidths', ['status' => 150, 'size' => 100, 'monthlyPayment' => 120]);
 

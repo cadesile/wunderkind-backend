@@ -95,7 +95,6 @@ class GuardianCrudController extends AbstractCrudController
         $responseParameters->set('bmcDomain', 'people');
         $responseParameters->set('bmcTotal', $this->em->getRepository(Guardian::class)->count([]));
         $responseParameters->set('bmcSearchPlaceholder', 'Guardian or player name');
-        $responseParameters->set('bmcFacetColumns', ['gender' => 2]);
         $responseParameters->set('bmcWidths', ['demandLevel' => 160, 'loyaltyToClub' => 160]);
 
         $responseParameters->set('bmcFacets', $this->facets->count(
