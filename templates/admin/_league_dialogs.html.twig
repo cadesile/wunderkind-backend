@@ -151,9 +151,9 @@
                                     <span class="bmc-lbl">{{ which|upper }}</span>
                                     <div class="bmc-checks bmc-checks--6" role="radiogroup" aria-label="Ribbon {{ which|lower }}" data-ribbon="{{ which|lower }}">
                                         {% for colour in trophyRibbonColours %}
-                                            <label class="bmc-check" title="{{ colour }}" style="padding:2px">
-                                                <input type="radio" name="trRibbon{{ which }}" value="{{ colour }}">
-                                                <span class="bmc-tile" style="background:{{ colour }}"></span>
+                                            <label class="bmc-check" title="{{ colour.label }}" style="padding:2px">
+                                                <input type="radio" name="trRibbon{{ which }}" value="{{ colour.value }}">
+                                                <span class="bmc-tile" style="background:{{ colour.value }}"></span>
                                             </label>
                                         {% endfor %}
                                     </div>

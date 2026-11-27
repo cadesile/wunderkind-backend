@@ -36,6 +36,9 @@ use Symfony\Component\Uid\Uuid;
 
 class SyncService
 {
+    /** A week advance this long (wall clock, ms) is well past the ~20 s median; see checkDebugLogThresholds(). */
+    private const TICK_DURATION_WARN_MS = 60_000;
+
     public function __construct(
         private readonly ClubResolver                   $clubResolver,
         private readonly LeaderboardEntryRepository     $leaderboardEntryRepository,
@@ -968,10 +971,16 @@ class SyncService
             'tickDurationMs'=> $log['tickDurationMs'] ?? null,
         ];
 
-        if (isset($log['tickDurationMs']) && $log['tickDurationMs'] > 3000) {
+        // tickDurationMs is the app's wall clock from pressing Advance to building this
+        // sync (useWeeklyTick → collectDebugLog), i.e. most of a week advance. 3000 ms
+        // dated from before the weekly tick grew: today's median wait is ~20 s, so a
+        // 4.2 s tick (WUNDERKIND-BACKEND-2) was a fast one, not a regression. Only a tick
+        // well past the normal range is worth a warning; normal tick timing is tracked
+        // per phase by the app's own "Week Advanced" analytics event.
+        if (isset($log['tickDurationMs']) && $log['tickDurationMs'] > self::TICK_DURATION_WARN_MS) {
             $this->logger->warning('sync.debug: tick duration regression', array_merge($context, [
                 'tickDurationMs' => $log['tickDurationMs'],
-                'threshold'      => 3000,
+                'threshold'      => self::TICK_DURATION_WARN_MS,
             ]));
         }
 
