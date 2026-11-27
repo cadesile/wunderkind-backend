@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Entity\Location\PlotClaim;
 use App\Enum\Location\DormancyWarningStage;
 use App\Repository\Location\ClubDormancyWarningRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Service\InboxService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -49,6 +50,7 @@ class DormancyWarnCommand extends Command
 {
     public function __construct(
         private readonly PlotClaimRepository           $claimRepository,
+        private readonly GameConfigRepository          $configRepository,
         private readonly ClubDormancyWarningRepository $warningRepository,
         private readonly InboxService                  $inbox,
         private readonly EntityManagerInterface        $em,
@@ -72,7 +74,8 @@ class DormancyWarnCommand extends Command
         $now = new \DateTimeImmutable();
 
         // The earliest stage's threshold, so one query covers both buckets.
-        $earliest = DormancyWarningStage::N_MINUS_7->triggersAfterDays();
+        $window   = $this->configRepository->getConfig()->getPlotDormancyReclaimDays();
+        $earliest = DormancyWarningStage::N_MINUS_7->triggersAfterDays($window);
         $cutoff   = $now->modify(sprintf('-%d days', $earliest));
 
         $rows = $this->claimRepository->findDormantClaims($cutoff, $limit);
@@ -89,7 +92,7 @@ class DormancyWarnCommand extends Command
         foreach ($rows as $row) {
             $lastActive   = new \DateTimeImmutable((string) $row['last_active_at']);
             $daysInactive = (int) $lastActive->diff($now)->days;
-            $stage        = DormancyWarningStage::forDaysInactive($daysInactive);
+            $stage        = DormancyWarningStage::forDaysInactive($daysInactive, $window);
 
             if ($stage === null) {
                 $tooEarly++;

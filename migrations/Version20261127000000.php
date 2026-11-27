@@ -15,6 +15,8 @@ use Doctrine\Migrations\AbstractMigration;
  *   once delete_after passes.
  * - game_config.game_over_fan_morale_threshold (default 30) and
  *   game_config.liquidated_club_delete_after_days (default 30).
+ * - game_config.plot_dormancy_reclaim_days (default 30): the inactivity sell-back window, which
+ *   was the DormancyWarningStage::RECLAIM_AFTER_DAYS constant.
  */
 final class Version20261127000000 extends AbstractMigration
 {
@@ -29,6 +31,7 @@ final class Version20261127000000 extends AbstractMigration
         $this->addSql('ALTER TABLE club ADD delete_after TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL');
         $this->addSql('ALTER TABLE game_config ADD game_over_fan_morale_threshold INT DEFAULT 30 NOT NULL');
         $this->addSql('ALTER TABLE game_config ADD liquidated_club_delete_after_days INT DEFAULT 30 NOT NULL');
+        $this->addSql('ALTER TABLE game_config ADD plot_dormancy_reclaim_days INT DEFAULT 30 NOT NULL');
     }
 
     public function down(Schema $schema): void
@@ -37,5 +40,6 @@ final class Version20261127000000 extends AbstractMigration
         $this->addSql('ALTER TABLE club DROP delete_after');
         $this->addSql('ALTER TABLE game_config DROP game_over_fan_morale_threshold');
         $this->addSql('ALTER TABLE game_config DROP liquidated_club_delete_after_days');
+        $this->addSql('ALTER TABLE game_config DROP plot_dormancy_reclaim_days');
     }
 }

@@ -551,6 +551,7 @@ class DashboardController extends AbstractDashboardController
         $config->setBankruptcyDeductionsEnabled((bool) $request->request->get('bankruptcyDeductionsEnabled', false));
         $config->setGameOverFanMoraleThreshold((int) $request->request->get('gameOverFanMoraleThreshold', 30));
         $config->setLiquidatedClubDeleteAfterDays((int) $request->request->get('liquidatedClubDeleteAfterDays', 30));
+        $config->setPlotDormancyReclaimDays((int) $request->request->get('plotDormancyReclaimDays', 30));
         $tiersJson = $request->request->get('bankruptcyDeductionTiers', '[]');
         $tiers = json_decode($tiersJson, true);
         if (is_array($tiers)) {

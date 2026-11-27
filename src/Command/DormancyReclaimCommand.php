@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Enum\Location\ClaimReleaseReason;
 use App\Enum\Location\DormancyWarningStage;
 use App\Repository\Location\ClubDormancyWarningRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Service\Location\PlotSellBackService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -46,6 +47,7 @@ class DormancyReclaimCommand extends Command
 {
     public function __construct(
         private readonly PlotClaimRepository           $claimRepository,
+        private readonly GameConfigRepository          $configRepository,
         private readonly ClubDormancyWarningRepository $warningRepository,
         private readonly PlotSellBackService           $sellBack,
     ) {
@@ -73,7 +75,7 @@ class DormancyReclaimCommand extends Command
         $limit         = max(1, (int) $input->getOption('limit'));
 
         $now    = new \DateTimeImmutable();
-        $cutoff = $now->modify(sprintf('-%d days', DormancyWarningStage::RECLAIM_AFTER_DAYS));
+        $cutoff = $now->modify(sprintf('-%d days', $this->configRepository->getConfig()->getPlotDormancyReclaimDays()));
 
         $rows = $this->claimRepository->findDormantClaims($cutoff, $limit);
 
