@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Entity\UserLedger;
 use App\Enum\UserLedgerEntryType;
 use App\Repository\StarterConfigRepository;
+use App\Repository\UserLedgerRepository;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -39,10 +40,17 @@ final class StartingGrantService
     /** Shared by the ledger row's sourceKind and its description. */
     public const SOURCE_KIND = 'starting_grant';
 
+    /**
+     * The admin "Gift starter balance" top-up, for an account whose own grant is below the
+     * range's maximum. Keyed on the user id like the grant, so it can be written once only.
+     */
+    public const GIFT_SOURCE_KIND = 'starting_grant_gift';
+
     public function __construct(
         private readonly StarterConfigRepository $starterConfigRepository,
         private readonly UserLedgerService       $ledgerService,
         private readonly LoggerInterface         $logger,
+        private readonly UserLedgerRepository    $ledgerRepository,
     ) {}
 
     /** What this account's opening credit is, or would be. Reads nothing but config. */
@@ -88,5 +96,61 @@ final class StartingGrantService
 
             return null;
         }
+    }
+
+    /**
+     * Admin "Gift starter balance" (Courtney, 2026-11-27): bring this account's starting grant
+     * up to the MAXIMUM of the configured range, so an existing owner whose club was sold is not
+     * behind a new sign-up. Two cases, both written at most once:
+     *
+     * - No grant yet: the gift IS the grant, written under the grant's own idempotency key at
+     *   the maximum. A later avatar save then finds it and grants nothing more.
+     * - A grant below the maximum: a top-up for the difference, under GIFT_SOURCE_KIND.
+     *
+     * Already at or above the maximum, or the grant switched off (max 0): nothing is written.
+     *
+     * @return array{maxPence: int, grantedPence: int, giftPence: int}
+     */
+    public function giftPreview(User $user): array
+    {
+        $config = $this->starterConfigRepository->getConfig();
+        $max    = max($config->getUserStartingBalanceMinPence(), $config->getUserStartingBalanceMaxPence());
+
+        $granted = 0;
+        foreach ($this->ledgerRepository->findBy(['user' => $user, 'type' => UserLedgerEntryType::STARTING_GRANT]) as $entry) {
+            $granted += $entry->getAmountPence();
+        }
+
+        return [
+            'maxPence'     => $max,
+            'grantedPence' => $granted,
+            'giftPence'    => max(0, $max - $granted),
+        ];
+    }
+
+    /** Writes the gift worked out by giftPreview(). Returns null when there is nothing to give. */
+    public function giftToMax(User $user): ?UserLedger
+    {
+        $preview = $this->giftPreview($user);
+
+        if ($preview['giftPence'] <= 0) {
+            return null;
+        }
+
+        $hasGrant = $this->ledgerRepository->findByBackendSource(
+            self::SOURCE_KIND,
+            (string) $user->getId(),
+            UserLedgerEntryType::STARTING_GRANT,
+        ) !== null;
+
+        return $this->ledgerService->append(
+            $user,
+            null,
+            UserLedgerEntryType::STARTING_GRANT,
+            $preview['giftPence'],
+            $hasGrant ? self::GIFT_SOURCE_KIND : self::SOURCE_KIND,
+            (string) $user->getId(),
+            $hasGrant ? 'Starting grant top-up (gift)' : 'Opening account credit (gift)',
+        );
     }
 }
