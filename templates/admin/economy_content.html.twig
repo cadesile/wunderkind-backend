@@ -295,9 +295,11 @@
                 <div class="bmc-setting__text">
                     <span class="bmc-setting__label">BASE CEILING (£)</span>
                     <span class="bmc-setting__help">
-                        What an owner may gift into one club per season, before scaling. The resolved ceiling is
-                        <code>base x countryFactor x tierFactor x inflationIndex(season)</code> — the one place the backend applies
+                        The most an owner may gift into one <strong>tier 1</strong> club per season (baseline country, base year).
+                        Lower tiers get the same share of it as their baseline turnover is of tier 1's. The resolved ceiling is
+                        <code>base x countryFactor x (turnover[tier] / turnover[1]) x inflationIndex(season)</code> — the one place the backend applies
                         inflation itself, because a ceiling has to be checked against the season being claimed for.
+                        While the turnover table is unauthored, the tier factor column is used instead.
                         <strong>0 switches the feature off</strong>: every amount is then above the ceiling and
                         <code>POST /api/club/season-investment</code> refuses, which is how its two new error codes ship
                         unreachable by a client that does not understand them yet.
@@ -315,6 +317,26 @@
                     </label>
                 </div>
             </div>
+            {% if config.economySeasonInvestmentBasePence > 0 and investmentCeilings|length > 0 %}
+                <div style="overflow-x:auto">
+                    <table class="bmc-minitable">
+                        <thead><tr>
+                            <th>TIER ({{ previewCountry }}, SEASON 1)</th>
+                            <th class="is-right">SHARE OF TIER 1</th>
+                            <th class="is-right">CEILING (£)</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for row in investmentCeilings %}
+                                <tr>
+                                    <td>T{{ row.tier }}</td>
+                                    <td class="is-right">{{ (row.shareBp / 100)|number_format(2) }}%</td>
+                                    <td class="is-right">£{{ (row.ceilingPence / 100)|number_format(0) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
         </div>
     </section>
 

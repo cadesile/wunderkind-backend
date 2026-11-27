@@ -179,7 +179,7 @@ class SetupActionException extends \RuntimeException
     /**
      * Carries the ceiling, because the client cannot compute it.
      *
-     * The ceiling is `base x countryFactor x tierFactor x inflationIndex(season)` and the app
+     * The ceiling is `base x countryFactor x tierShare x inflationIndex(season)` and the app
      * is deliberately never told a country factor, so a refusal without the figure is a dead
      * end: the player cannot be shown what they CAN give.
      *

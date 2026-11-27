@@ -130,7 +130,7 @@ class SeasonInvestmentController extends AbstractController
      *
      * The conflict and the ceiling both carry enough context to render what the player already
      * gave or what they CAN give, rather than just saying no. That matters more here than
-     * elsewhere: the ceiling is `base x countryFactor x tierFactor x index(season)` and the app
+     * elsewhere: the ceiling is `base x countryFactor x tierShare x index(season)` and the app
      * is deliberately never told a country factor, so it cannot work the figure out itself.
      */
     private function errorResponse(SetupActionException $e): JsonResponse
