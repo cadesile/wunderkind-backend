@@ -75,6 +75,18 @@ class WorldPackSet
     private ?array $starterPackJson = null;
 
     /**
+     * The set's free agents (pack v16, Courtney 2026-11-27): unattached players of the pack's
+     * nationality, served once by POST /api/initialize/free-agents and loaded into the save's
+     * free transfer list. Cleared by the maintain sweep with the tier payloads, so the list
+     * lives on the device only once the world has loaded. Null on sets built before v16 and
+     * on claimed sets after the sweep.
+     *
+     * @var list<array<string, mixed>>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $freeAgentsJson = null;
+
+    /**
      * How many tiers this set is expected to hold, recorded at creation from the
      * country's League rows. Stored rather than counted so "ready" is verifiable
      * against an intent — a country that loses a League mid-run would otherwise make
@@ -124,6 +136,7 @@ class WorldPackSet
     public function getPayloadVersion(): int { return $this->payloadVersion; }
     public function getStatus(): WorldPackSetStatus { return $this->status; }
     public function getStarterPackJson(): ?array { return $this->starterPackJson; }
+    public function getFreeAgentsJson(): ?array { return $this->freeAgentsJson; }
     public function getTierCount(): int { return $this->tierCount; }
     public function getErrorMessage(): ?string { return $this->errorMessage; }
     public function getGeneratedAt(): \DateTimeImmutable { return $this->generatedAt; }
@@ -133,6 +146,7 @@ class WorldPackSet
 
     public function setStatus(WorldPackSetStatus $status): static { $this->status = $status; return $this; }
     public function setStarterPackJson(?array $pack): static { $this->starterPackJson = $pack; return $this; }
+    public function setFreeAgentsJson(?array $players): static { $this->freeAgentsJson = $players; return $this; }
     public function setTierCount(int $count): static { $this->tierCount = $count; return $this; }
     public function setErrorMessage(?string $message): static { $this->errorMessage = $message; return $this; }
     public function setReadyAt(?\DateTimeImmutable $at): static { $this->readyAt = $at; return $this; }

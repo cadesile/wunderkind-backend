@@ -37,6 +37,7 @@ class InitializeController extends AbstractController
         private readonly MessageBusInterface        $messageBus,
         private readonly EntityManagerInterface     $em,
         private readonly LoggerInterface            $logger,
+        private readonly \App\Service\FreeAgentGenerationService $freeAgentGenerator,
     ) {}
 
     /**
@@ -201,6 +202,78 @@ class InitializeController extends AbstractController
         $this->dispatchTopUp($country);
 
         return $this->json(['ampStarter' => $ampStarter]);
+    }
+
+    /**
+     * POST /api/initialize/free-agents
+     *
+     * The world's free agents (pack v16, Courtney 2026-11-27): the claimed set's list, loaded by
+     * the device straight into the save's free transfer list. Replays the same list on retry,
+     * like a tier, until the maintain sweep clears it an hour after the world finished loading.
+     *
+     *  - Claimed set holding a list → that list, `servedFromSet: true`.
+     *  - Claimed set built before v16 → generated now (it never had a list to mix with).
+     *  - Claimed v16+ set whose list was swept → 410, never a fresh list: a world must not be
+     *    mixed (Courtney, 2026-11-23). The client skips the pool with a warning.
+     *  - No set (live fallback world) → generated now, like the live starter squad.
+     */
+    #[Route('/free-agents', name: 'api_initialize_free_agents', methods: ['POST'])]
+    public function freeAgents(): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $club = $this->clubResolver->resolveFromRequest($user);
+
+        if ($club === null) {
+            return $this->json(['error' => 'Club not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$club->isStarterInitialized()) {
+            return $this->json(
+                ['error' => 'Call POST /api/initialize/starter before fetching free agents.'],
+                Response::HTTP_PRECONDITION_FAILED
+            );
+        }
+
+        $country = (string) $club->getCountry();
+        $set     = $club->getWorldPackSet();
+        $players = $set?->getFreeAgentsJson();
+        $servedFromSet = $players !== null;
+
+        if ($set !== null && $players === null
+            && $set->getPayloadVersion() >= WorldInitializationService::FREE_AGENTS_SINCE_PACK_VERSION) {
+            $this->logger->warning('initialize.free_agents.missing_from_claimed_set', [
+                'clubId'  => (string) $club->getId(),
+                'country' => $country,
+                'setId'   => (string) $set->getId(),
+            ]);
+
+            return $this->json(
+                [
+                    'error'   => 'world_pack_free_agents_unavailable',
+                    'message' => "This club's free agent list is no longer available.",
+                ],
+                Response::HTTP_GONE
+            );
+        }
+
+        if ($players === null) {
+            $players = $this->freeAgentGenerator->generateForPack($country);
+        }
+
+        $this->logger->info('initialize.free_agents.served', [
+            'clubId'        => (string) $club->getId(),
+            'country'       => $country,
+            'servedFromSet' => $servedFromSet,
+            'setId'         => $set !== null ? (string) $set->getId() : null,
+            'players'       => count($players),
+        ]);
+
+        return $this->json([
+            'country'       => $country,
+            'servedFromSet' => $servedFromSet,
+            'players'       => $players,
+        ]);
     }
 
     /**

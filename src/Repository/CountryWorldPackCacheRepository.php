@@ -99,6 +99,22 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      */
     public function deletePayloadsForWorldsInitialisedBefore(\DateTimeImmutable $before): int
     {
+        // The set's free agent list (pack v16) goes with its tiers: once the world has loaded,
+        // the device holds it and the server keeps nothing.
+        $this->getEntityManager()->getConnection()->executeStatement(
+            <<<'SQL'
+            UPDATE world_pack_set s
+               SET free_agents_json = NULL
+              FROM club c
+             WHERE c.id = s.claimed_by_club_id
+               AND s.status = 'claimed'
+               AND s.free_agents_json IS NOT NULL
+               AND c.world_initialized_at IS NOT NULL
+               AND c.world_initialized_at < :before
+            SQL,
+            ['before' => $before->format('Y-m-d H:i:s')],
+        );
+
         return (int) $this->getEntityManager()->getConnection()->executeStatement(
             <<<'SQL'
             DELETE FROM country_world_pack_cache
@@ -135,6 +151,18 @@ class CountryWorldPackCacheRepository extends ServiceEntityRepository
      */
     public function deletePayloadsForSetsClaimedBefore(\DateTimeImmutable $before): int
     {
+        $this->getEntityManager()->getConnection()->executeStatement(
+            <<<'SQL'
+            UPDATE world_pack_set
+               SET free_agents_json = NULL
+             WHERE status = 'claimed'
+               AND free_agents_json IS NOT NULL
+               AND claimed_at IS NOT NULL
+               AND claimed_at < :before
+            SQL,
+            ['before' => $before->format('Y-m-d H:i:s')],
+        );
+
         return (int) $this->getEntityManager()->getConnection()->executeStatement(
             <<<'SQL'
             DELETE FROM country_world_pack_cache

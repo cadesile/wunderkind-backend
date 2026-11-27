@@ -279,6 +279,67 @@
             </div>
         </section>
 
+        {#
+          Free agents (Courtney, 2026-11-27). Every world pack set carries a list of unattached
+          players of the pack's nationality; the season transition asks for a fresh batch.
+          Changing the pack size only affects sets built after the save.
+        #}
+        <section class="bmc-card" data-domain="club">
+            <div class="bmc-card__head">
+                <i data-lucide="user-plus"></i>
+                <span class="bmc-card__title">FREE AGENTS</span>
+                <span class="bmc-card__meta">the free transfer list every new world starts with</span>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">FREE AGENTS PER WORLD PACK</span>
+                    <span class="bmc-setting__help">Unattached players generated with every world pack set and loaded into the save&rsquo;s free transfer list at new game. Applies to sets built from now on.</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 200"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--60">
+                        <input name="freeAgentPackCount" inputmode="numeric"
+                               value="{{ config.freeAgentPackCount }}" data-saved="{{ config.freeAgentPackCount }}"
+                               data-min="0" data-max="300" aria-label="free agents per world pack">
+                    </label>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">SEASON TOP-UP SIZE</span>
+                    <span class="bmc-setting__help">Free agents the device asks for at each season transition, on top of any NPC squad shortfall (the server caps one batch at 200). A failed request is skipped silently.</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 80"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--60">
+                        <input name="freeAgentSeasonTopUpCount" inputmode="numeric"
+                               value="{{ config.freeAgentSeasonTopUpCount }}" data-saved="{{ config.freeAgentSeasonTopUpCount }}"
+                               data-min="0" data-max="300" aria-label="season free agent top-up size">
+                    </label>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+
+            <div class="bmc-setting" data-bmc-setting>
+                <div class="bmc-setting__text">
+                    <span class="bmc-setting__label">TOP-HALF SHARE (%)</span>
+                    <span class="bmc-setting__help">Percent of each batch generated at the ability of the top half of the pyramid. The rest suit the bottom half, weighted toward the lowest tiers.</span>
+                    <span class="bmc-setting__hint" data-bmc-hint data-default="Default 20"></span>
+                </div>
+                <div class="bmc-setting__ctl">
+                    <label class="bmc-num bmc-num--60">
+                        <input name="freeAgentUpperTierPercent" inputmode="numeric"
+                               value="{{ config.freeAgentUpperTierPercent }}" data-saved="{{ config.freeAgentUpperTierPercent }}"
+                               data-min="0" data-max="100" aria-label="percent of free agents from the top half of the pyramid">
+                    </label>
+                    <button type="button" class="bmc-revert" hidden title="Revert to saved"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+                </div>
+            </div>
+        </section>
+
         {# ── the bands a new club is created into ───────────────────────── #}
         <section class="bmc-card" data-domain="club">
             <div class="bmc-card__head">

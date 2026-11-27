@@ -105,17 +105,22 @@ class WorldPackClubGenerationService
         string $nationality,
         string $country = '',
         int $tier = 0,
+        bool $matchNationality = false,
     ): array {
         $staff = [];
+        // A founder's club (starter pack) matches the pack nationality for EVERY role, so a
+        // lower-tier setup never shows an out-of-place nationality (Courtney, 2026-11-27).
+        // NPC clubs keep the long-standing unfiltered precedent.
+        $openNationality = $matchNationality ? $nationality : null;
 
         for ($i = 0; $i < (int) $tierConf['managerCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::MANAGER, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::MANAGER, $openNationality, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['coachCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::COACH, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::COACH, $openNationality, $country, $tier);
         }
         for ($i = 0; $i < (int) $tierConf['chairmanCount']; $i++) {
-            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, null, $country, $tier);
+            $staff[] = $this->staffGen->build(StaffRole::CHAIRMAN, $openNationality, $country, $tier);
         }
         for ($i = 0; $i < (int) ($tierConf['directorOfFootballCount'] ?? 0); $i++) {
             $staff[] = $this->staffGen->build(StaffRole::DIRECTOR_OF_FOOTBALL, $nationality, $country, $tier);
@@ -125,6 +130,25 @@ class WorldPackClubGenerationService
         }
 
         return $staff;
+    }
+
+    /**
+     * The starter pack's hire candidates: $perRole of each setup role (manager, DoF, chairman,
+     * facility manager), all of the pack nationality, banded on the club's staff table.
+     *
+     * @return array<string, Staff[]> keyed by StaffRole value
+     */
+    public function generateStaffOptions(string $nationality, string $country, int $tier, int $perRole = 3): array
+    {
+        $options = [];
+        foreach ([StaffRole::MANAGER, StaffRole::DIRECTOR_OF_FOOTBALL, StaffRole::CHAIRMAN, StaffRole::FACILITY_MANAGER] as $role) {
+            $options[$role->value] = [];
+            for ($i = 0; $i < $perRole; $i++) {
+                $options[$role->value][] = $this->staffGen->build($role, $nationality, $country, $tier);
+            }
+        }
+
+        return $options;
     }
 
     /**

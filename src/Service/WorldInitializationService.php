@@ -312,8 +312,17 @@ class WorldInitializationService
      *     So `app:backfill-scout-abilities` has nothing to do here and there is no ordering
      *     hazard against the bump, unlike `BackfillPersonalitiesCommand`'s.
      *     Full account: `wunderkind-docs/economy-loose-ends/a32-scout-ability-floor-report.md`.
+     *
+     * v16 (2026-11-27, Courtney) — **free agents, three starter squads, staff candidates.**
+     *   Additive. Sets carry `freeAgentsJson` (served by POST /api/initialize/free-agents);
+     *   the starter pack gains `squads.{low,mid,high}` and `staffOptions` (3 per setup role),
+     *   and every starter staff member now matches the pack nationality. `players` is still
+     *   the Mid squad and `staff` still the auto-assigned roster, so older builds are unchanged.
      */
-    public const WORLD_PACK_VERSION = 15;
+    public const WORLD_PACK_VERSION = 16;
+
+    /** First pack version whose sets carry `freeAgentsJson` (Courtney, 2026-11-27). */
+    public const FREE_AGENTS_SINCE_PACK_VERSION = 16;
 
     /** Ability range by tier — indexes 1-8 */
     public const ABILITY_RANGES = [
