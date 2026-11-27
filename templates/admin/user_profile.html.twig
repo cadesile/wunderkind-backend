@@ -74,6 +74,7 @@
                         <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
                             {{ clubs|length }} club{{ clubs|length != 1 ? 's' : '' }}
                         </span>
+                        {{ include('admin/_gift_starter_button.html.twig') }}
                         {{ include('admin/_kill_session_button.html.twig') }}
                     </div>
                 </div>
