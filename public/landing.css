@@ -3009,6 +3009,24 @@ button:focus-visible,
     padding: 4px 5px 3px;
 }
 
+/* Keep it / lose it: two small rule cards under the steps. */
+.plot-rules {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 2px dashed var(--panel);
+}
+.plot-rule { padding: 12px 14px; background: var(--bg); border: 2px solid var(--border); border-top: 4px solid var(--mint); }
+.plot-rule--lose { border-top-color: var(--red); }
+.plot-rule-head { font-size: 8px; line-height: 1.6; color: var(--mint); margin-bottom: 8px; }
+.plot-rule--lose .plot-rule-head { color: #e07a7a; }
+.plot-rule ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.plot-rule li { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+.plot-rule strong { color: var(--text); font-weight: 700; }
+.journey-text .plot-rule-note { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--gold-dim); }
+
 /* ── Facilities (#facilities) ────────────────────────────────────────────── */
 
 .facilities-section {
