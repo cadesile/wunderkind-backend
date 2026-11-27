@@ -266,6 +266,9 @@ class ClubController extends AbstractController
             'homeKitConfig'       => $club->getHomeKitConfig(),
             'awayKitConfig'       => $club->getAwayKitConfig(),
             'badgeConfig'         => $club->getBadgeConfig(),
+            // Game over: the club was liquidated and will be deleted after `deleteAfter`.
+            'liquidatedAt'        => $club->getLiquidatedAt()?->format(\DateTimeInterface::ATOM),
+            'deleteAfter'         => $club->getDeleteAfter()?->format(\DateTimeInterface::ATOM),
             // Week/date are the club's own authoritative last-sync columns (updated on every
             // accepted sync, rollback or not); leaguePosition/form come from the latest VALID
             // sync's payload specifically — same split ClubCrudController's admin profile uses.

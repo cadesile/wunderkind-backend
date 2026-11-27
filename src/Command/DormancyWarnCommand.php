@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Entity\Location\PlotClaim;
 use App\Enum\Location\DormancyWarningStage;
 use App\Repository\Location\ClubDormancyWarningRepository;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Service\InboxService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,10 +37,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * insert sends. A crash between the send and the stamp risks one duplicate warning on the next
  * pass, which is much better than the reverse order's risk of a silent permanent skip.
  *
- * CLAIMS WITH NO CLUB ARE NEVER WARNED OR RECLAIMED, because they have no activity clock —
- * findDormantClaims() joins club. Land bought and never built on is therefore held
- * indefinitely. That is a deliberate consequence of letting land be bought before a club
- * exists, not an oversight, but it is a product question worth revisiting.
+ * CLAIMS WITH NO CLUB ARE NOT WARNED HERE — there is no club inbox. They are still reclaimed
+ * (Courtney, 2026-11-27): DormancyReclaimCommand sells an empty plot back once the window
+ * passes from the day it went empty, and the app shows that date instead of a warning.
  */
 #[AsCommand(
     name: 'app:plots:dormancy-warn',
@@ -49,6 +49,7 @@ class DormancyWarnCommand extends Command
 {
     public function __construct(
         private readonly PlotClaimRepository           $claimRepository,
+        private readonly GameConfigRepository          $configRepository,
         private readonly ClubDormancyWarningRepository $warningRepository,
         private readonly InboxService                  $inbox,
         private readonly EntityManagerInterface        $em,
@@ -72,7 +73,8 @@ class DormancyWarnCommand extends Command
         $now = new \DateTimeImmutable();
 
         // The earliest stage's threshold, so one query covers both buckets.
-        $earliest = DormancyWarningStage::N_MINUS_7->triggersAfterDays();
+        $window   = $this->configRepository->getConfig()->getPlotDormancyReclaimDays();
+        $earliest = DormancyWarningStage::N_MINUS_7->triggersAfterDays($window);
         $cutoff   = $now->modify(sprintf('-%d days', $earliest));
 
         $rows = $this->claimRepository->findDormantClaims($cutoff, $limit);
@@ -89,7 +91,7 @@ class DormancyWarnCommand extends Command
         foreach ($rows as $row) {
             $lastActive   = new \DateTimeImmutable((string) $row['last_active_at']);
             $daysInactive = (int) $lastActive->diff($now)->days;
-            $stage        = DormancyWarningStage::forDaysInactive($daysInactive);
+            $stage        = DormancyWarningStage::forDaysInactive($daysInactive, $window);
 
             if ($stage === null) {
                 $tooEarly++;

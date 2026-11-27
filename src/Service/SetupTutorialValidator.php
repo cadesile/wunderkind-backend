@@ -29,7 +29,7 @@ final class SetupTutorialValidator
 {
     /** Step kinds an anchor may name. Mirrors tutorial.ts's STEP_KINDS. */
     private const STEP_KINDS = [
-        'welcome', 'avatar', 'owner', 'country', 'club',
+        'welcome', 'avatar', 'owner', 'country', 'location', 'club',
         'badge', 'kits', 'stadium', 'hire', 'role', 'overview',
     ];
 

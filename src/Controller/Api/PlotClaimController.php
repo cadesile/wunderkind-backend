@@ -8,6 +8,7 @@ use App\Entity\Location\PlotClaim;
 use App\Entity\User;
 use App\Enum\Location\ClaimReleaseReason;
 use App\Exception\Location\PlotUnavailableException;
+use App\Repository\GameConfigRepository;
 use App\Repository\Location\PlotClaimRepository;
 use App\Repository\UserLedgerRepository;
 use App\Service\Location\PlotClaimService;
@@ -38,6 +39,7 @@ class PlotClaimController extends AbstractController
         private readonly PlotClaimService     $claimService,
         private readonly PlotClaimRepository  $claimRepository,
         private readonly UserLedgerRepository $ledgerRepository,
+        private readonly GameConfigRepository $configRepository,
     ) {}
 
     /** Every plot the caller owns. */
@@ -47,7 +49,10 @@ class PlotClaimController extends AbstractController
         $claims = $this->claimRepository->findActiveForUser($this->currentUser());
 
         $response = new JsonResponse([
-            'claims' => array_map(fn (PlotClaim $c): array => $this->serialise($c), $claims),
+            'claims' => array_map(
+                fn (PlotClaim $c): array => self::present($c, $this->configRepository->getConfig()->getPlotDormancyReclaimDays()),
+                $claims,
+            ),
         ]);
         $response->setPrivate();
         $response->setMaxAge(0);
@@ -89,7 +94,7 @@ class PlotClaimController extends AbstractController
             );
         }
 
-        return $this->json(['claim' => $this->serialise($claim)], Response::HTTP_CREATED);
+        return $this->json(['claim' => self::present($claim)], Response::HTTP_CREATED);
     }
 
     /** Build the ground on a plot already owned. */
@@ -116,7 +121,7 @@ class PlotClaimController extends AbstractController
             return $this->errorResponse($e);
         }
 
-        return $this->json(['claim' => $this->serialise($claim)]);
+        return $this->json(['claim' => self::present($claim)]);
     }
 
     /**
@@ -144,7 +149,7 @@ class PlotClaimController extends AbstractController
         }
 
         return $this->json([
-            'claim' => $this->serialise($claim),
+            'claim' => self::present($claim),
             'quote' => $sellBack->quote($claim),
         ])->setPrivate()->setMaxAge(0);
     }
@@ -189,8 +194,17 @@ class PlotClaimController extends AbstractController
         ]);
     }
 
-    /** @return array<string, mixed> */
-    private function serialise(PlotClaim $claim): array
+    /**
+     * One claim as the API shows it. Public static so ClubLiquidationController answers with the
+     * same shape.
+     *
+     * `restartable`: no club stands on the plot (its club was liquidated, or none was ever
+     * founded), so the owner may found a new one here. A plot with a live club can only be sold
+     * back (Courtney, 2026-11-26).
+     *
+     * @return array<string, mixed>
+     */
+    public static function present(PlotClaim $claim, ?int $reclaimAfterDays = null): array
     {
         $location = $claim->getLocation();
 
@@ -210,7 +224,25 @@ class PlotClaimController extends AbstractController
             'stadiumPencePaid' => $claim->getStadiumPencePaid(),
             'totalPaidPence'   => $claim->getTotalPaidPence(),
             'hasStadium'       => $claim->hasStadium(),
+            'restartable'      => $claim->getClub() === null,
+            // When the inactivity sell-back would take this plot if nothing syncs (Courtney,
+            // 2026-11-27): the club's last sync + the window, or for an EMPTY plot the day it
+            // went empty + the window — the deadline to found a new club on it. Null when the
+            // caller did not ask (the window was not passed).
+            'emptySince'       => $claim->getClub() === null ? $claim->getEmptySince()->format(\DateTimeInterface::ATOM) : null,
+            'reclaimAt'        => $reclaimAfterDays === null ? null : self::reclaimAt($claim, $reclaimAfterDays)->format(\DateTimeInterface::ATOM),
         ];
+    }
+
+    /** The same clocks PlotClaimRepository::findDormantClaims / findDormantEmptyClaims read. */
+    private static function reclaimAt(PlotClaim $claim, int $days): \DateTimeImmutable
+    {
+        $club  = $claim->getClub();
+        $start = $club === null
+            ? $claim->getEmptySince()
+            : ($club->getLastSyncedAt() ?? $club->getCreatedAt());
+
+        return $start->modify(sprintf('+%d days', $days));
     }
 
     private function errorResponse(PlotUnavailableException $e): JsonResponse
