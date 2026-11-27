@@ -66,6 +66,7 @@ class DeletionRequestCrudController extends AbstractCrudController
                 DeletionRequestStatus::REJECTED_INVALID_CREDENTIALS->value => 'secondary',
                 DeletionRequestStatus::REJECTED_GUEST->value               => 'warning',
                 DeletionRequestStatus::FAILED->value                       => 'danger',
+                DeletionRequestStatus::PRUNED_INACTIVE->value              => 'info',
             ]);
         yield IntegerField::new('clubsDeleted', 'Clubs');
         yield TextField::new('ipAddress', 'IP')->hideOnIndex();
