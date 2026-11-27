@@ -178,7 +178,7 @@
                     <span class="bmc-lbl bmc-lbl--ink" style="margin-top:10px">MOTIVATION — BENCH</span>
                     <div class="bmc-check" style="margin:6px 0 10px">
                         <input type="hidden" name="motivationShareStartsAcrossSquad" value="0">
-                        <input type="checkbox" id="motivationShareStartsAcrossSquad" name="motivationShareStartsAcrossSquad" value="1" {{ config.motivationShareStartsAcrossSquad ? 'checked' : '' }}>
+                        <input type="checkbox" id="motivationShareStartsAcrossSquad" name="motivationShareStartsAcrossSquad" value="1" {{ config.motivationShareStartsAcrossSquad ? 'checked' : '' }}><span class="bmc-tile" aria-hidden="true"></span>
                         <label for="motivationShareStartsAcrossSquad">Share the 11 starts across the squad's role expectations, so being left out is not a loss by construction</label>
                     </div>
                     <p class="bmc-bodytext">Share (0–1) of the weekly "short of minutes" drain each role takes.</p>
@@ -624,7 +624,7 @@
                             <div class="bmc-check">
                                 <input  type="checkbox" id="bankruptcyDeductionsEnabled"
                                        name="bankruptcyDeductionsEnabled" value="1"
-                                       {{ config.bankruptcyDeductionsEnabled ? 'checked' : '' }}>
+                                       {{ config.bankruptcyDeductionsEnabled ? 'checked' : '' }}><span class="bmc-tile" aria-hidden="true"></span>
                                 <label for="bankruptcyDeductionsEnabled">
                                     Enable points deductions for negative balance at season end
                                 </label>
@@ -1414,7 +1414,7 @@
                     <span class="bmc-lbl bmc-lbl--ink" style="margin-top:10px">PA CHEATS</span>
                     <div class="bmc-check" style="margin:6px 0 4px">
                         <input type="hidden" name="paCheatsEnabled" value="0">
-                        <input type="checkbox" id="paCheatsEnabled" name="paCheatsEnabled" value="1" {{ config.paCheatsEnabled ? 'checked' : '' }}>
+                        <input type="checkbox" id="paCheatsEnabled" name="paCheatsEnabled" value="1" {{ config.paCheatsEnabled ? 'checked' : '' }}><span class="bmc-tile" aria-hidden="true"></span>
                         <label for="paCheatsEnabled">Let the Personal Assistant pitch sham sponsorship deals</label>
                     </div>
                     <p class="bmc-bodytext">Off stops new pitches; deals already signed keep paying until they end. Accepted deals are recorded under Clubs &rsaquo; Illicit activity. Default off.</p>
@@ -1458,7 +1458,7 @@
                     <div class="bmc-check">
                         <input  type="checkbox" role="switch"
                                id="debugLoggingEnabled" name="debugLoggingEnabled"
-                               {% if config.debugLoggingEnabled %}checked{% endif %}>
+                               {% if config.debugLoggingEnabled %}checked{% endif %}><span class="bmc-tile" aria-hidden="true"></span>
                         <label for="debugLoggingEnabled">
                             Enable in-app debug log panel
                         </label>
