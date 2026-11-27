@@ -105,6 +105,9 @@ class EconomyAdminController extends AbstractController
             // The league-payout half: what each tier's champion and placings are paid, and what
             // that costs the whole division — see buildPayoutPreview().
             'payouts'         => $this->buildPayoutPreview($previewCountry, $config),
+            // The owner season-investment ceiling per tier, base year, so the operator sees what
+            // the tier 1 base becomes down the pyramid before saving it.
+            'investmentCeilings' => $this->buildInvestmentCeilingPreview($previewCountry),
             'wageScaleUnit'   => EconomyScaleResolver::WAGE_SCALE_UNIT,
             // So the screen can say what flipping the model will cost before it is flipped.
             'worldPackVersion' => WorldInitializationService::WORLD_PACK_VERSION,
@@ -441,6 +444,26 @@ class EconomyAdminController extends AbstractController
      *
      * @return array<string, mixed>
      */
+    /**
+     * Season 1 (base-year) owner investment ceiling per tier for one country.
+     *
+     * @return list<array{tier: int, shareBp: int, ceilingPence: int}>
+     */
+    private function buildInvestmentCeilingPreview(string $country): array
+    {
+        $rows = [];
+
+        for ($tier = 1, $n = $this->scaleResolver->tierCountFor($country); $tier <= $n; $tier++) {
+            $rows[] = [
+                'tier'         => $tier,
+                'shareBp'      => $this->scaleResolver->seasonInvestmentTierShareBp($country, $tier),
+                'ceilingPence' => $this->scaleResolver->seasonInvestmentCeilingPence($country, $tier, 1),
+            ];
+        }
+
+        return $rows;
+    }
+
     private function buildPreview(string $country, GameConfig $config): array
     {
         $tierCount = $this->scaleResolver->tierCountFor($country);

@@ -1723,8 +1723,10 @@ class GameConfig
      * The TIER half of the country x tier chain, where `country_profile.economy_factor_bp` is
      * the country half. Separate from `economyBaselineTurnoverPence` because they answer
      * different questions: turnover says what a division is worth in money, this says how the
-     * non-wage figures derived from it (the season-investment ceiling, and the fines, floors
-     * and caps Pyramid Investigations will later express the same way) step between tiers.
+     * non-wage figures derived from it (the fines, floors and caps Pyramid Investigations will
+     * later express the same way) step between tiers. The season-investment ceiling no longer
+     * reads it except as a fallback while the turnover table is unauthored — it steps by
+     * turnover share instead (owner ruling 2026-11-27).
      *
      * RAW ROW INDEXING: tier t reads index t-1, with no stretching for a shallow pyramid. A
      * 4-tier country uses rows 1-4. See getNpcClubBalanceRangeForTier(), which this convention
@@ -1824,7 +1826,8 @@ class GameConfig
      * compatibility mechanism `max_enrichment_requests_per_user` uses in reverse: a new limit
      * arrives in the position that changes nothing, and turning it on is a form.
      *
-     * The resolved ceiling is `base x countryFactor x tierFactor x inflationIndex(season)` —
+     * THE BASE IS THE TIER 1 MAXIMUM (owner ruling 2026-11-27). The resolved ceiling is
+     * `base x countryFactor x (turnover[tier] / turnover[1]) x inflationIndex(season)` —
      * see EconomyScaleResolver::seasonInvestmentCeilingPence(). Base-year pence; the index is
      * the one place the backend applies inflation itself, because a ceiling has to be checked
      * against the season being claimed for.
