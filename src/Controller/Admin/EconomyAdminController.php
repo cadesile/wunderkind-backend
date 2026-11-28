@@ -286,6 +286,24 @@ class EconomyAdminController extends AbstractController
             );
         }
 
+        // OWNER INVESTMENT CURVE: PERCENT OF TIER 1 IN, PARTS PER MILLION STORED. Read by index
+        // like the tier factors (the index IS the tier). A BLANK CELL MEANS "follow turnover"
+        // for that tier, so clearing a row is how an operator hands it back to the turnover
+        // share; the placeholder shows what that share currently is.
+        $shares = $request->request->all('seasonInvestmentTierSharePct');
+        if ($shares !== []) {
+            $current = $config->getEconomySeasonInvestmentTierSharePpm();
+            for ($i = 0; $i < 8; $i++) {
+                if (!array_key_exists($i, $shares)) {
+                    continue;
+                }
+
+                $raw         = str_replace(['%', ','], '', trim((string) $shares[$i]));
+                $current[$i] = $raw === '' || !is_numeric($raw) ? null : (int) round(((float) $raw) * 10_000);
+            }
+            $config->setEconomySeasonInvestmentTierSharePpm($current);
+        }
+
         $parachute = $request->request->get('leagueParachute');
         if ($parachute !== null) {
             // Verbatim, like the per-league block — see League::$parachute. Blank clears;
@@ -447,7 +465,7 @@ class EconomyAdminController extends AbstractController
     /**
      * Season 1 (base-year) owner investment ceiling per tier for one country.
      *
-     * @return list<array{tier: int, shareBp: int, ceilingPence: int}>
+     * @return list<array{tier: int, sharePpm: int, turnoverSharePpm: int, isCustom: bool, ceilingPence: int}>
      */
     private function buildInvestmentCeilingPreview(string $country): array
     {
@@ -455,9 +473,11 @@ class EconomyAdminController extends AbstractController
 
         for ($tier = 1, $n = $this->scaleResolver->tierCountFor($country); $tier <= $n; $tier++) {
             $rows[] = [
-                'tier'         => $tier,
-                'shareBp'      => $this->scaleResolver->seasonInvestmentTierShareBp($country, $tier),
-                'ceilingPence' => $this->scaleResolver->seasonInvestmentCeilingPence($country, $tier, 1),
+                'tier'             => $tier,
+                'sharePpm'         => $this->scaleResolver->seasonInvestmentTierSharePpm($country, $tier),
+                'turnoverSharePpm' => $this->scaleResolver->seasonInvestmentTurnoverSharePpm($country, $tier),
+                'isCustom'         => $this->scaleResolver->seasonInvestmentTierShareIsCustom($country, $tier),
+                'ceilingPence'     => $this->scaleResolver->seasonInvestmentCeilingPence($country, $tier, 1),
             ];
         }
 

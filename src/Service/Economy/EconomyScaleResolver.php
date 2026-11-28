@@ -206,8 +206,10 @@ final class EconomyScaleResolver
      * ── THE BASE IS THE TIER 1 MAXIMUM (owner ruling, 2026-11-27) ───────────────────────────
      *
      * The configured base is what an owner may put into a TIER 1 club of the baseline country.
-     * Every lower tier gets the same share of it as its baseline turnover is of tier 1's:
-     * `base x turnover[tier] / turnover[1]` — see seasonInvestmentTierShareBp(). So with
+     * Each tier gets a share of it: the owner investment curve typed into Economy settings
+     * where one is set (Courtney, 2026-11-28), otherwise the same share as its baseline
+     * turnover is of tier 1's, `base x turnover[tier] / turnover[1]` — see
+     * seasonInvestmentTierSharePpm(). With the curve blank and
      * England at £331m / £114m / ... / £215k, a £10m base gives tier 2 about £3.4m and tier 8
      * about £6.5k. The country factor then applies on top, as it does to every money figure,
      * because "everything economic scales by country".
@@ -227,41 +229,67 @@ final class EconomyScaleResolver
         }
 
         $countryScaled = intdiv($base * $this->countryFactorBp($country), self::BP);
-        [$own, $top]   = $this->seasonInvestmentTurnoverPair($country, $tier);
 
-        // Parts per million, not basis points: tier 8 is 6.5 bp of tier 1, and rounding that to
-        // 6 bp would cut its ceiling by 8%. Not the raw ratio either: base pence x turnover pence
-        // overflows a 64-bit int (£10m x £331m is 3.3e19). ppm keeps both under it for any base
-        // below about £9bn.
-        $tierScaled = $top > 0
-            ? intdiv($countryScaled * intdiv($own * 1_000_000, $top), 1_000_000)
-            : intdiv($countryScaled * $this->seasonInvestmentTierShareBp($country, $tier), self::BP);
+        // Parts per million, not basis points: tier 8 can be 6.5 bp of tier 1, and rounding
+        // that to 6 bp would cut its ceiling by 8%. ppm keeps base x share under a 64-bit int
+        // for any base below about £9bn.
+        $tierScaled = intdiv($countryScaled * $this->seasonInvestmentTierSharePpm($country, $tier), 1_000_000);
 
         return intdiv($tierScaled * $this->inflationIndexBp($season), self::BP);
     }
 
     /**
      * The tier half of the season-investment ceiling, in basis points. 10000 = the full base.
-     *
-     * `turnover[tier] x 10000 / turnover[1]`, read from the BASELINE turnover table, so it is a
-     * pure tier ratio — the country half is applied separately by the caller. Tier 1 is always
-     * exactly 10000. The tier is clamped to the country's own depth first, the same way
-     * resolve() clamps it, so a 4-tier country's bottom division reads row 4.
-     *
-     * FALLS BACK TO THE TIER FACTOR when the turnover table is unauthored (tier 1 or this tier
-     * at 0). Zero turnover would otherwise make every lower tier's ceiling zero and switch the
-     * feature off by accident; the tier-factor column was the ceiling's tier scale before this
-     * ruling, so falling back to it is the "no change" direction.
+     * seasonInvestmentTierSharePpm() floored to bp; published to the app as `tierFactorBp`.
      */
     public function seasonInvestmentTierShareBp(string $country, int $tier): int
+    {
+        return intdiv($this->seasonInvestmentTierSharePpm($country, $tier), 100);
+    }
+
+    /**
+     * The tier half of the season-investment ceiling, in parts per million. 1000000 = the base.
+     *
+     * OWNER INVESTMENT CURVE FIRST (Courtney, 2026-11-28). When Economy settings has a share
+     * typed in for this tier (GameConfig::$economySeasonInvestmentTierSharePpm), that is the
+     * answer, independent of the turnover table. A blank row keeps the turnover rule below.
+     * The tier is clamped to the country's own depth first, as resolve() does, so a 4-tier
+     * country's bottom division reads row 4.
+     */
+    public function seasonInvestmentTierSharePpm(string $country, int $tier): int
+    {
+        $row    = $this->resolve($country, $tier)->tier - 1;
+        $custom = $this->gameConfigRepository->getConfig()->getEconomySeasonInvestmentTierSharePpm()[$row] ?? null;
+
+        if ($custom !== null) {
+            return $custom;
+        }
+
+        return $this->seasonInvestmentTurnoverSharePpm($country, $tier);
+    }
+
+    /** True when this tier's share comes from the owner investment curve rather than turnover. */
+    public function seasonInvestmentTierShareIsCustom(string $country, int $tier): bool
+    {
+        $row = $this->resolve($country, $tier)->tier - 1;
+
+        return ($this->gameConfigRepository->getConfig()->getEconomySeasonInvestmentTierSharePpm()[$row] ?? null) !== null;
+    }
+
+    /**
+     * The share a tier gets when its owner investment row is blank, in ppm:
+     * `turnover[tier] / turnover[1]`, falling back to the tier factor while the turnover table
+     * is unauthored (zero turnover would otherwise switch every lower tier off by accident).
+     */
+    public function seasonInvestmentTurnoverSharePpm(string $country, int $tier): int
     {
         [$own, $top] = $this->seasonInvestmentTurnoverPair($country, $tier);
 
         if ($top <= 0) {
-            return $this->resolve($country, $tier)->tierFactorBp;
+            return $this->resolve($country, $tier)->tierFactorBp * 100;
         }
 
-        return intdiv($own * self::BP, $top);
+        return intdiv($own * 1_000_000, $top);
     }
 
     /**
