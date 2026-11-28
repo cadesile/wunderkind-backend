@@ -296,10 +296,10 @@
                     <span class="bmc-setting__label">BASE CEILING (£)</span>
                     <span class="bmc-setting__help">
                         The most an owner may gift into one <strong>tier 1</strong> club per season (baseline country, base year).
-                        Lower tiers get the same share of it as their baseline turnover is of tier 1's. The resolved ceiling is
-                        <code>base x countryFactor x (turnover[tier] / turnover[1]) x inflationIndex(season)</code> — the one place the backend applies
+                        Each tier gets the share of it set in the table below; a blank row follows its baseline turnover share of tier 1. The resolved ceiling is
+                        <code>base x countryFactor x tierShare x inflationIndex(season)</code> — the one place the backend applies
                         inflation itself, because a ceiling has to be checked against the season being claimed for.
-                        While the turnover table is unauthored, the tier factor column is used instead.
+                        While the turnover table is unauthored, a blank row uses the tier factor column instead.
                         <strong>0 switches the feature off</strong>: every amount is then above the ceiling and
                         <code>POST /api/club/season-investment</code> refuses, which is how its two new error codes ship
                         unreachable by a client that does not understand them yet.
@@ -317,26 +317,63 @@
                     </label>
                 </div>
             </div>
-            {% if config.economySeasonInvestmentBasePence > 0 and investmentCeilings|length > 0 %}
-                <div style="overflow-x:auto">
-                    <table class="bmc-minitable">
-                        <thead><tr>
-                            <th>TIER ({{ previewCountry }}, SEASON 1)</th>
-                            <th class="is-right">SHARE OF TIER 1</th>
-                            <th class="is-right">CEILING (£)</th>
-                        </tr></thead>
-                        <tbody>
+            <div style="overflow-x:auto">
+                <table class="bmc-minitable" style="min-width:640px">
+                    <thead><tr>
+                        <th>TIER</th>
+                        <th class="is-right">OWNER INVESTMENT SHARE (% OF TIER 1)</th>
+                        <th class="is-right">TURNOVER SHARE</th>
+                        <th class="is-right">CEILING ({{ previewCountry }}, SEASON 1)</th>
+                    </tr>
+                    <tr>
+                        <th colspan="4" style="font-weight:400">
+                            <span class="bmc-data">The owner investment curve, separate from the turnover table so it can be tuned on its own.
+                            Each tier's ceiling is <code>base x this share</code> (then country and inflation). <strong>Blank follows turnover</strong>:
+                            the row uses the turnover share shown beside it (the placeholder), which is how every tier behaved before.
+                            Decimals are fine (2.5 = 2.5%); anything above 100 is capped at 100, because the base is the tier 1 maximum.
+                            Tier rows are raw: a 4-tier country's bottom division reads T4.</span>
+                        </th>
+                    </tr></thead>
+                    <tbody>
+                        {% set turnover = config.economyBaselineTurnoverPence %}
+                        {% set shares = config.economySeasonInvestmentTierSharePpm %}
+                        {% for i in 0..7 %}
+                            {% if turnover[0]|default(0) > 0 and turnover[i]|default(0) > 0 %}
+                                {% set turnoverPct = (min(turnover[i], turnover[0]) / turnover[0]) * 100 %}
+                            {% else %}
+                                {% set turnoverPct = config.economyTierFactorsBp[i]|default(10000) / 100 %}
+                            {% endif %}
+                            {% set ceiling = null %}
                             {% for row in investmentCeilings %}
-                                <tr>
-                                    <td>T{{ row.tier }}</td>
-                                    <td class="is-right">{{ (row.shareBp / 100)|number_format(2) }}%</td>
-                                    <td class="is-right">£{{ (row.ceilingPence / 100)|number_format(0) }}</td>
-                                </tr>
+                                {% if row.tier == i + 1 %}{% set ceiling = row %}{% endif %}
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% endif %}
+                            <tr>
+                                <td>T{{ i + 1 }}</td>
+                                <td class="is-right">
+                                    <label class="bmc-num bmc-num--104">
+                                        <input name="seasonInvestmentTierSharePct[{{ i }}]" inputmode="decimal" data-kind="decimal" data-blank="ok" data-min="0" data-max="100"
+                                               value="{{ shares[i] is not null ? (shares[i] / 10000)|round(4) : '' }}"
+                                               placeholder="{{ turnoverPct|round(4) }}"
+                                               aria-label="tier {{ i + 1 }} owner investment share percent of tier 1">
+                                        <span class="bmc-num__unit">%</span>
+                                    </label>
+                                </td>
+                                <td class="is-right">{{ turnoverPct|number_format(2) }}%</td>
+                                <td class="is-right">
+                                    {% if ceiling is null %}
+                                        &mdash;
+                                    {% elseif config.economySeasonInvestmentBasePence <= 0 %}
+                                        off
+                                    {% else %}
+                                        £{{ (ceiling.ceilingPence / 100)|number_format(0) }}
+                                        <span class="bmc-data">({{ (ceiling.sharePpm / 10000)|number_format(2) }}%{{ ceiling.isCustom ? '' : ', turnover' }})</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 

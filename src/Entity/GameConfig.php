@@ -1847,6 +1847,25 @@ class GameConfig
     private int $economySeasonInvestmentBasePence = 0;
 
     /**
+     * Owner season investment share of the tier 1 ceiling, per tier, in PARTS PER MILLION.
+     * Index 0 = tier 1; 1000000 = the full base. Courtney, 2026-11-28: the turnover-share
+     * decay was too steep (tier 8 got 0.06% of tier 1), so owner investment gets its own
+     * tunable curve, independent of the turnover table.
+     *
+     * A NULL ROW FOLLOWS TURNOVER. Each row that is null (blank in the admin) keeps the
+     * previous rule, `turnover[tier] / turnover[1]` (or the tier factor while turnover is
+     * unauthored), so this column ships as all nulls and deploying it changes nothing. A row
+     * above 1000000 is capped there: the base is the tier 1 MAXIMUM by ruling.
+     *
+     * Same raw row indexing as the tier factors: tier t reads index t-1, after clamping the
+     * tier to the country's own depth. See EconomyScaleResolver::seasonInvestmentTierSharePpm().
+     *
+     * @var list<int|null>
+     */
+    #[ORM\Column(type: 'json', options: ['default' => '[null,null,null,null,null,null,null,null]'])]
+    private array $economySeasonInvestmentTierSharePpm = [null, null, null, null, null, null, null, null];
+
+    /**
      * Ceiling on a youth scholarship, as a share of the tier's WORST first-team wage. 5000 = 50%.
      *
      * ── THE DEFECT THIS FIXES ─────────────────────────────────────────────────────────────
@@ -2355,6 +2374,33 @@ class GameConfig
 
     public function getEconomySeasonInvestmentBasePence(): int { return $this->economySeasonInvestmentBasePence; }
     public function setEconomySeasonInvestmentBasePence(int $v): static { $this->economySeasonInvestmentBasePence = max(0, $v); return $this; }
+
+    /** @return list<int|null> */
+    public function getEconomySeasonInvestmentTierSharePpm(): array
+    {
+        $raw = array_values($this->economySeasonInvestmentTierSharePpm);
+        $out = [];
+
+        for ($i = 0; $i < 8; $i++) {
+            $out[] = isset($raw[$i]) && is_numeric($raw[$i]) ? max(0, min(1_000_000, (int) $raw[$i])) : null;
+        }
+
+        return $out;
+    }
+
+    /** @param array<int|null> $v Read by index; null (or a non-number) = follow turnover for that tier. */
+    public function setEconomySeasonInvestmentTierSharePpm(array $v): static
+    {
+        $out = [];
+
+        for ($i = 0; $i < 8; $i++) {
+            $out[] = isset($v[$i]) && is_numeric($v[$i]) ? max(0, min(1_000_000, (int) $v[$i])) : null;
+        }
+
+        $this->economySeasonInvestmentTierSharePpm = $out;
+
+        return $this;
+    }
 
     public function getEconomyWageModel(): EconomyWageModel { return $this->economyWageModel; }
     public function setEconomyWageModel(EconomyWageModel $v): static { $this->economyWageModel = $v; return $this; }
