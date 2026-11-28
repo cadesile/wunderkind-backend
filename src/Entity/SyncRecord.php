@@ -13,6 +13,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Entity(repositoryClass: \App\Repository\SyncRecordRepository::class)]
 #[ORM\Index(name: 'idx_sync_record_server_timestamp', columns: ['server_timestamp'])]
 #[ORM\Index(name: 'idx_sync_record_club_server_ts', columns: ['club_id', 'server_timestamp'])]
+#[ORM\UniqueConstraint(name: 'uq_sync_record_club_idempotency_key', columns: ['club_id', 'idempotency_key'])]
 class SyncRecord
 {
     #[ORM\Id]
@@ -65,6 +66,16 @@ class SyncRecord
     #[ORM\Column]
     private bool $isRollback = false;
 
+    /**
+     * Identifies the PAYLOAD, not the request: the device mints it when it builds the
+     * payload and sends the same value on every retry, so a resend finds this record and
+     * is replayed instead of applied again. Clients that predate the field get a key
+     * derived from (week, clientTimestamp), which is equally stable across their retries.
+     * See SyncService::idempotencyKeyFor(). Null only on rows written before 2026-11-28.
+     */
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $idempotencyKey = null;
+
     public function __construct(
         Club $club,
         int $clientWeekNumber,
@@ -104,6 +115,9 @@ class SyncRecord
     public function isRollback(): bool { return $this->isRollback; }
 
     public function markRollback(): void { $this->isRollback = true; }
+
+    public function getIdempotencyKey(): ?string { return $this->idempotencyKey; }
+    public function setIdempotencyKey(?string $key): void { $this->idempotencyKey = $key; }
 
     public function getPayloadJson(): string
     {

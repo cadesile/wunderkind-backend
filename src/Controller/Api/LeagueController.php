@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Service\ClubResolver;
 use App\Repository\SeasonRecordRepository;
 use App\Repository\SeasonSnapshotRepository;
+use App\Service\ClubWriteLock;
 use App\Service\LeagueService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,6 +24,7 @@ class LeagueController extends AbstractController
         private readonly LeagueService            $leagueService,
         private readonly SeasonSnapshotRepository $seasonSnapshotRepository,
         private readonly SeasonRecordRepository   $seasonRecordRepository,
+        private readonly ClubWriteLock            $clubWriteLock,
     ) {}
 
     #[Route('/conclude-season', name: 'api_league_conclude_season', methods: ['POST'])]
@@ -40,7 +42,14 @@ class LeagueController extends AbstractController
         }
 
         try {
-            $result = $this->leagueService->concludeSeason($club, $dto);
+            // Already idempotent on (club, season), but only once the first copy has
+            // committed: a resend arriving while it is still running would miss the lookup,
+            // and its insert would hit the unique index as a 500. Waiting on the club's
+            // write lock turns that into a clean replay. See ClubWriteLock.
+            $result = $this->clubWriteLock->run(
+                $club,
+                fn (): array => $this->leagueService->concludeSeason($club, $dto),
+            );
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], 422);
         }
