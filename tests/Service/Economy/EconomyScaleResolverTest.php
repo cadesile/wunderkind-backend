@@ -343,6 +343,47 @@ class EconomyScaleResolverTest extends TestCase
         self::assertSame(500_000_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
     }
 
+    public function testTheOwnerInvestmentCurveOverridesTurnoverPerTier(): void
+    {
+        $config = $this->investmentConfig(10_000_000)
+            ->setEconomySeasonInvestmentTierSharePpm([null, 600_000, null, null, null, null, null, 25_000]);
+        $resolver = $this->resolver($config, $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+        ]);
+
+        // Typed rows win: tier 2 at 60%, tier 8 at 2.5% of £10m.
+        self::assertSame(600_000, $resolver->seasonInvestmentTierSharePpm('EN', 2));
+        self::assertSame(600_000_000, $resolver->seasonInvestmentCeilingPence('EN', 2, 1));
+        self::assertSame(25_000_000, $resolver->seasonInvestmentCeilingPence('EN', 8, 1));
+        self::assertTrue($resolver->seasonInvestmentTierShareIsCustom('EN', 8));
+        // Blank rows still follow turnover.
+        self::assertFalse($resolver->seasonInvestmentTierShareIsCustom('EN', 3));
+        self::assertSame(104_531, $resolver->seasonInvestmentTierSharePpm('EN', 3));
+        self::assertSame(1_000_000_000, $resolver->seasonInvestmentCeilingPence('EN', 1, 1));
+    }
+
+    public function testTheOwnerInvestmentCurveIsCappedAtTheBaseAndShipsBlank(): void
+    {
+        self::assertSame(array_fill(0, 8, null), (new GameConfig())->getEconomySeasonInvestmentTierSharePpm());
+
+        $config = (new GameConfig())->setEconomySeasonInvestmentTierSharePpm([2_000_000, -5, 'x']);
+        self::assertSame([1_000_000, 0, null, null, null, null, null, null], $config->getEconomySeasonInvestmentTierSharePpm());
+    }
+
+    public function testACountryReadsTheCurveRowForItsClampedTier(): void
+    {
+        $config = $this->investmentConfig(10_000_000)
+            ->setEconomySeasonInvestmentTierSharePpm([null, null, null, 300_000, null, null, null, 10_000]);
+        $resolver = $this->resolver($config, $this->starterConfig(), [
+            'EN' => $this->profile('EN', isBaseline: true),
+            'SC' => $this->profile('SC', factorBp: 1000, tierCount: 4),
+        ]);
+
+        // Scotland tier 4 = 30% of (10% of £10m); asking for tier 7 clamps to row 4 too.
+        self::assertSame(30_000_000, $resolver->seasonInvestmentCeilingPence('SC', 4, 1));
+        self::assertSame(30_000_000, $resolver->seasonInvestmentCeilingPence('SC', 7, 1));
+    }
+
     public function testAZeroBaseKeepsTheFeatureOff(): void
     {
         $resolver = $this->resolver($this->investmentConfig(0), $this->starterConfig(), [
