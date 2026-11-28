@@ -9,8 +9,10 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 
 /**
@@ -60,6 +62,26 @@ class ApiExceptionSubscriberLogLevelTest extends TestCase
         self::assertSame(
             [['warning', 'api.client_error']],
             $this->logsFor(new NotFoundHttpException('Club not found.')),
+        );
+    }
+
+    public function testARouterMethodNotAllowedIsLoggedAtInfo(): void
+    {
+        // What RouterListener throws for `POST /api` (the scanner in WUNDERKIND-BACKEND-8).
+        $wrongMethod = new MethodNotAllowedHttpException(
+            ['GET'],
+            'No route found for "POST https://dev.buildmyclub.co.uk/api": Method Not Allowed (Allow: GET)',
+            new MethodNotAllowedException(['GET']),
+        );
+
+        self::assertSame([['info', 'api.client_error']], $this->logsFor($wrongMethod));
+    }
+
+    public function testAControllerAnswered405StaysAWarning(): void
+    {
+        self::assertSame(
+            [['warning', 'api.client_error']],
+            $this->logsFor(new MethodNotAllowedHttpException(['GET'], 'Not allowed here.')),
         );
     }
 }

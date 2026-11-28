@@ -25,6 +25,9 @@ class YouTubeFeedService
 {
     public const TTL = 21600; // 6 hours
 
+    /** How long an empty result is kept after a failed fetch, so an outage is retried soon but not on every hit. */
+    public const FAILURE_TTL = 600; // 10 minutes
+
     private const CACHE_KEY = 'youtube_feed';
 
     private const FEED_URL = 'https://www.youtube.com/feeds/videos.xml?channel_id=%s';
@@ -53,8 +56,15 @@ class YouTubeFeedService
                     ->getContent();
             } catch (\Throwable $e) {
                 // A dead feed must never take the page down with it — the caller
-                // hides the section when this is empty.
-                $this->logger->warning('YouTube feed fetch failed', ['channelId' => $channelId, 'exception' => $e]);
+                // hides the section when this is empty. A YouTube outage (a 503,
+                // a timeout) is not our bug, so log at INFO: on dev WARNING and up
+                // become Sentry issues (WUNDERKIND-BACKEND-9). Keep the empty
+                // result only briefly so the videos come back once YouTube does.
+                $item->expiresAfter(self::FAILURE_TTL);
+                $this->logger->info('YouTube feed fetch failed', [
+                    'channelId' => $channelId,
+                    'error'     => $e::class . ': ' . $e->getMessage(),
+                ]);
 
                 return [];
             }

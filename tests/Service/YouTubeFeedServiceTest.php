@@ -8,7 +8,9 @@ use App\Service\YouTubeFeedService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Psr\Log\AbstractLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 
 class YouTubeFeedServiceTest extends TestCase
 {
@@ -94,5 +96,44 @@ class YouTubeFeedServiceTest extends TestCase
     {
         // MockHttpClient with no responses queued would throw if a request were made.
         self::assertSame([], $this->service()->getVideos('   '));
+    }
+
+    /**
+     * A YouTube outage (WUNDERKIND-BACKEND-9 was a 503) must not become a Sentry issue: dev sends
+     * WARNING and up. It is logged at INFO, the page gets no videos, and the next request soon after
+     * retries rather than waiting out the 6-hour TTL.
+     */
+    public function testAnUpstreamOutageLogsAtInfoAndIsRetried(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $levels = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->levels[] = (string) $level;
+            }
+        };
+        $calls = 0;
+        $http  = new MockHttpClient(function () use (&$calls): MockResponse {
+            ++$calls;
+
+            return new MockResponse('Service Unavailable', ['http_code' => 503]);
+        });
+        $cache   = new ArrayAdapter();
+        $service = new YouTubeFeedService($http, $cache, $logger);
+
+        self::assertSame([], $service->getVideos('UCchannel'));
+        self::assertSame(['info'], $logger->levels);
+        self::assertSame(1, $calls);
+
+        // Cached briefly: a second hit straight away does not refetch.
+        self::assertSame([], $service->getVideos('UCchannel'));
+        self::assertSame(1, $calls);
+
+        $item = $cache->getItem('youtube_feed.UCchannel');
+        self::assertTrue($item->isHit());
+        $expiry = (new \ReflectionProperty($item, 'expiry'))->getValue($item);
+        self::assertLessThanOrEqual(microtime(true) + YouTubeFeedService::FAILURE_TTL + 1, $expiry);
     }
 }

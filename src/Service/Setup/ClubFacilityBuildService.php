@@ -167,7 +167,7 @@ final class ClubFacilityBuildService
             $from = $current[$slug] ?? 0;
 
             if ($level < $from) {
-                throw SetupActionException::invalidLevel($slug, $level, $templates[$slug]->getMaxLevel());
+                throw SetupActionException::belowCurrentLevel($slug, $level, $from, $templates[$slug]->getMaxLevel());
             }
 
             $cost                    = $this->costCalculator->costBetween($templates[$slug]->getBaseCost(), $from, $level);
