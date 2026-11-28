@@ -17,6 +17,15 @@ class SyncRequest
     #[Assert\Uuid]
     public ?string $clubId = null;
 
+    /**
+     * Minted by the device when it BUILDS the payload and resent unchanged on every retry,
+     * so the server can tell a resend from a new week (2026-11-28: a timed-out sync was
+     * retried while the first copy was still running, and both were applied). Optional:
+     * older clients omit it and the server derives one from weekNumber + clientTimestamp.
+     */
+    #[Assert\Length(max: 120)]
+    public ?string $idempotencyKey = null;
+
     #[Assert\Positive]
     public int $weekNumber;
 

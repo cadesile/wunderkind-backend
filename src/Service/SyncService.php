@@ -62,6 +62,7 @@ class SyncService
         private readonly \App\Service\Economy\LeagueSizeResolver      $leagueSizeResolver,
         private readonly \App\Service\Economy\LeaguePayoutResolver    $leaguePayoutResolver,
         private readonly \App\Service\IllicitActivity\IllicitActivitySyncProcessor $illicitActivityProcessor,
+        private readonly ClubWriteLock                   $clubWriteLock,
     ) {}
 
     /**
@@ -74,6 +75,63 @@ class SyncService
         $club = $this->clubResolver->resolve($user, $request->clubId);
         if ($club === null) {
             throw new \RuntimeException('Club not found for user.');
+        }
+
+        // Idempotency (2026-11-28). The lock makes a concurrent resend WAIT for the first
+        // copy to commit; the lookup inside it then finds that copy's SyncRecord and replays
+        // it. Without the lock both copies miss the lookup and both apply. See ClubWriteLock.
+        $idempotencyKey = self::idempotencyKeyFor($request);
+
+        return $this->clubWriteLock->run(
+            $club,
+            fn (): array => $this->processLocked($user, $club, $request, $idempotencyKey),
+        );
+    }
+
+    /**
+     * The key that identifies this PAYLOAD across retries.
+     *
+     * The device's own key when it sent one. Otherwise (clients released before the field)
+     * one derived from week + clientTimestamp: the timestamp is stamped when the payload is
+     * built and the queued JSON is resent verbatim, so it is as stable across retries as a
+     * minted key, while two genuinely different payloads never share it.
+     */
+    public static function idempotencyKeyFor(SyncRequest $request): string
+    {
+        $key = $request->idempotencyKey !== null ? trim($request->idempotencyKey) : '';
+        if ($key !== '') {
+            return substr($key, 0, 120);
+        }
+
+        return 'derived:' . hash('sha256', $request->weekNumber . '|' . $request->clientTimestamp);
+    }
+
+    /** @return array<string, mixed> */
+    private function processLocked(User $user, Club $club, SyncRequest $request, string $idempotencyKey): array
+    {
+        $alreadyApplied = $this->syncRecordRepository->findOneBy([
+            'club'           => $club,
+            'idempotencyKey' => $idempotencyKey,
+        ]);
+        if ($alreadyApplied !== null) {
+            // A resend of a payload already applied. Write NOTHING (no second SyncRecord, no
+            // dividend draw, no transfer, no stat snapshot) and answer as the first copy did,
+            // from the state that copy left behind.
+            $this->logger->info('sync.duplicate_replayed', [
+                'clubId'       => (string) $club->getId(),
+                'weekNumber'   => $request->weekNumber,
+                'syncRecordId' => (string) $alreadyApplied->getId(),
+            ]);
+
+            $fixtureIds = array_values(array_filter(
+                array_map(static fn (MatchResultDto $r): string => $r->fixtureId, $request->matchResults),
+                static fn (string $id): bool => $id !== '',
+            ));
+
+            return [
+                ...$this->buildAcceptedResponse($user, $club, $request, $alreadyApplied->isRollback(), $fixtureIds),
+                'replayed' => true,
+            ];
         }
 
         $clientTimestamp = new \DateTimeImmutable($request->clientTimestamp);
@@ -126,6 +184,7 @@ class SyncService
                 'illicitActivity'     => $request->illicitActivity,
             ],
         );
+        $syncRecord->setIdempotencyKey($idempotencyKey);
         if ($request->log !== null) {
             $syncRecord->setDebugLog($request->log);
             $this->checkDebugLogThresholds($request->log);
@@ -290,7 +349,18 @@ class SyncService
             $this->em->flush();
         }
 
-        $syncedAt = $club->getLastSyncedAt();
+        return $this->buildAcceptedResponse($user, $club, $request, $syncRecord->isRollback(), $syncedFixtureIds);
+    }
+
+    /**
+     * The accepted-sync response. Reads only: shared by a first apply and by a replay.
+     *
+     * @param string[] $syncedFixtureIds
+     * @return array<string, mixed>
+     */
+    private function buildAcceptedResponse(User $user, Club $club, SyncRequest $request, bool $isRollback, array $syncedFixtureIds): array
+    {
+        $syncedAt = $club->getLastSyncedAt() ?? new \DateTimeImmutable();
 
         // Fetch runtime config to embed in response. Read-only: if no row exists
         // getConfig() always returns the singleton row (creating with defaults if absent),
@@ -489,7 +559,7 @@ class SyncService
 
         return [
             'accepted'          => true,
-            'isRollback'        => $syncRecord->isRollback(),
+            'isRollback'        => $isRollback,
             'weekNumber'        => $request->weekNumber,
             'syncedAt'          => $syncedAt->format(\DateTimeInterface::ATOM),
             'facilityTemplates' => $facilityTemplates,
