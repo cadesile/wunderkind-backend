@@ -17,8 +17,9 @@ namespace App\Enum;
  * Two distinct notions are deliberately kept apart here, because conflating
  * them is the bug this enum exists to prevent:
  *
- *   - {@see isGenerationCapable()} — the world generator can build a league
- *     pyramid and NPC clubs for this country. A property of the code.
+ *   - {@see isGenerationCapable()} — this country's code-side content is held to
+ *     the content tests. A property of the code. (The admin generate pickers no
+ *     longer read it: they list every country_profile row.)
  *   - A LIVE `CountryProfile` — the country is offered to players right now. An
  *     operator decision, recorded on the country itself, and a subset of the
  *     above. Read it through
@@ -364,12 +365,6 @@ enum Country: string
     }
 
     /**
-     * Whether league structures and NPC clubs can be generated for this country.
-     *
-     * Independent of whether players may currently pick it — see the class
-     * docblock. Mirrors the country dropdowns on the admin Generate screen.
-     */
-    /**
      * The real ISO 3166-1 alpha-2 code for this country, or null where none exists.
      *
      * WHY THIS IS NOT JUST $value. Five of this enum's codes are FOOTBALL codes, not ISO ones,
@@ -415,6 +410,14 @@ enum Country: string
         return $this->isoAlpha2() === $this->value;
     }
 
+    /**
+     * Whether this country has the code-side content (name pools, naming registry) the content
+     * tests hold it to.
+     *
+     * NOT THE ADMIN PICKER LIST any more. The Generate, worldpack and locations screens list every
+     * country_profile row (CountryProfileRepository::nameMap()), so a country created in the
+     * database can be generated without a deploy. Generation itself never checked this flag.
+     */
     public function isGenerationCapable(): bool
     {
         return match ($this) {

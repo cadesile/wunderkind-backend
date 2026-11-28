@@ -1348,7 +1348,9 @@ class DashboardController extends AbstractDashboardController
             'facilities'           => $facilities,
             'clubCount'            => $this->npcClubRepository->count([]),
             'clubsByCountry'       => $this->npcClubRepository->getCountsByCountryAndTier(),
-            'generationCapableCountries' => Country::generationCapableLabels(),
+            // Every country in the database, not the enum's compiled generation-capable list, so
+            // a country created on the locations dashboard can be generated without a deploy.
+            'generatorCountries'   => $this->countryProfileRepository->nameMap(),
         ]);
     }
 
@@ -1695,10 +1697,9 @@ class DashboardController extends AbstractDashboardController
     {
         $summaries = $this->worldPackCacheRepository->findAllSummaries();
 
-        // Cache warming only makes sense for countries the league/club
-        // generation process can actually build - independent of
-        // StarterConfig's player-facing "enabled countries" toggle.
-        $enabledCountries = Country::generationCapableLabels();
+        // Every country in the database - the same list the Generate screen offers - independent
+        // of the player-facing LIVE flag. Regenerating still refuses a country with no leagues.
+        $enabledCountries = $this->countryProfileRepository->nameMap();
         $packVersion      = WorldInitializationService::WORLD_PACK_VERSION;
 
         $entries   = [];

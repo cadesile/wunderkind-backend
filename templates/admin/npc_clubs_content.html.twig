@@ -2,7 +2,7 @@
 {#
   World → Generate, on bmc_page + bmc-pages.css/js.
   Data: DashboardController::npcClubsContent() — clubCount, clubsByCountry,
-  generationCapableCountries, facilities, gameConfig.
+  generatorCountries, facilities, gameConfig.
 
   FOUR INDEPENDENT FORMS, THREE OF THEM PLAIN POSTS. Generate clubs is the exception: it posts
   by fetch() so the pool table can be redrawn from the response rather than reloading a page
@@ -88,7 +88,7 @@
                         <label class="bmc-lbl bmc-lbl--ink" for="country">COUNTRY</label>
                         <span class="bmc-select">
                             <select id="country" name="country" style="min-width:190px">
-                                {% for code, label in generationCapableCountries %}
+                                {% for code, label in generatorCountries %}
                                     <option value="{{ code }}">{{ label }} ({{ code }})</option>
                                 {% endfor %}
                             </select>
@@ -148,7 +148,7 @@
                         <label class="bmc-lbl bmc-lbl--ink" for="league_country">COUNTRY</label>
                         <span class="bmc-select">
                             <select id="league_country" name="country" style="min-width:190px">
-                                {% for code, label in generationCapableCountries %}
+                                {% for code, label in generatorCountries %}
                                     <option value="{{ code }}">{{ label }} ({{ code }})</option>
                                 {% endfor %}
                             </select>

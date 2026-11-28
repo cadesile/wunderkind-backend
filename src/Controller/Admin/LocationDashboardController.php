@@ -95,12 +95,9 @@ class LocationDashboardController extends AbstractController
             'namePoolAiReady' => $this->namePools->suggesterIsConfigured(),
             'namePoolTarget'  => NamePoolValidator::TARGET_PER_LIST,
             'namePoolMin'     => NamePoolValidator::MIN_PER_LIST,
-            // Whether the LEAGUES readiness row can offer a way forward at all. The generate
-            // form's country list is Country::generationCapable(), so for the other 46 cases
-            // sending an operator there would be a dead end — the blocker is the enum, which
-            // is a deploy.
-            'canGenerateLeagues' => ($enum = \App\Enum\Country::tryFrom((string) $selected)) !== null
-                && $enum->isGenerationCapable(),
+            // Whether the LEAGUES readiness row can offer a way forward. The generate form lists
+            // every country in the database, so any selected country can be sent there.
+            'canGenerateLeagues' => $selected !== null,
             'namingLimits'  => [
                 'minSuffixes' => \App\Service\CountryContent\NamingContentValidator::MIN_SUFFIXES,
                 'minFormats'  => \App\Service\CountryContent\NamingContentValidator::MIN_STADIUM_FORMATS,

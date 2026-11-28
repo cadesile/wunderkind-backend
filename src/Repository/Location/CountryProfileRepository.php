@@ -86,11 +86,6 @@ class CountryProfileRepository extends ServiceEntityRepository
     }
 
     /**
-     * code => name, for admin dropdowns and the /api/countries join.
-     *
-     * @return array<string, string>
-     */
-    /**
      * Every country's name-pool override, in ONE projected query.
      *
      * PROJECTED, NOT HYDRATED, and that is the point. NamePoolProvider fills its whole memo
@@ -123,10 +118,22 @@ class CountryProfileRepository extends ServiceEntityRepository
         return $out;
     }
 
+    /**
+     * code => name for every country in the database, ordered by name, for admin dropdowns and
+     * the /api/countries join.
+     *
+     * THIS IS THE ADMIN COUNTRY LIST. A country an operator creates on the locations dashboard
+     * appears in every picker that reads this (Generate league structure, Generate clubs, the
+     * worldpack cache) with no deploy. The pickers used to read Country::generationCapable(), a
+     * list compiled into the enum, so a country added in the database (Ghana) never showed up.
+     *
+     * @return array<string, string>
+     */
     public function nameMap(): array
     {
         $rows = $this->createQueryBuilder('c')
             ->select('c.code AS code', 'c.name AS name')
+            ->orderBy('c.name', 'ASC')
             ->getQuery()
             ->getArrayResult();
 
