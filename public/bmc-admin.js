@@ -265,6 +265,17 @@
         if (chips) chips.hidden = n > 0;
         if (selAll) selAll.hidden = !(n === boxes.length && n > 0 && total > n && !all);
     }
+    // The selection cell must never open the row. EasyAdmin's clickable-row handler
+    // (data-default-action-url on the <tr>) skips clicks on an <input>, but these checkboxes
+    // are visually hidden: the click lands on the .bmc-tile span or the cell padding, neither
+    // of which it treats as interactive, so ticking a box also opened the detail page
+    // (Courtney, 2026-11-28; every list page on bmc_index). Stopping the click at the cell
+    // keeps the label's default action (toggling the checkbox) away from the row.
+    $$('td.bmc-sel').forEach(function (td) {
+        ['click', 'dblclick', 'auxclick'].forEach(function (type) {
+            td.addEventListener(type, function (e) { e.stopPropagation(); });
+        });
+    });
     boxes.forEach(function (b) { b.addEventListener('change', function () { if (allField) allField.value = '0'; syncSel(); }); });
     if (headBox) headBox.addEventListener('change', function () { boxes.forEach(function (b) { b.checked = headBox.checked; }); if (allField) allField.value = '0'; syncSel(); });
     if (selAll) $('button', selAll).addEventListener('click', function () { allField.value = '1'; syncSel(); });
