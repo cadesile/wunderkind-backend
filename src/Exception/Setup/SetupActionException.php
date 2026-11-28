@@ -81,6 +81,21 @@ class SetupActionException extends \RuntimeException
     }
 
     /**
+     * A target below what the club already has. Same `invalid_level` code as an out-of-range
+     * level, so clients branch the same way, but its own message and the current level: there is
+     * no sell-back, so a lower number means the client's view of the club is stale, and "out of
+     * range, goes up to 5" for a level of 2 sent anyone reading it the wrong way.
+     */
+    public static function belowCurrentLevel(string $slug, int $level, int $currentLevel, int $maxLevel): self
+    {
+        return new self(
+            self::INVALID_LEVEL,
+            sprintf('%s is already at level %d, so it cannot be set to %d.', $slug, $currentLevel, $level),
+            ['slug' => $slug, 'level' => $level, 'maxLevel' => $maxLevel, 'currentLevel' => $currentLevel],
+        );
+    }
+
+    /**
      * Carries the levels that WERE built, not just the refusal.
      *
      * A client that got this because its retry lost a race needs to know what is actually
