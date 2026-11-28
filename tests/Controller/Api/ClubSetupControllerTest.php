@@ -247,7 +247,11 @@ class ClubSetupControllerTest extends WebTestCase
         $this->authedRequest('POST', '/api/club/facilities/training', ['levels' => ['training_pitch' => 2]]);
 
         self::assertResponseStatusCodeSame(422);
-        self::assertSame('invalid_level', $this->json()['error']);
+        $body = $this->json();
+        self::assertSame('invalid_level', $body['error']);
+        self::assertSame(4, $body['currentLevel']);
+        self::assertSame(2, $body['level']);
+        self::assertStringContainsString('already at level 4', $body['message']);
     }
 
     /** Pricing starts from the level already held, so a part-built site is not re-charged. */

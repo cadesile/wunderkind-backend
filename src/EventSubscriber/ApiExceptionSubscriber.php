@@ -11,8 +11,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 use Symfony\Component\Serializer\Exception\PartialDenormalizationException;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
@@ -209,7 +211,9 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         // software (`/api/v1/targets`, `/api/datasources`, ...), not our app: the
         // app only calls routes that exist. At WARNING it reaches Sentry on dev
         // (WUNDERKIND-BACKEND-8), so log it at INFO, which stays a breadcrumb.
-        // A 404 from inside a matched route (a missing club, say) keeps WARNING.
+        // A 405 the router raises (a scanner POSTing to `/api`, say) is the same
+        // noise and gets the same treatment. A 404 from inside a matched route
+        // (a missing club, say) keeps WARNING.
         if (self::isUnroutedPath($throwable)) {
             $this->logger->info('api.client_error', $context);
 
@@ -219,10 +223,16 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         $this->logger->warning('api.client_error', $context);
     }
 
-    /** The router found no route at all, as opposed to a controller answering 404. */
+    /**
+     * The router found no route for this path and method, as opposed to a
+     * controller answering 404/405 itself. Symfony's RouterListener wraps the
+     * routing exception as the previous one, which is how the two are told apart.
+     */
     public static function isUnroutedPath(\Throwable $throwable): bool
     {
-        return $throwable instanceof NotFoundHttpException
-            && $throwable->getPrevious() instanceof ResourceNotFoundException;
+        $previous = $throwable->getPrevious();
+
+        return ($throwable instanceof NotFoundHttpException && $previous instanceof ResourceNotFoundException)
+            || ($throwable instanceof MethodNotAllowedHttpException && $previous instanceof MethodNotAllowedException);
     }
 }
